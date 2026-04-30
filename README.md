@@ -1,7 +1,7 @@
 # 绳网 Web (Inter-Knot Web)
 
 <p align="center">
-  <img src="public/favicon.png" alt="Inter-Knot Logo" width="120" />
+  <img src="icon.webp" alt="Inter-Knot Logo" width="120" />
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 
 本项目是 [KawaYiLab/InterKnot-App](https://github.com/KawaYiLab/InterKnot-App)（Flutter 版）独立开发的 **Web 前端**，使用 Nuxt 4 从零构建，采用绝区零视觉风格，后端对接自建 Strapi v5。
 
-> 📱 移动端请前往 [InterKnot-App](https://github.com/KawaYiLab/InterKnot-App)（Android / iOS）。
+> 📱 移动端请前往 [KawaYiLab/InterKnot-App](https://github.com/KawaYiLab/InterKnot-App)（Android / iOS）。
 
 ---
 
@@ -27,7 +27,7 @@
 - **发帖** — 富文本编辑器，图片上传
 - **用户体系** — 登录注册、个人主页、经验等级
 - **图片画廊** — 集成 lightGallery，支持缩放与幻灯片
-- **绝区零风格 UI** — 集成 [zenless-ui](https://github.com/ChrisChan13/zenless-ui) 组件库，搭配自定义主题光标
+- **绝区零UI风格** — 使用 [zenless-ui](https://github.com/ChrisChan13/zenless-ui) 组件库，搭配自定义主题光标
 - **响应式** — 桌面端 + 移动端自适应，移动端底部导航栏
 - **SPA + 静态生成** — 纯客户端渲染，可部署至任意静态托管
 
@@ -94,8 +94,7 @@ npm run dev
 ### 6. 构建生产版本
 
 ```bash
-npm run build        # SSR 构建
-npm run generate     # 静态生成（推荐）
+npm run generate     # 静态生成
 npm run preview      # 预览生产构建
 ```
 
