@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inter Knot</title>
+    <script>
+      (function () {
+        var l = window.location;
+        var target = "/?p=" + encodeURIComponent(l.pathname + l.search + l.hash);
+        window.location.replace(target);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

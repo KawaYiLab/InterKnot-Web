@@ -1,0 +1,29 @@
+<div id="spa-loading-screen">
+  <img src="/images/loading.gif" alt="加载中" fetchpriority="high" />
+</div>
+<style>
+  #spa-loading-screen {
+    position: fixed;
+    inset: 0;
+    box-sizing: border-box;
+    z-index: 9999;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    background: #fff;
+    padding: 24px;
+  }
+  #spa-loading-screen img {
+    width: 300px;
+    max-width: 100%;
+    height: auto;
+  }
+  @media (max-width: 768px) {
+    #spa-loading-screen {
+      padding: 16px;
+    }
+    #spa-loading-screen img {
+      max-width: min(85vw, 530px);
+    }
+  }
+</style>

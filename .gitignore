@@ -1,0 +1,10 @@
+.nuxt
+.output
+dist
+node_modules
+.data
+coverage
+test-results
+playwright-report
+server
+/.windsurf

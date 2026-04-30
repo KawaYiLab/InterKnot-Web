@@ -1,0 +1,17 @@
+:where([class^="z-"], [class*=" z-"]) {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:where([class^="z-"], [class*=" z-"]) *,
+:where([class^="z-"], [class*=" z-"]) *::before,
+:where([class^="z-"], [class*=" z-"]) *::after {
+  box-sizing: border-box;
+}
+
+:where([class^="z-"], [class*=" z-"]) button,
+:where([class^="z-"], [class*=" z-"]) input,
+:where([class^="z-"], [class*=" z-"]) textarea {
+  font-family: inherit;
+}

@@ -1,0 +1,46 @@
+{
+  "name": "inter-knot-nuxt",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "test": "npm run test:unit",
+    "test:unit": "nuxt prepare && vitest run",
+    "test:watch": "nuxt prepare && vitest",
+    "test:e2e": "npm run generate && playwright test",
+    "test:e2e:ui": "npm run generate && playwright test --ui"
+  },
+  "dependencies": {
+    "@heroicons/vue": "^2.2.0",
+    "@pinia/nuxt": "^0.11.2",
+    "@tanstack/vue-query": "^5.90.7",
+    "@vueuse/core": "^13.9.0",
+    "lightgallery": "^2.9.0",
+    "nuxt": "^4.4.2",
+    "ofetch": "^1.4.1",
+    "pinia": "^3.0.3",
+    "sass": "^1.93.2",
+    "throttle-debounce": "^5.0.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@testing-library/vue": "^8.1.0",
+    "@types/node": "^24.7.2",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vitest/coverage-v8": "^3.2.4",
+    "@vue/test-utils": "^2.4.6",
+    "fast-check": "^4.6.0",
+    "jsdom": "^27.0.1",
+    "serve": "^14.2.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=20.18.0"
+  }
+}

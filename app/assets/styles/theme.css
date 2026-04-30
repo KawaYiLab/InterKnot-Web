@@ -1,0 +1,316 @@
+﻿:root {
+  --ik-bg: #0a0a0a;
+  --ik-bg-elevated: #1a1a1a;
+  --ik-bg-card: #222222;
+  --ik-text: #e8e8e8;
+  --ik-muted: #9a9a9a;
+  --ik-primary: #d7ff00;
+  --ik-accent: #00e5ff;
+  --ik-danger: #ff4d4f;
+
+  /* ── Cursor assets ─────────────────────────── */
+  --ik-cursor-default: url("/cursors/正常选择.png") 2 1, auto;
+  --ik-cursor-help: url("/cursors/帮助选择.png") 0 0, help;
+  --ik-cursor-not-allowed: url("/cursors/不可用.png") 16 14, not-allowed;
+  --ik-cursor-row-resize: url("/cursors/垂直调整大小.png") 16 16, row-resize;
+  --ik-cursor-progress: url("/cursors/后台加载.png") 2 1, progress;
+  --ik-cursor-cell: url("/cursors/候选.png") 16 4, cell;
+  --ik-cursor-crosshair: url("/cursors/精确选择.png") 16 16, crosshair;
+  --ik-cursor-pointer: url("/cursors/链接选择.png") 14 3, pointer;
+  --ik-cursor-wait: url("/cursors/忙.png") 2 1, wait;
+  --ik-cursor-pen: url("/cursors/手写.png") 1 1, text;
+  --ik-cursor-col-resize: url("/cursors/水平调整大小.png") 16 16, col-resize;
+  --ik-cursor-text: url("/cursors/文本选择.png") 16 16, text;
+  --ik-cursor-nwse-resize: url("/cursors/沿对角线调整大小1.png") 16 16, nwse-resize;
+  --ik-cursor-nesw-resize: url("/cursors/沿对角线调整大小2.png") 16 16, nesw-resize;
+  --ik-cursor-move: url("/cursors/移动.png") 16 16, move;
+
+  /* ── Card – structure ───────────────────────── */
+  --ik-discussion-card-radius: 24px 24px 0 24px;
+  --ik-discussion-card-inner-radius: 20px 20px 0 20px;
+  --ik-discussion-card-padding: 4px;
+  --ik-discussion-card-body-gap: 8px;
+  --ik-discussion-card-body-padding: 0 8px 12px;
+
+  /* ── Card – colors ──────────────────────────── */
+  --ik-discussion-card-outer-bg: #000;
+  --ik-discussion-card-inner-bg: #222;
+  --ik-discussion-card-cover-bg: #151515;
+  --ik-discussion-card-placeholder-bg: #2a2a2a;
+  --ik-discussion-card-divider-bg: #3a3a3a;
+  --ik-discussion-card-pinned-bg: #2d4dff;
+  --ik-discussion-card-hover-bg: var(--ik-primary);
+
+  /* ── Card – cover ───────────────────────────── */
+  --ik-discussion-card-cover-aspect-ratio: 1.576;
+
+  /* ── Card – views overlay ───────────────────── */
+  --ik-discussion-card-views-font-size: 14px;
+  --ik-discussion-card-views-icon-size: 22px;
+
+  /* ── Card – avatar ──────────────────────────── */
+  --ik-discussion-card-avatar-size: 54px;
+  --ik-discussion-card-avatar-padding: 2px;
+  --ik-discussion-card-avatar-offset: -28px;
+  --ik-discussion-card-avatar-bg: #1b1b1b;
+
+  /* ── Card – author ──────────────────────────── */
+  --ik-discussion-card-author-offset: 4px;
+  --ik-discussion-card-author-block-width: calc(100% - 58px);
+  --ik-discussion-card-author-min-height: 32px;
+  --ik-discussion-card-author-padding-left: 8px;
+  --ik-discussion-card-author-name-size: 15px;
+  --ik-discussion-card-author-name-color: #fff;
+
+  /* ── Card – title ───────────────────────────── */
+  --ik-discussion-card-title-size: 17px;
+  --ik-discussion-card-title-color: #2196f3;
+  --ik-discussion-card-title-read-color: #9e9e9e;
+
+  /* ── Card – excerpt ─────────────────────────── */
+  --ik-discussion-card-excerpt-size: 15px;
+  --ik-discussion-card-excerpt-color: #e0e0e0;
+  --ik-discussion-card-excerpt-gap: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#__nuxt {
+  margin: 0;
+  min-height: 100%;
+  background: #000;
+  color: var(--ik-text);
+  font-family:
+    "HarmonyOS Sans SC",
+    "PingFang SC",
+    "Microsoft YaHei",
+    "Segoe UI",
+    sans-serif;
+  cursor: var(--ik-cursor-default);
+  /* 隐藏滚动条 (IE, Edge, Firefox) */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 隐藏滚动条 (Chrome, Safari, Opera) */
+#__nuxt {
+  position: relative;
+  isolation: isolate;
+}
+
+#__nuxt::before {
+  content: '';
+  position: fixed;
+  top: -5%;
+  left: -5%;
+  width: 120%;
+  height: 120%;
+  background: url("/images/main.avif") center top / cover no-repeat;
+  filter: brightness(0.5);
+  z-index: -1;
+  pointer-events: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#__nuxt::-webkit-scrollbar {
+  display: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a,
+button,
+summary,
+[role="button"],
+[tabindex]:not([tabindex="-1"]),
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+.z-button,
+.z-link,
+.ik-card,
+.ik-dialog__close,
+.ik-comment__like-btn {
+  cursor: var(--ik-cursor-pointer) !important;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  cursor: var(--ik-cursor-text) !important;
+  caret-color: var(--ik-primary);
+}
+
+button:disabled,
+[aria-disabled="true"],
+.is-disabled,
+.z-button--disabled {
+  cursor: var(--ik-cursor-not-allowed) !important;
+}
+
+[aria-busy="true"],
+.is-loading,
+.z-button--loading {
+  cursor: var(--ik-cursor-progress) !important;
+}
+
+.ik-cursor-help {
+  cursor: var(--ik-cursor-help) !important;
+}
+
+.ik-cursor-wait {
+  cursor: var(--ik-cursor-wait) !important;
+}
+
+.ik-cursor-cell {
+  cursor: var(--ik-cursor-cell) !important;
+}
+
+.ik-cursor-crosshair {
+  cursor: var(--ik-cursor-crosshair) !important;
+}
+
+.ik-cursor-pen {
+  cursor: var(--ik-cursor-pen) !important;
+}
+
+.ik-cursor-move {
+  cursor: var(--ik-cursor-move) !important;
+}
+
+.ik-cursor-row-resize {
+  cursor: var(--ik-cursor-row-resize) !important;
+}
+
+.ik-cursor-col-resize {
+  cursor: var(--ik-cursor-col-resize) !important;
+}
+
+.ik-cursor-nwse-resize {
+  cursor: var(--ik-cursor-nwse-resize) !important;
+}
+
+.ik-cursor-nesw-resize {
+  cursor: var(--ik-cursor-nesw-resize) !important;
+}
+
+.container {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.ik-page {
+  padding: 0;
+}
+
+.ik-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.ik-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ik-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ik-panel {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #2d2d2d;
+  background: linear-gradient(180deg, #212121 0%, #181818 100%);
+}
+
+.ik-meta {
+  color: var(--ik-muted);
+  font-size: 13px;
+}
+
+.ik-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+}
+
+.ik-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--ik-muted);
+}
+
+/* ── Image fade-in on load ──────────────────── */
+img:not(.ik-card__cover) {
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+
+img:not(.ik-card__cover).ik-img-revealed {
+  opacity: 1;
+}
+
+/* ── lightGallery overrides ──────────────────── */
+.lg-backdrop {
+  z-index: 10000 !important;
+}
+.lg-outer {
+  z-index: 10001 !important;
+}
+
+/* 工具栏图标 hover / active */
+.lg-toolbar .lg-icon:hover,
+.lg-actions .lg-icon:hover {
+  color: var(--ik-primary);
+}
+
+/* 进度条 */
+.lg-progress-bar .lg-progress {
+  background-color: var(--ik-primary) !important;
+}
+
+/* 计数器 */
+.lg-counter {
+  color: var(--ik-primary);
+}
+
+/* 当前缩略图边框 */
+.lg-thumb-item.active,
+.lg-thumb-item:hover {
+  border-color: var(--ik-primary) !important;
+}
+
+/* 自动播放按钮 active 状态 */
+.lg-autoplay-button:hover .lg-icon {
+  color: var(--ik-primary);
+}
+
+/* ── Message toast 覆盖（高于弹窗 z-index:9000，位于 header 下方）── */
+.z-message {
+  z-index: 9999 !important;
+  top: 90px !important;
+}
+
+@media (max-width: 768px) {
+  .container {
+    width: calc(100% - 20px);
+  }
+
+  .ik-page {
+    padding-bottom: 64px;
+  }
+}
