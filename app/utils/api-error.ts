@@ -1,0 +1,21 @@
+import type { ApiClientError } from "~/types/api";
+
+export function normalizeApiError(error: unknown): ApiClientError {
+  if (error instanceof Error) {
+    return error as ApiClientError;
+  }
+  return new Error("未知请求异常") as ApiClientError;
+}
+
+export function resolveErrorMessage(error: unknown, fallback = "请求失败"): string {
+  const e = normalizeApiError(error);
+  const retryAfter = e.details?.retryAfter;
+  const attemptsRemaining = e.details?.attemptsRemaining;
+  if (e.code === "REGISTER_CODE_COOLDOWN" && typeof retryAfter === "number") {
+    return `发送太频繁，请 ${retryAfter} 秒后再试`;
+  }
+  if (e.code === "REGISTER_CODE_INVALID" && typeof attemptsRemaining === "number") {
+    return `验证码错误，还可尝试 ${attemptsRemaining} 次`;
+  }
+  return e.message || fallback;
+}

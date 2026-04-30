@@ -1,0 +1,2087 @@
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/6a46ab7f.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0-017F, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01CD-01DC, U+01E5, U+01E7, U+01E9, U+01EF-01F0, U+01F9-01FF, U+0218-021B, U+021F, U+0237, U+0251, U+0259, U+0261, U+0292, U+02BB-02BC, U+02C6-02C7, U+02C9-02CB, U+02D8-02DD, U+02F3, U+0300-0304, U+0306-030A, U+030C, U+030F, U+0323, U+0326-0327, U+0335, U+0338, U+037E, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03CE, U+03D1-03D2, U+03D6, U+0400-0429;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/0a645f1a.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+042A-045F, U+0462-0463, U+046B, U+0472-0475, U+0490-0493, U+0497, U+049A-049D, U+04A2-04A3, U+04AE-04B3, U+04B8-04BB, U+04CA, U+04D8-04D9, U+04E8-04E9, U+1E00-1E01, U+1E3E-1E3F, U+1E80-1E85, U+1EA0-1EF9, U+1F45, U+2004-2006, U+2009-200A, U+2010-2011, U+2013-201E, U+2020-2022, U+2025-2029, U+2030, U+2032-2037, U+2039-203B, U+2044, U+2052, U+2060-2064, U+2066-2069, U+2070, U+2074-2079, U+207F-2089, U+20A3-20A4, U+20A6-20AC, U+20B1, U+20B9-20BA, U+20BC-20BD, U+2103, U+2105, U+2109, U+2113, U+2116, U+2121-2122, U+2126, U+212E, U+215B-215E, U+2160-216B, U+2170-2179, U+2190-2193, U+2196-2199, U+2202, U+2206, U+2208, U+220F, U+2211-2212, U+2215, U+221A, U+221D-2220, U+2223, U+2225, U+2227-222B, U+222E, U+2234-2237, U+223D, U+2248, U+224C, U+2252, U+2260-2261, U+2264-2267, U+226E-226F, U+2295, U+2299, U+22A5, U+22BF, U+2312, U+2460-2469, U+2474-249B, U+2500-254B, U+2550-2571;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/c8318c2d.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2572-2573, U+2581-258F, U+2593-2595, U+25A0-25A1, U+25B2-25B3, U+25BC-25BD, U+25C6-25C7, U+25CA-25CB, U+25CE-25CF, U+25E2-25E5, U+2605-2606, U+2609, U+2640, U+2642, U+27E8-27E9, U+2E81, U+2E84, U+2E88, U+2E8B-2E8C, U+2E97, U+2EA7, U+2EAA, U+2EAE, U+2EB3, U+2EB6-2EB7, U+2EBB, U+2ECA, U+2FF0-2FFB, U+3000-3003, U+3005-301B, U+301D-301E, U+3021-3029, U+303E, U+3041-3094, U+309B-309E, U+30A1-30FE, U+3105-3129, U+31C0-31E3, U+3220-3229, U+3231, U+32A3, U+338E-338F, U+339C-339E, U+33A1, U+33C4, U+33CE, U+33D1-33D2, U+33D5, U+3400-347D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/d16b81b2.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+347E-367D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/de5800b9.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+367E-387D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/04737cda.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+387E-3A7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/69eed6b8.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3A7E-3C7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/caabb2f8.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3C7E-3E7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/7d597466.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3E7E-407D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/93072287.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+407E-427D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/3806d786.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+427E-447D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/ed9c0e16.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+447E-467D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/13533a7b.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+467E-487D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/c4521f8a.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+487E-4A7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/16c156ba.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4A7E-4C7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/47e14249.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4C7E-4DB5, U+4E00-4EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/b69bc98b.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4EC8-50C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/ec55b818.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+50C8-52C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/b1983207.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+52C8-54C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/a2b70b8d.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+54C8-56C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/327310e5.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+56C8-58C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/35c6e1e8.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+58C8-5AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/f06e78a3.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5AC8-5CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/59fb0629.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5CC8-5EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/e5f88a89.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5EC8-60C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/dab96253.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+60C8-62C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/d0670396.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+62C8-64C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/572553ed.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+64C8-66C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/069ccd21.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+66C8-68C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/81f1cb52.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+68C8-6AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/345f27a7.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6AC8-6CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/0677f8c7.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6CC8-6EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/176a3c25.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6EC8-70C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/9a03dd74.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+70C8-72C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/fa0f723c.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+72C8-74C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/59bf0ddc.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+74C8-76C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/128f01c0.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+76C8-78C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/5573bad4.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+78C8-7AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/430b402c.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7AC8-7CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/7869f749.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7CC8-7EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/3c758bb5.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7EC8-80C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/64ca9e8f.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+80C8-82C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/4ed8b055.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+82C8-84C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/507d57a9.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+84C8-86C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/4da3303a.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+86C8-88C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/c7543348.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+88C8-8AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/dcf6727d.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8AC8-8CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/43251e0f.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8CC8-8EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/da42afa3.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8EC8-90C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/eb6a5661.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+90C8-92C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/d04f7249.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+92C8-94C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/71731fa1.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+94C8-96C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/b18f64b0.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+96C8-98C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/e928092a.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+98C8-9AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/493c2dd9.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9AC8-9CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/c200e2a2.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9CC8-9EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/af6a73ee.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9EC8-9FFF, U+F9F1, U+FA0E-FA0F, U+FA11, U+FA13-FA14, U+FA1F, U+FA21, U+FA23-FA24, U+FA27-FA29, U+FE10-FE19, U+FE30-FE31, U+FE33-FE44, U+FE49-FE52, U+FE54-FE57, U+FE59-FE66, U+FE68-FE6B, U+FF01-FF60, U+FFE0-FFE6, U+20087, U+20089, U+200CC, U+20164, U+201EE, U+20242, U+20302, U+20542, U+20545, U+20587, U+20676, U+207AD, U+207B0, U+20A44, U+20AB1, U+20B6F, U+20BBE, U+20CD0, U+20D1F, U+20DFF, U+20EF3, U+20F1F;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Regular/b72f76e4.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2139A, U+21413, U+2144D, U+215D7, U+21681, U+216DF, U+21A18, U+21A25, U+21B36, U+21DEB, U+21ED5, U+2231A, U+2295E, U+2298F, U+22AD3, U+22AEC, U+22B38, U+22BA5, U+22CDF, U+22D80, U+22DEC, U+22F96, U+23519, U+235CB, U+2365C, U+237C4, U+237F4, U+23A3C, U+23B72, U+23C7C, U+23C97-23C98, U+23E23, U+23E8C, U+241FE, U+242EE, U+24350, U+243F6, U+246D8, U+247A4, U+249DB, U+24A0F, U+24A7D, U+24A8C, U+24AC9, U+24B5B, U+24C1C, U+24C48, U+24CC8, U+24D21, U+24D50, U+24EA5, U+25128, U+251E2, U+2538A, U+2546A, U+25532, U+25562, U+255A8, U+255FD, U+256F1, U+2591A, U+25997, U+25BBE, U+25C7C, U+25CBB, U+25DD1, U+25ED7, U+260B3, U+260C2, U+26220-26221, U+26246, U+26291, U+26351, U+26369, U+2640C, U+2648D, U+26548, U+26676, U+2677C, U+26B5C, U+26C0F, U+26C21, U+26D4F, U+277C4, U+27C35, U+27FF9, U+280BF, U+2812E, U+28263, U+28408, U+284C8, U+28678, U+28695, U+287E0, U+289C0, U+28A0F, U+28B46, U+28B49, U+28B4E, U+28C47, U+28C4D, U+28C4F, U+28C51, U+28C54, U+28E99, U+28F7B, U+294D0, U+295D7, U+29F7E, U+29F83, U+29F8C, U+2A3AD, U+2A7DD, U+2A8FB, U+2A917, U+2AA07, U+2AA17, U+2AA30, U+2AA36, U+2AA58, U+2AED0, U+2AFA2, U+2B124-2B125, U+2B127-2B128, U+2B137-2B138, U+2B1ED, U+2B300, U+2B328, U+2B363, U+2B36F, U+2B372, U+2B37D, U+2B404, U+2B410, U+2B413, U+2B461, U+2B4E7, U+2B4EF, U+2B4F6, U+2B4F9, U+2B50D-2B50E, U+2B536, U+2B5AE-2B5AF, U+2B5B3, U+2B5E7, U+2B5F4, U+2B61C-2B61D, U+2B624, U+2B626-2B628, U+2B62A, U+2B62C, U+2B695-2B696, U+2B6AD, U+2B6DE, U+2B6E9, U+2B6ED, U+2B6F6, U+2B728, U+2B7A9, U+2B7C5, U+2B7E6, U+2B7F7, U+2B7F9, U+2B7FC, U+2B806, U+2B80A, U+2B81C, U+2B892, U+2B8B8, U+2B9EF, U+2BA74, U+2BAC7, U+2BB5F, U+2BB62, U+2BB7C, U+2BB83, U+2BC1B, U+2BC30, U+2BD58, U+2BD77, U+2BD87, U+2BDF7, U+2BE29, U+2C029-2C02A, U+2C0A9, U+2C0CA, U+2C1AE, U+2C1D5, U+2C1D9, U+2C1F9, U+2C27C, U+2C288, U+2C2A4, U+2C317, U+2C35B, U+2C361, U+2C364, U+2C3DF, U+2C488, U+2C494, U+2C497, U+2C542, U+2C613, U+2C618, U+2C621, U+2C629, U+2C62B-2C62D, U+2C62F, U+2C642, U+2C64A-2C64B, U+2C72C, U+2C72F, U+2C79F, U+2C7C1, U+2C7FD, U+2C88A, U+2C8D9, U+2C8DE, U+2C8E1, U+2C8F3, U+2C907, U+2C90A, U+2C91D, U+2C9C0, U+2CA02, U+2CA0E, U+2CA7D, U+2CAA9, U+2CB29, U+2CB2B, U+2CB2D-2CB2E, U+2CB31, U+2CB38-2CB39, U+2CB3B, U+2CB3F, U+2CB41, U+2CB4A, U+2CB4E, U+2CB5A-2CB5B, U+2CB63-2CB64, U+2CB69, U+2CB6C, U+2CB6F, U+2CB73, U+2CB76, U+2CB78, U+2CB7C, U+2CBA4, U+2CBB1, U+2CBBF-2CBC0, U+2CBCE, U+2CC56, U+2CC5F, U+2CCF5-2CCF6, U+2CCFD, U+2CCFF, U+2CD02-2CD03, U+2CD0A, U+2CD8B, U+2CD8D, U+2CD8F-2CD90, U+2CD9F-2CDA0, U+2CDA8, U+2CDAD-2CDAE, U+2CDD5, U+2CE05, U+2CE18, U+2CE1A, U+2CE23, U+2CE26, U+2CE2A, U+2CE7C, U+2CE88, U+2CE93, U+2D075, U+2D079, U+2D6A6, U+2D8C7, U+2DC4A, U+2E0C4, U+2E267-2E268, U+2E26A-2E26B, U+2E428, U+2E64B, U+2E774, U+2E779, U+2E8F4, U+2E932, U+2E9F4-2E9F5, U+2EA5D, U+2F80F, U+30D7C, U+30DE5, U+310A8, U+310B1, U+3114B;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/6a46ab7f.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0-017F, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01CD-01DC, U+01E5, U+01E7, U+01E9, U+01EF-01F0, U+01F9-01FF, U+0218-021B, U+021F, U+0237, U+0251, U+0259, U+0261, U+0292, U+02BB-02BC, U+02C6-02C7, U+02C9-02CB, U+02D8-02DD, U+02F3, U+0300-0304, U+0306-030A, U+030C, U+030F, U+0323, U+0326-0327, U+0335, U+0338, U+037E, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03CE, U+03D1-03D2, U+03D6, U+0400-0429;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/0a645f1a.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+042A-045F, U+0462-0463, U+046B, U+0472-0475, U+0490-0493, U+0497, U+049A-049D, U+04A2-04A3, U+04AE-04B3, U+04B8-04BB, U+04CA, U+04D8-04D9, U+04E8-04E9, U+1E00-1E01, U+1E3E-1E3F, U+1E80-1E85, U+1EA0-1EF9, U+1F45, U+2004-2006, U+2009-200A, U+2010-2011, U+2013-201E, U+2020-2022, U+2025-2029, U+2030, U+2032-2037, U+2039-203B, U+2044, U+2052, U+2060-2064, U+2066-2069, U+2070, U+2074-2079, U+207F-2089, U+20A3-20A4, U+20A6-20AC, U+20B1, U+20B9-20BA, U+20BC-20BD, U+2103, U+2105, U+2109, U+2113, U+2116, U+2121-2122, U+2126, U+212E, U+215B-215E, U+2160-216B, U+2170-2179, U+2190-2193, U+2196-2199, U+2202, U+2206, U+2208, U+220F, U+2211-2212, U+2215, U+221A, U+221D-2220, U+2223, U+2225, U+2227-222B, U+222E, U+2234-2237, U+223D, U+2248, U+224C, U+2252, U+2260-2261, U+2264-2267, U+226E-226F, U+2295, U+2299, U+22A5, U+22BF, U+2312, U+2460-2469, U+2474-249B, U+2500-254B, U+2550-2571;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/c8318c2d.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2572-2573, U+2581-258F, U+2593-2595, U+25A0-25A1, U+25B2-25B3, U+25BC-25BD, U+25C6-25C7, U+25CA-25CB, U+25CE-25CF, U+25E2-25E5, U+2605-2606, U+2609, U+2640, U+2642, U+27E8-27E9, U+2E81, U+2E84, U+2E88, U+2E8B-2E8C, U+2E97, U+2EA7, U+2EAA, U+2EAE, U+2EB3, U+2EB6-2EB7, U+2EBB, U+2ECA, U+2FF0-2FFB, U+3000-3003, U+3005-301B, U+301D-301E, U+3021-3029, U+303E, U+3041-3094, U+309B-309E, U+30A1-30FE, U+3105-3129, U+31C0-31E3, U+3220-3229, U+3231, U+32A3, U+338E-338F, U+339C-339E, U+33A1, U+33C4, U+33CE, U+33D1-33D2, U+33D5, U+3400-347D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/d16b81b2.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+347E-367D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/de5800b9.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+367E-387D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/04737cda.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+387E-3A7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/69eed6b8.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3A7E-3C7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/caabb2f8.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3C7E-3E7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/7d597466.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3E7E-407D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/93072287.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+407E-427D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/3806d786.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+427E-447D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/ed9c0e16.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+447E-467D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/13533a7b.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+467E-487D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/c4521f8a.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+487E-4A7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/16c156ba.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4A7E-4C7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/47e14249.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4C7E-4DB5, U+4E00-4EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/b69bc98b.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4EC8-50C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/ec55b818.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+50C8-52C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/b1983207.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+52C8-54C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/a2b70b8d.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+54C8-56C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/327310e5.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+56C8-58C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/35c6e1e8.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+58C8-5AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/f06e78a3.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5AC8-5CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/59fb0629.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5CC8-5EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/e5f88a89.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5EC8-60C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/dab96253.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+60C8-62C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/d0670396.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+62C8-64C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/572553ed.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+64C8-66C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/069ccd21.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+66C8-68C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/81f1cb52.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+68C8-6AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/345f27a7.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6AC8-6CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/0677f8c7.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6CC8-6EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/176a3c25.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6EC8-70C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/9a03dd74.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+70C8-72C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/fa0f723c.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+72C8-74C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/59bf0ddc.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+74C8-76C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/128f01c0.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+76C8-78C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/5573bad4.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+78C8-7AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/430b402c.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7AC8-7CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/7869f749.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7CC8-7EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/3c758bb5.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7EC8-80C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/64ca9e8f.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+80C8-82C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/4ed8b055.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+82C8-84C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/507d57a9.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+84C8-86C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/4da3303a.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+86C8-88C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/c7543348.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+88C8-8AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/dcf6727d.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8AC8-8CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/43251e0f.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8CC8-8EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/da42afa3.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8EC8-90C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/eb6a5661.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+90C8-92C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/d04f7249.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+92C8-94C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/71731fa1.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+94C8-96C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/b18f64b0.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+96C8-98C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/e928092a.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+98C8-9AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/493c2dd9.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9AC8-9CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/c200e2a2.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9CC8-9EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/af6a73ee.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9EC8-9FFF, U+F9F1, U+FA0E-FA0F, U+FA11, U+FA13-FA14, U+FA1F, U+FA21, U+FA23-FA24, U+FA27-FA29, U+FE10-FE19, U+FE30-FE31, U+FE33-FE44, U+FE49-FE52, U+FE54-FE57, U+FE59-FE66, U+FE68-FE6B, U+FF01-FF60, U+FFE0-FFE6, U+20087, U+20089, U+200CC, U+20164, U+201EE, U+20242, U+20302, U+20542, U+20545, U+20587, U+20676, U+207AD, U+207B0, U+20A44, U+20AB1, U+20B6F, U+20BBE, U+20CD0, U+20D1F, U+20DFF, U+20EF3, U+20F1F;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Medium/b72f76e4.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2139A, U+21413, U+2144D, U+215D7, U+21681, U+216DF, U+21A18, U+21A25, U+21B36, U+21DEB, U+21ED5, U+2231A, U+2295E, U+2298F, U+22AD3, U+22AEC, U+22B38, U+22BA5, U+22CDF, U+22D80, U+22DEC, U+22F96, U+23519, U+235CB, U+2365C, U+237C4, U+237F4, U+23A3C, U+23B72, U+23C7C, U+23C97-23C98, U+23E23, U+23E8C, U+241FE, U+242EE, U+24350, U+243F6, U+246D8, U+247A4, U+249DB, U+24A0F, U+24A7D, U+24A8C, U+24AC9, U+24B5B, U+24C1C, U+24C48, U+24CC8, U+24D21, U+24D50, U+24EA5, U+25128, U+251E2, U+2538A, U+2546A, U+25532, U+25562, U+255A8, U+255FD, U+256F1, U+2591A, U+25997, U+25BBE, U+25C7C, U+25CBB, U+25DD1, U+25ED7, U+260B3, U+260C2, U+26220-26221, U+26246, U+26291, U+26351, U+26369, U+2640C, U+2648D, U+26548, U+26676, U+2677C, U+26B5C, U+26C0F, U+26C21, U+26D4F, U+277C4, U+27C35, U+27FF9, U+280BF, U+2812E, U+28263, U+28408, U+284C8, U+28678, U+28695, U+287E0, U+289C0, U+28A0F, U+28B46, U+28B49, U+28B4E, U+28C47, U+28C4D, U+28C4F, U+28C51, U+28C54, U+28E99, U+28F7B, U+294D0, U+295D7, U+29F7E, U+29F83, U+29F8C, U+2A3AD, U+2A7DD, U+2A8FB, U+2A917, U+2AA07, U+2AA17, U+2AA30, U+2AA36, U+2AA58, U+2AED0, U+2AFA2, U+2B124-2B125, U+2B127-2B128, U+2B137-2B138, U+2B1ED, U+2B300, U+2B328, U+2B363, U+2B36F, U+2B372, U+2B37D, U+2B404, U+2B410, U+2B413, U+2B461, U+2B4E7, U+2B4EF, U+2B4F6, U+2B4F9, U+2B50D-2B50E, U+2B536, U+2B5AE-2B5AF, U+2B5B3, U+2B5E7, U+2B5F4, U+2B61C-2B61D, U+2B624, U+2B626-2B628, U+2B62A, U+2B62C, U+2B695-2B696, U+2B6AD, U+2B6DE, U+2B6E9, U+2B6ED, U+2B6F6, U+2B728, U+2B7A9, U+2B7C5, U+2B7E6, U+2B7F7, U+2B7F9, U+2B7FC, U+2B806, U+2B80A, U+2B81C, U+2B892, U+2B8B8, U+2B9EF, U+2BA74, U+2BAC7, U+2BB5F, U+2BB62, U+2BB7C, U+2BB83, U+2BC1B, U+2BC30, U+2BD58, U+2BD77, U+2BD87, U+2BDF7, U+2BE29, U+2C029-2C02A, U+2C0A9, U+2C0CA, U+2C1AE, U+2C1D5, U+2C1D9, U+2C1F9, U+2C27C, U+2C288, U+2C2A4, U+2C317, U+2C35B, U+2C361, U+2C364, U+2C3DF, U+2C488, U+2C494, U+2C497, U+2C542, U+2C613, U+2C618, U+2C621, U+2C629, U+2C62B-2C62D, U+2C62F, U+2C642, U+2C64A-2C64B, U+2C72C, U+2C72F, U+2C79F, U+2C7C1, U+2C7FD, U+2C88A, U+2C8D9, U+2C8DE, U+2C8E1, U+2C8F3, U+2C907, U+2C90A, U+2C91D, U+2C9C0, U+2CA02, U+2CA0E, U+2CA7D, U+2CAA9, U+2CB29, U+2CB2B, U+2CB2D-2CB2E, U+2CB31, U+2CB38-2CB39, U+2CB3B, U+2CB3F, U+2CB41, U+2CB4A, U+2CB4E, U+2CB5A-2CB5B, U+2CB63-2CB64, U+2CB69, U+2CB6C, U+2CB6F, U+2CB73, U+2CB76, U+2CB78, U+2CB7C, U+2CBA4, U+2CBB1, U+2CBBF-2CBC0, U+2CBCE, U+2CC56, U+2CC5F, U+2CCF5-2CCF6, U+2CCFD, U+2CCFF, U+2CD02-2CD03, U+2CD0A, U+2CD8B, U+2CD8D, U+2CD8F-2CD90, U+2CD9F-2CDA0, U+2CDA8, U+2CDAD-2CDAE, U+2CDD5, U+2CE05, U+2CE18, U+2CE1A, U+2CE23, U+2CE26, U+2CE2A, U+2CE7C, U+2CE88, U+2CE93, U+2D075, U+2D079, U+2D6A6, U+2D8C7, U+2DC4A, U+2E0C4, U+2E267-2E268, U+2E26A-2E26B, U+2E428, U+2E64B, U+2E774, U+2E779, U+2E8F4, U+2E932, U+2E9F4-2E9F5, U+2EA5D, U+2F80F, U+30D7C, U+30DE5, U+310A8, U+310B1, U+3114B;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/6a46ab7f.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0-017F, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01CD-01DC, U+01E5, U+01E7, U+01E9, U+01EF-01F0, U+01F9-01FF, U+0218-021B, U+021F, U+0237, U+0251, U+0259, U+0261, U+0292, U+02BB-02BC, U+02C6-02C7, U+02C9-02CB, U+02D8-02DD, U+02F3, U+0300-0304, U+0306-030A, U+030C, U+030F, U+0323, U+0326-0327, U+0335, U+0338, U+037E, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03CE, U+03D1-03D2, U+03D6, U+0400-0429;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/0a645f1a.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+042A-045F, U+0462-0463, U+046B, U+0472-0475, U+0490-0493, U+0497, U+049A-049D, U+04A2-04A3, U+04AE-04B3, U+04B8-04BB, U+04CA, U+04D8-04D9, U+04E8-04E9, U+1E00-1E01, U+1E3E-1E3F, U+1E80-1E85, U+1EA0-1EF9, U+1F45, U+2004-2006, U+2009-200A, U+2010-2011, U+2013-201E, U+2020-2022, U+2025-2029, U+2030, U+2032-2037, U+2039-203B, U+2044, U+2052, U+2060-2064, U+2066-2069, U+2070, U+2074-2079, U+207F-2089, U+20A3-20A4, U+20A6-20AC, U+20B1, U+20B9-20BA, U+20BC-20BD, U+2103, U+2105, U+2109, U+2113, U+2116, U+2121-2122, U+2126, U+212E, U+215B-215E, U+2160-216B, U+2170-2179, U+2190-2193, U+2196-2199, U+2202, U+2206, U+2208, U+220F, U+2211-2212, U+2215, U+221A, U+221D-2220, U+2223, U+2225, U+2227-222B, U+222E, U+2234-2237, U+223D, U+2248, U+224C, U+2252, U+2260-2261, U+2264-2267, U+226E-226F, U+2295, U+2299, U+22A5, U+22BF, U+2312, U+2460-2469, U+2474-249B, U+2500-254B, U+2550-2571;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/c8318c2d.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2572-2573, U+2581-258F, U+2593-2595, U+25A0-25A1, U+25B2-25B3, U+25BC-25BD, U+25C6-25C7, U+25CA-25CB, U+25CE-25CF, U+25E2-25E5, U+2605-2606, U+2609, U+2640, U+2642, U+27E8-27E9, U+2E81, U+2E84, U+2E88, U+2E8B-2E8C, U+2E97, U+2EA7, U+2EAA, U+2EAE, U+2EB3, U+2EB6-2EB7, U+2EBB, U+2ECA, U+2FF0-2FFB, U+3000-3003, U+3005-301B, U+301D-301E, U+3021-3029, U+303E, U+3041-3094, U+309B-309E, U+30A1-30FE, U+3105-3129, U+31C0-31E3, U+3220-3229, U+3231, U+32A3, U+338E-338F, U+339C-339E, U+33A1, U+33C4, U+33CE, U+33D1-33D2, U+33D5, U+3400-347D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/d16b81b2.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+347E-367D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/de5800b9.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+367E-387D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/04737cda.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+387E-3A7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/69eed6b8.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3A7E-3C7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/caabb2f8.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3C7E-3E7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/7d597466.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3E7E-407D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/93072287.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+407E-427D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/3806d786.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+427E-447D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/ed9c0e16.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+447E-467D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/13533a7b.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+467E-487D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/c4521f8a.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+487E-4A7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/16c156ba.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4A7E-4C7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/47e14249.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4C7E-4DB5, U+4E00-4EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/b69bc98b.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4EC8-50C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/ec55b818.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+50C8-52C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/b1983207.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+52C8-54C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/a2b70b8d.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+54C8-56C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/327310e5.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+56C8-58C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/35c6e1e8.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+58C8-5AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/f06e78a3.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5AC8-5CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/59fb0629.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5CC8-5EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/e5f88a89.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5EC8-60C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/dab96253.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+60C8-62C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/d0670396.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+62C8-64C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/572553ed.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+64C8-66C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/069ccd21.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+66C8-68C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/81f1cb52.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+68C8-6AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/345f27a7.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6AC8-6CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/0677f8c7.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6CC8-6EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/176a3c25.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6EC8-70C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/9a03dd74.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+70C8-72C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/fa0f723c.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+72C8-74C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/59bf0ddc.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+74C8-76C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/128f01c0.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+76C8-78C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/5573bad4.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+78C8-7AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/430b402c.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7AC8-7CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/7869f749.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7CC8-7EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/3c758bb5.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7EC8-80C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/64ca9e8f.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+80C8-82C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/4ed8b055.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+82C8-84C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/507d57a9.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+84C8-86C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/4da3303a.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+86C8-88C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/c7543348.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+88C8-8AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/dcf6727d.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8AC8-8CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/43251e0f.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8CC8-8EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/da42afa3.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8EC8-90C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/eb6a5661.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+90C8-92C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/d04f7249.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+92C8-94C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/71731fa1.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+94C8-96C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/b18f64b0.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+96C8-98C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/e928092a.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+98C8-9AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/493c2dd9.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9AC8-9CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/c200e2a2.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9CC8-9EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/af6a73ee.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9EC8-9FFF, U+F9F1, U+FA0E-FA0F, U+FA11, U+FA13-FA14, U+FA1F, U+FA21, U+FA23-FA24, U+FA27-FA29, U+FE10-FE19, U+FE30-FE31, U+FE33-FE44, U+FE49-FE52, U+FE54-FE57, U+FE59-FE66, U+FE68-FE6B, U+FF01-FF60, U+FFE0-FFE6, U+20087, U+20089, U+200CC, U+20164, U+201EE, U+20242, U+20302, U+20542, U+20545, U+20587, U+20676, U+207AD, U+207B0, U+20A44, U+20AB1, U+20B6F, U+20BBE, U+20CD0, U+20D1F, U+20DFF, U+20EF3, U+20F1F;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Bold/b72f76e4.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2139A, U+21413, U+2144D, U+215D7, U+21681, U+216DF, U+21A18, U+21A25, U+21B36, U+21DEB, U+21ED5, U+2231A, U+2295E, U+2298F, U+22AD3, U+22AEC, U+22B38, U+22BA5, U+22CDF, U+22D80, U+22DEC, U+22F96, U+23519, U+235CB, U+2365C, U+237C4, U+237F4, U+23A3C, U+23B72, U+23C7C, U+23C97-23C98, U+23E23, U+23E8C, U+241FE, U+242EE, U+24350, U+243F6, U+246D8, U+247A4, U+249DB, U+24A0F, U+24A7D, U+24A8C, U+24AC9, U+24B5B, U+24C1C, U+24C48, U+24CC8, U+24D21, U+24D50, U+24EA5, U+25128, U+251E2, U+2538A, U+2546A, U+25532, U+25562, U+255A8, U+255FD, U+256F1, U+2591A, U+25997, U+25BBE, U+25C7C, U+25CBB, U+25DD1, U+25ED7, U+260B3, U+260C2, U+26220-26221, U+26246, U+26291, U+26351, U+26369, U+2640C, U+2648D, U+26548, U+26676, U+2677C, U+26B5C, U+26C0F, U+26C21, U+26D4F, U+277C4, U+27C35, U+27FF9, U+280BF, U+2812E, U+28263, U+28408, U+284C8, U+28678, U+28695, U+287E0, U+289C0, U+28A0F, U+28B46, U+28B49, U+28B4E, U+28C47, U+28C4D, U+28C4F, U+28C51, U+28C54, U+28E99, U+28F7B, U+294D0, U+295D7, U+29F7E, U+29F83, U+29F8C, U+2A3AD, U+2A7DD, U+2A8FB, U+2A917, U+2AA07, U+2AA17, U+2AA30, U+2AA36, U+2AA58, U+2AED0, U+2AFA2, U+2B124-2B125, U+2B127-2B128, U+2B137-2B138, U+2B1ED, U+2B300, U+2B328, U+2B363, U+2B36F, U+2B372, U+2B37D, U+2B404, U+2B410, U+2B413, U+2B461, U+2B4E7, U+2B4EF, U+2B4F6, U+2B4F9, U+2B50D-2B50E, U+2B536, U+2B5AE-2B5AF, U+2B5B3, U+2B5E7, U+2B5F4, U+2B61C-2B61D, U+2B624, U+2B626-2B628, U+2B62A, U+2B62C, U+2B695-2B696, U+2B6AD, U+2B6DE, U+2B6E9, U+2B6ED, U+2B6F6, U+2B728, U+2B7A9, U+2B7C5, U+2B7E6, U+2B7F7, U+2B7F9, U+2B7FC, U+2B806, U+2B80A, U+2B81C, U+2B892, U+2B8B8, U+2B9EF, U+2BA74, U+2BAC7, U+2BB5F, U+2BB62, U+2BB7C, U+2BB83, U+2BC1B, U+2BC30, U+2BD58, U+2BD77, U+2BD87, U+2BDF7, U+2BE29, U+2C029-2C02A, U+2C0A9, U+2C0CA, U+2C1AE, U+2C1D5, U+2C1D9, U+2C1F9, U+2C27C, U+2C288, U+2C2A4, U+2C317, U+2C35B, U+2C361, U+2C364, U+2C3DF, U+2C488, U+2C494, U+2C497, U+2C542, U+2C613, U+2C618, U+2C621, U+2C629, U+2C62B-2C62D, U+2C62F, U+2C642, U+2C64A-2C64B, U+2C72C, U+2C72F, U+2C79F, U+2C7C1, U+2C7FD, U+2C88A, U+2C8D9, U+2C8DE, U+2C8E1, U+2C8F3, U+2C907, U+2C90A, U+2C91D, U+2C9C0, U+2CA02, U+2CA0E, U+2CA7D, U+2CAA9, U+2CB29, U+2CB2B, U+2CB2D-2CB2E, U+2CB31, U+2CB38-2CB39, U+2CB3B, U+2CB3F, U+2CB41, U+2CB4A, U+2CB4E, U+2CB5A-2CB5B, U+2CB63-2CB64, U+2CB69, U+2CB6C, U+2CB6F, U+2CB73, U+2CB76, U+2CB78, U+2CB7C, U+2CBA4, U+2CBB1, U+2CBBF-2CBC0, U+2CBCE, U+2CC56, U+2CC5F, U+2CCF5-2CCF6, U+2CCFD, U+2CCFF, U+2CD02-2CD03, U+2CD0A, U+2CD8B, U+2CD8D, U+2CD8F-2CD90, U+2CD9F-2CDA0, U+2CDA8, U+2CDAD-2CDAE, U+2CDD5, U+2CE05, U+2CE18, U+2CE1A, U+2CE23, U+2CE26, U+2CE2A, U+2CE7C, U+2CE88, U+2CE93, U+2D075, U+2D079, U+2D6A6, U+2D8C7, U+2DC4A, U+2E0C4, U+2E267-2E268, U+2E26A-2E26B, U+2E428, U+2E64B, U+2E774, U+2E779, U+2E8F4, U+2E932, U+2E9F4-2E9F5, U+2EA5D, U+2F80F, U+30D7C, U+30DE5, U+310A8, U+310B1, U+3114B;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/6a46ab7f.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0-017F, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01CD-01DC, U+01E5, U+01E7, U+01E9, U+01EF-01F0, U+01F9-01FF, U+0218-021B, U+021F, U+0237, U+0251, U+0259, U+0261, U+0292, U+02BB-02BC, U+02C6-02C7, U+02C9-02CB, U+02D8-02DD, U+02F3, U+0300-0304, U+0306-030A, U+030C, U+030F, U+0323, U+0326-0327, U+0335, U+0338, U+037E, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03CE, U+03D1-03D2, U+03D6, U+0400-0429;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/0a645f1a.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+042A-045F, U+0462-0463, U+046B, U+0472-0475, U+0490-0493, U+0497, U+049A-049D, U+04A2-04A3, U+04AE-04B3, U+04B8-04BB, U+04CA, U+04D8-04D9, U+04E8-04E9, U+1E00-1E01, U+1E3E-1E3F, U+1E80-1E85, U+1EA0-1EF9, U+1F45, U+2004-2006, U+2009-200A, U+2010-2011, U+2013-201E, U+2020-2022, U+2025-2029, U+2030, U+2032-2037, U+2039-203B, U+2044, U+2052, U+2060-2064, U+2066-2069, U+2070, U+2074-2079, U+207F-2089, U+20A3-20A4, U+20A6-20AC, U+20B1, U+20B9-20BA, U+20BC-20BD, U+2103, U+2105, U+2109, U+2113, U+2116, U+2121-2122, U+2126, U+212E, U+215B-215E, U+2160-216B, U+2170-2179, U+2190-2193, U+2196-2199, U+2202, U+2206, U+2208, U+220F, U+2211-2212, U+2215, U+221A, U+221D-2220, U+2223, U+2225, U+2227-222B, U+222E, U+2234-2237, U+223D, U+2248, U+224C, U+2252, U+2260-2261, U+2264-2267, U+226E-226F, U+2295, U+2299, U+22A5, U+22BF, U+2312, U+2460-2469, U+2474-249B, U+2500-254B, U+2550-2571;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/c8318c2d.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2572-2573, U+2581-258F, U+2593-2595, U+25A0-25A1, U+25B2-25B3, U+25BC-25BD, U+25C6-25C7, U+25CA-25CB, U+25CE-25CF, U+25E2-25E5, U+2605-2606, U+2609, U+2640, U+2642, U+27E8-27E9, U+2E81, U+2E84, U+2E88, U+2E8B-2E8C, U+2E97, U+2EA7, U+2EAA, U+2EAE, U+2EB3, U+2EB6-2EB7, U+2EBB, U+2ECA, U+2FF0-2FFB, U+3000-3003, U+3005-301B, U+301D-301E, U+3021-3029, U+303E, U+3041-3094, U+309B-309E, U+30A1-30FE, U+3105-3129, U+31C0-31E3, U+3220-3229, U+3231, U+32A3, U+338E-338F, U+339C-339E, U+33A1, U+33C4, U+33CE, U+33D1-33D2, U+33D5, U+3400-347D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/d16b81b2.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+347E-367D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/de5800b9.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+367E-387D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/04737cda.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+387E-3A7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/69eed6b8.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3A7E-3C7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/caabb2f8.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3C7E-3E7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/7d597466.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3E7E-407D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/93072287.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+407E-427D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/3806d786.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+427E-447D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/ed9c0e16.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+447E-467D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/13533a7b.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+467E-487D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/c4521f8a.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+487E-4A7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/16c156ba.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4A7E-4C7D;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/47e14249.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4C7E-4DB5, U+4E00-4EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/b69bc98b.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4EC8-50C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/ec55b818.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+50C8-52C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/b1983207.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+52C8-54C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/a2b70b8d.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+54C8-56C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/327310e5.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+56C8-58C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/35c6e1e8.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+58C8-5AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/f06e78a3.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5AC8-5CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/59fb0629.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5CC8-5EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/e5f88a89.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+5EC8-60C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/dab96253.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+60C8-62C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/d0670396.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+62C8-64C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/572553ed.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+64C8-66C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/069ccd21.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+66C8-68C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/81f1cb52.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+68C8-6AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/345f27a7.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6AC8-6CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/0677f8c7.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6CC8-6EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/176a3c25.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+6EC8-70C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/9a03dd74.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+70C8-72C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/fa0f723c.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+72C8-74C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/59bf0ddc.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+74C8-76C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/128f01c0.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+76C8-78C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/5573bad4.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+78C8-7AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/430b402c.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7AC8-7CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/7869f749.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7CC8-7EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/3c758bb5.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+7EC8-80C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/64ca9e8f.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+80C8-82C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/4ed8b055.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+82C8-84C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/507d57a9.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+84C8-86C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/4da3303a.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+86C8-88C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/c7543348.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+88C8-8AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/dcf6727d.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8AC8-8CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/43251e0f.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8CC8-8EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/da42afa3.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+8EC8-90C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/eb6a5661.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+90C8-92C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/d04f7249.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+92C8-94C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/71731fa1.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+94C8-96C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/b18f64b0.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+96C8-98C7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/e928092a.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+98C8-9AC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/493c2dd9.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9AC8-9CC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/c200e2a2.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9CC8-9EC7;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/af6a73ee.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+9EC8-9FFF, U+F9F1, U+FA0E-FA0F, U+FA11, U+FA13-FA14, U+FA1F, U+FA21, U+FA23-FA24, U+FA27-FA29, U+FE10-FE19, U+FE30-FE31, U+FE33-FE44, U+FE49-FE52, U+FE54-FE57, U+FE59-FE66, U+FE68-FE6B, U+FF01-FF60, U+FFE0-FFE6, U+20087, U+20089, U+200CC, U+20164, U+201EE, U+20242, U+20302, U+20542, U+20545, U+20587, U+20676, U+207AD, U+207B0, U+20A44, U+20AB1, U+20B6F, U+20BBE, U+20CD0, U+20D1F, U+20DFF, U+20EF3, U+20F1F;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("./HarmonyOS_SansSC_Black/b72f76e4.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2139A, U+21413, U+2144D, U+215D7, U+21681, U+216DF, U+21A18, U+21A25, U+21B36, U+21DEB, U+21ED5, U+2231A, U+2295E, U+2298F, U+22AD3, U+22AEC, U+22B38, U+22BA5, U+22CDF, U+22D80, U+22DEC, U+22F96, U+23519, U+235CB, U+2365C, U+237C4, U+237F4, U+23A3C, U+23B72, U+23C7C, U+23C97-23C98, U+23E23, U+23E8C, U+241FE, U+242EE, U+24350, U+243F6, U+246D8, U+247A4, U+249DB, U+24A0F, U+24A7D, U+24A8C, U+24AC9, U+24B5B, U+24C1C, U+24C48, U+24CC8, U+24D21, U+24D50, U+24EA5, U+25128, U+251E2, U+2538A, U+2546A, U+25532, U+25562, U+255A8, U+255FD, U+256F1, U+2591A, U+25997, U+25BBE, U+25C7C, U+25CBB, U+25DD1, U+25ED7, U+260B3, U+260C2, U+26220-26221, U+26246, U+26291, U+26351, U+26369, U+2640C, U+2648D, U+26548, U+26676, U+2677C, U+26B5C, U+26C0F, U+26C21, U+26D4F, U+277C4, U+27C35, U+27FF9, U+280BF, U+2812E, U+28263, U+28408, U+284C8, U+28678, U+28695, U+287E0, U+289C0, U+28A0F, U+28B46, U+28B49, U+28B4E, U+28C47, U+28C4D, U+28C4F, U+28C51, U+28C54, U+28E99, U+28F7B, U+294D0, U+295D7, U+29F7E, U+29F83, U+29F8C, U+2A3AD, U+2A7DD, U+2A8FB, U+2A917, U+2AA07, U+2AA17, U+2AA30, U+2AA36, U+2AA58, U+2AED0, U+2AFA2, U+2B124-2B125, U+2B127-2B128, U+2B137-2B138, U+2B1ED, U+2B300, U+2B328, U+2B363, U+2B36F, U+2B372, U+2B37D, U+2B404, U+2B410, U+2B413, U+2B461, U+2B4E7, U+2B4EF, U+2B4F6, U+2B4F9, U+2B50D-2B50E, U+2B536, U+2B5AE-2B5AF, U+2B5B3, U+2B5E7, U+2B5F4, U+2B61C-2B61D, U+2B624, U+2B626-2B628, U+2B62A, U+2B62C, U+2B695-2B696, U+2B6AD, U+2B6DE, U+2B6E9, U+2B6ED, U+2B6F6, U+2B728, U+2B7A9, U+2B7C5, U+2B7E6, U+2B7F7, U+2B7F9, U+2B7FC, U+2B806, U+2B80A, U+2B81C, U+2B892, U+2B8B8, U+2B9EF, U+2BA74, U+2BAC7, U+2BB5F, U+2BB62, U+2BB7C, U+2BB83, U+2BC1B, U+2BC30, U+2BD58, U+2BD77, U+2BD87, U+2BDF7, U+2BE29, U+2C029-2C02A, U+2C0A9, U+2C0CA, U+2C1AE, U+2C1D5, U+2C1D9, U+2C1F9, U+2C27C, U+2C288, U+2C2A4, U+2C317, U+2C35B, U+2C361, U+2C364, U+2C3DF, U+2C488, U+2C494, U+2C497, U+2C542, U+2C613, U+2C618, U+2C621, U+2C629, U+2C62B-2C62D, U+2C62F, U+2C642, U+2C64A-2C64B, U+2C72C, U+2C72F, U+2C79F, U+2C7C1, U+2C7FD, U+2C88A, U+2C8D9, U+2C8DE, U+2C8E1, U+2C8F3, U+2C907, U+2C90A, U+2C91D, U+2C9C0, U+2CA02, U+2CA0E, U+2CA7D, U+2CAA9, U+2CB29, U+2CB2B, U+2CB2D-2CB2E, U+2CB31, U+2CB38-2CB39, U+2CB3B, U+2CB3F, U+2CB41, U+2CB4A, U+2CB4E, U+2CB5A-2CB5B, U+2CB63-2CB64, U+2CB69, U+2CB6C, U+2CB6F, U+2CB73, U+2CB76, U+2CB78, U+2CB7C, U+2CBA4, U+2CBB1, U+2CBBF-2CBC0, U+2CBCE, U+2CC56, U+2CC5F, U+2CCF5-2CCF6, U+2CCFD, U+2CCFF, U+2CD02-2CD03, U+2CD0A, U+2CD8B, U+2CD8D, U+2CD8F-2CD90, U+2CD9F-2CDA0, U+2CDA8, U+2CDAD-2CDAE, U+2CDD5, U+2CE05, U+2CE18, U+2CE1A, U+2CE23, U+2CE26, U+2CE2A, U+2CE7C, U+2CE88, U+2CE93, U+2D075, U+2D079, U+2D6A6, U+2D8C7, U+2DC4A, U+2E0C4, U+2E267-2E268, U+2E26A-2E26B, U+2E428, U+2E64B, U+2E774, U+2E779, U+2E8F4, U+2E932, U+2E9F4-2E9F5, U+2EA5D, U+2F80F, U+30D7C, U+30DE5, U+310A8, U+310B1, U+3114B;
+}
