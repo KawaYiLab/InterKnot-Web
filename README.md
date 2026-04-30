@@ -1,4 +1,4 @@
-# 绳网 Web (Inter-Knot Web)
+# 绳网 (InterKnot)
 
 <p align="center">
   <img src="icon.webp" alt="Inter-Knot Logo" width="120" />
