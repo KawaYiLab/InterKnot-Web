@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/Node-%E2%89%A520.18-339933?logo=nodedotjs&logoColor=white" alt="Node">
 </p>
 
-本项目是 [KawaYiLab/InterKnot-App](https://github.com/KawaYiLab/InterKnot-App)（Flutter 版）独立开发的 **Web 前端**，使用 Nuxt 4 从零构建，采用绝区零视觉风格，后端对接自建 Strapi v5。
+本项目是 [KawaYiLab/InterKnot-App](https://github.com/KawaYiLab/InterKnot-App) 独立开发的**网页前端**，使用 Nuxt 4 从零构建，模仿绝区零UI风格，后端对接自建 Strapi v5。
 
 > 📱 移动端请前往 [KawaYiLab/InterKnot-App](https://github.com/KawaYiLab/InterKnot-App)（Android / iOS）。
 
