@@ -154,7 +154,7 @@ InterKnot-web/
 
 ```
 Copyright (c) 2024 share121
-Copyright (c) 2026 yinengbei
+Copyright (c) 2026 KawaYi
 ```
 
 [zenless-ui](https://github.com/ChrisChan13/zenless-ui) 组件库由 ChrisChan13 开发，基于 MIT License。
