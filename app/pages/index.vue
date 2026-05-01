@@ -272,13 +272,12 @@ watch(
   { flush: "post" },
 );
 
+// 在 setup 阶段提前发起首屏数据请求，不等 onMounted
+pageDataLoading.claim();
+const initialFetchPromise = fetchList(true).finally(() => pageDataLoading.finish());
+
 onMounted(async () => {
-  pageDataLoading.claim();
-  try {
-    await fetchList(true);
-  } finally {
-    pageDataLoading.finish();
-  }
+  await initialFetchPromise;
   await nextTick();
   observeLoadMoreSentinel();
 });

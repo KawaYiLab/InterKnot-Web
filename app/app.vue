@@ -40,19 +40,19 @@ const handleOverlayClose = () => {
 
     <!-- 登录弹窗 -->
     <ClientOnly>
-      <LoginDialog />
+      <LazyLoginDialog />
     </ClientOnly>
 
     <!-- 确认弹窗 -->
     <ClientOnly>
-      <ConfirmDialog />
+      <LazyConfirmDialog />
     </ClientOnly>
 
     <!-- 帖子详情弹窗（从首页点击卡片时弹出） -->
     <ClientOnly>
       <Teleport to="body">
         <Transition name="ik-overlay" appear @after-leave="discussionModal.clearAfterLeave()">
-          <DiscussionOverlay
+          <LazyDiscussionOverlay
             v-if="discussionModal.isOpen.value"
             :discussion-id="discussionModal.discussionId.value || ''"
             :cover-hint="discussionModal.coverHint.value"

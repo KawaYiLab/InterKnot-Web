@@ -101,6 +101,19 @@ export default defineNuxtPlugin(() => {
   const config = useRuntimeConfig();
   const baseURL = config.public.apiBaseUrl;
 
+  // Preconnect to API domain to speed up first request
+  if (import.meta.client && baseURL) {
+    try {
+      const origin = new URL(baseURL).origin;
+      if (!document.querySelector(`link[rel="preconnect"][href="${origin}"]`)) {
+        const link = document.createElement("link");
+        link.rel = "preconnect";
+        link.href = origin;
+        document.head.appendChild(link);
+      }
+    } catch { /* invalid URL, skip */ }
+  }
+
   const baseApi = $fetch.create({
     baseURL,
     headers: {
