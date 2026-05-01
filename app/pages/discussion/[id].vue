@@ -208,7 +208,20 @@ const handleDeleteReply = async (reply: Comment["replies"][number], parentCommen
 const pageTitle = computed(() =>
   discussion.value?.title ? `${discussion.value.title} - 绳网` : "绳网",
 );
-useHead({ title: pageTitle });
+const pageDescription = computed(() => {
+  const text = discussion.value?.bodyText || discussion.value?.rawBodyText || "";
+  return text.length > 160 ? text.slice(0, 157) + "..." : text || "绳网是一个游戏、技术交流平台";
+});
+const pageCover = computed(() => discussion.value?.cover || "/images/zzzicon_200x200.png");
+
+useSeoMeta({
+  title: pageTitle,
+  description: pageDescription,
+  ogTitle: pageTitle,
+  ogDescription: pageDescription,
+  ogImage: pageCover,
+  ogType: "article",
+});
 
 onMounted(async () => {
   pageDataLoading.claim();
