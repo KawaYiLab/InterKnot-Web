@@ -28,6 +28,7 @@ export default defineNuxtConfig({
       link: [
         { rel: "icon", type: "image/png", href: "/favicon.png" },
         { rel: "stylesheet", href: "/fonts/fonts.css" },
+        { rel: "preconnect", href: "https://image.tiwat.cn" },
       ],
       htmlAttrs: {
         lang: "zh-CN",
