@@ -161,9 +161,11 @@ function extractPaginationMeta(payload: unknown): BackendPaginationMeta | undefi
 function toAuthor(raw: unknown, apiBaseUrl: string): Author {
   const data = (raw || {}) as Record<string, unknown>;
   const authorRelation = data.author && typeof data.author === "object" ? data.author as Record<string, unknown> : null;
-  const avatar = extractMediaMeta(data.avatar, apiBaseUrl)?.url
-    || (authorRelation ? extractMediaMeta(authorRelation.avatar, apiBaseUrl)?.url : "")
-    || "";
+  const avatar = typeof data.avatar === "string"
+    ? data.avatar
+    : extractMediaMeta(data.avatar, apiBaseUrl)?.url
+      || (authorRelation ? extractMediaMeta(authorRelation.avatar, apiBaseUrl)?.url : "")
+      || "";
 
   return {
     id: data.id as string | number | undefined,
@@ -185,13 +187,29 @@ function toAuthor(raw: unknown, apiBaseUrl: string): Author {
 
 function toDiscussion(raw: unknown, apiBaseUrl: string): Discussion {
   const data = (raw || {}) as Record<string, unknown>;
-  const covers =
-    extractAllMediaMeta(data.cover, apiBaseUrl).length
-      ? extractAllMediaMeta(data.cover, apiBaseUrl)
-      : extractAllMediaMeta(data.coverImages, apiBaseUrl).length
-        ? extractAllMediaMeta(data.coverImages, apiBaseUrl)
-        : extractAllMediaMeta(data.covers, apiBaseUrl);
-  const firstCover = covers[0] || null;
+
+  let covers: MediaMeta[];
+  let coverUrl: string;
+  let coverW: number | undefined;
+  let coverH: number | undefined;
+
+  if (typeof data.cover === "string" || data.cover === null || data.cover === undefined) {
+    coverUrl = (typeof data.cover === "string" ? data.cover : "");
+    coverW = typeof data.coverWidth === "number" ? data.coverWidth : undefined;
+    coverH = typeof data.coverHeight === "number" ? data.coverHeight : undefined;
+    covers = coverUrl ? [{ url: coverUrl, width: coverW, height: coverH }] : [];
+  } else {
+    covers =
+      extractAllMediaMeta(data.cover, apiBaseUrl).length
+        ? extractAllMediaMeta(data.cover, apiBaseUrl)
+        : extractAllMediaMeta(data.coverImages, apiBaseUrl).length
+          ? extractAllMediaMeta(data.coverImages, apiBaseUrl)
+          : extractAllMediaMeta(data.covers, apiBaseUrl);
+    const firstCover = covers[0] || null;
+    coverUrl = firstCover?.url || "";
+    coverW = firstCover?.width;
+    coverH = firstCover?.height;
+  }
 
   return {
     id: String(data.documentId || data.id || ""),
@@ -200,13 +218,12 @@ function toDiscussion(raw: unknown, apiBaseUrl: string): Discussion {
     bodyText: (data.text as string | undefined) || "",
     rawBodyText: (data.rawBodyText as string | undefined) || "",
     covers,
-    cover: firstCover?.url || "",
-    coverWidth: firstCover?.width,
-    coverHeight: firstCover?.height,
+    cover: coverUrl,
+    coverWidth: coverW,
+    coverHeight: coverH,
     views: Number(data.views || 0),
     likesCount: Number(data.likesCount ?? 0),
     commentsCount: Number(data.commentsCount ?? 0),
-    isPinned: data.isPinned === true,
     isRead: data.isRead === true,
     liked: data.liked === true,
     createdAt: data.createdAt as string | undefined,
