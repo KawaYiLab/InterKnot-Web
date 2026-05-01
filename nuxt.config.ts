@@ -8,7 +8,7 @@ export default defineNuxtConfig({
   compatibilityDate: "2025-07-01",
   srcDir: "app/",
   modules: ["@pinia/nuxt"],
-  ssr: false,
+  ssr: true,
   nitro: {
     preset: "static",
     prerender: {

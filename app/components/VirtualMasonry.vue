@@ -70,6 +70,8 @@ let scrollRAF: number | null = null;
 let resizeRAF: number | null = null;
 let _prevScrollY = 0;
 
+const isMounted = ref(false);
+
 /* ── 列数 ─────────────────────────────────────── */
 const columnCount = computed(() => {
   const w = containerWidth.value;
@@ -226,7 +228,31 @@ const visibleItems = computed(() => {
   return visible;
 });
 
+/* ── SSR: 渲染所有 item，不做虚拟化裁剪 ─────── */
+const ssrItems = computed((): LayoutItem[] => {
+  return props.items.map((item, index) => ({
+    key: props.keyMapper(item),
+    index,
+    top: 0,
+    left: 0,
+    width: props.columnWidth,
+    height: props.estimatedHeight,
+  }));
+});
+
+const displayItems = computed(() => {
+  if (!isMounted.value) return ssrItems.value;
+  return visibleItems.value;
+});
+
 /* ── 容器与 item 的样式 ────────────────────────── */
+const ssrContainerStyle = computed<StyleValue>(() => ({
+  display: "grid",
+  gridTemplateColumns: `repeat(auto-fill, minmax(${props.columnWidth}px, 1fr))`,
+  gap: `${props.gap}px`,
+  width: "100%",
+}));
+
 const containerStyle = computed<StyleValue>(() => ({
   position: "relative" as const,
   width: "100%",
@@ -394,6 +420,7 @@ onMounted(async () => {
   await nextTick();
   setupContainerResize();
   updateContainerOffset();
+  isMounted.value = true;
 });
 
 onBeforeUnmount(() => {
@@ -413,12 +440,12 @@ defineExpose({ measuredHeights });
 </script>
 
 <template>
-  <div ref="containerRef" :style="containerStyle">
+  <div ref="containerRef" :style="isMounted ? containerStyle : ssrContainerStyle">
     <div
-      v-for="layoutItem in visibleItems"
+      v-for="layoutItem in displayItems"
       :key="layoutItem.key"
-      :ref="(el: any) => setItemRef(el as Element, layoutItem.key)"
-      :style="itemStyle(layoutItem)"
+      :ref="(el: any) => { if (isMounted) setItemRef(el as Element, layoutItem.key) }"
+      :style="isMounted ? itemStyle(layoutItem) : undefined"
     >
       <slot
         :item="getItem(layoutItem)"
