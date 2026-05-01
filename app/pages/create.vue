@@ -94,7 +94,6 @@ const previewDiscussion = computed<Discussion>(() => {
     views: 0,
     likesCount: 0,
     commentsCount: 0,
-    isPinned: false,
     isRead: false,
     author: {
       name: auth.user?.name || "未知作者",

@@ -31,7 +31,6 @@ export interface Discussion {
   views?: number;
   likesCount?: number;
   commentsCount?: number;
-  isPinned?: boolean;
   isRead?: boolean;
   liked?: boolean;
   createdAt?: string;

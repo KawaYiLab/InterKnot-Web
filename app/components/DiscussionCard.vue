@@ -86,7 +86,7 @@ const handleOpen = (e: MouseEvent) => {
 </script>
 
 <template>
-  <article ref="cardRef" class="ik-card" :class="{ 'ik-card--pinned': discussion.isPinned }" @click.capture="handleOpen">
+  <article ref="cardRef" class="ik-card" @click.capture="handleOpen">
     <NuxtLink
       :to="`/discussion/${discussion.id}`"
       class="ik-card__link"
@@ -164,10 +164,6 @@ const handleOpen = (e: MouseEvent) => {
   overflow: hidden;
   transition: background-color 180ms ease;
   contain: layout style paint;
-}
-
-.ik-card--pinned {
-  background: var(--ik-discussion-card-pinned-bg);
 }
 
 .ik-card:hover {
