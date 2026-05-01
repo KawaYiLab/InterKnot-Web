@@ -11,7 +11,6 @@ const api = useApi();
 const route = useRoute();
 const discussionModal = useDiscussionModal();
 const message = useMessage();
-const pageDataLoading = usePageDataLoading();
 
 const scrollTarget = ref<HTMLElement>();
 onMounted(() => {
@@ -272,12 +271,20 @@ watch(
   { flush: "post" },
 );
 
-// 在 setup 阶段提前发起首屏数据请求，不等 onMounted
-pageDataLoading.claim();
-const initialFetchPromise = fetchList(true).finally(() => pageDataLoading.finish());
+// SSR-compatible initial data fetch
+const { data: initialPage } = await useAsyncData(
+  'home-articles',
+  () => api.searchArticles(query.value.trim(), '0'),
+);
+
+if (initialPage.value) {
+  list.value = toUniqueNodes(initialPage.value.nodes, true);
+  endCursor.value = initialPage.value.endCursor;
+  hasNextPage.value = initialPage.value.hasNextPage;
+  lastFetchTime = Date.now();
+}
 
 onMounted(async () => {
-  await initialFetchPromise;
   await nextTick();
   observeLoadMoreSentinel();
 });
@@ -327,7 +334,7 @@ onBeforeUnmount(() => {
     <div v-else-if="!list.length && !loading" class="ik-empty">暂无相关帖子... [ o_x ]/</div>
 
     <!-- 实际内容：list 不为空时显示 -->
-    <ClientOnly v-else>
+    <template v-else>
       <VirtualMasonry
         class="ik-masonry"
         :items="list"
@@ -359,7 +366,7 @@ onBeforeUnmount(() => {
           <span v-else class="ik-meta">已经到底啦 [ O_X ] /</span>
         </div>
       </div>
-    </ClientOnly>
+    </template>
     <!-- Refresh FAB -->
     <z-button
       circle
