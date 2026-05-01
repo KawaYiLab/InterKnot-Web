@@ -14,10 +14,12 @@ const DEFAULT_TITLE = "绳网";
 export function useDiscussionModal() {
   const isOpen = useState("dm:open", () => false);
   const discussionId = useState<string | null>("dm:id", () => null);
-  function open(id: string) {
+  const coverHint = useState<number | null>("dm:coverHint", () => null);
+  function open(id: string, opts?: { coverAspectRatio?: number }) {
     if (!import.meta.client) return;
 
     discussionId.value = id;
+    coverHint.value = opts?.coverAspectRatio ?? null;
     isOpen.value = true;
     _historyPushed = true;
 
@@ -80,6 +82,7 @@ export function useDiscussionModal() {
   return {
     isOpen: readonly(isOpen),
     discussionId: readonly(discussionId),
+    coverHint: readonly(coverHint),
     open,
     close,
     setTitle,

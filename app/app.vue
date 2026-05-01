@@ -55,6 +55,7 @@ const handleOverlayClose = () => {
           <DiscussionOverlay
             v-if="discussionModal.isOpen.value"
             :discussion-id="discussionModal.discussionId.value || ''"
+            :cover-hint="discussionModal.coverHint.value"
             @close="handleOverlayClose"
           />
         </Transition>
