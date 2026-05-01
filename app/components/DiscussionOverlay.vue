@@ -472,36 +472,7 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
                 <div class="ik-dialog__actions">
-                  <div class="ik-engage-bar">
-                    <div class="ik-engage-bar__main">
-                      <div class="ik-engage-bar__content-edit" style="pointer-events:none">
-                        <div class="ik-engage-bar__placeholder">
-                          <img
-                            :src="auth.user?.avatar || '/images/default-avatar.webp'"
-                            alt=""
-                            class="ik-engage-bar__placeholder-avatar"
-                          />
-                          <span>说点什么...</span>
-                        </div>
-                      </div>
-                      <div class="ik-engage-bar__interact-container">
-                        <div class="ik-engage-bar__buttons">
-                          <button type="button" class="ik-engage-bar__action" disabled>
-                            <HandThumbUpIcon class="ik-engage-icon" aria-hidden="true" />
-                            <span>点赞</span>
-                          </button>
-                          <button type="button" class="ik-engage-bar__action" disabled>
-                            <StarIcon class="ik-engage-icon" aria-hidden="true" />
-                            <span>收藏</span>
-                          </button>
-                          <button type="button" class="ik-engage-bar__action" disabled>
-                            <ChatBubbleLeftIcon class="ik-engage-icon" aria-hidden="true" />
-                            <span>0</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <div class="ik-skel ik-skel--actions-bar"></div>
                 </div>
               </div>
             </div>
@@ -917,6 +888,12 @@ onBeforeUnmount(() => {
   height: 14px;
   margin-top: 8px;
   border-radius: 3px;
+}
+
+.ik-skel--actions-bar {
+  width: 100%;
+  height: 36px;
+  border-radius: 18px;
 }
 
 /* ── Error ─────────────────────────────────────── */
