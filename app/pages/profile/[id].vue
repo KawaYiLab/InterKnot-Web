@@ -84,7 +84,9 @@ const formatNumber = (n: number) => {
 
 const goArticle = (discussion: Discussion, event: MouseEvent) => {
   event.preventDefault();
-  discussionModal.open(discussion.id);
+  discussionModal.open(discussion.id, {
+    coverAspectRatio: getCoverAspectRatio(discussion.coverWidth, discussion.coverHeight),
+  });
 };
 
 const goCommentArticle = (articleId?: string) => {
