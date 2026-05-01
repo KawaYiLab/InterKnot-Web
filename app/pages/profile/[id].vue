@@ -132,6 +132,21 @@ watch(
   },
 );
 
+const profileTitle = computed(() =>
+  profile.value?.name ? `${profile.value.name}的主页 - 绳网` : "用户主页 - 绳网",
+);
+const profileDescription = computed(() =>
+  profile.value?.bio || `查看 ${profile.value?.name || "用户"} 在绳网上的帖子和评论`,
+);
+
+useSeoMeta({
+  title: profileTitle,
+  description: profileDescription,
+  ogTitle: profileTitle,
+  ogDescription: profileDescription,
+  ogImage: () => profile.value?.avatar || "/images/zzzicon_200x200.png",
+});
+
 onMounted(async () => {
   loading.value = true;
   loadError.value = false;

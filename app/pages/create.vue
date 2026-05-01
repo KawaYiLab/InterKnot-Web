@@ -22,6 +22,11 @@ const router = useRouter();
 const loginDialog = useLoginDialog();
 const message = useMessage();
 
+useSeoMeta({
+  title: "发帖 - 绳网",
+  robots: "noindex, nofollow",
+});
+
 if (import.meta.client && !auth.isLogin) {
   loginDialog.open();
   router.replace("/");

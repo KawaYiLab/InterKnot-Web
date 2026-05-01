@@ -19,12 +19,12 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBaseUrl: "",
-      appName: "绳网",
+      appName: "InterKnot",
     },
   },
   app: {
     head: {
-      title: "绳网",
+      title: "InterKnot",
       link: [
         { rel: "icon", type: "image/png", href: "/favicon.png" },
         { rel: "stylesheet", href: "/fonts/fonts.css" },
@@ -40,6 +40,12 @@ export default defineNuxtConfig({
           content: "width=device-width, initial-scale=1, viewport-fit=cover",
         },
         { name: "description", content: "绳网是一个游戏、技术交流平台" },
+        { property: "og:type", content: "website" },
+        { property: "og:site_name", content: "InterKnot" },
+        { property: "og:title", content: "InterKnot" },
+        { property: "og:description", content: "绳网是一个游戏、技术交流平台" },
+        { property: "og:image", content: "/images/zzzicon_200x200.png" },
+        { name: "twitter:card", content: "summary_large_image" },
       ],
     },
   },

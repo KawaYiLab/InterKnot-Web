@@ -13,6 +13,13 @@ const discussionModal = useDiscussionModal();
 const message = useMessage();
 const pageDataLoading = usePageDataLoading();
 
+useSeoMeta({
+  title: "InterKnot",
+  description: "绳网是一个游戏、技术交流平台，发现并分享有趣的内容。",
+  ogTitle: "InterKnot",
+  ogDescription: "绳网是一个游戏、技术交流平台，发现并分享有趣的内容。",
+});
+
 const scrollTarget = ref<HTMLElement>();
 onMounted(() => {
   const el = document.documentElement;
