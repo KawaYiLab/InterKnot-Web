@@ -172,7 +172,9 @@ const fetchList = async (reset = false) => {
 const goDiscussion = (discussion: Discussion, event: MouseEvent) => {
   // 阻止 NuxtLink 默认导航，改为弹窗展示
   event.preventDefault();
-  discussionModal.open(discussion.id);
+  discussionModal.open(discussion.id, {
+    coverAspectRatio: getCoverAspectRatio(discussion.coverWidth, discussion.coverHeight),
+  });
 
   // 标记已读并更新本地列表状态
   if (!discussion.isRead) {

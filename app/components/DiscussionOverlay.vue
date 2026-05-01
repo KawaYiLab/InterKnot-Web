@@ -13,6 +13,7 @@ const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: gal
 
 const props = defineProps<{
   discussionId: string;
+  coverHint?: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -432,7 +433,7 @@ onBeforeUnmount(() => {
                 <div class="ik-dialog__left-scroll">
                   <div class="ik-dialog__cover-wrap">
                     <div class="ik-dialog__cover-border">
-                      <div class="ik-skel ik-skel--cover"></div>
+                      <div class="ik-skel ik-skel--cover" :style="props.coverHint ? { aspectRatio: String(props.coverHint) } : {}"></div>
                     </div>
                   </div>
                   <div class="ik-dialog__detail">
