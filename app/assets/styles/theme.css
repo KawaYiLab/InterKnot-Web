@@ -106,8 +106,8 @@ body,
   position: fixed;
   top: -5%;
   left: -5%;
-  width: 120%;
-  height: 120%;
+  width: 115%;
+  height: 115%;
   background: url("/images/main.avif") center top / cover no-repeat;
   filter: brightness(0.5);
   z-index: -1;
