@@ -24,7 +24,8 @@ export function shouldAttachToken(path: string, method: string, token: string): 
   if (
     upperMethod === "GET" &&
     (pathname.startsWith("/api/articles/detail/") ||
-      pathname.startsWith("/api/comments/list"))
+      pathname.startsWith("/api/comments/list") ||
+      pathname.startsWith("/api/profiles/"))
   ) {
     return true;
   }

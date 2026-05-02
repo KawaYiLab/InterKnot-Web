@@ -1,12 +1,8 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
-import type { Comment, Discussion, Profile } from "~/types/entities";
+import type { Discussion, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
-import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
-import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
-import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
 
 const route = useRoute();
 const api = useApi();
@@ -18,32 +14,12 @@ const profile = ref<Profile | null>(null);
 const loadError = ref(false);
 const loading = ref(false);
 
-const tab = ref<"articles" | "comments">("articles");
-
 const articles = ref<Discussion[]>([]);
 const articleCursor = ref("");
 const articleHasNext = ref(true);
 const articleLoading = ref(false);
 
-const comments = ref<Comment[]>([]);
-const commentCursor = ref("");
-const commentHasNext = ref(true);
-const commentLoading = ref(false);
-
 const profileId = computed(() => String(route.params.id || ""));
-
-const loadProfile = async () => {
-  loading.value = true;
-  loadError.value = false;
-  try {
-    profile.value = await api.getProfile(profileId.value);
-  } catch (err) {
-    loadError.value = true;
-    message.error(resolveErrorMessage(err, "获取用户信息失败"));
-  } finally {
-    loading.value = false;
-  }
-};
 
 const loadProfileArticles = async () => {
   if (articleLoading.value || !articleHasNext.value) return;
@@ -60,27 +36,11 @@ const loadProfileArticles = async () => {
   }
 };
 
-const loadProfileComments = async () => {
-  if (commentLoading.value || !commentHasNext.value) return;
-  commentLoading.value = true;
-  try {
-    const page = await api.getProfileComments(profileId.value, commentCursor.value);
-    comments.value.push(...page.nodes);
-    commentCursor.value = page.endCursor;
-    commentHasNext.value = page.hasNextPage;
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "获取用户评论失败"));
-  } finally {
-    commentLoading.value = false;
-  }
-};
-
 const formatNumber = (n: number) => {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
 };
-
 
 const goArticle = (discussion: Discussion, event: MouseEvent) => {
   event.preventDefault();
@@ -89,48 +49,18 @@ const goArticle = (discussion: Discussion, event: MouseEvent) => {
   });
 };
 
-const goCommentArticle = (articleId?: string) => {
-  if (articleId) discussionModal.open(articleId);
-};
+const sparkles = [1, 2, 3, 4, 5, 6];
 
-const CARD_HORIZONTAL_CHROME = 24;
-const CARD_FIXED_HEIGHT = 83;
-const CARD_EXCERPT_LINE_HEIGHT = 21;
-const CARD_MAX_EXCERPT_LINES = 2;
-
-const masonryKeyMapper = (d: Discussion) => d.id;
-const skeletonKeyMapper = (item: SkeletonItem) => item.id;
-
-const skeletonItems = computed(() => generateSkeletons(calculateSkeletonCount(import.meta.client ? window.innerWidth : 0, import.meta.client)));
-
-const getWeightedTextLength = (text: string) => {
-  let length = 0;
-  for (let i = 0; i < text.length; i++) {
-    length += text.charCodeAt(i) <= 0xff ? 0.55 : 1;
+const copyUid = async () => {
+  const uid = profile.value?.uid;
+  if (uid == null) return;
+  try {
+    await navigator.clipboard.writeText(String(uid));
+    message.success("UID 已复制");
+  } catch {
+    message.error("复制失败");
   }
-  return length;
 };
-
-const estimateCardHeight = (discussion: Discussion, itemWidth: number) => {
-  const coverH = itemWidth / getCoverAspectRatio(discussion.coverWidth, discussion.coverHeight);
-  const text = discussion.bodyText || discussion.rawBodyText || "暂无摘要内容";
-  const contentW = Math.max(1, itemWidth - CARD_HORIZONTAL_CHROME);
-  const charsPerLine = Math.max(1, Math.floor(contentW / 15));
-  const excerptLines = Math.min(CARD_MAX_EXCERPT_LINES, Math.max(1, Math.ceil(getWeightedTextLength(text) / charsPerLine)));
-  return Math.ceil(coverH + CARD_FIXED_HEIGHT + excerptLines * CARD_EXCERPT_LINE_HEIGHT);
-};
-
-watch(
-  () => tab.value,
-  async (next) => {
-    if (next === "articles" && !articles.value.length) {
-      await loadProfileArticles();
-    }
-    if (next === "comments" && !comments.value.length) {
-      await loadProfileComments();
-    }
-  },
-);
 
 const profileTitle = computed(() =>
   profile.value?.name ? `${profile.value.name}的主页 - 绳网` : "用户主页 - 绳网",
@@ -147,7 +77,18 @@ useSeoMeta({
   ogImage: () => profile.value?.avatar || "/images/zzzicon_200x200.png",
 });
 
+// Lock page scroll while on this profile page
+let _prevHtmlOverflow = "";
+let _prevBodyOverflow = "";
+
 onMounted(async () => {
+  if (import.meta.client) {
+    _prevHtmlOverflow = document.documentElement.style.overflow;
+    _prevBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+  }
+
   loading.value = true;
   loadError.value = false;
   pageDataLoading.claim();
@@ -162,218 +103,199 @@ onMounted(async () => {
     pageDataLoading.finish();
   }
 });
+
+onBeforeUnmount(() => {
+  if (import.meta.client) {
+    document.documentElement.style.overflow = _prevHtmlOverflow;
+    document.body.style.overflow = _prevBodyOverflow;
+  }
+});
 </script>
 
 <template>
-  <section class="ik-profile container">
-    <!-- Skeleton -->
-    <div v-if="loading" class="ik-profile-skeleton" aria-busy="true">
-      <!-- Header skeleton — matches .ik-profile-header (gap:28px, padding:32px 0) -->
-      <div class="ik-profile-header">
-        <div class="ik-profile-avatar">
-          <div class="ik-skel ik-skel--circle" style="width:100%;height:100%"></div>
-        </div>
-        <!-- matches .ik-profile-info (flex col, gap:6px, padding-top:4px) -->
-        <div class="ik-profile-info">
-          <!-- name: font-size:26px, line-height:1.3 => ~34px -->
-          <div class="ik-skel" style="width:180px;height:34px;border-radius:4px"></div>
-          <!-- UID: font-size:13px, margin-top:2px (gap handles 6px but margin-top:2px on actual) -->
-          <div class="ik-skel" style="width:100px;height:13px;border-radius:3px"></div>
-          <!-- bio: margin:6px 0 0, font-size:14px, line-height:1.5 => ~21px -->
-          <div class="ik-skel" style="width:240px;height:21px;border-radius:3px;margin-top:6px"></div>
-          <!-- stats: margin-top:10px, gap:24px, items are inline-flex baseline -->
-          <div style="display:flex;gap:24px;margin-top:10px">
-            <div class="ik-skel" style="width:64px;height:20px;border-radius:3px"></div>
-            <div class="ik-skel" style="width:80px;height:20px;border-radius:3px"></div>
-            <div class="ik-skel" style="width:56px;height:20px;border-radius:3px"></div>
-          </div>
-        </div>
+  <section class="ik-profile">
+    <!-- ══════════ Skeleton ══════════ -->
+    <div v-if="loading" class="ik-profile" aria-busy="true">
+      <div class="ik-frame">
+        <div class="ik-frame__inner">
+          <div class="ik-frame__body">
+      <!-- Tab bar skeleton -->
+      <div class="ik-tab-bar">
+        <div class="ik-skel" style="width:140px;height:18px;border-radius:4px"></div>
+        <div class="ik-skel" style="width:80px;height:36px;border-radius:999px"></div>
       </div>
-      <!-- Tab bar skeleton — matches .ik-profile-tabs (centered, margin-top:8px, border-bottom) -->
-      <div class="ik-profile-tabs" style="pointer-events:none">
-        <div style="padding:14px 28px"><div class="ik-skel" style="width:56px;height:15px;border-radius:3px"></div></div>
-        <div style="padding:14px 28px"><div class="ik-skel" style="width:56px;height:15px;border-radius:3px"></div></div>
-      </div>
-      <!-- Article grid skeleton — matches .ik-profile-content (padding-top:16px) -->
-      <div style="padding-top:16px">
-        <ClientOnly>
-          <VirtualMasonry
-            class="ik-profile-articles"
-            :items="skeletonItems"
-            :column-width="200"
-            :gap="16"
-            :min-columns="2"
-            :max-columns="6"
-            :key-mapper="skeletonKeyMapper"
-            :height-mapper="estimateSkeletonHeight"
-            :measure-items="false"
-          >
-            <template #default="{ item }">
-              <DiscussionCardSkeleton :skeleton="item" />
-            </template>
-          </VirtualMasonry>
-        </ClientOnly>
-      </div>
-    </div>
-
-    <!-- Error -->
-    <div v-else-if="loadError && !profile" class="ik-empty">加载失败，请刷新重试</div>
-
-    <template v-else-if="profile">
-      <div class="ik-profile-header">
-        <div class="ik-profile-avatar">
-          <img
-            :src="profile.avatar || '/images/default-avatar.webp'"
-            alt=""
-            class="ik-profile-avatar__img"
-            @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-          />
-        </div>
-        <div class="ik-profile-info">
-          <h1 class="ik-profile-info__name">
-            {{ profile.name || profile.login || "匿名用户" }}
-            <span class="ik-profile-info__level">Lv.{{ profile.level || 1 }}</span>
-          </h1>
-          <span class="ik-profile-info__id">UID: {{ profile.uid }}</span>
-          <p v-if="profile.bio" class="ik-profile-info__bio">{{ profile.bio }}</p>
-          <p v-else class="ik-profile-info__bio ik-profile-info__bio--empty">这个人很神秘，什么都没有留下。</p>
-          <div v-if="profile.stats" class="ik-profile-stats">
-            <span class="ik-profile-stats__item">
-              <span class="ik-profile-stats__value">{{ formatNumber(profile.stats.totalViews) }}</span>
-              <span class="ik-profile-stats__label">浏览</span>
-            </span>
-            <span class="ik-profile-stats__item">
-              <span class="ik-profile-stats__value">{{ formatNumber(profile.stats.totalComments) }}</span>
-              <span class="ik-profile-stats__label">收到评论</span>
-            </span>
-            <span class="ik-profile-stats__item">
-              <span class="ik-profile-stats__value">{{ formatNumber(profile.stats.totalLikes) }}</span>
-              <span class="ik-profile-stats__label">获赞</span>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── Tab Bar ──────────────────────────── -->
-      <div class="ik-profile-tabs">
-        <button
-          class="ik-profile-tab"
-          :class="{ 'ik-profile-tab--active': tab === 'articles' }"
-          @click="tab = 'articles'"
-        >
-          帖子
-          <span v-if="profile.stats" class="ik-profile-tab__count">{{ profile.stats.articleCount }}</span>
-        </button>
-        <button
-          class="ik-profile-tab"
-          :class="{ 'ik-profile-tab--active': tab === 'comments' }"
-          @click="tab = 'comments'"
-        >
-          评论
-          <span v-if="profile.stats" class="ik-profile-tab__count">{{ profile.stats.commentCount }}</span>
-        </button>
-      </div>
-
-      <!-- ── Tab Content ──────────────────────── -->
-      <div class="ik-profile-content">
-        <!-- Articles Tab -->
-        <template v-if="tab === 'articles'">
-          <div v-if="!articles.length && !articleLoading" class="ik-profile-empty">
-            <svg class="ik-profile-empty__icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="1.5" />
-              <circle cx="32" cy="26" r="8" stroke="currentColor" stroke-width="1.5" />
-              <path d="M16 50c0-8.837 7.163-16 16-16s16 7.163 16 16" stroke="currentColor" stroke-width="1.5" />
-            </svg>
-            <span class="ik-profile-empty__text">还没有发布任何内容哦</span>
-          </div>
-          <ClientOnly v-else>
-            <VirtualMasonry
-              class="ik-profile-articles"
-              :items="articles"
-              :column-width="200"
-              :gap="16"
-              :min-columns="2"
-              :max-columns="6"
-              :buffer="2500"
-              :estimated-height="300"
-              :height-mapper="estimateCardHeight"
-              :key-mapper="masonryKeyMapper"
-              :measure-items="false"
-            >
-              <template #default="{ item, index }">
-                <DiscussionCard
-                  :discussion="item"
-                  :eager="index < 6"
-                  @open="goArticle"
-                />
-              </template>
-            </VirtualMasonry>
-          </ClientOnly>
-          <div class="ik-profile-load-more">
-            <z-button v-if="articleHasNext" :loading="articleLoading" @click="loadProfileArticles">
-              加载更多
-            </z-button>
-            <span v-else-if="articles.length" class="ik-meta">已全部加载</span>
-          </div>
-        </template>
-
-        <!-- Comments Tab -->
-        <template v-else-if="tab === 'comments'">
-          <div v-if="!comments.length && !commentLoading" class="ik-profile-empty">
-            <svg class="ik-profile-empty__icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="1.5" />
-              <circle cx="24" cy="32" r="2.5" fill="currentColor" />
-              <circle cx="32" cy="32" r="2.5" fill="currentColor" />
-              <circle cx="40" cy="32" r="2.5" fill="currentColor" />
-            </svg>
-            <span class="ik-profile-empty__text">还没有任何评论哦</span>
-          </div>
-          <div v-else class="ik-profile-comments">
-            <div
-              v-for="c in comments"
-              :key="c.id"
-              class="ik-pcomment"
-              :class="{ 'ik-pcomment--clickable': !!c.articleId }"
-              @click="goCommentArticle(c.articleId)"
-            >
-              <!-- Reply reference -->
-              <div v-if="c.parentContent" class="ik-pcomment__ref">
-                <span class="ik-pcomment__ref-label">回复 </span>
-                <span class="ik-pcomment__ref-name">{{ c.parentAuthorName || "未知用户" }}</span>
-                <p class="ik-pcomment__ref-text">{{ c.parentContent }}</p>
-              </div>
-              <!-- Comment body -->
-              <p class="ik-pcomment__body">{{ c.content }}</p>
-              <!-- Footer -->
-              <div class="ik-pcomment__footer">
-                <span class="ik-pcomment__time">{{ formatTime(c.createdAt) }}</span>
-                <span class="ik-pcomment__spacer" />
-                <HandThumbUpIconSolid
-                  v-if="c.liked"
-                  class="ik-pcomment__like-icon ik-pcomment__like-icon--active"
-                  style="width:14px;height:14px"
-                />
-                <HandThumbUpIcon
-                  v-else
-                  class="ik-pcomment__like-icon"
-                  style="width:14px;height:14px;color:#808080"
-                />
-                <span v-if="c.likesCount" class="ik-pcomment__like-count" :class="{ 'ik-pcomment__like-count--active': c.liked }">{{ c.likesCount }}</span>
-              </div>
-              <!-- Article reference -->
-              <div v-if="c.articleTitle" class="ik-pcomment__article">
-                <DocumentTextIcon style="width:14px;height:14px;color:#808080" />
-                <span class="ik-pcomment__article-title">{{ c.articleTitle }}</span>
+      <!-- A-frame skeleton -->
+      <div class="ik-aframe">
+        <!-- Banner skeleton -->
+        <div class="ik-banner-card">
+          <div class="ik-banner ik-banner--skeleton">
+            <div class="ik-banner__user">
+              <div class="ik-skel ik-skel--circle" style="width:72px;height:72px"></div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div class="ik-skel" style="width:140px;height:24px;border-radius:6px"></div>
+                <div class="ik-skel" style="width:100px;height:28px;border-radius:6px"></div>
               </div>
             </div>
           </div>
-          <div class="ik-profile-load-more">
-            <z-button v-if="commentHasNext" :loading="commentLoading" @click="loadProfileComments">
-              加载更多
-            </z-button>
-            <span v-else-if="comments.length" class="ik-meta">已全部加载</span>
+          <div class="ik-banner-footer">
+            <div class="ik-skel" style="width:200px;height:16px;border-radius:4px"></div>
+          </div>
+        </div>
+        <div class="ik-aframe__content">
+          <!-- Cards skeleton -->
+          <div class="ik-article-grid">
+            <div v-for="n in 6" :key="n" class="ik-article-grid__item">
+              <div class="ik-skel" style="width:100%;aspect-ratio:3/4;border-radius:12px"></div>
+              <div class="ik-skel" style="width:60%;height:14px;border-radius:4px;margin:8px auto 0"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+          </div>
+        </div>
+      </div>
+      <!-- Actions skeleton -->
+      <div class="ik-bottom-actions">
+        <div class="ik-skel" style="width:100px;height:44px;border-radius:999px" v-for="n in 4" :key="n"></div>
+      </div>
+    </div>
+
+    <!-- ══════════ Error ══════════ -->
+    <div v-else-if="loadError && !profile" class="ik-empty">加载失败，请刷新重试</div>
+
+    <!-- ══════════ Main Content ══════════ -->
+    <template v-else-if="profile">
+
+      <!-- ── 大框 (Double-border frame) ────────── -->
+      <div class="ik-frame">
+        <div class="ik-frame__inner">
+          <div class="ik-frame__body">
+
+      <!-- ── Tab Bar (UID + 更多操作) ──────────── -->
+      <div class="ik-tab-bar">
+        <div class="ik-tab-bar__left">
+          <span class="ik-tab-bar__label">UID:</span>
+          <span class="ik-tab-bar__value">{{ profile.uid }}</span>
+          <button class="ik-tab-bar__copy" aria-label="复制UID" @click="copyUid">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+        <z-button v-if="profile.isSelf" @click="message.warning('功能即将开放')">更多操作</z-button>
+      </div>
+
+      <!-- ── A-Frame (包含名片 + 帖子) ────────── -->
+      <div class="ik-aframe">
+
+      <!-- ── Profile Banner Card (flush 贴合 A-frame 上边) ─── -->
+      <div class="ik-banner-card">
+        <div class="ik-banner">
+          <!-- Scalloped edge top -->
+          <div class="ik-banner__scallop ik-banner__scallop--top" aria-hidden="true">
+            <div v-for="n in 40" :key="n" class="ik-banner__scallop-tooth"></div>
+          </div>
+
+          <!-- Grid pattern overlay -->
+          <div class="ik-banner__grid-overlay" aria-hidden="true"></div>
+
+          <!-- Sparkles -->
+          <svg v-for="(s, i) in sparkles" :key="i" class="ik-sparkle" :class="`ik-sparkle--${i + 1}`" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 0 L13.5 10.5 L24 12 L13.5 13.5 L12 24 L10.5 13.5 L0 12 L10.5 10.5 Z"/>
+          </svg>
+
+          <!-- User info area (left aligned) -->
+          <div class="ik-banner__user">
+            <div class="ik-banner__avatar-wrap">
+              <div class="ik-banner__avatar">
+                <img
+                  :src="profile.avatar || '/images/default-avatar.webp'"
+                  alt=""
+                  class="ik-banner__avatar-img"
+                  @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+                />
+              </div>
+              <span class="ik-banner__level">{{ profile.level || 1 }}</span>
+            </div>
+            <div class="ik-banner__info">
+              <h1 class="ik-banner__name">{{ profile.name || profile.login || "匿名用户" }}</h1>
+              <span v-if="profile.bio" class="ik-banner__title-tag">{{ profile.bio }}</span>
+              <span v-else class="ik-banner__title-tag ik-banner__title-tag--empty">暂无称号</span>
+            </div>
+          </div>
+
+          <!-- Stats text row -->
+          <div v-if="profile.stats" class="ik-banner__stats">
+            <span class="ik-stat">
+              <span class="ik-stat__label">浏览</span>
+              <span class="ik-stat__num">{{ formatNumber(profile.stats.totalViews) }}</span>
+            </span>
+            <span class="ik-stat__sep">-</span>
+            <span class="ik-stat">
+              <span class="ik-stat__label">评论</span>
+              <span class="ik-stat__num">{{ formatNumber(profile.stats.totalComments) }}</span>
+            </span>
+            <span class="ik-stat__sep">-</span>
+            <span class="ik-stat">
+              <span class="ik-stat__label">点赞</span>
+              <span class="ik-stat__num">{{ formatNumber(profile.stats.totalLikes) }}</span>
+            </span>
+          </div>
+
+          <!-- Scalloped edge bottom -->
+          <div class="ik-banner__scallop ik-banner__scallop--bottom" aria-hidden="true">
+            <div v-for="n in 40" :key="n" class="ik-banner__scallop-tooth"></div>
+          </div>
+        </div>
+
+        <!-- Footer: signature -->
+        <z-pattern type="squares" class="ik-banner-footer">
+          <p v-if="profile.bio" class="ik-banner-footer__sig">{{ profile.bio }}</p>
+          <p v-else class="ik-banner-footer__sig ik-banner-footer__sig--empty">这个人很神秘，什么都没有留下。</p>
+        </z-pattern>
+      </div>
+
+      <!-- ── 下半 (帖子区域) ───────────────── -->
+      <div class="ik-aframe__content">
+
+      <!-- ── Article Grid ────────────────────────── -->
+      <div class="ik-article-grid">
+        <div v-if="!articles.length && !articleLoading" class="ik-article-grid__empty">
+          还没有发布任何内容哦
+        </div>
+        <template v-else>
+          <div
+            v-for="(item, index) in articles"
+            :key="item.id"
+            class="ik-article-grid__item"
+          >
+            <DiscussionCard
+              :discussion="item"
+              :eager="index < 6"
+              @open="goArticle"
+            />
           </div>
         </template>
+      </div>
+      <!-- Load more -->
+      <div v-if="articleHasNext && articles.length" class="ik-load-more-wrap">
+        <button class="ik-load-more" :disabled="articleLoading" @click="loadProfileArticles">
+          <span v-if="articleLoading"><i class="z-icon-loading ik-spin" /></span>
+          <span v-else>加载更多</span>
+        </button>
+      </div>
+
+      </div><!-- /.ik-aframe__content -->
+      </div><!-- /.ik-aframe -->
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Bottom Actions ──────────────────────── -->
+      <div v-if="profile.isSelf" class="ik-bottom-actions">
+        <z-button @click="message.warning('功能即将开放')">修改头像</z-button>
+        <z-button @click="message.warning('功能即将开放')">修改称号</z-button>
+        <z-button @click="message.warning('功能即将开放')">修改勋章</z-button>
+        <z-button @click="message.warning('功能即将开放')">修改名片</z-button>
       </div>
 
     </template>
@@ -382,11 +304,49 @@ onMounted(async () => {
 
 <style scoped>
 .ik-profile {
-  padding-top: 40px;
-  padding-bottom: 48px;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 16px 16px 24px;
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  height: calc(100vh - 78px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── 大框 (Double-border frame) ──────────────── */
+.ik-frame {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: #2D2C2D;
+  border-radius: 24px;
+}
+.ik-frame__inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: #000;
+  border-radius: 22px;
+  overflow: hidden;
+}
+.ik-frame__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  padding: 0;
   gap: 0;
+  border-radius: 20px;
+  overflow: hidden;
 }
 
 /* ── Skeleton ─────────────────────────────────── */
@@ -394,375 +354,380 @@ onMounted(async () => {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
-
 .ik-skel {
   background: #222;
   animation: ik-skel-pulse 1.5s ease-in-out infinite;
 }
-
-.ik-skel--circle {
-  border-radius: 999px;
-}
-
+.ik-skel--circle { border-radius: 999px; }
 @media (prefers-reduced-motion: reduce) {
-  .ik-skel {
-    animation: none;
-    opacity: 0.6;
-  }
+  .ik-skel { animation: none; opacity: 0.6; }
 }
 
-.ik-profile-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 28px;
-  padding: 32px 0;
-}
-
-/* Avatar */
-.ik-profile-avatar {
-  flex-shrink: 0;
-  width: 96px;
-  height: 96px;
-  border-radius: 999px;
-  border: 2px solid #3a3a3a;
-  padding: 3px;
-}
-
-.ik-profile-avatar__img {
-  width: 100%;
-  height: 100%;
-  border-radius: 999px;
-  object-fit: cover;
-  background: #111;
-}
-
-/* Info */
-.ik-profile-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 4px;
-}
-
-.ik-profile-info__name {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 800;
-  color: #fff;
-  line-height: 1.3;
-}
-
-.ik-profile-info__id {
-  font-size: 13px;
-  color: #808080;
-  margin-top: 2px;
-}
-
-.ik-profile-info__bio {
-  margin: 6px 0 0;
-  font-size: 14px;
-  color: #b0b0b0;
-  line-height: 1.5;
-}
-
-.ik-profile-info__bio--empty {
-  color: #606060;
-  font-style: italic;
-}
-
-/* Level badge (superscript beside name) */
-.ik-profile-info__level {
-  display: inline-block;
-  vertical-align: super;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: #d7ff00;
-  font-size: 11px;
-  font-weight: 800;
-  font-style: italic;
-  color: #000;
-  line-height: 1.4;
-}
-
-.ik-profile-stats {
+/* ── Tab Bar (UID + 更多操作) ─────────────── */
+.ik-tab-bar {
   display: flex;
   align-items: center;
-  gap: 24px;
-  margin-top: 10px;
+  justify-content: space-between;
+  padding: 10px 20px;
+  min-height: 52px;
+  flex-shrink: 0;
+  border-radius: 0 0 16px 16px;
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(180deg, #161616 0%, #080808 100%);
+}
+.ik-tab-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #000;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+}
+.ik-tab-bar__label { letter-spacing: 0.5px; }
+.ik-tab-bar__value { font-family: monospace; }
+.ik-tab-bar__copy {
+  margin-left: 4px;
+  color: rgba(255,255,255,0.5);
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.ik-tab-bar__copy:hover { color: #fff; }
+
+/* ── A-Frame (透明定位包裹) ───────────────── */
+.ik-aframe {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #010101 0%, #161616 100%);
+}
+.ik-aframe__content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.ik-profile-stats__item {
+/* ── Banner Card (与帖子卡片左右对齐) ──────── */
+.ik-banner-card {
+  background: transparent;
+  padding: 0;
+  margin: 0 16px;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.ik-banner {
+  position: relative;
+  border-radius: 0 0 14px 14px;
+  overflow: hidden;
+  border: 3px solid #5fd3c8;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  background: linear-gradient(180deg, #ff8fb8 0%, #ffb8d4 45%, #ffd9c8 100%);
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 32px 36px;
+}
+.ik-banner--skeleton {
+  background: linear-gradient(135deg, #1a1a1a 0%, #222 50%, #1a1a1a 100%);
+  border-color: #2a2a2a;
+}
+
+/* Grid pattern overlay */
+.ik-banner__grid-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0.25;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px);
+  background-size: 70px 70px;
+  pointer-events: none;
+}
+
+/* Scalloped edges */
+.ik-banner__scallop {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+  display: flex;
+  pointer-events: none;
+  z-index: 2;
+}
+.ik-banner__scallop--top { top: 0; }
+.ik-banner__scallop--bottom { bottom: 0; }
+.ik-banner__scallop-tooth {
+  flex: 1;
+  background: #5fd3c8;
+}
+.ik-banner__scallop--top .ik-banner__scallop-tooth {
+  border-radius: 0 0 50% 50%;
+  margin-top: -5px;
+}
+.ik-banner__scallop--bottom .ik-banner__scallop-tooth {
+  border-radius: 50% 50% 0 0;
+  margin-bottom: -5px;
+}
+
+/* Sparkles */
+.ik-sparkle {
+  position: absolute;
+  color: #fff;
+  pointer-events: none;
+  z-index: 1;
+  animation: ik-sparkle-float 3s ease-in-out infinite;
+}
+.ik-sparkle--1 { width: 24px; top: 12%; left: 42%; animation-delay: 0s; }
+.ik-sparkle--2 { width: 16px; top: 40%; left: 28%; animation-delay: 0.6s; opacity: 0.8; }
+.ik-sparkle--3 { width: 20px; bottom: 20%; left: 35%; animation-delay: 1.2s; }
+.ik-sparkle--4 { width: 28px; top: 18%; right: 8%; animation-delay: 1.8s; }
+.ik-sparkle--5 { width: 16px; bottom: 16%; right: 18%; animation-delay: 2.4s; opacity: 0.8; }
+.ik-sparkle--6 { width: 20px; top: 50%; right: 2%; animation-delay: 0.3s; }
+
+@keyframes ik-sparkle-float {
+  0%, 100% { opacity: 0.4; transform: scale(0.8) translateY(0); }
+  50% { opacity: 1; transform: scale(1.15) translateY(-4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ik-sparkle { animation: none; opacity: 0.5; }
+}
+
+/* User info inside banner */
+.ik-banner__user {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+.ik-banner__avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.ik-banner__avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 4px solid #000;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  background: #000;
+}
+.ik-banner__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ik-banner__level {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #000;
+  border: 2px solid #000;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 28px;
+  text-align: center;
+  padding: 0 6px;
+}
+
+.ik-banner__info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 6px;
+}
+.ik-banner__name {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.1;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
+  letter-spacing: 0.5px;
+}
+.ik-banner__title-tag {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 5px 16px;
+  border-radius: 999px;
+  background: #000;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3), 0 2px 0 rgba(0,0,0,0.2);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.ik-banner__title-tag--empty {
+  background: #000;
+  box-shadow: none;
+  color: rgba(255,255,255,0.6);
+  font-style: italic;
+}
+
+/* Stat text row */
+.ik-banner__stats {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-top: auto;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.ik-stat {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
 }
-
-.ik-profile-stats__value {
-  font-size: 16px;
-  font-weight: 800;
-  color: #fff;
-}
-
-.ik-profile-stats__label {
-  font-size: 13px;
-  color: #808080;
-}
-
-.ik-profile-tabs {
-  display: flex;
-  justify-content: center;
-  gap: 0;
-  border-bottom: 1px solid #2a2a2a;
-  margin-top: 8px;
-}
-
-.ik-profile-tab {
-  position: relative;
-  padding: 14px 28px;
-  border: none;
-  background: transparent;
-  color: #808080;
-  font-size: 15px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: color 150ms ease;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.ik-profile-tab:hover {
-  color: #c0c0c0;
-}
-
-.ik-profile-tab--active {
-  color: #fff;
-}
-
-.ik-profile-tab--active::after {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 28px;
-  height: 3px;
-  border-radius: 2px;
-  background: #d7ff00;
-}
-
-.ik-profile-tab__count {
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-/* ── Content Area ─────────────────────────────── */
-.ik-profile-content {
-  min-height: 200px;
-  padding-top: 16px;
-}
-
-.ik-profile-articles {
-  width: 100%;
-}
-
-.ik-profile-load-more {
-  display: flex;
-  justify-content: center;
-  padding: 24px 0;
-}
-
-.ik-profile-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 80px 0;
-  color: #555;
-}
-
-.ik-profile-empty__icon {
-  width: 64px;
-  height: 64px;
-}
-
-.ik-profile-empty__text {
-  font-size: 14px;
-  color: #808080;
-}
-
-/* ── Comment Card (Profile) ───────────────────── */
-.ik-profile-comments {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.ik-pcomment {
-  padding: 16px 0;
-  border-bottom: 1px solid #2a2a2a;
-}
-
-.ik-pcomment--clickable {
-  cursor: pointer;
-  transition: background 150ms ease;
-  padding: 16px 12px;
-  margin: 0 -12px;
-  border-radius: 8px;
-}
-
-.ik-pcomment--clickable:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-/* Reply reference */
-.ik-pcomment__ref {
-  padding: 8px 10px;
-  margin-bottom: 8px;
-  border-radius: 6px;
-  background: #1a1a1a;
-  border-left: 3px solid #333;
-}
-
-.ik-pcomment__ref-label {
-  font-size: 12px;
-  color: #808080;
-}
-
-.ik-pcomment__ref-name {
-  font-size: 12px;
-  color: #d7ff00;
+.ik-stat__label {
+  color: rgba(255, 255, 255, 0.85);
   font-weight: 600;
 }
-
-.ik-pcomment__ref-text {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: #999;
-  line-height: 1.4;
+.ik-stat__num {
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
 }
-
-/* Body */
-.ik-pcomment__body {
-  margin: 0;
-  font-size: 15px;
-  color: #e0e0e0;
-  line-height: 1.65;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-
-/* Footer */
-.ik-pcomment__footer {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 10px;
-}
-
-.ik-pcomment__time {
-  font-size: 12px;
-  color: #808080;
-}
-
-.ik-pcomment__spacer {
-  flex: 1;
-}
-
-.ik-pcomment__like-icon {
-  flex-shrink: 0;
-}
-
-.ik-pcomment__like-count {
-  font-size: 12px;
-  color: #808080;
+.ik-stat__sep {
+  color: rgba(255, 255, 255, 0.5);
   font-weight: 700;
 }
 
-.ik-pcomment__like-count--active {
-  color: #d7ff00;
+/* Banner footer */
+.ik-banner-footer {
+  padding: 8px 16px;
+  border-bottom: 2px solid #000;
+  border-radius: 0 0 14px 14px;
+  overflow: hidden;
+}
+.ik-banner-footer__sig {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.95);
+  line-height: 1.5;
+}
+.ik-banner-footer__sig--empty {
+  color: rgba(255,255,255,0.35);
+  font-style: italic;
 }
 
-/* Article reference */
-.ik-pcomment__article {
+/* ── Article Grid ─────────────────────────────── */
+.ik-article-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.ik-article-grid__empty {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #222;
+  justify-content: center;
+  min-height: 200px;
+  font-size: 14px;
+  color: #555;
+  border-radius: 16px;
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
 }
-
-.ik-pcomment__article-title {
-  font-size: 12px;
-  color: #808080;
-  white-space: nowrap;
+.ik-article-grid__item {
+  border-radius: 16px;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+.ik-article-grid__item :deep(.ik-card__cover-frame) {
+  max-height: 260px;
 }
 
-/* ── Mobile ───────────────────────────────────── */
-@media (max-width: 768px) {
-  .ik-profile {
-    padding-top: 16px;
-    padding-left: 16px;
-    padding-right: 16px;
-  }
+/* Load more */
+.ik-load-more-wrap {
+  display: flex;
+  justify-content: center;
+}
+.ik-load-more {
+  padding: 10px 32px;
+  border-radius: 999px;
+  background: #0f0f0f;
+  color: rgba(255,255,255,0.9);
+  font-weight: 700;
+  font-size: 14px;
+  border: 1px solid #2a2a2a;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.ik-load-more:hover { background: #1a1a1a; }
+.ik-load-more:disabled { opacity: 0.5; cursor: default; }
 
-  .ik-profile-header {
-    gap: 16px;
-    padding: 20px 0;
-  }
-
-  .ik-profile-avatar {
-    width: 72px;
-    height: 72px;
-  }
-
-  .ik-profile-info__name {
-    font-size: 20px;
-  }
-
-  .ik-profile-stats {
-    gap: 16px;
-  }
-
-  .ik-profile-stats__value {
-    font-size: 15px;
-  }
-
-  .ik-profile-stats__label {
-    font-size: 12px;
-  }
-
-  .ik-profile-tab {
-    padding: 12px 20px;
-    font-size: 14px;
-  }
-
+@keyframes ik-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.ik-spin {
+  display: inline-block;
+  animation: ik-spin 0.8s linear infinite;
 }
 
-@media (max-width: 480px) {
-  .ik-profile-header {
-    gap: 14px;
-  }
+/* ── Bottom Actions ───────────────────────────── */
+.ik-bottom-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
 
-  .ik-profile-avatar {
-    width: 60px;
-    height: 60px;
-  }
-
-  .ik-profile-info__name {
-    font-size: 18px;
-  }
-
-  .ik-profile-stats {
-    gap: 12px;
-    flex-wrap: wrap;
-  }
+/* ── Responsive ─────────────────────────────── */
+@media (min-width: 640px) {
+  .ik-article-grid { grid-template-columns: repeat(3, 1fr); }
+  .ik-profile { padding: 20px 24px 32px; }
+}
+@media (min-width: 1024px) {
+  .ik-article-grid { grid-template-columns: repeat(6, 1fr); }
+}
+@media (max-width: 639px) {
+  .ik-profile { height: calc(100vh - 66px); }
+  .ik-frame { border-radius: 12px; }
+  .ik-frame__inner { border-radius: 12px; }
+  .ik-frame__body { padding: 0; }
+  .ik-tab-bar { padding: 8px 14px; min-height: 44px; }
+  .ik-banner { min-height: 240px; padding: 22px 18px; }
+  .ik-banner__avatar { width: 68px; height: 68px; border-width: 3px; }
+  .ik-banner__level { min-width: 28px; height: 28px; font-size: 12px; line-height: 24px; }
+  .ik-banner__name { font-size: 22px; }
+  .ik-banner__title-tag { font-size: 13px; padding: 4px 12px; }
+  .ik-banner__stats { font-size: 13px; gap: 8px; }
+  .ik-aframe__content { padding: 10px; gap: 10px; }
+  .ik-banner-card { margin: 0 10px; padding: 0; }
 }
 </style>
