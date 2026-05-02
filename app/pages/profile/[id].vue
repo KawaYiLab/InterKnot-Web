@@ -49,8 +49,6 @@ const goArticle = (discussion: Discussion, event: MouseEvent) => {
   });
 };
 
-const sparkles = [1, 2, 3, 4, 5, 6];
-
 const copyUid = async () => {
   const uid = profile.value?.uid;
   if (uid == null) return;
@@ -189,19 +187,6 @@ onBeforeUnmount(() => {
       <!-- ── Profile Banner Card (flush 贴合 A-frame 上边) ─── -->
       <div class="ik-banner-card">
         <div class="ik-banner">
-          <!-- Scalloped edge top -->
-          <div class="ik-banner__scallop ik-banner__scallop--top" aria-hidden="true">
-            <div v-for="n in 40" :key="n" class="ik-banner__scallop-tooth"></div>
-          </div>
-
-          <!-- Grid pattern overlay -->
-          <div class="ik-banner__grid-overlay" aria-hidden="true"></div>
-
-          <!-- Sparkles -->
-          <svg v-for="(s, i) in sparkles" :key="i" class="ik-sparkle" :class="`ik-sparkle--${i + 1}`" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 0 L13.5 10.5 L24 12 L13.5 13.5 L12 24 L10.5 13.5 L0 12 L10.5 10.5 Z"/>
-          </svg>
-
           <!-- User info area (left aligned) -->
           <div class="ik-banner__user">
             <div class="ik-banner__avatar-wrap">
@@ -240,10 +225,6 @@ onBeforeUnmount(() => {
             </span>
           </div>
 
-          <!-- Scalloped edge bottom -->
-          <div class="ik-banner__scallop ik-banner__scallop--bottom" aria-hidden="true">
-            <div v-for="n in 40" :key="n" class="ik-banner__scallop-tooth"></div>
-          </div>
         </div>
 
         <!-- Footer: signature -->
@@ -432,11 +413,7 @@ onBeforeUnmount(() => {
   position: relative;
   border-radius: 0 0 14px 14px;
   overflow: hidden;
-  border: 3px solid #5fd3c8;
-  border-top: none;
-  border-left: none;
-  border-right: none;
-  background: linear-gradient(180deg, #ff8fb8 0%, #ffb8d4 45%, #ffd9c8 100%);
+  background: #2a2d33 url("/images/banner.png") center/cover no-repeat;
   min-height: 240px;
   display: flex;
   flex-direction: column;
@@ -447,66 +424,6 @@ onBeforeUnmount(() => {
 .ik-banner--skeleton {
   background: linear-gradient(135deg, #1a1a1a 0%, #222 50%, #1a1a1a 100%);
   border-color: #2a2a2a;
-}
-
-/* Grid pattern overlay */
-.ik-banner__grid-overlay {
-  position: absolute;
-  inset: 0;
-  opacity: 0.25;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px);
-  background-size: 70px 70px;
-  pointer-events: none;
-}
-
-/* Scalloped edges */
-.ik-banner__scallop {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 10px;
-  display: flex;
-  pointer-events: none;
-  z-index: 2;
-}
-.ik-banner__scallop--top { top: 0; }
-.ik-banner__scallop--bottom { bottom: 0; }
-.ik-banner__scallop-tooth {
-  flex: 1;
-  background: #5fd3c8;
-}
-.ik-banner__scallop--top .ik-banner__scallop-tooth {
-  border-radius: 0 0 50% 50%;
-  margin-top: -5px;
-}
-.ik-banner__scallop--bottom .ik-banner__scallop-tooth {
-  border-radius: 50% 50% 0 0;
-  margin-bottom: -5px;
-}
-
-/* Sparkles */
-.ik-sparkle {
-  position: absolute;
-  color: #fff;
-  pointer-events: none;
-  z-index: 1;
-  animation: ik-sparkle-float 3s ease-in-out infinite;
-}
-.ik-sparkle--1 { width: 24px; top: 12%; left: 42%; animation-delay: 0s; }
-.ik-sparkle--2 { width: 16px; top: 40%; left: 28%; animation-delay: 0.6s; opacity: 0.8; }
-.ik-sparkle--3 { width: 20px; bottom: 20%; left: 35%; animation-delay: 1.2s; }
-.ik-sparkle--4 { width: 28px; top: 18%; right: 8%; animation-delay: 1.8s; }
-.ik-sparkle--5 { width: 16px; bottom: 16%; right: 18%; animation-delay: 2.4s; opacity: 0.8; }
-.ik-sparkle--6 { width: 20px; top: 50%; right: 2%; animation-delay: 0.3s; }
-
-@keyframes ik-sparkle-float {
-  0%, 100% { opacity: 0.4; transform: scale(0.8) translateY(0); }
-  50% { opacity: 1; transform: scale(1.15) translateY(-4px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ik-sparkle { animation: none; opacity: 0.5; }
 }
 
 /* User info inside banner */
