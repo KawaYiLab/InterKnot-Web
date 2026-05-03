@@ -34,20 +34,24 @@ const floorLabel = computed(() =>
 <template>
   <div class="ik-comment">
     <div class="ik-comment__avatar-col">
-      <img
-        :src="comment.author?.avatar || '/images/default-avatar.webp'"
-        :alt="comment.author?.name || ''"
-        class="ik-comment__avatar"
-        @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-      />
+      <UserHoverCard :author-id="comment.author?.documentId">
+        <img
+          :src="comment.author?.avatar || '/images/default-avatar.webp'"
+          :alt="comment.author?.name || ''"
+          class="ik-comment__avatar"
+          @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+        />
+      </UserHoverCard>
     </div>
 
     <div class="ik-comment__content-col">
       <!-- Author -->
       <div class="ik-comment__author-row">
-        <span class="ik-comment__name">
-          {{ comment.author?.name || "匿名用户" }}
-        </span>
+        <UserHoverCard :author-id="comment.author?.documentId">
+          <span class="ik-comment__name">
+            {{ comment.author?.name || "匿名用户" }}
+          </span>
+        </UserHoverCard>
         <span v-if="comment.author?.level" class="ik-comment__level">
           Lv.{{ comment.author.level }}
         </span>
@@ -93,18 +97,22 @@ const floorLabel = computed(() =>
           class="ik-comment__reply"
         >
           <div class="ik-comment__reply-avatar-col">
-            <img
-              :src="reply.author?.avatar || '/images/default-avatar.webp'"
-              :alt="reply.author?.name || ''"
-              class="ik-comment__avatar ik-comment__avatar--sm"
-              @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-            />
+            <UserHoverCard :author-id="reply.author?.documentId">
+              <img
+                :src="reply.author?.avatar || '/images/default-avatar.webp'"
+                :alt="reply.author?.name || ''"
+                class="ik-comment__avatar ik-comment__avatar--sm"
+                @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+              />
+            </UserHoverCard>
           </div>
           <div class="ik-comment__reply-content-col">
             <div class="ik-comment__author-row">
-              <span class="ik-comment__name">
-                {{ reply.author?.name || "匿名用户" }}
-              </span>
+              <UserHoverCard :author-id="reply.author?.documentId">
+                <span class="ik-comment__name">
+                  {{ reply.author?.name || "匿名用户" }}
+                </span>
+              </UserHoverCard>
               <span v-if="reply.author?.level" class="ik-comment__level">
                 Lv.{{ reply.author.level }}
               </span>

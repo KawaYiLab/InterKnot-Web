@@ -604,12 +604,13 @@ export function useApi() {
   const getProfileArticles = async (
     documentId: string,
     endCur = "",
+    limit = DEFAULT_PAGE_SIZE,
   ): Promise<Pagination<Discussion>> => {
     const start = parseStart(endCur);
     const response = await $api(`/api/profiles/${documentId}/articles`, {
       query: {
         start: String(start),
-        limit: String(DEFAULT_PAGE_SIZE),
+        limit: String(limit),
       },
     });
     const meta = extractPaginationMeta(response);
@@ -825,6 +826,15 @@ export function useApi() {
     return { name: String(data.name || name) };
   };
 
+  const updateMyBio = async (bio: string): Promise<{ bio: string }> => {
+    const response = await $api("/api/me/profile/bio", {
+      method: "PUT",
+      body: { bio },
+    });
+    const data = response as Record<string, unknown>;
+    return { bio: String(data.bio ?? bio) };
+  };
+
   return {
     login,
     sendRegisterCode,
@@ -854,6 +864,7 @@ export function useApi() {
     getMyBusinessCards,
     equipBusinessCard,
     updateMyName,
+    updateMyBio,
   };
 }
 

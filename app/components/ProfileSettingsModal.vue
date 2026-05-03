@@ -4,11 +4,13 @@ import { resolveErrorMessage } from "~/utils/api-error";
 
 const props = defineProps<{
   currentName?: string;
+  currentBio?: string;
 }>();
 
 const emit = defineEmits<{
   close: [];
   nameUpdated: [name: string];
+  bioUpdated: [bio: string];
 }>();
 
 const api = useApi();
@@ -18,7 +20,12 @@ const showEditName = ref(false);
 const nameInput = ref(props.currentName || "");
 const saving = ref(false);
 
+const showEditBio = ref(false);
+const bioInput = ref(props.currentBio || "");
+const savingBio = ref(false);
+
 const NAME_MAX = 20;
+const BIO_MAX = 100;
 
 const handleClose = () => {
   emit("close");
@@ -62,6 +69,46 @@ const submitName = async () => {
   }
 };
 
+const openEditBio = () => {
+  bioInput.value = props.currentBio || "";
+  showEditBio.value = true;
+};
+
+const closeEditBio = () => {
+  showEditBio.value = false;
+};
+
+const submitBio = async () => {
+  const trimmed = bioInput.value.trim();
+  if (trimmed.length > BIO_MAX) {
+    message.warning(`签名不能超过 ${BIO_MAX} 个字符`);
+    return;
+  }
+  if (trimmed === (props.currentBio || "")) {
+    message.warning("什么都没改呢！");
+    closeEditBio();
+    return;
+  }
+  savingBio.value = true;
+  try {
+    const result = await api.updateMyBio(trimmed);
+    emit("bioUpdated", result.bio);
+    message.success("签名修改成功");
+    closeEditBio();
+    handleClose();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "修改签名失败"));
+  } finally {
+    savingBio.value = false;
+  }
+};
+
+const handleEditBioOverlayClick = (e: MouseEvent) => {
+  if ((e.target as HTMLElement).classList.contains("ik-overlay")) {
+    closeEditBio();
+  }
+};
+
 const handleOverlayClick = (e: MouseEvent) => {
   if ((e.target as HTMLElement).classList.contains("ik-overlay")) {
     handleClose();
@@ -76,7 +123,9 @@ const handleEditNameOverlayClick = (e: MouseEvent) => {
 
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === "Escape") {
-    if (showEditName.value) {
+    if (showEditBio.value) {
+      closeEditBio();
+    } else if (showEditName.value) {
       closeEditName();
     } else {
       handleClose();
@@ -113,7 +162,7 @@ onBeforeUnmount(() => {
             <div class="ik-settings__list">
               <z-button @click="openEditName">修改用户名</z-button>
               <z-button @click="message.warning('功能即将开放')">隐藏生日信息</z-button>
-              <z-button @click="message.warning('功能即将开放')">修改签名</z-button>
+              <z-button @click="openEditBio">修改签名</z-button>
               <z-button @click="message.warning('功能即将开放')">修改帖子展示</z-button>
               <z-button @click="message.warning('功能即将开放')">社交设置</z-button>
             </div>
@@ -158,6 +207,49 @@ onBeforeUnmount(() => {
                       @click="submitName"
                     >
                       {{ saving ? '保存中...' : '确定' }}
+                    </z-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+    <!-- Edit Bio Sub-dialog -->
+    <Teleport to="body">
+      <Transition name="ik-overlay" appear>
+        <div v-if="showEditBio" class="ik-overlay ik-overlay--sub" @click="handleEditBioOverlayClick">
+          <div class="ik-overlay__stripe" aria-hidden="true"></div>
+          <div class="ik-dialog" @click.stop>
+            <div class="ik-dialog__outer">
+              <div class="ik-dialog__inner">
+                <div class="ik-dialog__header">
+                  <span class="ik-dialog__title">修改签名</span>
+                  <button class="ik-dialog__close" aria-label="关闭" @click="closeEditBio">
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                  </button>
+                </div>
+                <div class="ik-dialog__body">
+                  <div class="ik-edit-name__wrapper">
+                    <div class="ik-edit-name">
+                      <div class="ik-edit-name__field">
+                        <z-textarea
+                          v-model="bioInput"
+                          :maxlength="BIO_MAX"
+                          placeholder="请输入新签名"
+                          :disabled="savingBio"
+                        />
+                      </div>
+                      <span class="ik-edit-name__count">{{ bioInput.trim().length }}/{{ BIO_MAX }}</span>
+                    </div>
+                    <z-button
+                      class="ik-edit-name__submit"
+                      :icon="{ success: '#00cc0d' }"
+                      :disabled="savingBio"
+                      @click="submitBio"
+                    >
+                      {{ savingBio ? '保存中...' : '确定' }}
                     </z-button>
                   </div>
                 </div>
