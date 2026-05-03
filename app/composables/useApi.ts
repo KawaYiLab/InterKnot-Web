@@ -816,6 +816,15 @@ export function useApi() {
     });
   };
 
+  const updateMyName = async (name: string): Promise<{ name: string }> => {
+    const response = await $api("/api/me/profile/name", {
+      method: "PUT",
+      body: { name },
+    });
+    const data = response as Record<string, unknown>;
+    return { name: String(data.name || name) };
+  };
+
   return {
     login,
     sendRegisterCode,
@@ -844,6 +853,7 @@ export function useApi() {
     uploadImage,
     getMyBusinessCards,
     equipBusinessCard,
+    updateMyName,
   };
 }
 
