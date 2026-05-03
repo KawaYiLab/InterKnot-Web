@@ -67,9 +67,9 @@ const handleEquip = async () => {
     await api.equipBusinessCard(selectedCard.value.documentId);
     equippedId.value = selectedCard.value.documentId;
     emit("equipped", selectedCard.value);
-    message.success("名片已装备");
+    message.success("已使用此名片");
   } catch (err) {
-    message.error(resolveErrorMessage(err, "装备名片失败"));
+    message.error(resolveErrorMessage(err, "使用名片失败"));
   } finally {
     equipping.value = false;
   }
