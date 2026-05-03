@@ -23,14 +23,16 @@ const articleLoading = ref(false);
 
 const profileId = computed(() => String(route.params.id || ""));
 
+const PROFILE_ARTICLES_MAX = 6;
+
 const loadProfileArticles = async () => {
   if (articleLoading.value || !articleHasNext.value) return;
   articleLoading.value = true;
   try {
-    const page = await api.getProfileArticles(profileId.value, articleCursor.value);
+    const page = await api.getProfileArticles(profileId.value, articleCursor.value, PROFILE_ARTICLES_MAX);
     articles.value.push(...page.nodes);
     articleCursor.value = page.endCursor;
-    articleHasNext.value = page.hasNextPage;
+    articleHasNext.value = false;
   } catch (err) {
     message.error(resolveErrorMessage(err, "获取用户帖子失败"));
   } finally {
@@ -64,6 +66,12 @@ const onNameUpdated = (name: string) => {
     profile.value = { ...profile.value, name };
   }
   authStore.fetchSelfUser();
+};
+
+const onBioUpdated = (bio: string) => {
+  if (profile.value) {
+    profile.value = { ...profile.value, bio: bio || undefined };
+  }
 };
 
 const copyUid = async () => {
@@ -222,8 +230,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="ik-banner__info">
               <h1 class="ik-banner__name">{{ profile.name || profile.login || "匿名用户" }}</h1>
-              <span v-if="profile.bio" class="ik-banner__title-tag">{{ profile.bio }}</span>
-              <span v-else class="ik-banner__title-tag ik-banner__title-tag--empty">暂无称号</span>
+              <span class="ik-banner__title-tag ik-banner__title-tag--empty">暂无称号</span>
             </div>
           </div>
 
@@ -276,13 +283,6 @@ onBeforeUnmount(() => {
           </div>
         </template>
       </div>
-      <!-- Load more -->
-      <div v-if="articleHasNext && articles.length" class="ik-load-more-wrap">
-        <button class="ik-load-more" :disabled="articleLoading" @click="loadProfileArticles">
-          <span v-if="articleLoading"><i class="z-icon-loading ik-spin" /></span>
-          <span v-else>加载更多</span>
-        </button>
-      </div>
 
       </div><!-- /.ik-aframe__content -->
       </div><!-- /.ik-aframe -->
@@ -306,8 +306,10 @@ onBeforeUnmount(() => {
             <ProfileSettingsModal
               v-if="showSettingsModal"
               :current-name="profile?.name"
+              :current-bio="profile?.bio"
               @close="showSettingsModal = false"
               @name-updated="onNameUpdated"
+              @bio-updated="onBioUpdated"
             />
           </Transition>
         </Teleport>

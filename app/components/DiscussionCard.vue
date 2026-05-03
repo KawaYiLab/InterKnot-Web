@@ -131,18 +131,22 @@ const handleOpen = (e: MouseEvent) => {
 
       <div class="ik-card__body">
         <div class="ik-card__author-row">
-          <div class="ik-card__avatar-shell">
-            <img
-              :src="avatarSrc"
-              :alt="authorName"
-              class="ik-card__avatar-image"
-              loading="lazy"
-              decoding="async"
-              @error="onAvatarError"
-            />
-          </div>
+          <UserHoverCard :author-id="discussion.author?.documentId">
+            <div class="ik-card__avatar-shell">
+              <img
+                :src="avatarSrc"
+                :alt="authorName"
+                class="ik-card__avatar-image"
+                loading="lazy"
+                decoding="async"
+                @error="onAvatarError"
+              />
+            </div>
+          </UserHoverCard>
           <div class="ik-card__author-block">
-            <p class="ik-card__author-name">{{ authorName }}</p>
+            <UserHoverCard :author-id="discussion.author?.documentId">
+              <p class="ik-card__author-name">{{ authorName }}</p>
+            </UserHoverCard>
             <div class="ik-card__author-divider" />
           </div>
         </div>
