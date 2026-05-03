@@ -74,6 +74,12 @@ const onBioUpdated = (bio: string) => {
   }
 };
 
+const onHiddenUpdated = (h: boolean) => {
+  if (profile.value) {
+    profile.value = { ...profile.value, profileHidden: h };
+  }
+};
+
 const copyUid = async () => {
   const uid = profile.value?.uid;
   if (uid == null) return;
@@ -122,7 +128,9 @@ onMounted(async () => {
     profileTabLabel.value = profile.value?.isSelf
       ? null
       : (profile.value?.name || profile.value?.login || null);
-    await loadProfileArticles();
+    if (!profile.value?.isHidden) {
+      await loadProfileArticles();
+    }
   } catch (err) {
     loadError.value = true;
     message.error(resolveErrorMessage(err, "获取用户信息失败"));
@@ -252,6 +260,11 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <!-- Hidden badge (self view only) -->
+          <div v-if="profile.isSelf && profile.profileHidden" class="ik-banner__hidden-badge">
+            个人资料已隐藏，仅自己可见
+          </div>
+
           <!-- Stats text row -->
           <div v-if="profile.stats" class="ik-banner__stats">
             <span class="ik-stat">
@@ -283,7 +296,12 @@ onBeforeUnmount(() => {
       <div class="ik-aframe__content">
 
       <!-- ── Article Grid ────────────────────────── -->
-      <div class="ik-article-grid">
+      <div v-if="profile.isHidden" class="ik-article-grid">
+        <div class="ik-article-grid__empty">
+          该用户已隐藏个人资料
+        </div>
+      </div>
+      <div v-else class="ik-article-grid">
         <div v-if="!articles.length && !articleLoading" class="ik-article-grid__empty">
           还没有发布任何内容哦
         </div>
@@ -325,9 +343,11 @@ onBeforeUnmount(() => {
               v-if="showSettingsModal"
               :current-name="profile?.name"
               :current-bio="profile?.bio"
+              :current-hidden="profile?.profileHidden"
               @close="showSettingsModal = false"
               @name-updated="onNameUpdated"
               @bio-updated="onBioUpdated"
+              @hidden-updated="onHiddenUpdated"
             />
           </Transition>
         </Teleport>
@@ -574,6 +594,21 @@ onBeforeUnmount(() => {
   box-shadow: none;
   color: rgba(255,255,255,0.6);
   font-style: italic;
+}
+
+/* Hidden profile badge */
+.ik-banner__hidden-badge {
+  position: relative;
+  z-index: 1;
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffcf3b;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 /* Stat text row */
