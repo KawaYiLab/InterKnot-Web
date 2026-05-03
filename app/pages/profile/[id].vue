@@ -57,6 +57,15 @@ const onCardEquipped = (card: BusinessCard | null) => {
   }
 };
 
+const authStore = useAuthStore();
+
+const onNameUpdated = (name: string) => {
+  if (profile.value) {
+    profile.value = { ...profile.value, name };
+  }
+  authStore.fetchSelfUser();
+};
+
 const copyUid = async () => {
   const uid = profile.value?.uid;
   if (uid == null) return;
@@ -296,7 +305,9 @@ onBeforeUnmount(() => {
           <Transition name="ik-overlay" appear @after-leave="showSettingsModal = false">
             <ProfileSettingsModal
               v-if="showSettingsModal"
+              :current-name="profile?.name"
               @close="showSettingsModal = false"
+              @name-updated="onNameUpdated"
             />
           </Transition>
         </Teleport>
