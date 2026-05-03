@@ -1,10 +1,65 @@
 <script setup lang="ts">
+import { useMessage } from "zenless-ui";
+import { resolveErrorMessage } from "~/utils/api-error";
+
+const props = defineProps<{
+  currentName?: string;
+}>();
+
 const emit = defineEmits<{
   close: [];
+  nameUpdated: [name: string];
 }>();
+
+const api = useApi();
+const message = useMessage();
+
+const showEditName = ref(false);
+const nameInput = ref(props.currentName || "");
+const saving = ref(false);
+
+const NAME_MAX = 20;
 
 const handleClose = () => {
   emit("close");
+};
+
+const openEditName = () => {
+  nameInput.value = props.currentName || "";
+  showEditName.value = true;
+};
+
+const closeEditName = () => {
+  showEditName.value = false;
+};
+
+const submitName = async () => {
+  const trimmed = nameInput.value.trim();
+  if (!trimmed) {
+    message.warning("用户名不能为空");
+    return;
+  }
+  if (trimmed.length > NAME_MAX) {
+    message.warning(`用户名不能超过 ${NAME_MAX} 个字符`);
+    return;
+  }
+  if (trimmed === props.currentName) {
+    message.warning("什么都没改呢！");
+    closeEditName();
+    return;
+  }
+  saving.value = true;
+  try {
+    const result = await api.updateMyName(trimmed);
+    emit("nameUpdated", result.name);
+    message.success("用户名修改成功");
+    closeEditName();
+    handleClose();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "修改用户名失败"));
+  } finally {
+    saving.value = false;
+  }
 };
 
 const handleOverlayClick = (e: MouseEvent) => {
@@ -13,8 +68,20 @@ const handleOverlayClick = (e: MouseEvent) => {
   }
 };
 
+const handleEditNameOverlayClick = (e: MouseEvent) => {
+  if ((e.target as HTMLElement).classList.contains("ik-overlay")) {
+    closeEditName();
+  }
+};
+
 const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === "Escape") handleClose();
+  if (e.key === "Escape") {
+    if (showEditName.value) {
+      closeEditName();
+    } else {
+      handleClose();
+    }
+  }
 };
 
 onMounted(() => {
@@ -41,19 +108,65 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <!-- Body -->
+          <!-- Menu Body -->
           <div class="ik-dialog__body">
             <div class="ik-settings__list">
-              <z-button @click="$emit('close')">修改用户名</z-button>
-              <z-button @click="$emit('close')">隐藏生日信息</z-button>
-              <z-button @click="$emit('close')">修改签名</z-button>
-              <z-button @click="$emit('close')">修改帖子展示</z-button>
-              <z-button @click="$emit('close')">社交设置</z-button>
+              <z-button @click="openEditName">修改用户名</z-button>
+              <z-button @click="message.warning('功能即将开放')">隐藏生日信息</z-button>
+              <z-button @click="message.warning('功能即将开放')">修改签名</z-button>
+              <z-button @click="message.warning('功能即将开放')">修改帖子展示</z-button>
+              <z-button @click="message.warning('功能即将开放')">社交设置</z-button>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Edit Name Sub-dialog -->
+    <Teleport to="body">
+      <Transition name="ik-overlay" appear>
+        <div v-if="showEditName" class="ik-overlay ik-overlay--sub" @click="handleEditNameOverlayClick">
+          <div class="ik-overlay__stripe" aria-hidden="true"></div>
+          <div class="ik-dialog" @click.stop>
+            <div class="ik-dialog__outer">
+              <div class="ik-dialog__inner">
+                <div class="ik-dialog__header">
+                  <span class="ik-dialog__title">修改用户名</span>
+                  <button class="ik-dialog__close" aria-label="关闭" @click="closeEditName">
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                  </button>
+                </div>
+                <div class="ik-dialog__body">
+                  <div class="ik-edit-name__wrapper">
+                    <div class="ik-edit-name">
+                      <div class="ik-edit-name__field">
+                        <z-input
+                          v-model="nameInput"
+                          :maxlength="NAME_MAX"
+                          placeholder="请输入新用户名"
+                          :disabled="saving"
+                          clearable
+                          @keydown.enter="submitName"
+                        />
+                      </div>
+                      <span class="ik-edit-name__count">{{ nameInput.trim().length }}/{{ NAME_MAX }}</span>
+                    </div>
+                    <z-button
+                      class="ik-edit-name__submit"
+                      :icon="{ success: '#00cc0d' }"
+                      :disabled="saving || !nameInput.trim()"
+                      @click="submitName"
+                    >
+                      {{ saving ? '保存中...' : '确定' }}
+                    </z-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -191,6 +304,48 @@ onBeforeUnmount(() => {
   margin-left: 0;
 }
 
+/* ── Edit Name Form ───────────────────────────── */
+.ik-edit-name {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 32px 20px 45px;
+  background: #00000065;
+  border-radius: 16px;
+}
+
+.ik-edit-name__field {
+  position: relative;
+}
+
+.ik-edit-name__field :deep(.z-input) {
+  width: 100%;
+}
+
+.ik-edit-name__count {
+  margin-top: -6px;
+  align-self: flex-end;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.ik-edit-name__wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.ik-edit-name__wrapper > :deep(.z-button) {
+  margin-top: -18px;
+  position: relative;
+  z-index: 1;
+  min-width: 70px;
+}
+
 /* ═══════════════════════════════════════════════
    Animations — 与项目其他弹窗一致
    ═══════════════════════════════════════════════ */
@@ -256,6 +411,11 @@ onBeforeUnmount(() => {
 .ik-overlay-leave-to .ik-dialog {
   opacity: 0;
   transform: translateX(-5%);
+}
+
+/* ── Sub-overlay z-index boost ────────────────── */
+.ik-overlay--sub {
+  z-index: 9200;
 }
 
 /* ── Mobile ───────────────────────────────────── */
