@@ -329,9 +329,9 @@ onBeforeUnmount(() => {
 
       <!-- ── Bottom Actions ──────────────────────── -->
       <div v-if="profile.isSelf" class="ik-bottom-actions">
-        <z-button @click="message.warning('功能即将开放')">修改头像</z-button>
-        <z-button @click="message.warning('功能即将开放')">修改称号</z-button>
-        <z-button @click="message.warning('功能即将开放')">修改勋章</z-button>
+        <z-button disabled>修改头像</z-button>
+        <z-button disabled>修改称号</z-button>
+        <z-button disabled>修改勋章</z-button>
         <z-button @click="showCardModal = true">修改名片</z-button>
       </div>
 

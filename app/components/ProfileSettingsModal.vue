@@ -217,9 +217,9 @@ onBeforeUnmount(() => {
           <div class="ik-dialog__body">
             <div class="ik-settings__list">
               <z-button @click="openEditName">修改用户名</z-button>
-              <z-button @click="message.warning('功能即将开放')">隐藏生日信息</z-button>
+              <z-button disabled>隐藏生日信息</z-button>
               <z-button @click="openEditBio">修改签名</z-button>
-              <z-button @click="message.warning('功能即将开放')">修改帖子展示</z-button>
+              <z-button disabled>修改帖子展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
             </div>
           </div>
