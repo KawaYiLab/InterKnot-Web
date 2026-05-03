@@ -90,7 +90,7 @@ const handleTabChange = async (next: string | number) => {
   }
 
   if (tab === "notification") {
-    message.warning("通知中心即将开放");
+    message.warning("敲敲即将开放");
     activeTab.value = resolveActiveTab(route.path);
     return;
   }
@@ -189,7 +189,7 @@ watch(
               />
             </svg>
             <span class="ik-header-tab__content">
-              <span class="ik-tab-label">消息</span>
+              <span class="ik-tab-label">敲敲</span>
               <span class="ik-tab-dot" />
             </span>
           </button>
