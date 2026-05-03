@@ -69,6 +69,19 @@ export interface ProfileStats {
   totalLikes: number;
 }
 
+export type BusinessCardType = "character" | "city" | "news";
+
+export interface BusinessCard {
+  documentId: string;
+  name: string;
+  description?: string;
+  story?: unknown[];
+  type: BusinessCardType;
+  image?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+}
+
 export interface Profile {
   documentId: string;
   uid?: number;
@@ -80,6 +93,7 @@ export interface Profile {
   exp?: number;
   isSelf?: boolean;
   stats?: ProfileStats;
+  equippedCard?: BusinessCard;
 }
 
 export interface LikeToggleResult {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
-import type { Discussion, Profile } from "~/types/entities";
+import type { BusinessCard, Discussion, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 
@@ -13,6 +13,7 @@ const message = useMessage();
 const profile = ref<Profile | null>(null);
 const loadError = ref(false);
 const loading = ref(false);
+const showCardModal = ref(false);
 
 const articles = ref<Discussion[]>([]);
 const articleCursor = ref("");
@@ -47,6 +48,12 @@ const goArticle = (discussion: Discussion, event: MouseEvent) => {
   discussionModal.open(discussion.id, {
     coverAspectRatio: getCoverAspectRatio(discussion.coverWidth, discussion.coverHeight),
   });
+};
+
+const onCardEquipped = (card: BusinessCard | null) => {
+  if (profile.value) {
+    profile.value = { ...profile.value, equippedCard: card ?? undefined };
+  }
 };
 
 const copyUid = async () => {
@@ -186,7 +193,10 @@ onBeforeUnmount(() => {
 
       <!-- ── Profile Banner Card (flush 贴合 A-frame 上边) ─── -->
       <div class="ik-banner-card">
-        <div class="ik-banner">
+        <div
+          class="ik-banner"
+          :style="profile.equippedCard?.image ? { backgroundImage: `url('${profile.equippedCard.image}')` } : undefined"
+        >
           <!-- User info area (left aligned) -->
           <div class="ik-banner__user">
             <div class="ik-banner__avatar-wrap">
@@ -276,8 +286,22 @@ onBeforeUnmount(() => {
         <z-button @click="message.warning('功能即将开放')">修改头像</z-button>
         <z-button @click="message.warning('功能即将开放')">修改称号</z-button>
         <z-button @click="message.warning('功能即将开放')">修改勋章</z-button>
-        <z-button @click="message.warning('功能即将开放')">修改名片</z-button>
+        <z-button @click="showCardModal = true">修改名片</z-button>
       </div>
+
+      <!-- 名片选择弹窗 -->
+      <ClientOnly>
+        <Teleport to="body">
+          <Transition name="ik-overlay" appear @after-leave="showCardModal = false">
+            <BusinessCardModal
+              v-if="showCardModal"
+              :profile="profile"
+              @close="showCardModal = false"
+              @equipped="onCardEquipped"
+            />
+          </Transition>
+        </Teleport>
+      </ClientOnly>
 
     </template>
   </section>
@@ -404,7 +428,7 @@ onBeforeUnmount(() => {
 .ik-banner-card {
   background: transparent;
   padding: 0;
-  margin: 0 16px;
+  margin: 12px 16px 0;
   overflow: hidden;
   border-radius: 14px;
 }
