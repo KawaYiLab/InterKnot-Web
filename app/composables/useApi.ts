@@ -588,6 +588,8 @@ export function useApi() {
       level: Number(userRaw?.level ?? data.level ?? 1),
       exp: Number(userRaw?.exp ?? data.exp ?? 0),
       isSelf: data.isSelf === true,
+      isHidden: data.isHidden === true,
+      profileHidden: data.profileHidden === true,
       stats: statsRaw
         ? {
             articleCount: Number(statsRaw.articleCount || 0),
@@ -835,6 +837,21 @@ export function useApi() {
     return { bio: String(data.bio ?? bio) };
   };
 
+  const updateMyVisibility = async (profileHidden: boolean): Promise<{ profileHidden: boolean }> => {
+    const response = await $api("/api/me/profile/visibility", {
+      method: "PUT",
+      body: { profileHidden },
+    });
+    const data = response as Record<string, unknown>;
+    return { profileHidden: data.profileHidden === true };
+  };
+
+  const getMyProfileSettings = async (): Promise<{ profileHidden: boolean }> => {
+    const response = await $api("/api/me/profile");
+    const data = response as Record<string, unknown>;
+    return { profileHidden: data.profileHidden === true };
+  };
+
   return {
     login,
     sendRegisterCode,
@@ -865,6 +882,8 @@ export function useApi() {
     equipBusinessCard,
     updateMyName,
     updateMyBio,
+    updateMyVisibility,
+    getMyProfileSettings,
   };
 }
 

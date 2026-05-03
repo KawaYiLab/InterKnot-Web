@@ -5,12 +5,14 @@ import { resolveErrorMessage } from "~/utils/api-error";
 const props = defineProps<{
   currentName?: string;
   currentBio?: string;
+  currentHidden?: boolean;
 }>();
 
 const emit = defineEmits<{
   close: [];
   nameUpdated: [name: string];
   bioUpdated: [bio: string];
+  hiddenUpdated: [hidden: boolean];
 }>();
 
 const api = useApi();
@@ -103,6 +105,58 @@ const submitBio = async () => {
   }
 };
 
+const showSocial = ref(false);
+const hidden = ref(!!props.currentHidden);
+const togglingHidden = ref(false);
+
+watch(
+  () => props.currentHidden,
+  (val) => {
+    hidden.value = !!val;
+  },
+);
+
+const openSocial = () => {
+  hidden.value = !!props.currentHidden;
+  showSocial.value = true;
+};
+
+const closeSocial = () => {
+  showSocial.value = false;
+};
+
+// z-switch 的语义是"公开"(ON=公开，OFF=隐藏)，所以需要反转
+const publicSwitch = computed<boolean>({
+  get: () => !hidden.value,
+  set: (nextPublic) => {
+    void applyVisibility(!nextPublic);
+  },
+});
+
+const applyVisibility = async (nextHidden: boolean) => {
+  if (togglingHidden.value) return;
+  const prev = hidden.value;
+  hidden.value = nextHidden; // 乐观更新
+  togglingHidden.value = true;
+  try {
+    const result = await api.updateMyVisibility(nextHidden);
+    hidden.value = result.profileHidden;
+    emit("hiddenUpdated", result.profileHidden);
+    message.success(result.profileHidden ? "已隐藏个人资料" : "已公开个人资料");
+  } catch (err) {
+    hidden.value = prev; // 回滚
+    message.error(resolveErrorMessage(err, "修改失败"));
+  } finally {
+    togglingHidden.value = false;
+  }
+};
+
+const handleSocialOverlayClick = (e: MouseEvent) => {
+  if ((e.target as HTMLElement).classList.contains("ik-overlay")) {
+    closeSocial();
+  }
+};
+
 const handleEditBioOverlayClick = (e: MouseEvent) => {
   if ((e.target as HTMLElement).classList.contains("ik-overlay")) {
     closeEditBio();
@@ -123,7 +177,9 @@ const handleEditNameOverlayClick = (e: MouseEvent) => {
 
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === "Escape") {
-    if (showEditBio.value) {
+    if (showSocial.value) {
+      closeSocial();
+    } else if (showEditBio.value) {
       closeEditBio();
     } else if (showEditName.value) {
       closeEditName();
@@ -164,7 +220,7 @@ onBeforeUnmount(() => {
               <z-button @click="message.warning('功能即将开放')">隐藏生日信息</z-button>
               <z-button @click="openEditBio">修改签名</z-button>
               <z-button @click="message.warning('功能即将开放')">修改帖子展示</z-button>
-              <z-button @click="message.warning('功能即将开放')">社交设置</z-button>
+              <z-button @click="openSocial">社交设置</z-button>
             </div>
           </div>
         </div>
@@ -251,6 +307,43 @@ onBeforeUnmount(() => {
                     >
                       {{ savingBio ? '保存中...' : '确定' }}
                     </z-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Social Settings Sub-dialog -->
+    <Teleport to="body">
+      <Transition name="ik-overlay" appear>
+        <div v-if="showSocial" class="ik-overlay ik-overlay--sub" @click="handleSocialOverlayClick">
+          <div class="ik-overlay__stripe" aria-hidden="true"></div>
+          <div class="ik-dialog ik-dialog--large" @click.stop>
+            <div class="ik-dialog__outer">
+              <div class="ik-dialog__inner">
+                <div class="ik-dialog__header">
+                  <span class="ik-dialog__title">社交设置</span>
+                  <button class="ik-dialog__close" aria-label="关闭" @click="closeSocial">
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                  </button>
+                </div>
+                <div class="ik-dialog__body">
+                  <div class="ik-social">
+                    <div class="ik-social__row">
+                      <div class="ik-social__text">
+                        <span class="ik-social__label">公开个人资料</span>
+                        <span class="ik-social__desc">
+                          关闭后，其他用户访问你的主页将无法看到签名、统计数据、名片和发过的帖子/评论。
+                        </span>
+                      </div>
+                      <z-switch
+                        v-model="publicSwitch"
+                        :disabled="togglingHidden"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -394,6 +487,63 @@ onBeforeUnmount(() => {
   width: 100%;
   box-sizing: border-box;
   margin-left: 0;
+}
+
+/* ── Larger dialog variant (for settings pages) ── */
+.ik-dialog--large {
+  width: 720px;
+  height: 520px;
+}
+/* body 改为顶部对齐，方便未来放多项设置 */
+.ik-dialog--large .ik-dialog__body {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* ── Social Settings ─────────────────────────── */
+.ik-social {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px 20px;
+  background: #00000065;
+  border-radius: 16px;
+}
+
+.ik-social__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.ik-social__row:last-child {
+  border-bottom: none;
+}
+
+.ik-social__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ik-social__label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ik-social__desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* ── Edit Name Form ───────────────────────────── */
