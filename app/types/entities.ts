@@ -92,6 +92,8 @@ export interface Profile {
   level?: number;
   exp?: number;
   isSelf?: boolean;
+  isHidden?: boolean;
+  profileHidden?: boolean;
   stats?: ProfileStats;
   equippedCard?: BusinessCard;
 }
