@@ -389,21 +389,25 @@ onBeforeUnmount(() => {
             <!-- ── Header Bar ─────────────────────── -->
             <div class="ik-dialog__header">
               <div class="ik-dialog__header-left">
-                <div class="ik-dialog__avatar-shell">
-                  <img
-                    v-if="discussion"
-                    :src="discussion.author.avatar || '/images/default-avatar.webp'"
-                    :alt="discussion.author.name || ''"
-                    class="ik-dialog__avatar"
-                    @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-                  />
-                  <div v-else class="ik-skel" style="width:100%;height:100%;border-radius:999px"></div>
-                </div>
+                <UserHoverCard :author-id="discussion?.author?.documentId">
+                  <div class="ik-dialog__avatar-shell">
+                    <img
+                      v-if="discussion"
+                      :src="discussion.author.avatar || '/images/default-avatar.webp'"
+                      :alt="discussion.author.name || ''"
+                      class="ik-dialog__avatar"
+                      @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+                    />
+                    <div v-else class="ik-skel" style="width:100%;height:100%;border-radius:999px"></div>
+                  </div>
+                </UserHoverCard>
                 <div v-if="discussion" class="ik-dialog__author-info">
                   <div class="ik-dialog__author-row">
-                    <span class="ik-dialog__author-name">
-                      {{ discussion.author.name || "匿名用户" }}
-                    </span>
+                    <UserHoverCard :author-id="discussion.author?.documentId">
+                      <span class="ik-dialog__author-name">
+                        {{ discussion.author.name || "匿名用户" }}
+                      </span>
+                    </UserHoverCard>
                     <span v-if="discussion.author.level" class="ik-dialog__level">
                       Lv.{{ discussion.author.level }}
                     </span>
