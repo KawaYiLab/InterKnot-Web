@@ -24,6 +24,12 @@ router.afterEach(() => {
 type HeaderTabName = "home" | "notification" | "create" | "mine";
 
 const activeTab = ref<HeaderTabName>("home");
+const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
+const mineTabText = computed(() => {
+  const label = profileTabLabel.value;
+  if (!label) return "我的";
+  return label.length > 3 ? `${label.slice(0, 4)}...` : label;
+});
 const searchKeyword = ref("");
 const applyingSearch = ref(false);
 const searchInputRef = ref<InstanceType<any>>();
@@ -225,7 +231,7 @@ watch(
                 fill="currentColor"
               />
             </svg>
-            <span class="ik-header-tab__content">我的</span>
+            <span class="ik-header-tab__content">{{ mineTabText }}</span>
           </button>
         </div>
       </div>

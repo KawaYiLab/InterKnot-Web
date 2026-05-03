@@ -100,6 +100,8 @@ useSeoMeta({
   ogImage: () => profile.value?.avatar || "/images/zzzicon_200x200.png",
 });
 
+const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
+
 // Lock page scroll while on this profile page
 let _prevHtmlOverflow = "";
 let _prevBodyOverflow = "";
@@ -117,6 +119,9 @@ onMounted(async () => {
   pageDataLoading.claim();
   try {
     profile.value = await api.getProfile(profileId.value);
+    profileTabLabel.value = profile.value?.isSelf
+      ? null
+      : (profile.value?.name || profile.value?.login || null);
     await loadProfileArticles();
   } catch (err) {
     loadError.value = true;
@@ -128,6 +133,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  profileTabLabel.value = null;
   if (import.meta.client) {
     document.documentElement.style.overflow = _prevHtmlOverflow;
     document.body.style.overflow = _prevBodyOverflow;
