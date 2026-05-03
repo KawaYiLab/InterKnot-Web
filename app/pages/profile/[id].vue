@@ -686,6 +686,10 @@ onBeforeUnmount(() => {
 }
 
 /* ── Bottom Actions ───────────────────────────── */
+.ik-bottom-actions :deep(.z-button__content),
+.ik-tab-bar :deep(.z-button__content) {
+  font-weight: 700;
+}
 .ik-bottom-actions {
   display: flex;
   flex-wrap: wrap;
