@@ -148,44 +148,56 @@ onBeforeUnmount(() => {
       <div class="ik-frame">
         <div class="ik-frame__inner">
           <div class="ik-frame__body">
+
       <!-- Tab bar skeleton -->
       <div class="ik-tab-bar">
-        <div class="ik-skel" style="width:140px;height:18px;border-radius:4px"></div>
-        <div class="ik-skel" style="width:80px;height:36px;border-radius:999px"></div>
+        <div class="ik-skel" style="width:120px;height:34px;border-radius:999px"></div>
+        <div class="ik-skel" style="width:90px;height:36px;border-radius:999px"></div>
       </div>
+
       <!-- A-frame skeleton -->
       <div class="ik-aframe">
-        <!-- Banner skeleton -->
+        <!-- Banner card skeleton -->
         <div class="ik-banner-card">
           <div class="ik-banner ik-banner--skeleton">
+            <!-- User row: avatar + info -->
             <div class="ik-banner__user">
-              <div class="ik-skel ik-skel--circle" style="width:72px;height:72px"></div>
-              <div style="display:flex;flex-direction:column;gap:10px">
-                <div class="ik-skel" style="width:140px;height:24px;border-radius:6px"></div>
-                <div class="ik-skel" style="width:100px;height:28px;border-radius:6px"></div>
+              <div class="ik-banner__avatar-wrap">
+                <div class="ik-skel ik-skel--circle" style="width:90px;height:90px"></div>
+              </div>
+              <div class="ik-banner__info">
+                <div class="ik-skel" style="width:160px;height:30px;border-radius:6px"></div>
+                <div class="ik-skel" style="width:90px;height:28px;border-radius:999px"></div>
               </div>
             </div>
+            <!-- Stats row -->
+            <div class="ik-banner__stats">
+              <div class="ik-skel" style="width:200px;height:16px;border-radius:4px"></div>
+            </div>
           </div>
-          <div class="ik-banner-footer">
-            <div class="ik-skel" style="width:200px;height:16px;border-radius:4px"></div>
+          <!-- Footer signature -->
+          <div class="ik-banner-footer" style="padding:8px 34px">
+            <div class="ik-skel" style="width:220px;height:14px;border-radius:4px"></div>
           </div>
         </div>
+
+        <!-- Article grid skeleton -->
         <div class="ik-aframe__content">
-          <!-- Cards skeleton -->
           <div class="ik-article-grid">
             <div v-for="n in 6" :key="n" class="ik-article-grid__item">
               <div class="ik-skel" style="width:100%;aspect-ratio:3/4;border-radius:12px"></div>
-              <div class="ik-skel" style="width:60%;height:14px;border-radius:4px;margin:8px auto 0"></div>
             </div>
           </div>
         </div>
       </div>
+
           </div>
         </div>
       </div>
-      <!-- Actions skeleton -->
+
+      <!-- Bottom actions skeleton -->
       <div class="ik-bottom-actions">
-        <div class="ik-skel" style="width:100px;height:44px;border-radius:999px" v-for="n in 4" :key="n"></div>
+        <div class="ik-skel" style="width:90px;height:40px;border-radius:999px" v-for="n in 4" :key="n"></div>
       </div>
     </div>
 
