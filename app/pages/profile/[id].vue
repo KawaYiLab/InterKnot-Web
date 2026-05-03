@@ -567,7 +567,7 @@ onBeforeUnmount(() => {
 
 /* Banner footer */
 .ik-banner-footer {
-  padding: 8px 16px;
+  padding: 8px 34px;
   border-bottom: 2px solid #000;
   border-radius: 0 0 14px 14px;
   overflow: hidden;
@@ -603,11 +603,14 @@ onBeforeUnmount(() => {
   border: 1px solid #1f1f1f;
 }
 .ik-article-grid__item {
+  --ik-discussion-card-radius: 16px;
+  --ik-discussion-card-inner-radius: 12px;
   border-radius: 16px;
   overflow: hidden;
 }
 .ik-article-grid__item :deep(.ik-card__cover-frame) {
-  max-height: 260px;
+  max-height: 245px;
+  overflow: hidden;
 }
 
 /* Load more */

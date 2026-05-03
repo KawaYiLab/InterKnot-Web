@@ -691,22 +691,23 @@ onBeforeUnmount(() => {
   transform-origin: center;
 }
 
-/* 外边框：半透明白色，三圆角（左上/左下/右下） */
+/* 外边框 */
 .ik-dialog__outer {
   width: 100%;
   height: 100%;
   padding: 4px;
-  background: rgba(255, 255, 255, 0.23);
-  border-radius: 16px 0 16px 16px;
+  background: #2D2C2D;
+  border-radius: 24px 0 24px 24px;
+  overflow: hidden;
 }
 
-/* 内边框：纯黑 */
+/* 内边框 */
 .ik-dialog__inner {
   width: 100%;
   height: 100%;
-  padding: 2px;
+  padding: 4px;
   background: #000;
-  border-radius: 16px 0 16px 16px;
+  border-radius: 22px 0 22px 22px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -720,6 +721,7 @@ onBeforeUnmount(() => {
   padding: 8px 16px;
   gap: 8px;
   flex-shrink: 0;
+  border-radius: 18px 0 0 0;
   background:
     url("/images/tab-bg-point.webp") repeat,
     linear-gradient(180deg, #161616 0%, #080808 100%);
@@ -915,6 +917,7 @@ onBeforeUnmount(() => {
   display: flex;
   min-height: 0;
   background: #121212;
+  border-radius: 0 0 18px 18px;
 }
 
 /* ── Left Column ───────────────────────────────── */

@@ -1,5 +1,5 @@
 export const DEFAULT_COVER_ASPECT_RATIO = 643 / 408;
-export const MIN_COVER_ASPECT_RATIO = 0.75;
+export const MIN_COVER_ASPECT_RATIO = 0.80;
 
 export function getCoverAspectRatio(
   coverWidth: number | undefined,
