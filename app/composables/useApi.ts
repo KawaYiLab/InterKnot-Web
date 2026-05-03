@@ -1,6 +1,8 @@
 import type { ApiClientError, Pagination } from "~/types/api";
 import type {
   Author,
+  BusinessCard,
+  BusinessCardType,
   Comment,
   DraftArticle,
   Discussion,
@@ -155,6 +157,25 @@ function extractPaginationMeta(payload: unknown): BackendPaginationMeta | undefi
     limit: typeof p.limit === "number" ? p.limit : undefined,
     total: typeof p.total === "number" ? p.total : undefined,
     pageCount: typeof p.pageCount === "number" ? p.pageCount : undefined,
+  };
+}
+
+const VALID_CARD_TYPES = new Set(["character", "city", "news"]);
+
+function toBusinessCard(raw: unknown, apiBaseUrl: string): BusinessCard | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const data = raw as Record<string, unknown>;
+  const imageMeta = extractMediaMeta(data.image, apiBaseUrl);
+  const rawType = String(data.type || "character");
+  return {
+    documentId: String(data.documentId || ""),
+    name: String(data.name || ""),
+    description: (data.description as string | undefined) || undefined,
+    story: Array.isArray(data.story) ? data.story : undefined,
+    type: (VALID_CARD_TYPES.has(rawType) ? rawType : "character") as BusinessCardType,
+    image: imageMeta?.url,
+    imageWidth: imageMeta?.width,
+    imageHeight: imageMeta?.height,
   };
 }
 
@@ -554,6 +575,9 @@ export function useApi() {
     const userRaw = data.user as Record<string, unknown> | null | undefined;
     const statsRaw = data.stats as Record<string, unknown> | null | undefined;
 
+    const equippedCardRaw = data.equippedCard;
+    const equippedCard = toBusinessCard(equippedCardRaw, apiBaseUrl);
+
     return {
       documentId: String(data.documentId || documentId),
       uid: data.userId != null ? Number(data.userId) : undefined,
@@ -573,6 +597,7 @@ export function useApi() {
             totalLikes: Number(statsRaw.totalLikes || 0),
           }
         : undefined,
+      equippedCard,
     };
   };
 
@@ -774,6 +799,23 @@ export function useApi() {
     return uploaded;
   };
 
+  const getMyBusinessCards = async (): Promise<{ cards: BusinessCard[]; equippedCardDocumentId: string | null }> => {
+    const response = await $api("/api/me/business-cards");
+    const data = response as Record<string, unknown>;
+    const rawCards = Array.isArray(data.data) ? data.data : [];
+    return {
+      cards: rawCards.map((item) => toBusinessCard(item, apiBaseUrl)).filter(Boolean) as BusinessCard[],
+      equippedCardDocumentId: (data.equippedCardDocumentId as string) || null,
+    };
+  };
+
+  const equipBusinessCard = async (documentId: string | null): Promise<void> => {
+    await $api("/api/me/business-cards/equip", {
+      method: "PUT",
+      body: { documentId },
+    });
+  };
+
   return {
     login,
     sendRegisterCode,
@@ -800,6 +842,8 @@ export function useApi() {
     signUpload,
     completeUpload,
     uploadImage,
+    getMyBusinessCards,
+    equipBusinessCard,
   };
 }
 
