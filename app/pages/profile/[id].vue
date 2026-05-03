@@ -14,6 +14,7 @@ const profile = ref<Profile | null>(null);
 const loadError = ref(false);
 const loading = ref(false);
 const showCardModal = ref(false);
+const showSettingsModal = ref(false);
 
 const articles = ref<Discussion[]>([]);
 const articleCursor = ref("");
@@ -185,7 +186,7 @@ onBeforeUnmount(() => {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           </button>
         </div>
-        <z-button v-if="profile.isSelf" @click="message.warning('功能即将开放')">更多操作</z-button>
+        <z-button v-if="profile.isSelf" @click="showSettingsModal = true">更多操作</z-button>
       </div>
 
       <!-- ── A-Frame (包含名片 + 帖子) ────────── -->
@@ -288,6 +289,18 @@ onBeforeUnmount(() => {
         <z-button @click="message.warning('功能即将开放')">修改勋章</z-button>
         <z-button @click="showCardModal = true">修改名片</z-button>
       </div>
+
+      <!-- 更多操作弹窗 -->
+      <ClientOnly>
+        <Teleport to="body">
+          <Transition name="ik-overlay" appear @after-leave="showSettingsModal = false">
+            <ProfileSettingsModal
+              v-if="showSettingsModal"
+              @close="showSettingsModal = false"
+            />
+          </Transition>
+        </Teleport>
+      </ClientOnly>
 
       <!-- 名片选择弹窗 -->
       <ClientOnly>
