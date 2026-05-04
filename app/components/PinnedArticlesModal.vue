@@ -397,8 +397,8 @@ onBeforeUnmount(() => {
 
 .ik-pin__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
 }
 
 .ik-pin__grid--readonly {
@@ -410,36 +410,38 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.03);
+  background: #0f0f0f;
   border: 2px solid transparent;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  padding: 0;
+  padding: 2px;
   text-align: left;
   color: inherit;
   font: inherit;
-  transition: border-color 140ms ease, background 140ms ease, transform 100ms ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .ik-pin__card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: #1a1a1a;
+  border-color: #333;
 }
 
 .ik-pin__card:active {
   transform: scale(0.97);
 }
 
-.ik-pin__card--active {
+.ik-pin__card--active,
+.ik-pin__card--active:hover {
   border-color: #fbfe00;
   background: #1a1a0a;
 }
 
 .ik-pin__card-cover {
   width: 100%;
-  aspect-ratio: 16 / 10;
-  background: #000;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #1a1a1a;
   overflow: hidden;
 }
 .ik-pin__card-cover img {
