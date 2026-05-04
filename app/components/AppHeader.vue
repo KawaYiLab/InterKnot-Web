@@ -10,7 +10,7 @@ const { isActive: showProgress, progress: progressValue, isClaimed, start: start
 
 let _autoFinishTimer: ReturnType<typeof setTimeout> | null = null;
 router.beforeEach((to, from) => {
-  if (to.fullPath === from.fullPath) return;
+  if (to.path === from.path) return;
   if (_autoFinishTimer) { clearTimeout(_autoFinishTimer); _autoFinishTimer = null; }
   startProgress();
 });
