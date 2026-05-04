@@ -80,6 +80,16 @@ const onHiddenUpdated = (h: boolean) => {
   }
 };
 
+const onPinnedUpdated = async (_pinned: string[] | null) => {
+  // 重置文章列表并重新加载，以应用新的精选配置
+  articles.value = [];
+  articleCursor.value = "";
+  articleHasNext.value = true;
+  if (!profile.value?.isHidden) {
+    await loadProfileArticles();
+  }
+};
+
 const copyUid = async () => {
   const uid = profile.value?.uid;
   if (uid == null) return;
@@ -348,6 +358,7 @@ onBeforeUnmount(() => {
               @name-updated="onNameUpdated"
               @bio-updated="onBioUpdated"
               @hidden-updated="onHiddenUpdated"
+              @pinned-updated="onPinnedUpdated"
             />
           </Transition>
         </Teleport>
