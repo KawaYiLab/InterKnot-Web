@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import type { Profile } from "~/types/entities";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   authorId?: string;
-}>();
+  clickable?: boolean;
+}>(), {
+  clickable: false,
+});
 
 const api = useApi();
 
@@ -28,6 +31,7 @@ const profileCache = new Map<string, Profile>();
 const fetchProfile = async (id: string) => {
   if (profileCache.has(id)) {
     profile.value = profileCache.get(id)!;
+    nextTick(() => updatePosition());
     return;
   }
   loading.value = true;
@@ -36,6 +40,7 @@ const fetchProfile = async (id: string) => {
     const data = await api.getProfile(id);
     profileCache.set(id, data);
     profile.value = data;
+    nextTick(() => updatePosition());
   } catch {
     fetchError.value = true;
   } finally {
@@ -49,15 +54,16 @@ const updatePosition = () => {
 
   const rect = trigger.getBoundingClientRect();
   const cardWidth = 320;
-  const cardHeight = 300;
+  const card = cardRef.value;
+  const cardHeight = card ? card.offsetHeight : 300;
   const gap = 8;
 
-  let top = rect.bottom + gap;
+  let top = rect.top - gap - cardHeight;
   let left = rect.left + rect.width / 2 - cardWidth / 2;
 
-  // Flip above if not enough space below
-  if (top + cardHeight > window.innerHeight - 16) {
-    top = rect.top - gap - cardHeight;
+  // Flip below if not enough space above
+  if (top < 16) {
+    top = rect.bottom + gap;
   }
 
   // Clamp horizontal
@@ -131,8 +137,10 @@ onBeforeUnmount(() => {
   <div
     ref="triggerRef"
     class="ik-hovercard-trigger"
+    :class="{ 'ik-hovercard-trigger--clickable': clickable }"
     @mouseenter="onTriggerEnter"
     @mouseleave="onTriggerLeave"
+    @click="clickable && goProfile()"
   >
     <slot />
   </div>
@@ -147,15 +155,30 @@ onBeforeUnmount(() => {
         @mouseenter="onCardEnter"
         @mouseleave="onCardLeave"
       >
-        <!-- Loading state -->
+       <div class="ik-hovercard__outer">
+        <div class="ik-hovercard__inner">
+        <!-- Loading placeholder (mirrors profile layout to prevent size jump) -->
         <div v-if="loading && !profile" class="ik-hovercard__loading">
-          <div class="ik-hovercard__skel ik-hovercard__skel--banner" />
-          <div class="ik-hovercard__loading-body">
-            <div class="ik-hovercard__skel ik-hovercard__skel--avatar" />
-            <div class="ik-hovercard__skel-lines">
-              <div class="ik-hovercard__skel" style="width: 100px; height: 16px" />
-              <div class="ik-hovercard__skel" style="width: 160px; height: 12px" />
+          <div class="ik-hovercard__banner">
+            <div class="ik-hovercard__skel" style="width:100%;height:100%;border-radius:0" />
+          </div>
+          <div class="ik-hovercard__avatar-row">
+            <div class="ik-hovercard__avatar-wrap">
+              <div class="ik-hovercard__skel" style="width:52px;height:52px;border-radius:999px" />
             </div>
+          </div>
+          <div class="ik-hovercard__body">
+            <div class="ik-hovercard__skel" style="width:100px;height:16px" />
+            <div class="ik-hovercard__skel" style="width:160px;height:12px;margin-top:6px" />
+          </div>
+          <div class="ik-hovercard__stats">
+            <div v-for="i in 3" :key="i" class="ik-hovercard__stat">
+              <div class="ik-hovercard__skel" style="width:32px;height:15px" />
+              <div class="ik-hovercard__skel" style="width:24px;height:11px" />
+            </div>
+          </div>
+          <div class="ik-hovercard__footer">
+            <div class="ik-hovercard__skel" style="width:100%;height:30px;border-radius:8px" />
           </div>
         </div>
 
@@ -220,6 +243,8 @@ onBeforeUnmount(() => {
         <div v-else-if="fetchError" class="ik-hovercard__error">
           加载失败
         </div>
+        </div>
+       </div>
       </div>
     </Transition>
   </Teleport>
@@ -231,21 +256,44 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.ik-hovercard-trigger--clickable:hover {
+  opacity: 0.85;
+}
+
 /* ═══════════════════════════════════════════════
    Hover Card
    ═══════════════════════════════════════════════ */
 .ik-hovercard {
   position: fixed;
-  border-radius: 16px 0 16px 16px;
-  background: #141414;
-  border: 1px solid #2a2a2a;
+  border-radius: 18px 0 18px 18px;
   overflow: hidden;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.6),
     0 2px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  transition: top 200ms ease, left 200ms ease;
+}
+
+/* 外边框 */
+.ik-hovercard__outer {
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+  background: #2D2C2D;
+  border-radius: 18px 0 18px 18px;
+  overflow: hidden;
+}
+
+/* 内边框 */
+.ik-hovercard__inner {
+  width: 100%;
+  height: 100%;
+  background: #141414;
+  border: 3px solid #000;
+  border-radius: 16px 0 16px 16px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  pointer-events: auto;
 }
 
 /* ── Top Banner ───────────────────────────────── */
@@ -360,31 +408,6 @@ onBeforeUnmount(() => {
   animation: ik-hovercard-pulse 1.2s ease-in-out infinite;
 }
 
-.ik-hovercard__skel--banner {
-  width: 100%;
-  height: 90px;
-  border-radius: 0;
-}
-
-.ik-hovercard__loading-body {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-}
-
-.ik-hovercard__skel--avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 999px;
-  flex-shrink: 0;
-}
-
-.ik-hovercard__skel-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
 
 @keyframes ik-hovercard-pulse {
   0%, 100% { opacity: 0.4; }
