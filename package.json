@@ -24,7 +24,8 @@
     "ofetch": "^1.4.1",
     "pinia": "^3.0.3",
     "sass": "^1.93.2",
-    "throttle-debounce": "^5.0.2"
+    "throttle-debounce": "^5.0.2",
+    "vue-advanced-cropper": "^2.8.9"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",

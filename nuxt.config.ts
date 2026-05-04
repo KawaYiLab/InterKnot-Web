@@ -57,6 +57,15 @@ export default defineNuxtConfig({
     client: true,
   },
   vite: {
+    optimizeDeps: {
+      include: [
+        '@tanstack/vue-query',
+        'throttle-debounce',
+        '@vueuse/core',
+        '@heroicons/vue/24/outline',
+        'vue-advanced-cropper',
+      ],
+    },
     resolve: {
       alias: {
         "zenless-ui": zzzuiPackages,
