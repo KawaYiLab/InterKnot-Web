@@ -852,6 +852,60 @@ export function useApi() {
     return { profileHidden: data.profileHidden === true };
   };
 
+  const getPinnedArticles = async (
+    limit?: number,
+  ): Promise<{
+    pinned: string[] | null;
+    candidates: Array<{
+      documentId: string;
+      title: string;
+      cover: MediaMeta | null;
+      updatedAt?: string;
+    }>;
+    max: number;
+  }> => {
+    const response = await $api("/api/me/profile/pinned-articles", {
+      query: limit != null ? { limit: String(limit) } : undefined,
+    });
+    const data = response as Record<string, unknown>;
+    const pinnedRaw = data.pinned;
+    const pinned = Array.isArray(pinnedRaw)
+      ? pinnedRaw.filter((id): id is string => typeof id === "string")
+      : pinnedRaw === null
+        ? null
+        : null;
+    const candidatesRaw = Array.isArray(data.candidates) ? data.candidates : [];
+    const candidates = candidatesRaw.map((item) => {
+      const c = item as Record<string, unknown>;
+      return {
+        documentId: String(c.documentId || ""),
+        title: String(c.title || ""),
+        cover: extractMediaMeta(c.cover, apiBaseUrl),
+        updatedAt: typeof c.updatedAt === "string" ? c.updatedAt : undefined,
+      };
+    });
+    const max = Number(data.max) || 6;
+    return { pinned, candidates, max };
+  };
+
+  const updatePinnedArticles = async (
+    pinned: string[] | null,
+  ): Promise<{ pinned: string[] | null }> => {
+    const response = await $api("/api/me/profile/pinned-articles", {
+      method: "PUT",
+      body: { pinned },
+    });
+    const data = response as Record<string, unknown>;
+    const result = data.pinned;
+    return {
+      pinned: Array.isArray(result)
+        ? result.filter((id): id is string => typeof id === "string")
+        : result === null
+          ? null
+          : null,
+    };
+  };
+
   return {
     login,
     sendRegisterCode,
@@ -884,6 +938,8 @@ export function useApi() {
     updateMyBio,
     updateMyVisibility,
     getMyProfileSettings,
+    getPinnedArticles,
+    updatePinnedArticles,
   };
 }
 
