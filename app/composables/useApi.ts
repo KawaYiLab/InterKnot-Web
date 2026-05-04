@@ -858,6 +858,21 @@ export function useApi() {
     });
   };
 
+  const uploadCustomAvatar = async (
+    file: File,
+    onProgress?: (percent: number) => void,
+  ): Promise<{ url: string }> => {
+    const uploaded = await uploadImage(file, (p) => onProgress?.(p * 0.8));
+    const response = await $api("/api/me/avatars/upload-custom", {
+      method: "PUT",
+      body: { fileId: uploaded.id },
+    });
+    onProgress?.(100);
+    const data = response as Record<string, unknown>;
+    const avatar = data.avatar as Record<string, unknown> | undefined;
+    return { url: normalizeMediaUrl(avatar?.url, apiBaseUrl) };
+  };
+
   const updateMyName = async (name: string): Promise<{ name: string }> => {
     const response = await $api("/api/me/profile/name", {
       method: "PUT",
@@ -975,6 +990,7 @@ export function useApi() {
     equipBusinessCard,
     getMyAvatars,
     equipAvatar,
+    uploadCustomAvatar,
     updateMyName,
     updateMyBio,
     updateMyVisibility,

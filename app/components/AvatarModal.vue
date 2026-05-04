@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
+import { Cropper, CircleStencil } from "vue-advanced-cropper";
+import "vue-advanced-cropper/dist/style.css";
 import type { Avatar, AvatarType, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 
@@ -10,6 +12,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   equipped: [avatar: Avatar | null];
+  customUploaded: [avatarUrl: string];
 }>();
 
 const api = useApi();
@@ -80,7 +83,72 @@ const handleConfirm = async () => {
   }
 };
 
+// ── Custom avatar upload + crop ──
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const showCropper = ref(false);
+const cropImageSrc = ref("");
+const cropperRef = ref<InstanceType<any> | null>(null);
+const uploading = ref(false);
+
+const triggerFileInput = () => {
+  fileInputRef.value?.click();
+};
+
+const onFileSelected = (e: Event) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    message.warning("请选择图片文件");
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    message.warning("图片大小不能超过 10MB");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    cropImageSrc.value = reader.result as string;
+    showCropper.value = true;
+  };
+  reader.readAsDataURL(file);
+};
+
+const cancelCrop = () => {
+  showCropper.value = false;
+  cropImageSrc.value = "";
+};
+
+const confirmCrop = async () => {
+  if (!cropperRef.value || uploading.value) return;
+  uploading.value = true;
+  try {
+    const { canvas } = cropperRef.value.getResult();
+    if (!canvas) throw new Error("Canvas export failed");
+    const blob: Blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (b: Blob | null) => (b ? resolve(b) : reject(new Error("Canvas export failed"))),
+        "image/webp",
+        0.9,
+      );
+    });
+    const file = new File([blob], "custom-avatar.webp", { type: "image/webp" });
+    const result = await api.uploadCustomAvatar(file);
+    equippedId.value = null;
+    selectedAvatar.value = null;
+    emit("customUploaded", result.url);
+    message.success("自定义头像上传成功");
+    cancelCrop();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "上传头像失败"));
+  } finally {
+    uploading.value = false;
+  }
+};
+
 const handleClose = () => {
+  cancelCrop();
   emit("close");
 };
 
@@ -91,7 +159,13 @@ const handleOverlayClick = (e: MouseEvent) => {
 };
 
 const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === "Escape") handleClose();
+  if (e.key === "Escape") {
+    if (showCropper.value) {
+      cancelCrop();
+    } else {
+      handleClose();
+    }
+  }
 };
 
 onMounted(async () => {
@@ -202,6 +276,13 @@ onBeforeUnmount(() => {
                 <Transition name="ik-fade">
                   <z-scrollbar v-if="!loading && filteredAvatars.length" class="ik-av-grid-scroll">
                     <div class="ik-av-grid">
+                      <!-- Upload custom avatar entry -->
+                      <button class="ik-av-grid__item ik-av-grid__item--upload" @click="triggerFileInput">
+                        <div class="ik-av-grid__thumb ik-av-grid__thumb--upload">
+                          <svg class="ik-av-grid__upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </div>
+                      </button>
+                      <input ref="fileInputRef" type="file" accept="image/*" class="ik-av-grid__file-input" @change="onFileSelected" />
                       <button
                         v-for="avatar in filteredAvatars"
                         :key="avatar.documentId"
@@ -247,6 +328,58 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <!-- Cropper overlay -->
+    <Transition name="ik-overlay" appear>
+      <div v-if="showCropper" class="ik-overlay ik-crop-overlay">
+        <div class="ik-overlay__stripe" />
+        <div class="ik-crop-dialog">
+          <div class="ik-av-frame">
+            <div class="ik-av-frame__inner">
+              <div class="ik-av-frame__body">
+
+                <!-- Header bar -->
+                <div class="ik-crop-tab-bar">
+                  <span class="ik-crop-title">裁剪头像</span>
+                  <button class="ik-av-close" aria-label="关闭" @click="cancelCrop">
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-av-close__img" draggable="false" />
+                  </button>
+                </div>
+
+                <!-- Cropper area -->
+                <div class="ik-crop-body">
+                  <Cropper
+                    ref="cropperRef"
+                    class="ik-crop-cropper"
+                    :src="cropImageSrc"
+                    :stencil-component="CircleStencil"
+                    :stencil-props="{
+                      aspectRatio: 1,
+                      handlerComponent: 'CircleHandler',
+                      handlers: { eastNorth: true, westNorth: true, eastSouth: true, westSouth: true },
+                      lines: {},
+                    }"
+                    :canvas="{ width: 512, height: 512, imageSmoothingQuality: 'high' }"
+                    :resize-image="{ adjustStencil: false }"
+                    :default-size="({ imageSize, visibleArea }: any) => ({ width: visibleArea?.width || imageSize.width, height: visibleArea?.height || imageSize.height })"
+                    :min-width="0"
+                    :min-height="0"
+                  />
+                </div>
+
+                <!-- Submit -->
+                <div class="ik-av-submit-wrap">
+                  <z-button class="ik-av-submit" :disabled="uploading" @click="confirmCrop">
+                    {{ uploading ? '上传中...' : '确认上传' }}
+                  </z-button>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -592,6 +725,8 @@ onBeforeUnmount(() => {
 
 /* ── Submit button (与修改用户名/签名一致) ── */
 .ik-av-submit-wrap {
+  position: relative;
+  z-index: 2;
   flex-shrink: 0;
   display: flex;
   justify-content: center;
@@ -644,17 +779,20 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(0) !important;
 }
 .ik-overlay-enter-active .ik-overlay__stripe { animation: stripe-fade-in 250ms ease-out both; }
-.ik-overlay-enter-active .ik-av-dialog {
+.ik-overlay-enter-active .ik-av-dialog,
+.ik-overlay-enter-active .ik-crop-dialog {
   transition: transform 250ms cubic-bezier(0.165, 0.84, 0.44, 1), opacity 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 .ik-overlay-enter-from .ik-overlay__stripe { opacity: 0; }
 .ik-overlay-enter-from .ik-av-dialog { opacity: 0; transform: scale(1.1) translateX(5%); }
+.ik-overlay-enter-from .ik-crop-dialog { opacity: 0; transform: scale(1.1) translateX(5%); }
 
 .ik-overlay-leave-active {
   transition: background-color 160ms ease-out, backdrop-filter 160ms ease-out, -webkit-backdrop-filter 160ms ease-out;
 }
 .ik-overlay-leave-active .ik-overlay__stripe { animation: stripe-fade-out 180ms ease-in both; }
-.ik-overlay-leave-active .ik-av-dialog {
+.ik-overlay-leave-active .ik-av-dialog,
+.ik-overlay-leave-active .ik-crop-dialog {
   transition: transform 200ms cubic-bezier(0.55, 0, 1, 0.45), opacity 180ms ease-in;
 }
 .ik-overlay-leave-to {
@@ -663,6 +801,7 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(0) !important;
 }
 .ik-overlay-leave-to .ik-av-dialog { opacity: 0; transform: scale(1.1) translateX(-5%); }
+.ik-overlay-leave-to .ik-crop-dialog { opacity: 0; transform: scale(1.1) translateX(-5%); }
 
 /* ── Mobile ── */
 @media (max-width: 1100px) {
@@ -672,6 +811,8 @@ onBeforeUnmount(() => {
   .ik-av-dialog { width: 92%; height: 85%; transform: scale(1); }
   .ik-overlay-enter-from .ik-av-dialog { transform: scale(1) translateX(5%); }
   .ik-overlay-leave-to .ik-av-dialog { transform: scale(1) translateX(-5%); }
+  .ik-overlay-enter-from .ik-crop-dialog { transform: scale(1) translateX(5%); }
+  .ik-overlay-leave-to .ik-crop-dialog { transform: scale(1) translateX(-5%); }
   .ik-av-grid { grid-template-columns: repeat(4, 1fr); }
 }
 @media (max-width: 500px) {
@@ -685,9 +826,94 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .ik-overlay-enter-active,
   .ik-overlay-enter-active .ik-av-dialog,
+  .ik-overlay-enter-active .ik-crop-dialog,
   .ik-overlay-leave-active,
-  .ik-overlay-leave-active .ik-av-dialog { transition: none; }
+  .ik-overlay-leave-active .ik-av-dialog,
+  .ik-overlay-leave-active .ik-crop-dialog { transition: none; }
   .ik-overlay-enter-active .ik-overlay__stripe,
   .ik-overlay-leave-active .ik-overlay__stripe { animation: none; }
+}
+
+/* ── Upload button in grid ── */
+.ik-av-grid__item--upload { border: 2px dashed #444; }
+.ik-av-grid__item--upload:hover { border-color: #fbfe00; }
+.ik-av-grid__thumb--upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: transparent;
+}
+.ik-av-grid__upload-icon { width: 28px; height: 28px; color: #666; transition: color 0.15s; }
+.ik-av-grid__item--upload:hover .ik-av-grid__upload-icon { color: #fbfe00; }
+.ik-av-grid__file-input { display: none; }
+
+/* ── Cropper overlay (reuses .ik-overlay / .ik-av-frame) ── */
+.ik-crop-overlay { z-index: 9500; }
+.ik-crop-dialog {
+  position: relative;
+  width: 440px;
+  max-width: 92vw;
+  transform: scale(1.1);
+  transform-origin: center;
+}
+.ik-crop-tab-bar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  min-height: 52px;
+  flex-shrink: 0;
+  border-radius: 0 0 16px 16px;
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(180deg, #161616 0%, #080808 100%);
+}
+.ik-crop-title { font-size: 16px; font-weight: 700; color: #fff; }
+.ik-crop-body {
+  flex: none;
+  width: 100%;
+  height: 340px;
+  margin-top: 14px;
+  background: #111;
+  overflow: visible;
+}
+.ik-crop-cropper {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Cropper stencil theme ── */
+.ik-crop-cropper :deep(.vue-circle-stencil) {
+  border: 2px solid rgba(251, 254, 0, 0.8);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+}
+.ik-crop-cropper :deep(.vue-simple-handler) {
+  width: 12px;
+  height: 12px;
+  background: #fbfe00;
+  border: 2px solid #111;
+  border-radius: 50%;
+  opacity: 0.9;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.ik-crop-cropper :deep(.vue-simple-handler:hover) {
+  transform: scale(1.3);
+  opacity: 1;
+}
+.ik-crop-cropper :deep(.vue-line-wrapper .vue-simple-line) {
+  border-color: rgba(251, 254, 0, 0.4);
+}
+
+@media (max-width: 800px) {
+  .ik-crop-dialog { width: 92%; transform: scale(1); }
+}
+@media (max-width: 500px) {
+  .ik-crop-dialog { width: 100%; max-width: 100%; }
+  .ik-crop-body { height: 280px; }
 }
 </style>
