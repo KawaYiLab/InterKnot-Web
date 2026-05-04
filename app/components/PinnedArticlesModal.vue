@@ -163,7 +163,8 @@ onBeforeUnmount(() => {
                 <div v-if="!candidates.length" class="ik-pin__empty">
                   你还没有发布任何帖子。
                 </div>
-                <div v-else class="ik-pin__grid">
+                <z-scrollbar v-else class="ik-pin__grid-scroll">
+                <div class="ik-pin__grid">
                   <button
                     v-for="card in candidates"
                     :key="card.documentId"
@@ -184,6 +185,7 @@ onBeforeUnmount(() => {
                     </span>
                   </button>
                 </div>
+                </z-scrollbar>
               </div>
 
               <!-- 底部操作 -->
@@ -392,7 +394,13 @@ onBeforeUnmount(() => {
 .ik-pin__grid-wrap {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.ik-pin__grid-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .ik-pin__grid {
