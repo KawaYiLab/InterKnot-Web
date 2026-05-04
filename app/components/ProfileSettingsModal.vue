@@ -21,12 +21,14 @@ const route = useRoute();
 const router = useRouter();
 const api = useApi();
 const message = useMessage();
+const authStore = useAuthStore();
 
 const modalQuery = computed(() => String(route.query.modal || ''));
 const showEditName = computed(() => modalQuery.value === 'edit-name');
 const showEditBio = computed(() => modalQuery.value === 'edit-bio');
 const showPinned = computed(() => modalQuery.value === 'pinned');
 const showSocial = computed(() => modalQuery.value === 'social');
+const showLogout = computed(() => modalQuery.value === 'logout');
 
 const openSub = (name: string) => {
   router.replace({ query: { ...route.query, modal: name } });
@@ -46,6 +48,21 @@ const BIO_MAX = 100;
 
 const handleClose = () => {
   emit("close");
+};
+
+const logoutOption = ref('home');
+
+const openLogout = () => {
+  logoutOption.value = 'home';
+  openSub('logout');
+};
+const closeLogout = () => {
+  closeSub();
+};
+const confirmLogout = async () => {
+  authStore.clearSession();
+  emit("close");
+  await router.replace("/");
 };
 
 const openEditName = () => {
@@ -260,6 +277,7 @@ onBeforeUnmount(() => {
               <z-button @click="openEditBio">修改签名</z-button>
               <z-button @click="openPinned">修改帖子展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
+              <z-button @click="openLogout">退出登录</z-button>
             </div>
           </div>
         </div>
@@ -402,6 +420,40 @@ onBeforeUnmount(() => {
         />
       </Transition>
     </Teleport>
+
+    <!-- Logout Sub-dialog -->
+    <Teleport to="body">
+      <Transition name="ik-overlay" appear>
+        <div v-if="showLogout" class="ik-overlay ik-overlay--sub" @click.self="closeLogout">
+          <div class="ik-overlay__stripe" aria-hidden="true"></div>
+          <div class="ik-dialog" @click.stop>
+            <div class="ik-dialog__outer">
+              <div class="ik-dialog__inner">
+                <div class="ik-dialog__header">
+                  <span class="ik-dialog__title">退出登录</span>
+                  <button class="ik-dialog__close" aria-label="关闭" @click="closeLogout">
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                  </button>
+                </div>
+                <div class="ik-dialog__body">
+                  <div class="ik-logout__wrapper">
+                    <div class="ik-logout__inner">
+                      <div class="ik-logout__options">
+                        <z-radio v-model="logoutOption" value="home">返回首页并清除登录记录</z-radio>
+                      </div>
+                    </div>
+                    <div class="ik-logout__actions">
+                      <z-button :icon="{ error: '#ff4444' }" @click="closeLogout">取消</z-button>
+                      <z-button :icon="{ success: '#00cc0d' }" @click="confirmLogout">确定</z-button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -537,6 +589,38 @@ onBeforeUnmount(() => {
   width: 100%;
   box-sizing: border-box;
   margin-left: 0;
+}
+
+/* ── Logout sub-dialog ── */
+.ik-logout__wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+.ik-logout__inner {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 120px 24px 45px;
+  background: #00000065;
+  border-radius: 16px;
+}
+.ik-logout__options {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ik-logout__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: -18px;
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Larger dialog variant (for settings pages) ── */
