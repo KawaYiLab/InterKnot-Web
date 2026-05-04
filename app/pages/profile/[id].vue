@@ -85,6 +85,17 @@ const onAvatarEquipped = (avatar: Avatar | null) => {
   authStore.fetchSelfUser();
 };
 
+const onCustomAvatarUploaded = (avatarUrl: string) => {
+  if (profile.value) {
+    profile.value = {
+      ...profile.value,
+      equippedAvatar: undefined,
+      avatar: avatarUrl,
+    };
+  }
+  authStore.fetchSelfUser();
+};
+
 const onNameUpdated = (name: string) => {
   if (profile.value) {
     profile.value = { ...profile.value, name };
@@ -398,6 +409,7 @@ onBeforeUnmount(() => {
               :profile="profile"
               @close="closeModal"
               @equipped="onAvatarEquipped"
+              @custom-uploaded="onCustomAvatarUploaded"
             />
           </Transition>
         </Teleport>
