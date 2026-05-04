@@ -177,7 +177,10 @@ onBeforeUnmount(() => {
 
               <!-- Banner preview (top) -->
               <div class="ik-bc-preview">
-                <div class="ik-bc-preview__banner-card">
+                <div v-if="loading" class="ik-bc-preview__banner-card">
+                  <div class="ik-skel ik-bc-preview__banner-skel"></div>
+                </div>
+                <div v-else class="ik-bc-preview__banner-card">
                   <div
                     class="ik-bc-preview__banner"
                     :style="previewCard?.image ? { backgroundImage: `url('${previewCard.image}')` } : undefined"
@@ -214,7 +217,8 @@ onBeforeUnmount(() => {
                   <div v-else-if="!filteredCards.length" class="ik-bc-grid-empty">
                     暂无此类名片
                   </div>
-                  <z-scrollbar v-else class="ik-bc-grid-scroll">
+                  <Transition name="ik-fade">
+                  <z-scrollbar v-if="!loading && filteredCards.length" class="ik-bc-grid-scroll">
                     <div class="ik-bc-grid">
                       <button
                         v-for="card in filteredCards"
@@ -241,11 +245,21 @@ onBeforeUnmount(() => {
                       </button>
                     </div>
                   </z-scrollbar>
+                  </Transition>
                 </div>
 
                 <!-- Card detail (right) -->
                 <div class="ik-bc-detail">
-                  <template v-if="previewCard">
+                  <template v-if="loading">
+                    <div class="ik-skel" style="width:140px;height:24px;border-radius:6px"></div>
+                    <div class="ik-skel" style="width:100%;height:14px;border-radius:4px;margin-top:12px"></div>
+                    <div class="ik-skel" style="width:80%;height:14px;border-radius:4px;margin-top:8px"></div>
+                    <div class="ik-skel" style="width:60%;height:14px;border-radius:4px;margin-top:8px"></div>
+                    <div style="margin-top:auto;padding-top:12px;display:flex;justify-content:center">
+                      <div class="ik-skel" style="width:130px;height:40px;border-radius:999px"></div>
+                    </div>
+                  </template>
+                  <template v-else-if="previewCard">
                     <h3 class="ik-bc-detail__name">{{ previewCard.name }}</h3>
                     <p v-if="previewStory" class="ik-bc-detail__story">{{ previewStory }}</p>
                     <p v-if="previewCard.description" class="ik-bc-detail__desc">{{ previewCard.description }}</p>
@@ -704,6 +718,28 @@ onBeforeUnmount(() => {
   height: 100%;
   color: #555;
   font-size: 14px;
+}
+
+/* ── Skeleton ── */
+@keyframes ik-skel-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.ik-skel {
+  background: #222;
+  animation: ik-skel-pulse 1.5s ease-in-out infinite;
+}
+.ik-bc-preview__banner-skel {
+  width: 100%;
+  min-height: 140px;
+  border-radius: 14px;
+}
+
+/* ── Fade transition ── */
+.ik-fade-enter-active { transition: opacity 0.35s ease; }
+.ik-fade-enter-from { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .ik-skel { animation: none; opacity: 0.6; }
 }
 
 /* ── Spin animation ── */

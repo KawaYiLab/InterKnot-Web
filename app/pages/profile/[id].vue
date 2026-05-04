@@ -174,7 +174,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="ik-profile">
     <!-- ══════════ Skeleton ══════════ -->
-    <div v-if="loading" class="ik-profile" aria-busy="true">
+    <template v-if="loading">
       <div class="ik-frame">
         <div class="ik-frame__inner">
           <div class="ik-frame__body">
@@ -229,7 +229,7 @@ onBeforeUnmount(() => {
       <div class="ik-bottom-actions">
         <div class="ik-skel" style="width:90px;height:40px;border-radius:999px" v-for="n in 4" :key="n"></div>
       </div>
-    </div>
+    </template>
 
     <!-- ══════════ Error ══════════ -->
     <div v-else-if="loadError && !profile" class="ik-empty">加载失败，请刷新重试</div>
