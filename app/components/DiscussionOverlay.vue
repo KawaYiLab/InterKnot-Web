@@ -389,7 +389,7 @@ onBeforeUnmount(() => {
             <!-- ── Header Bar ─────────────────────── -->
             <div class="ik-dialog__header">
               <div class="ik-dialog__header-left">
-                <UserHoverCard :author-id="discussion?.author?.documentId">
+                <UserHoverCard :author-id="discussion?.author?.documentId" clickable>
                   <div class="ik-dialog__avatar-shell">
                     <img
                       v-if="discussion"
@@ -403,7 +403,7 @@ onBeforeUnmount(() => {
                 </UserHoverCard>
                 <div v-if="discussion" class="ik-dialog__author-info">
                   <div class="ik-dialog__author-row">
-                    <UserHoverCard :author-id="discussion.author?.documentId">
+                    <UserHoverCard :author-id="discussion.author?.documentId" clickable>
                       <span class="ik-dialog__author-name">
                         {{ discussion.author.name || "匿名用户" }}
                       </span>

@@ -6,6 +6,7 @@ const props = defineProps<{
   currentName?: string;
   currentBio?: string;
   currentHidden?: boolean;
+  initialSub?: string;
 }>();
 
 const emit = defineEmits<{
@@ -16,14 +17,27 @@ const emit = defineEmits<{
   pinnedUpdated: [pinned: string[] | null];
 }>();
 
+const route = useRoute();
+const router = useRouter();
 const api = useApi();
 const message = useMessage();
 
-const showEditName = ref(false);
+const modalQuery = computed(() => String(route.query.modal || ''));
+const showEditName = computed(() => modalQuery.value === 'edit-name');
+const showEditBio = computed(() => modalQuery.value === 'edit-bio');
+const showPinned = computed(() => modalQuery.value === 'pinned');
+const showSocial = computed(() => modalQuery.value === 'social');
+
+const openSub = (name: string) => {
+  router.replace({ query: { ...route.query, modal: name } });
+};
+const closeSub = () => {
+  router.replace({ query: { ...route.query, modal: 'settings' } });
+};
+
 const nameInput = ref(props.currentName || "");
 const saving = ref(false);
 
-const showEditBio = ref(false);
 const bioInput = ref(props.currentBio || "");
 const savingBio = ref(false);
 
@@ -36,11 +50,11 @@ const handleClose = () => {
 
 const openEditName = () => {
   nameInput.value = props.currentName || "";
-  showEditName.value = true;
+  openSub('edit-name');
 };
 
 const closeEditName = () => {
-  showEditName.value = false;
+  closeSub();
 };
 
 const submitName = async () => {
@@ -74,11 +88,11 @@ const submitName = async () => {
 
 const openEditBio = () => {
   bioInput.value = props.currentBio || "";
-  showEditBio.value = true;
+  openSub('edit-bio');
 };
 
 const closeEditBio = () => {
-  showEditBio.value = false;
+  closeSub();
 };
 
 const submitBio = async () => {
@@ -106,18 +120,16 @@ const submitBio = async () => {
   }
 };
 
-const showPinned = ref(false);
 const openPinned = () => {
-  showPinned.value = true;
+  openSub('pinned');
 };
 const closePinned = () => {
-  showPinned.value = false;
+  closeSub();
 };
 const onPinnedSaved = (pinned: string[] | null) => {
   emit("pinnedUpdated", pinned);
 };
 
-const showSocial = ref(false);
 const hidden = ref(!!props.currentHidden);
 const togglingHidden = ref(false);
 
@@ -130,11 +142,11 @@ watch(
 
 const openSocial = () => {
   hidden.value = !!props.currentHidden;
-  showSocial.value = true;
+  openSub('social');
 };
 
 const closeSocial = () => {
-  showSocial.value = false;
+  closeSub();
 };
 
 // z-switch 的语义是"公开"(ON=公开，OFF=隐藏)，所以需要反转
@@ -204,6 +216,17 @@ const handleKeydown = (e: KeyboardEvent) => {
     }
   }
 };
+
+// 如果从 URL 直接进入子弹窗，初始化对应状态
+watch(
+  () => props.initialSub,
+  (sub) => {
+    if (sub === 'edit-name') nameInput.value = props.currentName || '';
+    if (sub === 'edit-bio') bioInput.value = props.currentBio || '';
+    if (sub === 'social') hidden.value = !!props.currentHidden;
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
   window.addEventListener("keydown", handleKeydown);

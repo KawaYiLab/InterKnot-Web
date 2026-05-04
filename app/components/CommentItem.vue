@@ -34,7 +34,7 @@ const floorLabel = computed(() =>
 <template>
   <div class="ik-comment">
     <div class="ik-comment__avatar-col">
-      <UserHoverCard :author-id="comment.author?.documentId">
+      <UserHoverCard :author-id="comment.author?.documentId" clickable>
         <img
           :src="comment.author?.avatar || '/images/default-avatar.webp'"
           :alt="comment.author?.name || ''"
@@ -47,7 +47,7 @@ const floorLabel = computed(() =>
     <div class="ik-comment__content-col">
       <!-- Author -->
       <div class="ik-comment__author-row">
-        <UserHoverCard :author-id="comment.author?.documentId">
+        <UserHoverCard :author-id="comment.author?.documentId" clickable>
           <span class="ik-comment__name">
             {{ comment.author?.name || "匿名用户" }}
           </span>
@@ -97,7 +97,7 @@ const floorLabel = computed(() =>
           class="ik-comment__reply"
         >
           <div class="ik-comment__reply-avatar-col">
-            <UserHoverCard :author-id="reply.author?.documentId">
+            <UserHoverCard :author-id="reply.author?.documentId" clickable>
               <img
                 :src="reply.author?.avatar || '/images/default-avatar.webp'"
                 :alt="reply.author?.name || ''"
@@ -108,7 +108,7 @@ const floorLabel = computed(() =>
           </div>
           <div class="ik-comment__reply-content-col">
             <div class="ik-comment__author-row">
-              <UserHoverCard :author-id="reply.author?.documentId">
+              <UserHoverCard :author-id="reply.author?.documentId" clickable>
                 <span class="ik-comment__name">
                   {{ reply.author?.name || "匿名用户" }}
                 </span>

@@ -5,6 +5,7 @@ import { resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 
 const route = useRoute();
+const router = useRouter();
 const api = useApi();
 const discussionModal = useDiscussionModal();
 const pageDataLoading = usePageDataLoading();
@@ -13,8 +14,19 @@ const message = useMessage();
 const profile = ref<Profile | null>(null);
 const loadError = ref(false);
 const loading = ref(false);
-const showCardModal = ref(false);
-const showSettingsModal = ref(false);
+
+const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'pinned', 'social'];
+const modalQuery = computed(() => String(route.query.modal || ''));
+const showCardModal = computed(() => modalQuery.value === 'banner');
+const showSettingsModal = computed(() => SETTINGS_MODALS.includes(modalQuery.value));
+
+const openModal = (name: string) => {
+  router.replace({ query: { ...route.query, modal: name } });
+};
+const closeModal = () => {
+  const { modal: _, ...rest } = route.query;
+  router.replace({ query: rest });
+};
 
 const articles = ref<Discussion[]>([]);
 const articleCursor = ref("");
@@ -239,7 +251,7 @@ onBeforeUnmount(() => {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           </button>
         </div>
-        <z-button v-if="profile.isSelf" @click="showSettingsModal = true">更多操作</z-button>
+        <z-button v-if="profile.isSelf" @click="openModal('settings')">更多操作</z-button>
       </div>
 
       <!-- ── A-Frame (包含名片 + 帖子) ────────── -->
@@ -342,19 +354,20 @@ onBeforeUnmount(() => {
         <z-button disabled>修改头像</z-button>
         <z-button disabled>修改称号</z-button>
         <z-button disabled>修改勋章</z-button>
-        <z-button @click="showCardModal = true">修改名片</z-button>
+        <z-button @click="openModal('banner')">修改名片</z-button>
       </div>
 
       <!-- 更多操作弹窗 -->
       <ClientOnly>
         <Teleport to="body">
-          <Transition name="ik-overlay" appear @after-leave="showSettingsModal = false">
+          <Transition name="ik-overlay" appear>
             <ProfileSettingsModal
               v-if="showSettingsModal"
               :current-name="profile?.name"
               :current-bio="profile?.bio"
               :current-hidden="profile?.profileHidden"
-              @close="showSettingsModal = false"
+              :initial-sub="modalQuery"
+              @close="closeModal"
               @name-updated="onNameUpdated"
               @bio-updated="onBioUpdated"
               @hidden-updated="onHiddenUpdated"
@@ -367,11 +380,11 @@ onBeforeUnmount(() => {
       <!-- 名片选择弹窗 -->
       <ClientOnly>
         <Teleport to="body">
-          <Transition name="ik-overlay" appear @after-leave="showCardModal = false">
+          <Transition name="ik-overlay" appear>
             <BusinessCardModal
               v-if="showCardModal"
               :profile="profile"
-              @close="showCardModal = false"
+              @close="closeModal"
               @equipped="onCardEquipped"
             />
           </Transition>
