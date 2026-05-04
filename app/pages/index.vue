@@ -14,9 +14,9 @@ const message = useMessage();
 const pageDataLoading = usePageDataLoading();
 
 useSeoMeta({
-  title: "InterKnot",
+  title: "绳网",
   description: "绳网是一个游戏、技术交流平台，发现并分享有趣的内容。",
-  ogTitle: "InterKnot",
+  ogTitle: "绳网",
   ogDescription: "绳网是一个游戏、技术交流平台，发现并分享有趣的内容。",
 });
 
