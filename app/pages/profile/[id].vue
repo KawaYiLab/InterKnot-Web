@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
-import type { BusinessCard, Discussion, Profile } from "~/types/entities";
+import type { Avatar, BusinessCard, Discussion, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 
@@ -18,6 +18,7 @@ const loading = ref(false);
 const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'pinned', 'social'];
 const modalQuery = computed(() => String(route.query.modal || ''));
 const showCardModal = computed(() => modalQuery.value === 'banner');
+const showAvatarModal = computed(() => modalQuery.value === 'avatar');
 const showSettingsModal = computed(() => SETTINGS_MODALS.includes(modalQuery.value));
 
 const openModal = (name: string) => {
@@ -65,13 +66,24 @@ const goArticle = (discussion: Discussion, event: MouseEvent) => {
   });
 };
 
+const authStore = useAuthStore();
+
 const onCardEquipped = (card: BusinessCard | null) => {
   if (profile.value) {
     profile.value = { ...profile.value, equippedCard: card ?? undefined };
   }
 };
 
-const authStore = useAuthStore();
+const onAvatarEquipped = (avatar: Avatar | null) => {
+  if (profile.value) {
+    profile.value = {
+      ...profile.value,
+      equippedAvatar: avatar ?? undefined,
+      avatar: avatar?.image || profile.value.avatar,
+    };
+  }
+  authStore.fetchSelfUser();
+};
 
 const onNameUpdated = (name: string) => {
   if (profile.value) {
@@ -351,7 +363,7 @@ onBeforeUnmount(() => {
 
       <!-- ── Bottom Actions ──────────────────────── -->
       <div v-if="profile.isSelf" class="ik-bottom-actions">
-        <z-button disabled>修改头像</z-button>
+        <z-button @click="openModal('avatar')">修改头像</z-button>
         <z-button disabled>修改称号</z-button>
         <z-button disabled>修改勋章</z-button>
         <z-button @click="openModal('banner')">修改名片</z-button>
@@ -372,6 +384,20 @@ onBeforeUnmount(() => {
               @bio-updated="onBioUpdated"
               @hidden-updated="onHiddenUpdated"
               @pinned-updated="onPinnedUpdated"
+            />
+          </Transition>
+        </Teleport>
+      </ClientOnly>
+
+      <!-- 头像选择弹窗 -->
+      <ClientOnly>
+        <Teleport to="body">
+          <Transition name="ik-overlay" appear>
+            <AvatarModal
+              v-if="showAvatarModal"
+              :profile="profile"
+              @close="closeModal"
+              @equipped="onAvatarEquipped"
             />
           </Transition>
         </Teleport>

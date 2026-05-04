@@ -82,6 +82,17 @@ export interface BusinessCard {
   imageHeight?: number;
 }
 
+export type AvatarType = BusinessCardType;
+
+export interface Avatar {
+  documentId: string;
+  name: string;
+  type: AvatarType;
+  image?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+}
+
 export interface Profile {
   documentId: string;
   uid?: number;
@@ -96,6 +107,7 @@ export interface Profile {
   profileHidden?: boolean;
   stats?: ProfileStats;
   equippedCard?: BusinessCard;
+  equippedAvatar?: Avatar;
 }
 
 export interface LikeToggleResult {

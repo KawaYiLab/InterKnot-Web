@@ -1,6 +1,8 @@
 import type { ApiClientError, Pagination } from "~/types/api";
 import type {
   Author,
+  Avatar,
+  AvatarType,
   BusinessCard,
   BusinessCardType,
   Comment,
@@ -173,6 +175,22 @@ function toBusinessCard(raw: unknown, apiBaseUrl: string): BusinessCard | undefi
     description: (data.description as string | undefined) || undefined,
     story: Array.isArray(data.story) ? data.story : undefined,
     type: (VALID_CARD_TYPES.has(rawType) ? rawType : "character") as BusinessCardType,
+    image: imageMeta?.url,
+    imageWidth: imageMeta?.width,
+    imageHeight: imageMeta?.height,
+  };
+}
+
+function toAvatar(raw: unknown, apiBaseUrl: string): Avatar | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const data = raw as Record<string, unknown>;
+  const imageMeta = extractMediaMeta(data.image, apiBaseUrl);
+  const rawType = String(data.type || "character");
+  if (!data.documentId) return undefined;
+  return {
+    documentId: String(data.documentId),
+    name: String(data.name || ""),
+    type: (VALID_CARD_TYPES.has(rawType) ? rawType : "character") as AvatarType,
     image: imageMeta?.url,
     imageWidth: imageMeta?.width,
     imageHeight: imageMeta?.height,
@@ -578,13 +596,16 @@ export function useApi() {
     const equippedCardRaw = data.equippedCard;
     const equippedCard = toBusinessCard(equippedCardRaw, apiBaseUrl);
 
+    const equippedAvatarRaw = data.equippedAvatar;
+    const equippedAvatar = toAvatar(equippedAvatarRaw, apiBaseUrl);
+
     return {
       documentId: String(data.documentId || documentId),
       uid: data.userId != null ? Number(data.userId) : undefined,
       login: (userRaw?.username as string) || (data.login as string | undefined),
       name: data.name as string | undefined,
       bio: bioText,
-      avatar: avatarUrl,
+      avatar: equippedAvatar?.image || avatarUrl,
       level: Number(userRaw?.level ?? data.level ?? 1),
       exp: Number(userRaw?.exp ?? data.exp ?? 0),
       isSelf: data.isSelf === true,
@@ -600,6 +621,7 @@ export function useApi() {
           }
         : undefined,
       equippedCard,
+      equippedAvatar,
     };
   };
 
@@ -819,6 +841,23 @@ export function useApi() {
     });
   };
 
+  const getMyAvatars = async (): Promise<{ avatars: Avatar[]; equippedAvatarDocumentId: string | null }> => {
+    const response = await $api("/api/me/avatars");
+    const data = response as Record<string, unknown>;
+    const rawAvatars = Array.isArray(data.data) ? data.data : [];
+    return {
+      avatars: rawAvatars.map((item) => toAvatar(item, apiBaseUrl)).filter(Boolean) as Avatar[],
+      equippedAvatarDocumentId: (data.equippedAvatarDocumentId as string) || null,
+    };
+  };
+
+  const equipAvatar = async (documentId: string | null): Promise<void> => {
+    await $api("/api/me/avatars/equip", {
+      method: "PUT",
+      body: { documentId },
+    });
+  };
+
   const updateMyName = async (name: string): Promise<{ name: string }> => {
     const response = await $api("/api/me/profile/name", {
       method: "PUT",
@@ -934,6 +973,8 @@ export function useApi() {
     uploadImage,
     getMyBusinessCards,
     equipBusinessCard,
+    getMyAvatars,
+    equipAvatar,
     updateMyName,
     updateMyBio,
     updateMyVisibility,
