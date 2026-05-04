@@ -13,6 +13,7 @@ const emit = defineEmits<{
   nameUpdated: [name: string];
   bioUpdated: [bio: string];
   hiddenUpdated: [hidden: boolean];
+  pinnedUpdated: [pinned: string[] | null];
 }>();
 
 const api = useApi();
@@ -105,6 +106,17 @@ const submitBio = async () => {
   }
 };
 
+const showPinned = ref(false);
+const openPinned = () => {
+  showPinned.value = true;
+};
+const closePinned = () => {
+  showPinned.value = false;
+};
+const onPinnedSaved = (pinned: string[] | null) => {
+  emit("pinnedUpdated", pinned);
+};
+
 const showSocial = ref(false);
 const hidden = ref(!!props.currentHidden);
 const togglingHidden = ref(false);
@@ -177,6 +189,10 @@ const handleEditNameOverlayClick = (e: MouseEvent) => {
 
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === "Escape") {
+    if (showPinned.value) {
+      // PinnedArticlesModal 内部已自行处理 Escape；此处避免冒泡到顶层
+      return;
+    }
     if (showSocial.value) {
       closeSocial();
     } else if (showEditBio.value) {
@@ -219,7 +235,7 @@ onBeforeUnmount(() => {
               <z-button @click="openEditName">修改用户名</z-button>
               <z-button disabled>隐藏生日信息</z-button>
               <z-button @click="openEditBio">修改签名</z-button>
-              <z-button disabled>修改帖子展示</z-button>
+              <z-button @click="openPinned">修改帖子展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
             </div>
           </div>
@@ -350,6 +366,17 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Pinned Articles Sub-dialog -->
+    <Teleport to="body">
+      <Transition name="ik-overlay" appear>
+        <PinnedArticlesModal
+          v-if="showPinned"
+          @close="closePinned"
+          @saved="onPinnedSaved"
+        />
       </Transition>
     </Teleport>
   </div>
