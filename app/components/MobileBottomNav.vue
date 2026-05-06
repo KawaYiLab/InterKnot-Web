@@ -1,7 +1,47 @@
 <script setup lang="ts">
+import { useMessage } from "zenless-ui";
+import {
+  HomeIcon as HomeOutlineIcon,
+  UserIcon as UserOutlineIcon,
+} from "@heroicons/vue/24/outline";
+import {
+  HomeIcon as HomeSolidIcon,
+  UserIcon as UserSolidIcon,
+  PlusIcon,
+} from "@heroicons/vue/24/solid";
+
 const route = useRoute();
 const auth = useAuthStore();
 const loginDialog = useLoginDialog();
+const message = useMessage();
+
+const isHome = computed(() => route.path === "/");
+const isMine = computed(
+  () => !!auth.profilePath && route.path === auth.profilePath,
+);
+
+// Double-tap on the active "推送" entry refreshes the home feed,
+// matching the Flutter app's behaviour.
+const DOUBLE_TAP_MS = 300;
+const lastHomeTap = ref<number | null>(null);
+
+const handleHomeTap = async () => {
+  const now = Date.now();
+  const last = lastHomeTap.value;
+  if (last !== null && now - last < DOUBLE_TAP_MS && isHome.value) {
+    lastHomeTap.value = null;
+    if (import.meta.client) {
+      window.dispatchEvent(new CustomEvent("ik:home-refresh"));
+      message({ message: "正在刷新帖子...", duration: 1000 });
+    }
+    return;
+  }
+  lastHomeTap.value = now;
+  if (!isHome.value) {
+    await navigateTo("/");
+  }
+};
+
 const handleAccountClick = () => {
   if (auth.profilePath) {
     navigateTo(auth.profilePath);
@@ -20,79 +60,176 @@ const handleCreatePost = () => {
 </script>
 
 <template>
-  <nav class="ik-mobile-nav">
-    <NuxtLink
-      to="/"
-      class="ik-mobile-nav__item"
-      :class="{ active: route.path === '/' }"
-    >
-      推送
-    </NuxtLink>
+  <nav class="ik-mobile-nav" role="navigation" aria-label="主导航">
     <button
-      class="ik-mobile-nav__item ik-mobile-nav__item--create"
-      @click="handleCreatePost"
+      type="button"
+      class="ik-mobile-nav__item"
+      :class="{ 'is-active': isHome }"
+      :aria-current="isHome ? 'page' : undefined"
+      aria-label="推送"
+      @click="handleHomeTap"
     >
-      <span class="ik-mobile-nav__create-icon">+</span>
-      发帖
+      <span class="ik-mobile-nav__inner">
+        <component
+          :is="isHome ? HomeSolidIcon : HomeOutlineIcon"
+          class="ik-mobile-nav__icon"
+          aria-hidden="true"
+        />
+        <span class="ik-mobile-nav__label">推送</span>
+      </span>
     </button>
+
+    <div class="ik-mobile-nav__create-wrap">
+      <button
+        type="button"
+        class="ik-mobile-nav__create-btn"
+        aria-label="发帖"
+        @click="handleCreatePost"
+      >
+        <PlusIcon class="ik-mobile-nav__create-icon" aria-hidden="true" />
+      </button>
+    </div>
+
     <button
+      type="button"
       class="ik-mobile-nav__item"
-      :class="{ active: route.path.startsWith('/profile') }"
+      :class="{ 'is-active': isMine }"
+      :aria-current="isMine ? 'page' : undefined"
+      aria-label="我的"
       @click="handleAccountClick"
     >
-      账号
+      <span class="ik-mobile-nav__inner">
+        <component
+          :is="isMine ? UserSolidIcon : UserOutlineIcon"
+          class="ik-mobile-nav__icon"
+          aria-hidden="true"
+        />
+        <span class="ik-mobile-nav__label">我的</span>
+      </span>
     </button>
   </nav>
 </template>
 
 <style scoped>
+/* ── Bar ───────────────────────────────────────────
+   Match the Flutter version: solid #1A1A1A, 1px white12 top
+   border, 58px content area + iOS safe-area inset. */
 .ik-mobile-nav {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 58px;
+  height: calc(58px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   display: none;
-  border-top: 1px solid #2d2d2d;
-  background: rgba(17, 17, 17, 0.96);
-  backdrop-filter: blur(8px);
+  align-items: stretch;
+  justify-content: space-around;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1a1a1a;
   z-index: 30;
-}
-
-.ik-mobile-nav__item {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  color: var(--ik-muted);
-  font-size: 13px;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: none;
-}
-
-.ik-mobile-nav__item.active {
-  color: var(--ik-primary);
-  font-weight: 700;
-}
-
-.ik-mobile-nav__item--create {
-  color: var(--ik-primary) !important;
-  font-weight: 700;
-  gap: 2px;
-}
-
-.ik-mobile-nav__create-icon {
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1;
 }
 
 @media (max-width: 768px) {
   .ik-mobile-nav {
     display: flex;
+  }
+}
+
+/* ── Side items (推送 / 我的) ──────────────────── */
+.ik-mobile-nav__item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.ik-mobile-nav__inner {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  transform: scale(1);
+  /* easeOutBack ≈ this cubic-bezier */
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ik-mobile-nav__item.is-active .ik-mobile-nav__inner {
+  transform: scale(1.2);
+}
+
+.ik-mobile-nav__icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  /* Heroicons handle stroke/fill internally with currentColor */
+}
+
+.ik-mobile-nav__label {
+  font-size: 12px;
+  line-height: 1;
+  color: #fff;
+}
+
+/* ── Center create button ──────────────────────── */
+.ik-mobile-nav__create-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ik-mobile-nav__create-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fbfe00;
+  color: #000;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  animation: ik-mobile-nav-create-pulse 800ms linear infinite alternate;
+  transition: transform 120ms ease;
+}
+
+.ik-mobile-nav__create-btn:active {
+  transform: scale(0.94);
+}
+
+.ik-mobile-nav__create-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  /* PlusIcon (24/solid) uses fill=currentColor; parent sets color: #000 */
+}
+
+@keyframes ik-mobile-nav-create-pulse {
+  from {
+    background-color: #fbfe00;
+  }
+  to {
+    background-color: #dcfe00;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-mobile-nav__create-btn {
+    animation: none;
+  }
+  .ik-mobile-nav__inner {
+    transition: none;
   }
 }
 </style>

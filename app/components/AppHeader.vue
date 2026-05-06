@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { useMessage } from "zenless-ui";
+import { useEventListener } from "@vueuse/core";
 
 const route = useRoute();
 const router = useRouter();
@@ -7,6 +8,34 @@ const auth = useAuthStore();
 const message = useMessage();
 const loginDialog = useLoginDialog();
 const { isActive: showProgress, progress: progressValue, isClaimed, start: startProgress, finish: finishProgress } = usePageDataLoading();
+
+// Auto-hide header on mobile when scrolling down, reveal on scroll up.
+// Only the CSS targets the mobile breakpoint; the JS state is harmless on
+// desktop because `.is-hidden` has no effect there.
+const SCROLL_TOP_BUFFER = 80;
+const SCROLL_DELTA_THRESHOLD = 6;
+const isHeaderHidden = ref(false);
+let lastScrollY = import.meta.client ? window.scrollY : 0;
+
+if (import.meta.client) {
+  useEventListener(
+    window,
+    "scroll",
+    () => {
+      const currentY = window.scrollY;
+      const delta = currentY - lastScrollY;
+      if (currentY <= SCROLL_TOP_BUFFER) {
+        isHeaderHidden.value = false;
+      } else if (delta > SCROLL_DELTA_THRESHOLD) {
+        isHeaderHidden.value = true;
+      } else if (delta < -SCROLL_DELTA_THRESHOLD) {
+        isHeaderHidden.value = false;
+      }
+      lastScrollY = currentY;
+    },
+    { passive: true },
+  );
+}
 
 let _autoFinishTimer: ReturnType<typeof setTimeout> | null = null;
 router.beforeEach((to, from) => {
@@ -123,6 +152,10 @@ watch(
   () => {
     activeTab.value = resolveActiveTab(route.path);
     searchKeyword.value = pickFirstQuery(route.query.q as string | string[] | undefined);
+    // Reset auto-hide state on navigation so the header is visible on the
+    // new page until the user scrolls down again.
+    isHeaderHidden.value = false;
+    lastScrollY = import.meta.client ? window.scrollY : 0;
   },
   { immediate: true },
 );
@@ -130,7 +163,7 @@ watch(
 </script>
 
 <template>
-  <header class="ik-header">
+  <header class="ik-header" :class="{ 'is-hidden': isHeaderHidden }">
     <div class="ik-header__inner">
       <div class="ik-header__left">
         <NuxtLink to="/" class="ik-brand" aria-label="Inter Knot 首页">
@@ -249,6 +282,21 @@ watch(
   z-index: 50;
   border-bottom: 1px solid #2b2b2b;
   background: #000;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Auto-hide on mobile while scrolling down. Desktop ignores `.is-hidden`. */
+@media (max-width: 768px) {
+  .ik-header.is-hidden {
+    transform: translateY(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-header {
+    transition: none;
+  }
 }
 
 .ik-header__progress {

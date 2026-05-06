@@ -293,13 +293,25 @@ watch(
 // 在 setup 阶段提前发起首屏数据请求，不等 onMounted
 const initialFetchPromise = fetchList(true);
 
+// Triggered by MobileBottomNav when the user double-taps the active
+// "推送" entry — mirrors the Flutter app's pull-to-refresh shortcut.
+const onHomeRefreshEvent = () => {
+  void handleRefresh();
+};
+
 onMounted(async () => {
+  if (import.meta.client) {
+    window.addEventListener("ik:home-refresh", onHomeRefreshEvent);
+  }
   await initialFetchPromise;
   await nextTick();
   observeLoadMoreSentinel();
 });
 
 onBeforeUnmount(() => {
+  if (import.meta.client) {
+    window.removeEventListener("ik:home-refresh", onHomeRefreshEvent);
+  }
   loadMoreObserverRef.value?.disconnect();
   loadMoreObserverRef.value = null;
   if (cooldownTimer) {
@@ -546,7 +558,14 @@ onBeforeUnmount(() => {
 @media (max-width: 768px) {
   .ik-refresh-fab {
     right: 16px;
-    bottom: 16px;
+    /* Lift above the fixed MobileBottomNav (58px) plus iOS safe area */
+    bottom: calc(58px + 16px + env(safe-area-inset-bottom, 0px));
+  }
+  /* Stack the back-to-top button above the refresh FAB (refresh ~28px tall +
+     12px gap) and align right edges. Override z-backtop's inline bottom/right. */
+  :deep(.z-backtop) {
+    right: 16px !important;
+    bottom: calc(58px + 16px + 56px + 12px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 </style>

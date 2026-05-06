@@ -803,7 +803,9 @@ onBeforeUnmount(() => {
 .ik-overlay-leave-to .ik-av-dialog { opacity: 0; transform: scale(1.1) translateX(-5%); }
 .ik-overlay-leave-to .ik-crop-dialog { opacity: 0; transform: scale(1.1) translateX(-5%); }
 
-/* ── Mobile ── */
+/* ── Mobile ──
+   Avatars are only 64px circles, so we keep the column count denser than
+   the BusinessCardModal (which uses larger card thumbnails). */
 @media (max-width: 1100px) {
   .ik-av-grid { grid-template-columns: repeat(6, 1fr); }
 }
@@ -813,14 +815,17 @@ onBeforeUnmount(() => {
   .ik-overlay-leave-to .ik-av-dialog { transform: scale(1) translateX(-5%); }
   .ik-overlay-enter-from .ik-crop-dialog { transform: scale(1) translateX(5%); }
   .ik-overlay-leave-to .ik-crop-dialog { transform: scale(1) translateX(-5%); }
-  .ik-av-grid { grid-template-columns: repeat(4, 1fr); }
+  .ik-av-grid { grid-template-columns: repeat(5, 1fr); padding: 14px; }
+  /* On mobile/tablet the dialog is much taller than desktop's 60vh; let the
+     scroll area fill the leftover space instead of being capped at 280px. */
+  .ik-av-grid-scroll { max-height: none; }
 }
 @media (max-width: 500px) {
   .ik-av-dialog { width: 100%; height: 95%; }
   .ik-av-frame { border-radius: 0; }
   .ik-av-frame__inner { border-radius: 0; }
   .ik-av-frame__body { border-radius: 0; }
-  .ik-av-grid { grid-template-columns: repeat(3, 1fr); }
+  .ik-av-grid { grid-template-columns: repeat(4, 1fr); padding: 12px; gap: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

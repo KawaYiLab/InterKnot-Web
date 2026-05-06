@@ -529,14 +529,8 @@ onUnmounted(() => {
   .ik-dialog {
     max-width: 100%;
   }
-
-  .ik-dialog__outer {
-    border-radius: 0;
-  }
-
-  .ik-dialog__inner {
-    border-radius: 0;
-  }
+  /* Keep the ZZZ-style 3-rounded-corner frame on mobile; the dialog is a
+     centered popup, not a fullscreen sheet. */
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -37,6 +37,15 @@ const closeSub = () => {
   router.replace({ query: { ...route.query, modal: 'settings' } });
 };
 
+// Navigate directly to sibling modals (avatar / business card) on mobile,
+// where the bottom action bar is hidden in favour of these menu entries.
+const openAvatarModal = () => {
+  router.replace({ query: { ...route.query, modal: 'avatar' } });
+};
+const openCardModal = () => {
+  router.replace({ query: { ...route.query, modal: 'banner' } });
+};
+
 const nameInput = ref(props.currentName || "");
 const saving = ref(false);
 
@@ -258,7 +267,7 @@ onBeforeUnmount(() => {
   <div class="ik-overlay" @click="handleOverlayClick">
     <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
-    <div class="ik-dialog" @click.stop>
+    <div class="ik-dialog ik-dialog--settings" @click.stop>
       <div class="ik-dialog__outer">
         <div class="ik-dialog__inner">
           <!-- Header -->
@@ -272,6 +281,12 @@ onBeforeUnmount(() => {
           <!-- Menu Body -->
           <div class="ik-dialog__body">
             <div class="ik-settings__list">
+              <!-- Mobile-only: appearance actions normally living in the
+                   bottom action bar on desktop. -->
+              <z-button class="ik-settings__action--mobile" @click="openAvatarModal">修改头像</z-button>
+              <z-button class="ik-settings__action--mobile" disabled>修改称号</z-button>
+              <z-button class="ik-settings__action--mobile" disabled>修改勋章</z-button>
+              <z-button class="ik-settings__action--mobile" @click="openCardModal">修改名片</z-button>
               <z-button @click="openEditName">修改用户名</z-button>
               <z-button disabled>隐藏生日信息</z-button>
               <z-button @click="openEditBio">修改签名</z-button>
@@ -591,6 +606,12 @@ onBeforeUnmount(() => {
   margin-left: 0;
 }
 
+/* Appearance actions live in the bottom action bar on desktop, so
+   suppress them in the menu by default. */
+.ik-settings__action--mobile {
+  display: none;
+}
+
 /* ── Logout sub-dialog ── */
 .ik-logout__wrapper {
   display: flex;
@@ -794,19 +815,31 @@ onBeforeUnmount(() => {
   z-index: 9200;
 }
 
+/* ── Mobile / Portrait — show appearance actions in the menu ─── */
+@media (max-width: 1023px), (orientation: portrait) {
+  .ik-settings__action--mobile {
+    display: inline-flex;
+  }
+  /* Settings dialog grows from 6 to 10 entries; let it size to content
+     and stay within viewport rather than overflowing the fixed 300px. */
+  .ik-dialog--settings {
+    height: auto;
+    max-height: 90%;
+  }
+  .ik-dialog--settings .ik-dialog__body {
+    overflow-y: auto;
+    align-items: flex-start;
+  }
+}
+
 /* ── Mobile ───────────────────────────────────── */
 @media (max-width: 500px) {
   .ik-dialog {
     max-width: 100%;
   }
-
-  .ik-dialog__outer {
-    border-radius: 0;
-  }
-
-  .ik-dialog__inner {
-    border-radius: 0;
-  }
+  /* Keep the ZZZ-style 3-rounded-corner frame on mobile; sub-dialogs
+     (edit name / bio / social / logout) are centered popups, not
+     fullscreen sheets. */
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -25,6 +25,13 @@ let hideTimer: ReturnType<typeof setTimeout> | null = null;
 const SHOW_DELAY = 400;
 const HIDE_DELAY = 250;
 
+// Skip the hover card on touch devices / narrow viewports — mouseenter can
+// still fire on iOS after a tap, which previously caused an unwanted popup.
+const isMobileEnv = () => {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(hover: none), (pointer: coarse), (max-width: 768px)").matches;
+};
+
 // Simple in-memory cache
 const profileCache = new Map<string, Profile>();
 
@@ -88,6 +95,8 @@ const clearTimers = () => {
 
 const onTriggerEnter = () => {
   if (!props.authorId) return;
+  // Never show the hover card on touch devices / narrow viewports.
+  if (isMobileEnv()) return;
   clearTimers();
   showTimer = setTimeout(() => {
     visible.value = true;
