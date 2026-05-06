@@ -15,14 +15,26 @@ const emit = defineEmits<{
 const api = useApi();
 const message = useMessage();
 
-const cards = ref<BusinessCard[]>([]);
+type TabKey = "all" | BusinessCardType;
+const CARD_TYPE_TABS: BusinessCardType[] = ["character", "city", "news"];
+const activeTab = ref<TabKey>("all");
+const cardsByTab = reactive<Record<TabKey, BusinessCard[] | null>>({
+  all: null,
+  character: null,
+  city: null,
+  news: null,
+});
+const loadingTabs = reactive<Record<TabKey, boolean>>({
+  all: false,
+  character: false,
+  city: false,
+  news: false,
+});
 const equippedId = ref<string | null>(null);
+const equippedCard = ref<BusinessCard | null>(null);
 const selectedCard = ref<BusinessCard | null>(null);
-const loading = ref(true);
 const equipping = ref(false);
 
-type TabKey = "all" | BusinessCardType;
-const activeTab = ref<TabKey>("all");
 const tabs: { key: TabKey; label: string }[] = [
   { key: "all", label: "全部" },
   { key: "character", label: "代理人" },
@@ -30,11 +42,19 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: "news", label: "纪闻" },
 ];
 
-const filteredCards = computed(() =>
-  activeTab.value === "all" ? cards.value : cards.value.filter((c) => c.type === activeTab.value),
-);
+const filteredCards = computed(() => cardsByTab[activeTab.value] ?? []);
+const loading = computed(() => loadingTabs[activeTab.value]);
 
-const previewCard = computed(() => selectedCard.value ?? cards.value.find((c) => c.documentId === equippedId.value) ?? null);
+const findCachedCard = (documentId: string | null) => {
+  if (!documentId) return null;
+  for (const cards of Object.values(cardsByTab)) {
+    const card = cards?.find((item) => item.documentId === documentId);
+    if (card) return card;
+  }
+  return null;
+};
+
+const previewCard = computed(() => selectedCard.value ?? findCachedCard(equippedId.value) ?? equippedCard.value);
 
 const blocksToText = (blocks: unknown[] | undefined): string => {
   if (!Array.isArray(blocks)) return "";
@@ -51,13 +71,41 @@ const blocksToText = (blocks: unknown[] | undefined): string => {
 
 const previewStory = computed(() => blocksToText(previewCard.value?.story));
 
+const selectCard = (card: BusinessCard) => {
+  selectedCard.value = card;
+};
+
+const cacheCards = (key: TabKey, nextCards: BusinessCard[]) => {
+  cardsByTab[key] = nextCards;
+  if (key === "all") {
+    for (const type of CARD_TYPE_TABS) {
+      cardsByTab[type] = nextCards.filter((card) => card.type === type);
+    }
+  }
+};
+
+const loadCardsForTab = async (key: TabKey) => {
+  if (cardsByTab[key] || loadingTabs[key]) return;
+  loadingTabs[key] = true;
+  try {
+    const result = await api.getMyBusinessCards(key === "all" ? undefined : key);
+    cacheCards(key, result.cards);
+    equippedId.value = result.equippedCardDocumentId;
+    equippedCard.value = result.equippedCard;
+    if (!equippedId.value && activeTab.value === key && !selectedCard.value && result.cards.length > 0) {
+      selectedCard.value = result.cards[0] ?? null;
+    }
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "获取名片列表失败"));
+  } finally {
+    loadingTabs[key] = false;
+  }
+};
+
 const handleTabChange = (key: TabKey) => {
   activeTab.value = key;
   selectedCard.value = null;
-};
-
-const selectCard = (card: BusinessCard) => {
-  selectedCard.value = card;
+  loadCardsForTab(key).catch(() => undefined);
 };
 
 const handleEquip = async () => {
@@ -66,6 +114,7 @@ const handleEquip = async () => {
   try {
     await api.equipBusinessCard(selectedCard.value.documentId);
     equippedId.value = selectedCard.value.documentId;
+    equippedCard.value = selectedCard.value;
     emit("equipped", selectedCard.value);
     message.success("已使用此名片");
   } catch (err) {
@@ -81,6 +130,7 @@ const handleUnequip = async () => {
   try {
     await api.equipBusinessCard(null);
     equippedId.value = null;
+    equippedCard.value = null;
     selectedCard.value = null;
     emit("equipped", null);
     message.success("已卸下名片");
@@ -107,19 +157,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 onMounted(async () => {
   window.addEventListener("keydown", handleKeydown);
-  loading.value = true;
-  try {
-    const result = await api.getMyBusinessCards();
-    cards.value = result.cards;
-    equippedId.value = result.equippedCardDocumentId;
-    if (!equippedId.value && cards.value.length > 0) {
-      selectedCard.value = cards.value[0] ?? null;
-    }
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "获取名片列表失败"));
-  } finally {
-    loading.value = false;
-  }
+  await loadCardsForTab(activeTab.value);
 });
 
 onBeforeUnmount(() => {

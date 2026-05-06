@@ -39,6 +39,12 @@ interface DiscussionCommentPayload {
   authorDocumentId?: string;
 }
 
+interface MyBusinessCardsResult {
+  cards: BusinessCard[];
+  equippedCardDocumentId: string | null;
+  equippedCard: BusinessCard | null;
+}
+
 interface MediaMeta {
   url: string;
   width?: number;
@@ -640,7 +646,7 @@ export function useApi() {
     const meta = extractPaginationMeta(response);
     const data = unwrapData<unknown[]>(response) || [];
     const page = buildPagination(data.map((item) => toDiscussion(item, apiBaseUrl)), start, meta);
-    await mergeReadStatus(page.nodes);
+    void mergeReadStatus(page.nodes);
     return page;
   };
 
@@ -824,13 +830,16 @@ export function useApi() {
     return uploaded;
   };
 
-  const getMyBusinessCards = async (): Promise<{ cards: BusinessCard[]; equippedCardDocumentId: string | null }> => {
-    const response = await $api("/api/me/business-cards");
+  const getMyBusinessCards = async (type?: BusinessCardType): Promise<MyBusinessCardsResult> => {
+    const response = await $api("/api/me/business-cards", {
+      query: type ? { type } : undefined,
+    });
     const data = response as Record<string, unknown>;
     const rawCards = Array.isArray(data.data) ? data.data : [];
     return {
       cards: rawCards.map((item) => toBusinessCard(item, apiBaseUrl)).filter(Boolean) as BusinessCard[],
       equippedCardDocumentId: (data.equippedCardDocumentId as string) || null,
+      equippedCard: toBusinessCard(data.equippedCard, apiBaseUrl) || null,
     };
   };
 

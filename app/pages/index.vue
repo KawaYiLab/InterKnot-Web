@@ -140,6 +140,14 @@ const fetchList = async (reset = false) => {
   if (loading.value || loadingMore.value) return;
   if (!hasNextPage.value && !reset) return;
 
+  const shouldShowPageProgress = reset && !refreshing.value;
+  if (shouldShowPageProgress) {
+    if (!pageDataLoading.isActive.value) {
+      pageDataLoading.start();
+    }
+    pageDataLoading.claim();
+  }
+
   if (reset && !refreshing.value) {
     loading.value = true;
   } else if (!reset) {
@@ -173,6 +181,9 @@ const fetchList = async (reset = false) => {
     loading.value = false;
     loadingMore.value = false;
     lastFetchTime = Date.now();
+    if (shouldShowPageProgress) {
+      pageDataLoading.finish();
+    }
   }
 };
 
@@ -280,8 +291,7 @@ watch(
 );
 
 // 在 setup 阶段提前发起首屏数据请求，不等 onMounted
-pageDataLoading.claim();
-const initialFetchPromise = fetchList(true).finally(() => pageDataLoading.finish());
+const initialFetchPromise = fetchList(true);
 
 onMounted(async () => {
   await initialFetchPromise;
