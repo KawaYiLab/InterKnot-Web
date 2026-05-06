@@ -646,7 +646,11 @@ export function useApi() {
     const meta = extractPaginationMeta(response);
     const data = unwrapData<unknown[]>(response) || [];
     const page = buildPagination(data.map((item) => toDiscussion(item, apiBaseUrl)), start, meta);
-    void mergeReadStatus(page.nodes);
+    // Must await: merging mutates the raw nodes in-place. If we fire-and-forget,
+    // the caller pushes them into a reactive ref before mutation happens, and
+    // direct mutation on the raw target won't trigger Vue's reactivity, so
+    // every card stays in the unread (blue) state until the next re-render.
+    await mergeReadStatus(page.nodes);
     return page;
   };
 

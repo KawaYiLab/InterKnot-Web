@@ -153,16 +153,36 @@ useSeoMeta({
 
 const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
 
-// Lock page scroll while on this profile page
+// Lock page scroll only on large landscape viewports where the layout is
+// designed to fit in a single screen. On medium/portrait/mobile viewports
+// the layout cannot fit (large banner + grid + bottom actions + fixed
+// MobileBottomNav), so we let the page scroll naturally.
 let _prevHtmlOverflow = "";
 let _prevBodyOverflow = "";
+let _scrollLockMql: MediaQueryList | null = null;
+const applyScrollLock = (lock: boolean) => {
+  if (!import.meta.client) return;
+  if (lock) {
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+  } else {
+    document.documentElement.style.overflow = _prevHtmlOverflow;
+    document.body.style.overflow = _prevBodyOverflow;
+  }
+};
+const _onScrollLockChange = (e: MediaQueryListEvent) => {
+  applyScrollLock(e.matches);
+};
 
 onMounted(async () => {
   if (import.meta.client) {
     _prevHtmlOverflow = document.documentElement.style.overflow;
     _prevBodyOverflow = document.body.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
+    _scrollLockMql = window.matchMedia(
+      "(min-width: 1024px) and (orientation: landscape)",
+    );
+    _scrollLockMql.addEventListener("change", _onScrollLockChange);
+    applyScrollLock(_scrollLockMql.matches);
   }
 
   loading.value = true;
@@ -188,6 +208,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   profileTabLabel.value = null;
   if (import.meta.client) {
+    if (_scrollLockMql) {
+      _scrollLockMql.removeEventListener("change", _onScrollLockChange);
+      _scrollLockMql = null;
+    }
     document.documentElement.style.overflow = _prevHtmlOverflow;
     document.body.style.overflow = _prevBodyOverflow;
   }
@@ -806,14 +830,54 @@ onBeforeUnmount(() => {
   .ik-article-grid { grid-template-columns: repeat(3, 1fr); }
   .ik-profile { padding: 20px 24px 32px; }
 }
-@media (min-width: 1024px) {
+@media (min-width: 1024px) and (orientation: landscape) {
   .ik-article-grid { grid-template-columns: repeat(6, 1fr); }
 }
+
+/* ── Medium / portrait viewports ─────────────────
+   The fixed-viewport layout (height: 100vh - 78px + overflow:hidden) only
+   fits on large landscape displays. On any smaller width or portrait
+   orientation the banner + grid + bottom actions exceed the viewport, so
+   we let the page scroll naturally and remove the inner clipping.
+   The bottom action bar (修改头像/称号/勋章/名片) is folded into the
+   ProfileSettingsModal on these viewports, so we hide it here. */
+@media (max-width: 1023px), (orientation: portrait) {
+  .ik-profile {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .ik-frame,
+  .ik-frame__inner,
+  .ik-frame__body,
+  .ik-aframe,
+  .ik-aframe__content {
+    flex: initial;
+    min-height: 0;
+  }
+  .ik-aframe__content {
+    overflow: visible;
+  }
+  .ik-article-grid__item :deep(.ik-card__cover-frame) {
+    max-height: none;
+  }
+  .ik-bottom-actions {
+    display: none;
+  }
+}
+
+/* Mobile: account for fixed MobileBottomNav (58px) */
+@media (max-width: 768px) {
+  .ik-profile {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+}
+
 @media (max-width: 639px) {
-  .ik-profile { height: calc(100vh - 66px); }
-  .ik-frame { border-radius: 12px; }
-  .ik-frame__inner { border-radius: 12px; }
-  .ik-frame__body { padding: 0; }
+  /* Frame corners (.ik-frame / .ik-frame__inner) intentionally inherit
+     desktop values so the tab bar's visible top corners (which are
+     clipped by these parents' overflow:hidden + border-radius) match the
+     tablet/desktop look. */
   .ik-tab-bar { padding: 8px 14px; min-height: 44px; }
   .ik-banner { min-height: 240px; padding: 22px 18px; }
   .ik-banner__avatar { width: 68px; height: 68px; border-width: 3px; }
@@ -822,6 +886,8 @@ onBeforeUnmount(() => {
   .ik-banner__title-tag { font-size: 13px; padding: 4px 12px; }
   .ik-banner__stats { font-size: 13px; gap: 8px; }
   .ik-aframe__content { padding: 10px; gap: 10px; }
-  .ik-banner-card { margin: 0 10px; padding: 0; }
+  /* Keep the same top gap between tab bar and banner card as desktop;
+     just trim horizontal margin a bit on tiny screens. */
+  .ik-banner-card { margin: 12px 10px 0; }
 }
 </style>
