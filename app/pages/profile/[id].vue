@@ -173,15 +173,15 @@ onMounted(async () => {
     profileTabLabel.value = profile.value?.isSelf
       ? null
       : (profile.value?.name || profile.value?.login || null);
-    if (!profile.value?.isHidden) {
-      await loadProfileArticles();
-    }
   } catch (err) {
     loadError.value = true;
     message.error(resolveErrorMessage(err, "获取用户信息失败"));
   } finally {
     loading.value = false;
     pageDataLoading.finish();
+  }
+  if (profile.value && !profile.value.isHidden) {
+    void loadProfileArticles();
   }
 });
 
@@ -347,7 +347,12 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div v-else class="ik-article-grid">
-        <div v-if="!articles.length && !articleLoading" class="ik-article-grid__empty">
+        <template v-if="articleLoading && !articles.length">
+          <div v-for="n in 6" :key="n" class="ik-article-grid__item">
+            <div class="ik-skel" style="width:100%;aspect-ratio:3/4;border-radius:12px"></div>
+          </div>
+        </template>
+        <div v-else-if="!articles.length" class="ik-article-grid__empty">
           还没有发布任何内容哦
         </div>
         <template v-else>
