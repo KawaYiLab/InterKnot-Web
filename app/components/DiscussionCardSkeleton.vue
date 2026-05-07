@@ -31,15 +31,11 @@ defineProps<{
           </div>
         </div>
 
-        <!-- 标题占位（两行） -->
+        <!-- 标题占位（与真实卡片一致：单行 placeholder，容器锁定 2 行高度避免切换抖动） -->
         <div class="ik-card-skeleton__title-group">
           <div
             class="ik-card-skeleton__title skeleton-pulse"
-            :style="{ width: '100%' }"
-          ></div>
-          <div
-            class="ik-card-skeleton__title skeleton-pulse"
-            :style="{ width: skeleton?.titleWidth || '60%' }"
+            :style="{ width: skeleton?.titleWidth || '86%' }"
           ></div>
         </div>
       </div>
@@ -150,11 +146,10 @@ defineProps<{
   margin-top: 4px;
 }
 
-/* 标题占位（两行） */
+/* 标题占位（单行 placeholder，与真实卡片"短标题占 1 行"的形态一致） */
 .ik-card-skeleton__title-group {
   display: flex;
   flex-direction: column;
-  gap: 5px;
 }
 
 .ik-card-skeleton__title {

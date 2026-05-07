@@ -66,3 +66,37 @@ export function getNormalizedCoverAspectRatio(
   }
   return NORMALIZED_LANDSCAPE_RATIO;
 }
+
+/**
+ * 估算标题在给定可用宽度下会占多少行（最多 2 行）。
+ *
+ * 启发式按字符 Unicode 范围区分宽度：
+ * - CJK / 全角字符 ≈ 1em（与 title 字号同宽）
+ * - 其它 ASCII / 半角 ≈ 0.55em（经验系数，覆盖大多数西文比例字体）
+ *
+ * 用于瀑布流虚拟化的高度估算，让"短标题占 1 行 / 长标题占 2 行"的真实渲染
+ * 与估算严格一致，避免 ResizeObserver 测量后触发 layout 重排引起滚动跳动。
+ */
+export function estimateTitleLineCount(
+  title: string | undefined,
+  availableWidth: number,
+  fontSize: number,
+  maxLines = 2,
+): number {
+  if (!title) return 1;
+  if (!Number.isFinite(availableWidth) || availableWidth <= 0) return 1;
+
+  const cjkWidth = fontSize;
+  const asciiWidth = fontSize * 0.55;
+
+  let totalWidth = 0;
+  for (let i = 0; i < title.length; i++) {
+    const code = title.charCodeAt(i);
+    // 0x2E80 之后大致覆盖 CJK 统一表意文字、假名、全角符号等
+    totalWidth += code >= 0x2e80 ? cjkWidth : asciiWidth;
+    if (totalWidth > availableWidth) {
+      return Math.min(maxLines, 2);
+    }
+  }
+  return 1;
+}

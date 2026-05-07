@@ -36,7 +36,10 @@ const SKELETON_LAYOUTS: SkeletonLayout[] = [
   { coverAspectRatio: RATIO_SQUARE, authorWidth: "66%", titleWidth: "94%" },
 ];
 
-const SKELETON_FIXED_HEIGHT = 105;
+// 与 DiscussionCard 真实渲染高度对齐（参见 pages/index.vue 中 DISCUSSION_CARD_FIXED_HEIGHT 注释）
+// 固定部分(68) + 单行 title placeholder(17) ≈ 85px
+// 注：骨架的 title-group 当前只渲染 1 行 placeholder，因此按 1 行高度估算。
+const SKELETON_FIXED_HEIGHT = 85;
 
 export function estimateSkeletonHeight(item: SkeletonItem, itemWidth: number): number {
   const coverHeight = itemWidth / item.coverAspectRatio;
