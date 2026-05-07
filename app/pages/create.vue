@@ -2,13 +2,20 @@
 import { useDebounceFn } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type {
-  Discussion,
   DraftArticle,
   UploadTask,
   UploadStatus,
 } from "~/types/entities";
 import type { Pagination } from "~/types/api";
-import { ArrowUpTrayIcon, EyeIcon, PhotoIcon, XMarkIcon, PlusIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
+import {
+  ArrowUpTrayIcon,
+  PhotoIcon,
+  XMarkIcon,
+  PlusIcon,
+  PencilSquareIcon,
+  MagnifyingGlassIcon,
+  PaperAirplaneIcon,
+} from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 
 const MAX_COVER_IMAGES = 9;
@@ -45,7 +52,6 @@ const suppressTracking = ref(false);
 const lastSavedSnapshot = ref("");
 
 // Draft list
-const showMobileDrafts = ref(false);
 const drafts = ref<DraftArticle[]>([]);
 const draftsCursor = ref("");
 const draftsHasNext = ref(true);
@@ -81,32 +87,6 @@ const canPublish = computed(
     title.value.trim().length > 0 &&
     (body.value.trim().length > 0 || uploadedImages.value.length > 0),
 );
-
-/* ── Live Preview ─────────────────────────────────── */
-const previewDiscussion = computed<Discussion>(() => {
-  const firstDone = uploadTasks.value.find(
-    (t) => t.status === "done" && t.serverUrl,
-  );
-  return {
-    id: documentId.value || "preview",
-    title: title.value || "标题预览",
-    bodyText: body.value || "正文内容预览…",
-    rawBodyText: body.value || "",
-    covers: uploadTasks.value
-      .filter((t) => t.status === "done" && t.serverUrl)
-      .map((t) => ({ url: t.serverUrl! })),
-    cover: firstDone?.previewUrl || firstDone?.serverUrl || undefined,
-    views: 0,
-    likesCount: 0,
-    commentsCount: 0,
-    isRead: false,
-    author: {
-      name: auth.user?.name || "未知作者",
-      avatar: auth.user?.avatar || "/images/default-avatar.webp",
-    },
-    createdAt: new Date().toISOString(),
-  };
-});
 
 const coverPayload = computed(() => {
   const imgs = uploadedImages.value;
@@ -320,6 +300,45 @@ async function deleteDraft() {
   }
 }
 
+/* ── Draft List Helpers ───────────────────────────── */
+function isDraftActive(draft: DraftArticle): boolean {
+  return !!documentId.value && draft.documentId === documentId.value;
+}
+
+function isNewDraftMarker(draft: DraftArticle): boolean {
+  if (isDraftActive(draft)) return false;
+  const ts = draft.updatedAt || draft.createdAt;
+  if (!ts) return false;
+  const t = new Date(ts).getTime();
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t < 24 * 60 * 60 * 1000;
+}
+
+function draftPreviewText(draft: DraftArticle): string {
+  const txt = (draft.text || "").trim();
+  return txt ? txt.slice(0, 40) : "无内容";
+}
+
+const editorWordCount = computed(() => body.value.length);
+const editorTitleCount = computed(() => title.value.length);
+
+const EDITING_KEY = "__editing__";
+const activeMenuKey = computed<string>(
+  () => documentId.value || EDITING_KEY,
+);
+
+function onMenuChange(name: string | number) {
+  const key = String(name);
+  if (key === EDITING_KEY) {
+    if (documentId.value) newDraft();
+    return;
+  }
+  const draft = drafts.value.find((d) => d.documentId === key);
+  if (draft && draft.documentId !== documentId.value) {
+    openDraft(draft);
+  }
+}
+
 /* ── Draft List ───────────────────────────────────── */
 async function loadMoreDrafts() {
   if (!auth.isLogin || draftsLoading.value || !draftsHasNext.value) return;
@@ -461,6 +480,10 @@ onBeforeUnmount(() => {
 
 watch(title, () => markDirty());
 watch(body, () => markDirty());
+
+if (import.meta.client && auth.isLogin) {
+  ensureDraftsLoaded();
+}
 </script>
 
 <template>
@@ -509,166 +532,179 @@ watch(body, () => markDirty());
         >
           {{ isDeletingDraft ? "删除中..." : "删除草稿" }}
         </button>
-        <z-button :loading="isPublishing" :disabled="!canPublish" @click="publish">
-          发布
-        </z-button>
       </div>
     </header>
 
-
-    <!-- ── Three-Column Body ──────────────────────── -->
+    <!-- ── Two-Column Body ─────────────────────── -->
     <div class="ik-create-columns">
-      <!-- ── Left: Live Preview ───────────── -->
-      <div class="ik-create-preview">
-        <div class="ik-create-preview__header">
-          <h3 class="ik-create-preview__label">
-            <EyeIcon style="width:16px;height:16px" />
-            主页预览
-          </h3>
-          <span class="ik-create-preview__hint">发布后效果</span>
-        </div>
-        <div class="ik-create-preview__card-wrap">
-          <DiscussionCard :discussion="previewDiscussion" />
-        </div>
-      </div>
-
-      <!-- ── Center: Editor + Covers ─────────── -->
-      <main class="ik-create-main">
-        <div class="ik-create-editor">
-          <input
-            v-model="title"
-            class="ik-create-editor__title"
-            type="text"
-            placeholder="标题"
-            maxlength="200"
-          />
-          <ZTextarea
-            v-model="body"
-            class="ik-create-editor__body"
-            placeholder="请尽情发挥吧..."
-          />
-        </div>
-
-        <!-- Covers Section (always visible) -->
-        <div class="ik-create-covers">
-          <div class="ik-create-covers__header">
-            <h3 class="ik-create-covers__label">
-              <PhotoIcon style="width:18px;height:18px" />
-              封面
-            </h3>
-            <span class="ik-create-covers__count">{{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
-          </div>
-          <div class="ik-create-covers__grid">
-            <div
-              v-for="(task, idx) in uploadTasks"
-              :key="task.localId"
-              class="ik-cover-thumb"
-            >
-              <img :src="task.previewUrl" :alt="task.filename" class="ik-cover-thumb__img" />
-              <div v-if="task.status === 'uploading'" class="ik-cover-thumb__overlay">
-                <span class="ik-cover-thumb__pct">{{ task.progress }}%</span>
-                <div class="ik-cover-thumb__bar">
-                  <div class="ik-cover-thumb__progress" :style="{ width: task.progress + '%' }"></div>
-                </div>
-              </div>
-              <div v-if="task.status === 'error'" class="ik-cover-thumb__overlay ik-cover-thumb__overlay--error" @click="retryUpload(task)">
-                <span>失败</span>
-                <span style="font-size:11px">点击重试</span>
-              </div>
-              <button class="ik-cover-thumb__remove" @click="removeUpload(idx)" aria-label="移除">
-                <XMarkIcon style="width:12px;height:12px" />
-              </button>
+      <!-- ── Left: Editing Slot + Drafts (ZMenu) ── -->
+      <aside class="ik-create-nav-wrap">
+        <z-menu
+          class="ik-create-menu"
+          :model-value="activeMenuKey"
+          @change="onMenuChange"
+        >
+          <!-- Slot #1: Editing -->
+          <z-menu-item :name="EDITING_KEY">
+            <div class="ik-nav-item__content">
+              <span class="ik-nav-item__title">
+                <span class="ik-nav-item__editing-arrow">▶</span>
+                {{ title.trim() || "新建文章" }}
+              </span>
+              <span class="ik-nav-item__meta">
+                {{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }} 图 · {{ editorWordCount }} 字
+              </span>
             </div>
-            <label v-if="uploadTasks.length < MAX_COVER_IMAGES" class="ik-cover-add">
-              <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden @change="onCoverFileInput" />
-              <PlusIcon style="width:24px;height:24px" />
-              <span class="ik-cover-add__text">添加图片</span>
-            </label>
+          </z-menu-item>
+
+          <!-- Drafts -->
+          <z-menu-item
+            v-for="draft in drafts"
+            :key="draft.documentId"
+            :name="draft.documentId"
+          >
+            <div class="ik-nav-item__content">
+              <span v-if="isNewDraftMarker(draft)" class="ik-nav-item__badge">NEW!</span>
+              <span class="ik-nav-item__title">{{ draft.title || "无标题" }}</span>
+              <span class="ik-nav-item__meta">{{ draftPreviewText(draft) }}</span>
+            </div>
+          </z-menu-item>
+        </z-menu>
+
+        <!-- Loading / Empty / Load more -->
+        <div v-if="!auth.isLogin" class="ik-nav-empty">请先登录</div>
+        <div v-else-if="draftsLoading && !drafts.length" class="ik-nav-empty">
+          <span class="ik-status ik-status--saving">
+            <span class="ik-status__dot"></span>加载中
+          </span>
+        </div>
+        <button
+          v-if="auth.isLogin && draftsHasNext && drafts.length"
+          class="ik-nav-loadmore"
+          :disabled="draftsLoading"
+          @click="loadMoreDrafts"
+        >
+          {{ draftsLoading ? "加载中..." : "加载更多" }}
+        </button>
+      </aside>
+
+      <!-- ── Right: Form Panel ───────────────── -->
+      <main class="ik-create-panel">
+        <div class="ik-create-panel__inner">
+          <h3 class="ik-section-title">委托详情</h3>
+
+          <!-- Title field -->
+          <div class="ik-field-row">
+            <span class="ik-field-row__label">委托标题</span>
+            <input
+              v-model="title"
+              class="ik-field-row__input"
+              type="text"
+              placeholder="请输入标题..."
+              maxlength="200"
+            />
+            <span class="ik-field-row__count">{{ editorTitleCount }}/200</span>
+          </div>
+
+          <!-- Body field -->
+          <div class="ik-field-block">
+            <div class="ik-field-block__header">
+              <span class="ik-field-block__label">委托附言</span>
+              <span class="ik-field-block__hint">若仅上传图片，正文可留空</span>
+            </div>
+            <div class="ik-field-block__body">
+              <ZTextarea
+                v-model="body"
+                class="ik-create-editor__body"
+                placeholder="请尽情发挥吧..."
+              />
+              <PencilSquareIcon class="ik-field-block__pencil" />
+            </div>
+          </div>
+
+          <!-- Covers preview -->
+          <div class="ik-field-block ik-field-block--covers">
+            <div class="ik-field-block__header">
+              <span class="ik-field-block__label">
+                <MagnifyingGlassIcon style="width:14px;height:14px" />
+                战利品预览
+              </span>
+              <span class="ik-field-block__hint">委托发布后将作为讨论封面展示</span>
+            </div>
+            <div class="ik-cover-rail">
+              <div
+                v-for="(task, idx) in uploadTasks"
+                :key="task.localId"
+                class="ik-cover-thumb"
+              >
+                <img :src="task.previewUrl" :alt="task.filename" class="ik-cover-thumb__img" />
+                <div v-if="task.status === 'uploading'" class="ik-cover-thumb__overlay">
+                  <span class="ik-cover-thumb__pct">{{ task.progress }}%</span>
+                  <div class="ik-cover-thumb__bar">
+                    <div class="ik-cover-thumb__progress" :style="{ width: task.progress + '%' }"></div>
+                  </div>
+                </div>
+                <div
+                  v-if="task.status === 'error'"
+                  class="ik-cover-thumb__overlay ik-cover-thumb__overlay--error"
+                  @click="retryUpload(task)"
+                >
+                  <span>失败</span>
+                  <span style="font-size:11px">点击重试</span>
+                </div>
+                <button class="ik-cover-thumb__remove" @click="removeUpload(idx)" aria-label="移除">
+                  <XMarkIcon style="width:12px;height:12px" />
+                </button>
+              </div>
+              <label v-if="uploadTasks.length < MAX_COVER_IMAGES" class="ik-cover-add">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  multiple
+                  hidden
+                  @change="onCoverFileInput"
+                />
+                <PhotoIcon style="width:22px;height:22px" />
+                <span class="ik-cover-add__text">添加图片</span>
+              </label>
+            </div>
           </div>
         </div>
       </main>
-
-      <!-- ── Side: Drafts Panel ────────────── -->
-      <aside class="ik-create-aside" @mouseenter="ensureDraftsLoaded" @focusin="ensureDraftsLoaded">
-        <div class="ik-create-drafts__header">
-          <h3 class="ik-create-drafts__title">
-            <DocumentTextIcon style="width:16px;height:16px" />
-            草稿箱
-          </h3>
-          <button class="ik-create-drafts__new-btn" @click="newDraft">
-            <PlusIcon style="width:14px;height:14px" />
-            新建
-          </button>
-        </div>
-
-        <div v-if="!auth.isLogin" class="ik-empty">请先登录</div>
-        <div v-else-if="draftsInitialized && !drafts.length && !draftsLoading" class="ik-empty">暂无草稿</div>
-        <div v-else-if="!draftsInitialized && !draftsLoading" class="ik-create-drafts__hint">移入加载草稿</div>
-
-        <div v-if="drafts.length" class="ik-create-drafts__list">
-          <button
-            v-for="draft in drafts"
-            :key="draft.documentId"
-            class="ik-draft-item"
-            :class="{ 'is-active': draft.documentId === documentId }"
-            @click="openDraft(draft)"
-          >
-            <div class="ik-draft-item__title">{{ draft.title || "无标题" }}</div>
-            <div class="ik-draft-item__meta">{{ draft.text ? draft.text.slice(0, 50) : "无内容" }}</div>
-          </button>
-          <div v-if="draftsHasNext" class="ik-create-drafts__load-more">
-            <z-button :loading="draftsLoading" @click="loadMoreDrafts">加载更多</z-button>
-          </div>
-        </div>
-        <div v-if="draftsLoading && !drafts.length" class="ik-empty">
-          <span class="ik-status ik-status--saving"><span class="ik-status__dot"></span>加载中</span>
-        </div>
-      </aside>
     </div>
 
-    <!-- ── Mobile Drafts Toggle ──────────────────── -->
-    <button class="ik-mobile-drafts-toggle" @click="showMobileDrafts = !showMobileDrafts; ensureDraftsLoaded()">
-      <DocumentTextIcon style="width:18px;height:18px" />
-      草稿 <span v-if="drafts.length" class="ik-mobile-drafts-toggle__count">{{ drafts.length }}</span>
-    </button>
-    <Transition name="ik-slide-up">
-      <div v-if="showMobileDrafts" class="ik-mobile-drafts-sheet" @click.self="showMobileDrafts = false">
-        <div class="ik-mobile-drafts-sheet__panel">
-          <div class="ik-create-drafts__header">
-            <h3 class="ik-create-drafts__title">草稿箱</h3>
-            <button class="ik-create-drafts__new-btn" @click="newDraft; showMobileDrafts = false">
-              <PlusIcon style="width:14px;height:14px" />
-              新建
-            </button>
-          </div>
-          <div v-if="!drafts.length && !draftsLoading" class="ik-empty">暂无草稿</div>
-          <div v-else class="ik-create-drafts__list">
-            <button
-              v-for="draft in drafts"
-              :key="draft.documentId"
-              class="ik-draft-item"
-              :class="{ 'is-active': draft.documentId === documentId }"
-              @click="openDraft(draft); showMobileDrafts = false"
-            >
-              <div class="ik-draft-item__title">{{ draft.title || "无标题" }}</div>
-              <div class="ik-draft-item__meta">{{ draft.text ? draft.text.slice(0, 50) : "无内容" }}</div>
-            </button>
-          </div>
-        </div>
+    <!-- ── Bottom Footer (Sticky Publish Bar) ───── -->
+    <footer class="ik-create-footer">
+      <div class="ik-create-footer__hint">
+        <span v-if="documentId" class="ik-create-footer__draft-id">草稿 #{{ documentId.slice(-6) }}</span>
+        <span v-else class="ik-create-footer__draft-id">未保存草稿</span>
+        <span class="ik-create-footer__count">字数 {{ editorWordCount }} · 图片 {{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
       </div>
-    </Transition>
+      <button
+        class="ik-publish-btn"
+        :class="{ 'is-disabled': !canPublish, 'is-loading': isPublishing }"
+        :disabled="!canPublish"
+        @click="publish"
+      >
+        <span class="ik-publish-btn__inner">
+          <PaperAirplaneIcon v-if="!isPublishing" style="width:18px;height:18px" />
+          <span v-else class="ik-publish-btn__spinner"></span>
+          <span class="ik-publish-btn__text">{{ isPublishing ? "发布中..." : "发布委托" }}</span>
+        </span>
+      </button>
+    </footer>
   </section>
 </template>
 
 <style scoped>
 /* ═══════════════════════════════════════════════
-   Create Post Page – ZZZ Unified Layout
+   Create Post Page – ZZZ "发布委托" Layout
    ═══════════════════════════════════════════════ */
 .ik-create-page {
   position: relative;
   width: min(1440px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 20px 0 40px;
+  padding: 20px 0 110px;
   min-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
@@ -710,11 +746,6 @@ watch(body, () => markDirty());
 .ik-fade-leave-active { transition: opacity 200ms ease; }
 .ik-fade-enter-from,
 .ik-fade-leave-to { opacity: 0; }
-
-.ik-slide-up-enter-active,
-.ik-slide-up-leave-active { transition: all 300ms cubic-bezier(.4,0,.2,1); }
-.ik-slide-up-enter-from,
-.ik-slide-up-leave-to { opacity: 0; transform: translateY(100%); }
 
 /* ── Top Bar ─────────────────────────────────────── */
 .ik-create-topbar {
@@ -844,74 +875,277 @@ watch(body, () => markDirty());
   50% { opacity: 0.3; transform: scale(0.6); }
 }
 
-/* ── Three-Column Layout ─────────────────────────── */
+/* ── Two-Column Layout ───────────────────────────── */
 .ik-create-columns {
   flex: 1;
   display: grid;
-  grid-template-columns: calc((min(1000px, 100vw - 32px) - 36px) / 4) 1fr 280px;
+  grid-template-columns: 240px 1fr;
   gap: 16px;
   min-height: 0;
   align-items: start;
 }
 
-/* ── Main Column ─────────────────────────────────── */
-.ik-create-main {
+/* ═════════ Left Nav: Editing + Drafts (ZMenu) ═════════ */
+.ik-create-nav-wrap {
+  position: sticky;
+  top: 20px;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  background: #0c0c0c;
+  gap: 8px;
+  max-height: calc(100vh - 100px);
+}
+
+.ik-create-menu {
+  flex: 1;
+  min-height: 320px !important;
+  max-height: 100%;
+}
+
+/* Customize ZMenu items: stack title + meta vertically */
+.ik-create-menu :deep(.z-menu__item) {
+  align-items: stretch;
+  min-height: 56px;
+  padding: 10px 16px;
+}
+
+.ik-create-menu :deep(.z-menu__item) > * {
+  width: 100%;
+}
+
+.ik-nav-item__content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+}
+
+.ik-nav-item__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.ik-nav-item__meta {
+  font-size: 11px;
+  font-weight: 700;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.ik-create-menu :deep(.z-menu__item.is-active) .ik-nav-item__meta {
+  color: rgba(0, 0, 0, 0.6);
+  opacity: 1;
+}
+
+.ik-nav-item__editing-arrow {
+  font-size: 10px;
+  color: #d7ff00;
+}
+
+.ik-create-menu :deep(.z-menu__item.is-active) .ik-nav-item__editing-arrow {
+  color: #0a0a0a;
+}
+
+.ik-nav-item__badge {
+  position: absolute;
+  top: -6px;
+  left: -2px;
+  font-size: 9px;
+  font-weight: 800;
+  font-style: italic;
+  color: #ff4d4f;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 4px rgba(255, 77, 79, 0.4);
+  pointer-events: none;
+}
+
+.ik-nav-loadmore {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border: 1px dashed #2a2a2a;
+  border-radius: 8px;
+  background: transparent;
+  color: #888;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 200ms, color 200ms;
+}
+
+.ik-nav-loadmore:hover:not(:disabled) {
+  border-color: #d7ff00;
+  color: #d7ff00;
+}
+
+.ik-nav-loadmore:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ik-nav-empty {
+  flex-shrink: 0;
+  text-align: center;
+  color: #555;
+  font-size: 12px;
+  padding: 12px 0;
+}
+
+/* ═════════ Right Panel ═════════ */
+.ik-create-panel {
+  display: flex;
+  flex-direction: column;
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(180deg, #0c0c0c 0%, #080808 100%);
   border: 1px solid #2a2a2a;
   border-radius: 20px;
   overflow: hidden;
+  min-height: 480px;
 }
 
-/* ── Editor ───────────────────────────────────────── */
-.ik-create-editor {
+.ik-create-panel__inner {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  padding: 28px 28px 0;
+  gap: 14px;
+  padding: 22px 26px 26px;
 }
 
-.ik-create-editor__title {
-  width: 100%;
-  padding: 14px 0;
+.ik-section-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 800;
+  font-style: italic;
+  color: #888;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* ── Field Row (Title-like) ──────────────────────── */
+.ik-field-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 14px;
+  transition: border-color 200ms, background 200ms;
+}
+
+.ik-field-row:focus-within {
+  border-color: rgba(215, 255, 0, 0.5);
+  background: #0d0d0d;
+}
+
+.ik-field-row__label {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #888;
+  letter-spacing: 0.3px;
+}
+
+.ik-field-row__input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
   border: none;
-  border-bottom: 2px solid transparent;
   background: transparent;
   color: #fff;
-  font-size: 24px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
   font-family: inherit;
-  letter-spacing: -0.3px;
   outline: none;
-  transition: border-color 300ms;
-  background-image: linear-gradient(to right, #2d2d2d, #2d2d2d);
-  background-size: 100% 2px;
-  background-position: bottom;
-  background-repeat: no-repeat;
 }
 
-.ik-create-editor__title:focus {
-  border-bottom-color: #d7ff00;
-  background-image: none;
-}
-
-.ik-create-editor__title::placeholder {
+.ik-field-row__input::placeholder {
   color: #444;
   font-style: italic;
+  font-weight: 400;
 }
 
+.ik-field-row__count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #555;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Field Block (Body / Covers) ─────────────────── */
+.ik-field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px 16px;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 14px;
+}
+
+.ik-field-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ik-field-block__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #aaa;
+  letter-spacing: 0.3px;
+}
+
+.ik-field-block__label svg {
+  color: #666;
+}
+
+.ik-field-block__hint {
+  font-size: 11px;
+  font-style: italic;
+  color: #555;
+}
+
+.ik-field-block__body {
+  position: relative;
+}
+
+.ik-field-block__pencil {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  width: 18px;
+  height: 18px;
+  color: #444;
+  pointer-events: none;
+}
+
+/* ── Body Textarea (within field block) ──────────── */
 .ik-create-editor__body {
-  flex: 1;
-  min-height: 280px;
   width: 100%;
-  margin-top: 16px;
-  border: 1px solid #1e1e1e;
-  border-radius: 16px;
-  background: #080808;
-  font-size: 16px;
-  line-height: 1.8;
+  min-height: 220px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: #050505;
+  font-size: 15px;
+  line-height: 1.75;
   font-family: inherit;
   outline: none;
   transition: border-color 300ms, box-shadow 300ms;
@@ -924,99 +1158,26 @@ watch(body, () => markDirty());
 
 .ik-create-editor__body.is-focused {
   border-color: rgba(215, 255, 0, 0.4);
-  box-shadow: 0 0 0 3px rgba(215, 255, 0, 0.06);
+  box-shadow: 0 0 0 2px rgba(215, 255, 0, 0.06);
 }
 
 .ik-create-editor__body :deep(.z-textarea__inner) {
-  padding: 20px;
+  padding: 16px 40px 16px 18px;
   color: #e0e0e0;
   resize: vertical;
+  background: transparent;
 }
 
 .ik-create-editor__body :deep(.z-textarea__inner)::placeholder {
   color: #444;
 }
 
-/* ── Covers Section ──────────────────────────────── */
-.ik-create-covers {
-  padding: 20px 28px 24px;
-  border-top: 1px solid #1a1a1a;
-}
-
-.ik-create-covers__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.ik-create-covers__label {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: #999;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.ik-create-covers__label svg {
-  color: #666;
-}
-
-.ik-create-covers__count {
-  font-size: 12px;
-  font-weight: 600;
-  color: #555;
-  padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 10px;
-}
-
-.ik-create-covers__grid {
+/* ── Cover Rail (horizontal grid) ────────────────── */
+.ik-cover-rail {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-}
-
-/* ── Live Preview (Left Column) ──────────────────── */
-.ik-create-preview {
-  position: sticky;
-  top: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.ik-create-preview__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.ik-create-preview__label {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: #666;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.ik-create-preview__label svg {
-  color: #555;
-}
-
-.ik-create-preview__hint {
-  font-size: 11px;
-  color: #444;
-  font-style: italic;
-}
-
-.ik-create-preview__card-wrap {
-  pointer-events: none;
-  user-select: none;
+  padding: 4px 0 2px;
 }
 
 /* ── Cover Thumbnail ─────────────────────────────── */
@@ -1138,145 +1299,109 @@ watch(body, () => markDirty());
   font-weight: 600;
 }
 
-/* ── Aside: Drafts Panel ─────────────────────────── */
-.ik-create-aside {
-  display: flex;
-  flex-direction: column;
-  background: #0c0c0c;
-  border: 1px solid #2a2a2a;
-  border-radius: 20px;
-  padding: 20px;
-  overflow-y: auto;
-  max-height: calc(100vh - 200px);
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.ik-create-aside::-webkit-scrollbar { display: none; }
-
-.ik-create-drafts__header {
+/* ═════════ Bottom Footer (Sticky Publish Bar) ═════════ */
+.ik-create-footer {
+  position: sticky;
+  bottom: 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #1a1a1a;
+  gap: 16px;
+  padding: 12px 20px 12px 24px;
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(135deg, #111 0%, #0a0a0a 100%);
+  border: 1px solid #2a2a2a;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 20;
 }
 
-.ik-create-drafts__title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 800;
-  color: #ccc;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.ik-create-footer__hint {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
-.ik-create-drafts__title svg { color: #666; }
-
-.ik-create-drafts__new-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 12px;
-  border: 1px solid rgba(215, 255, 0, 0.35);
-  border-radius: 8px;
-  background: transparent;
+.ik-create-footer__draft-id {
+  font-size: 11px;
+  font-weight: 700;
+  font-style: italic;
   color: #d7ff00;
+  letter-spacing: 0.5px;
+}
+
+.ik-create-footer__count {
   font-size: 12px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 200ms, border-color 200ms;
+  font-weight: 600;
+  color: #777;
+  font-variant-numeric: tabular-nums;
 }
 
-.ik-create-drafts__new-btn:hover {
-  background: rgba(215, 255, 0, 0.08);
-  border-color: #d7ff00;
-}
-
-.ik-create-drafts__hint {
-  text-align: center;
-  color: #444;
-  font-size: 13px;
-  padding: 24px 0;
-}
-
-.ik-create-drafts__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ik-draft-item {
+/* ── Publish Button (slanted) ────────────────────── */
+.ik-publish-btn {
+  flex-shrink: 0;
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 14px;
-  border: 1px solid #1a1a1a;
-  border-radius: 12px;
-  background: #0f0f0f;
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color 200ms, background 200ms, transform 200ms;
-}
-
-.ik-draft-item:hover {
-  border-color: #333;
-  background: #161616;
-  transform: translateX(2px);
-}
-
-.ik-draft-item.is-active {
-  border-color: rgba(215, 255, 0, 0.4);
-  background: rgba(215, 255, 0, 0.04);
-}
-
-.ik-draft-item.is-active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 60%;
-  border-radius: 0 3px 3px 0;
+  padding: 0;
+  height: 50px;
+  min-width: 200px;
+  border: none;
   background: #d7ff00;
+  color: #0a0a0a;
+  font-family: inherit;
+  cursor: pointer;
+  clip-path: polygon(16px 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
+  transition: filter 200ms, transform 150ms;
 }
 
-.ik-draft-item__title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #e0e0e0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ik-publish-btn:hover:not(.is-disabled):not(.is-loading) {
+  filter: brightness(1.1);
 }
 
-.ik-draft-item__meta {
-  font-size: 12px;
-  color: #666;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ik-publish-btn:active:not(.is-disabled):not(.is-loading) {
+  transform: translateY(1px);
 }
 
-.ik-create-drafts__load-more {
-  display: flex;
+.ik-publish-btn.is-disabled {
+  background: #2a2a2a;
+  color: #555;
+  cursor: not-allowed;
+}
+
+.ik-publish-btn.is-loading {
+  background: rgba(215, 255, 0, 0.6);
+  cursor: wait;
+}
+
+.ik-publish-btn__inner {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  padding: 8px 0;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 0 32px;
 }
 
-/* ── Mobile Drafts Toggle ────────────────────────── */
-.ik-mobile-drafts-toggle {
-  display: none;
+.ik-publish-btn__text {
+  font-size: 16px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 1px;
 }
 
-.ik-mobile-drafts-sheet {
-  display: none;
+.ik-publish-btn__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.3);
+  border-top-color: #0a0a0a;
+  border-radius: 50%;
+  animation: ik-publish-spin 0.8s linear infinite;
+}
+
+@keyframes ik-publish-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ═══════════════════════════════════════════════
@@ -1284,70 +1409,7 @@ watch(body, () => markDirty());
    ═══════════════════════════════════════════════ */
 @media (max-width: 1200px) {
   .ik-create-columns {
-    grid-template-columns: 260px 1fr;
-  }
-
-  .ik-create-aside {
-    display: none;
-  }
-
-  .ik-mobile-drafts-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 40;
-    padding: 10px 18px;
-    border: 1px solid #333;
-    border-radius: 999px;
-    background: #111;
-    color: #ccc;
-    font-size: 13px;
-    font-weight: 700;
-    font-family: inherit;
-    cursor: pointer;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    transition: background 200ms, border-color 200ms;
-  }
-
-  .ik-mobile-drafts-toggle:hover {
-    background: #1a1a1a;
-    border-color: #d7ff00;
-  }
-
-  .ik-mobile-drafts-toggle__count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 99px;
-    background: #d7ff00;
-    color: #000;
-    font-size: 10px;
-    font-weight: 800;
-  }
-
-  .ik-mobile-drafts-sheet {
-    display: flex;
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    align-items: flex-end;
-    background: rgba(0, 0, 0, 0.5);
-  }
-
-  .ik-mobile-drafts-sheet__panel {
-    width: 100%;
-    max-height: 60vh;
-    overflow-y: auto;
-    padding: 20px;
-    background: #111;
-    border-top: 1px solid #2a2a2a;
-    border-radius: 20px 20px 0 0;
+    grid-template-columns: 200px 1fr;
   }
 }
 
@@ -1355,42 +1417,62 @@ watch(body, () => markDirty());
   .ik-create-page {
     width: calc(100% - 24px);
     gap: 12px;
+    padding: 16px 0 100px;
   }
 
   .ik-create-columns {
     grid-template-columns: 1fr;
   }
 
-  .ik-create-preview {
+  .ik-create-nav-wrap {
     position: static;
+    max-height: 280px;
   }
 
-  .ik-create-preview__card-wrap {
-    max-width: 300px;
+  .ik-create-menu {
+    min-height: 200px !important;
   }
 
-  .ik-create-editor {
-    padding: 20px 20px 0;
+  .ik-create-panel__inner {
+    padding: 18px 18px 22px;
+    gap: 12px;
   }
 
-  .ik-create-editor__title {
-    font-size: 20px;
+  .ik-field-row {
+    padding: 10px 14px;
   }
 
-  .ik-create-editor__body {
-    min-height: 200px;
+  .ik-field-row__input {
     font-size: 15px;
   }
 
-  .ik-create-covers {
-    padding: 16px 20px 20px;
+  .ik-field-block {
+    padding: 12px 14px 14px;
+  }
+
+  .ik-create-editor__body {
+    min-height: 180px;
+    font-size: 14px;
+  }
+
+  .ik-create-footer {
+    padding: 10px 14px 10px 18px;
+  }
+
+  .ik-publish-btn {
+    min-width: 160px;
+    height: 46px;
+  }
+
+  .ik-publish-btn__text {
+    font-size: 14px;
   }
 }
 
 @media (max-width: 500px) {
   .ik-create-page {
     width: 100%;
-    padding: 0;
+    padding: 0 0 84px;
     gap: 0;
   }
 
@@ -1401,36 +1483,37 @@ watch(body, () => markDirty());
     padding: 12px 16px;
   }
 
-  .ik-create-main {
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
+  .ik-create-columns {
+    padding: 0 12px;
+    gap: 12px;
   }
 
-  .ik-create-editor {
-    padding: 16px 16px 0;
+  .ik-create-menu :deep(.z-menu--vertical) {
+    border-radius: 14px;
   }
 
-  .ik-create-editor__title {
-    font-size: 18px;
-    padding: 10px 0;
+  .ik-create-panel {
+    border-radius: 14px;
+  }
+
+  .ik-create-panel__inner {
+    padding: 14px 14px 18px;
+  }
+
+  .ik-field-row {
+    flex-wrap: wrap;
+  }
+
+  .ik-field-row__count {
+    margin-left: auto;
   }
 
   .ik-create-editor__body {
-    min-height: 180px;
-    border-radius: 12px;
+    min-height: 160px;
   }
 
   .ik-create-editor__body :deep(.z-textarea__inner) {
-    padding: 14px;
-  }
-
-  .ik-create-covers {
-    padding: 14px 16px 18px;
-  }
-
-  .ik-create-preview__card-wrap {
-    max-width: 100%;
+    padding: 14px 38px 14px 14px;
   }
 
   .ik-cover-thumb {
@@ -1451,6 +1534,23 @@ watch(body, () => markDirty());
 
   .ik-create-topbar__name {
     font-size: 14px;
+  }
+
+  .ik-create-footer {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    border-radius: 14px;
+  }
+
+  .ik-publish-btn {
+    min-width: 140px;
+    height: 44px;
+  }
+
+  .ik-publish-btn__inner {
+    padding: 0 22px;
   }
 }
 
