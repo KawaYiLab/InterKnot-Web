@@ -68,7 +68,11 @@ let resizeObserver: ResizeObserver | null = null;
 let containerResizeObserver: ResizeObserver | null = null;
 let scrollRAF: number | null = null;
 let resizeRAF: number | null = null;
+let measureRAF: number | null = null;
 let _prevScrollY = 0;
+// 累计同方向位移，超过阈值才翻转 scrollDirection，避免惯性滚动末段抖动导致 buffer 频繁切换
+let _directionAccum = 0;
+const DIRECTION_FLIP_THRESHOLD = 24;
 
 /* ── 列数 ─────────────────────────────────────── */
 const columnCount = computed(() => {
@@ -197,9 +201,11 @@ const visibleItems = computed(() => {
   const buf = props.buffer;
   const dir = scrollDirection.value;
 
-  // 根据滚动方向使用非对称缓冲区：滚动方向 1.6x，反方向 0.6x
-  const bufAbove = dir >= 0 ? buf * 0.6 : buf * 1.6;
-  const bufBelow = dir >= 0 ? buf * 1.6 : buf * 0.6;
+  // 根据滚动方向使用温和的非对称缓冲区：滚动方向 1.4x，反方向 1.0x
+  // 注：差值过大会在 scrollDirection 翻转瞬间一次性增删大量 DOM 引起跳动，
+  // 配合 onScroll 中的方向翻转阈值（DIRECTION_FLIP_THRESHOLD），可显著减少抖动。
+  const bufAbove = dir >= 0 ? buf * 1.0 : buf * 1.4;
+  const bufBelow = dir >= 0 ? buf * 1.4 : buf * 1.0;
   const top = sy - bufAbove;
   const bottom = sy + vh + bufBelow;
 
@@ -257,24 +263,39 @@ function updateContainerOffset() {
 }
 
 function onScroll() {
-  // 取消前一帧的 rAF 并重新调度，确保使用最新滚动位置
-  if (scrollRAF !== null) cancelAnimationFrame(scrollRAF);
+  // rAF 节流：若当前帧已排队，直接跳过本次事件，避免 cancel/request 抖动
+  if (scrollRAF !== null) return;
   scrollRAF = requestAnimationFrame(() => {
+    scrollRAF = null;
     const currentY = window.scrollY;
-    // 更新滚动方向（仅在方向实际翻转时写入）
-    if (currentY !== _prevScrollY) {
-      const dir = currentY > _prevScrollY ? 1 : -1;
-      if (scrollDirection.value !== dir) scrollDirection.value = dir;
+    const delta = currentY - _prevScrollY;
+    if (delta !== 0) {
+      // 累计同方向位移，反方向时立即重置；超过阈值才翻转 scrollDirection。
+      // 这样可避免惯性滚动末段或微小抖动导致 buffer 反复切换造成可见区抖动。
+      if ((delta > 0) === (_directionAccum >= 0)) {
+        _directionAccum += delta;
+      } else {
+        _directionAccum = delta;
+      }
+      const desiredDir = _directionAccum > 0 ? 1 : -1;
+      if (
+        scrollDirection.value !== desiredDir &&
+        Math.abs(_directionAccum) >= DIRECTION_FLIP_THRESHOLD
+      ) {
+        scrollDirection.value = desiredDir;
+      }
       _prevScrollY = currentY;
     }
-    scrollY.value = currentY;
+    if (scrollY.value !== currentY) scrollY.value = currentY;
     const vh = window.innerHeight;
     if (viewportH.value !== vh) viewportH.value = vh;
-    scrollRAF = null;
   });
 }
 
 /* ── ResizeObserver: 测量 item 真实高度 ────────── */
+// 测量误差容忍：小于该阈值的高度变化不触发 layout 重排，避免子像素差异造成滚动抖动
+const MEASURE_DIFF_THRESHOLD = 1;
+
 function setupResizeObserver() {
   if (!props.measureItems) return;
 
@@ -285,13 +306,21 @@ function setupResizeObserver() {
       if (key === undefined) continue;
       const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
       const rounded = Math.round(h);
-      if (measuredHeights.get(key) !== rounded) {
+      const prev = measuredHeights.get(key);
+      if (prev === undefined || Math.abs(prev - rounded) >= MEASURE_DIFF_THRESHOLD) {
         measuredHeights.set(key, rounded);
         changed = true;
       }
     }
     if (changed) {
-      heightVersion.value++;
+      // 合并到下一帧批量提交：避免一次 ResizeObserver 回调内多次 layout 重算，
+      // 也避免与滚动 rAF 在同一帧内争用导致抖动。
+      if (measureRAF === null) {
+        measureRAF = requestAnimationFrame(() => {
+          measureRAF = null;
+          heightVersion.value++;
+        });
+      }
     }
   });
 }
@@ -401,6 +430,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", onScroll);
   if (scrollRAF !== null) cancelAnimationFrame(scrollRAF);
   if (resizeRAF !== null) cancelAnimationFrame(resizeRAF);
+  if (measureRAF !== null) cancelAnimationFrame(measureRAF);
   resizeObserver?.disconnect();
   containerResizeObserver?.disconnect();
   observedElements.clear();

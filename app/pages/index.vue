@@ -3,7 +3,12 @@ import { useDebounceFn, useWindowSize } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Discussion } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
-import { FALLBACK_COVER_ASPECT_RATIO, getCoverAspectRatio, getNormalizedCoverAspectRatio } from "~/utils/cover";
+import {
+  FALLBACK_COVER_ASPECT_RATIO,
+  estimateTitleLineCount,
+  getCoverAspectRatio,
+  getNormalizedCoverAspectRatio,
+} from "~/utils/cover";
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 
@@ -34,7 +39,16 @@ onMounted(() => {
 
 const LOAD_MORE_ROOT_MARGIN = "360px 0px";
 const LOAD_MORE_COOLDOWN_MS = 1000;
-const DISCUSSION_CARD_FIXED_HEIGHT = 105;
+// 固定部分（不含 title 高度）：
+//   card padding(8) + body padding-bottom(12) + author-row min-height(32)
+// + body gap(8) + title margin(8) = 68px
+// title 高度按真实行数（1 或 2）动态加，与 DiscussionCard 实际渲染严格匹配，
+// 避免 ResizeObserver 测量后触发 layout 重排引起的滚动跳动。
+const DISCUSSION_CARD_FIXED_HEIGHT = 68;
+const DISCUSSION_CARD_TITLE_FONT_SIZE = 17;
+const DISCUSSION_CARD_TITLE_LINE_HEIGHT = 1.25;
+// 卡片 body 横向内边距 = 8 * 2 = 16px，title 可用宽度 = itemWidth - 16
+const DISCUSSION_CARD_BODY_PADDING_X = 16;
 
 const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
 const loading = ref(false);
@@ -64,7 +78,18 @@ const estimateDiscussionCardHeight = (discussion: Discussion, itemWidth: number)
     ? getNormalizedCoverAspectRatio(discussion.coverWidth, discussion.coverHeight)
     : FALLBACK_COVER_ASPECT_RATIO;
   const coverHeight = itemWidth / ratio;
-  return Math.ceil(coverHeight + DISCUSSION_CARD_FIXED_HEIGHT);
+
+  // 按 title 真实行数估算：避免短标题被强制占 2 行高度，又避免与实际渲染不一致引发滚动跳动
+  const titleAvailWidth = Math.max(0, itemWidth - DISCUSSION_CARD_BODY_PADDING_X);
+  const titleLines = estimateTitleLineCount(
+    discussion.title,
+    titleAvailWidth,
+    DISCUSSION_CARD_TITLE_FONT_SIZE,
+  );
+  const titleHeight =
+    DISCUSSION_CARD_TITLE_FONT_SIZE * DISCUSSION_CARD_TITLE_LINE_HEIGHT * titleLines;
+
+  return Math.ceil(coverHeight + DISCUSSION_CARD_FIXED_HEIGHT + titleHeight);
 };
 
 const addEnterAnimations = (nodes: Discussion[]) => {
