@@ -6,7 +6,7 @@ const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import type { Discussion } from "~/types/entities";
-import { getCoverAspectRatio } from "~/utils/cover";
+import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 
 const props = defineProps<{
   discussion: Discussion;
@@ -18,12 +18,6 @@ const emit = defineEmits<{
 }>();
 
 const authorName = computed(() => props.discussion.author?.name || "未知作者");
-const excerpt = computed(
-  () => props.discussion.bodyText || props.discussion.rawBodyText || "暂无摘要内容",
-);
-const coverAspectRatio = computed(() =>
-  getCoverAspectRatio(props.discussion.coverWidth, props.discussion.coverHeight),
-);
 
 const coverSrc = ref(DEFAULT_COVER_IMAGE);
 const coverImageLoaded = ref(false);
@@ -31,6 +25,15 @@ const coverIsFallback = ref(false);
 const avatarSrc = ref(DEFAULT_AVATAR_IMAGE);
 const cardRef = ref<HTMLElement | null>(null);
 const coverImgRef = ref<HTMLImageElement | null>(null);
+
+const coverAspectRatio = computed(() => {
+  // fallback 时使用占位图原生比例，让占位图完美填满 frame
+  if (coverIsFallback.value) return FALLBACK_COVER_ASPECT_RATIO;
+  return getNormalizedCoverAspectRatio(
+    props.discussion.coverWidth,
+    props.discussion.coverHeight,
+  );
+});
 
 const coverReady = computed(() => coverImageLoaded.value);
 
@@ -154,7 +157,6 @@ const handleOpen = (e: MouseEvent) => {
         <h3 class="ik-card__title" :class="{ 'ik-card__title--read': discussion.isRead }">
           {{ discussion.title }}
         </h3>
-        <p class="ik-card__excerpt">{{ excerpt }}</p>
       </div>
     </NuxtLink>
   </article>
@@ -215,6 +217,8 @@ const handleOpen = (e: MouseEvent) => {
   opacity: 0;
 }
 
+/* fallback 时 frame 已切换为占位图原生比例，
+   占位图天然填满 frame，沿用 object-fit: cover 即可 */
 .ik-card__cover--fallback {
   background: var(--ik-discussion-card-cover-bg);
 }
@@ -309,22 +313,15 @@ const handleOpen = (e: MouseEvent) => {
   color: var(--ik-discussion-card-title-color);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
 }
 
 .ik-card__title--read {
   color: var(--ik-discussion-card-title-read-color);
 }
 
-.ik-card__excerpt {
-  margin: 0;
-  color: var(--ik-discussion-card-excerpt-color);
-  font-size: var(--ik-discussion-card-excerpt-size);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
-}
 </style>

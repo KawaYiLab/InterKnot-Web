@@ -31,18 +31,15 @@ defineProps<{
           </div>
         </div>
 
-        <!-- 标题占位 -->
-        <div
-          class="ik-card-skeleton__title skeleton-pulse"
-          :style="{ width: skeleton?.titleWidth || '85%' }"
-        ></div>
-
-        <!-- 摘要占位 (2行) -->
-        <div class="ik-card-skeleton__excerpt">
-          <div class="skeleton-pulse"></div>
+        <!-- 标题占位（两行） -->
+        <div class="ik-card-skeleton__title-group">
           <div
-            class="skeleton-pulse"
-            :style="{ width: skeleton?.excerptWidth || '80%' }"
+            class="ik-card-skeleton__title skeleton-pulse"
+            :style="{ width: '100%' }"
+          ></div>
+          <div
+            class="ik-card-skeleton__title skeleton-pulse"
+            :style="{ width: skeleton?.titleWidth || '60%' }"
           ></div>
         </div>
       </div>
@@ -153,23 +150,15 @@ defineProps<{
   margin-top: 4px;
 }
 
-/* 标题占位 */
-.ik-card-skeleton__title {
-  height: var(--ik-discussion-card-title-size);
-  background: var(--ik-discussion-card-placeholder-bg);
-  border-radius: 4px;
-}
-
-/* 摘要占位 (2行) */
-.ik-card-skeleton__excerpt {
+/* 标题占位（两行） */
+.ik-card-skeleton__title-group {
   display: flex;
   flex-direction: column;
-  gap: var(--ik-discussion-card-excerpt-gap);
+  gap: 5px;
 }
 
-.ik-card-skeleton__excerpt > div {
-  height: var(--ik-discussion-card-excerpt-size);
-  width: 100%;
+.ik-card-skeleton__title {
+  height: var(--ik-discussion-card-title-size);
   background: var(--ik-discussion-card-placeholder-bg);
   border-radius: 4px;
 }

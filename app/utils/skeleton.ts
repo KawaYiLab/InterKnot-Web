@@ -3,7 +3,6 @@ export interface SkeletonItem {
   coverAspectRatio: number;
   authorWidth: string;
   titleWidth: string;
-  excerptWidth: string;
 }
 
 type SkeletonLayout = Omit<SkeletonItem, "id">;
@@ -16,29 +15,32 @@ export function calculateSkeletonCount(width: number, isClient: boolean): number
   return 6;
 }
 
+// 与 utils/cover.ts 中的归一化比例保持一致（4:3 / 1:1 / 3:4）
+const RATIO_LANDSCAPE = 4 / 3;
+const RATIO_SQUARE = 1;
+const RATIO_PORTRAIT = 3 / 4;
+
 const DEFAULT_SKELETON_LAYOUT: SkeletonLayout = {
-  coverAspectRatio: 1.58,
+  coverAspectRatio: RATIO_LANDSCAPE,
   authorWidth: "62%",
   titleWidth: "86%",
-  excerptWidth: "78%",
 };
 
 const SKELETON_LAYOUTS: SkeletonLayout[] = [
   DEFAULT_SKELETON_LAYOUT,
-  { coverAspectRatio: 1.58, authorWidth: "62%", titleWidth: "86%", excerptWidth: "78%" },
-  { coverAspectRatio: 1.12, authorWidth: "48%", titleWidth: "72%", excerptWidth: "92%" },
-  { coverAspectRatio: 1.36, authorWidth: "56%", titleWidth: "90%", excerptWidth: "68%" },
-  { coverAspectRatio: 0.92, authorWidth: "70%", titleWidth: "64%", excerptWidth: "84%" },
-  { coverAspectRatio: 1.78, authorWidth: "52%", titleWidth: "78%", excerptWidth: "58%" },
-  { coverAspectRatio: 1.24, authorWidth: "66%", titleWidth: "94%", excerptWidth: "74%" },
+  { coverAspectRatio: RATIO_LANDSCAPE, authorWidth: "62%", titleWidth: "86%" },
+  { coverAspectRatio: RATIO_SQUARE, authorWidth: "48%", titleWidth: "72%" },
+  { coverAspectRatio: RATIO_LANDSCAPE, authorWidth: "56%", titleWidth: "90%" },
+  { coverAspectRatio: RATIO_PORTRAIT, authorWidth: "70%", titleWidth: "64%" },
+  { coverAspectRatio: RATIO_LANDSCAPE, authorWidth: "52%", titleWidth: "78%" },
+  { coverAspectRatio: RATIO_SQUARE, authorWidth: "66%", titleWidth: "94%" },
 ];
 
-const SKELETON_FIXED_HEIGHT = 83;
-const SKELETON_EXCERPT_HEIGHT = 42;
+const SKELETON_FIXED_HEIGHT = 105;
 
 export function estimateSkeletonHeight(item: SkeletonItem, itemWidth: number): number {
   const coverHeight = itemWidth / item.coverAspectRatio;
-  return Math.ceil(coverHeight + SKELETON_FIXED_HEIGHT + SKELETON_EXCERPT_HEIGHT);
+  return Math.ceil(coverHeight + SKELETON_FIXED_HEIGHT);
 }
 
 export function generateSkeletons(count: number): SkeletonItem[] {

@@ -3,7 +3,7 @@ import { useDebounceFn, useWindowSize } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Discussion } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
-import { getCoverAspectRatio } from "~/utils/cover";
+import { FALLBACK_COVER_ASPECT_RATIO, getCoverAspectRatio, getNormalizedCoverAspectRatio } from "~/utils/cover";
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 
@@ -34,10 +34,7 @@ onMounted(() => {
 
 const LOAD_MORE_ROOT_MARGIN = "360px 0px";
 const LOAD_MORE_COOLDOWN_MS = 1000;
-const DISCUSSION_CARD_HORIZONTAL_CHROME = 24;
-const DISCUSSION_CARD_FIXED_HEIGHT = 83;
-const DISCUSSION_CARD_EXCERPT_LINE_HEIGHT = 21;
-const DISCUSSION_CARD_MAX_EXCERPT_LINES = 2;
+const DISCUSSION_CARD_FIXED_HEIGHT = 105;
 
 const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
 const loading = ref(false);
@@ -61,30 +58,13 @@ const skeletonKeyMapper = (item: SkeletonItem) => item.id;
 const { width: viewportWidth } = useWindowSize({ initialWidth: 0 });
 
 
-const getWeightedTextLength = (text: string) => {
-  let length = 0;
-  for (let i = 0; i < text.length; i++) {
-    length += text.charCodeAt(i) <= 0xff ? 0.55 : 1;
-  }
-  return length;
-};
-
-const estimateExcerptLines = (discussion: Discussion, itemWidth: number) => {
-  const text = discussion.bodyText || discussion.rawBodyText || "暂无摘要内容";
-  const contentWidth = Math.max(1, itemWidth - DISCUSSION_CARD_HORIZONTAL_CHROME);
-  const charsPerLine = Math.max(1, Math.floor(contentWidth / 15));
-  return Math.min(
-    DISCUSSION_CARD_MAX_EXCERPT_LINES,
-    Math.max(1, Math.ceil(getWeightedTextLength(text) / charsPerLine)),
-  );
-};
-
 const estimateDiscussionCardHeight = (discussion: Discussion, itemWidth: number) => {
-  const coverHeight = itemWidth / getCoverAspectRatio(discussion.coverWidth, discussion.coverHeight);
-  const excerptHeight =
-    estimateExcerptLines(discussion, itemWidth) * DISCUSSION_CARD_EXCERPT_LINE_HEIGHT;
-
-  return Math.ceil(coverHeight + DISCUSSION_CARD_FIXED_HEIGHT + excerptHeight);
+  // 无封面文章使用占位图原生比例，与卡片实际渲染保持一致
+  const ratio = discussion.cover
+    ? getNormalizedCoverAspectRatio(discussion.coverWidth, discussion.coverHeight)
+    : FALLBACK_COVER_ASPECT_RATIO;
+  const coverHeight = itemWidth / ratio;
+  return Math.ceil(coverHeight + DISCUSSION_CARD_FIXED_HEIGHT);
 };
 
 const addEnterAnimations = (nodes: Discussion[]) => {
@@ -368,7 +348,6 @@ onBeforeUnmount(() => {
         :estimated-height="300"
         :height-mapper="estimateDiscussionCardHeight"
         :key-mapper="masonryKeyMapper"
-        :measure-items="false"
       >
         <template #default="{ item, index }">
           <DiscussionCard
