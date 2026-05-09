@@ -21,7 +21,9 @@ defineProps<{
       <div class="ik-card-skeleton__body">
         <!-- 头像和作者名 -->
         <div class="ik-card-skeleton__author-row">
-          <div class="ik-card-skeleton__avatar skeleton-pulse"></div>
+          <div class="ik-card-skeleton__avatar">
+            <div class="ik-card-skeleton__avatar-inner skeleton-pulse"></div>
+          </div>
           <div class="ik-card-skeleton__author-block">
             <div
               class="ik-card-skeleton__author-name skeleton-pulse"
@@ -116,9 +118,17 @@ defineProps<{
   margin-top: var(--ik-discussion-card-avatar-offset);
   width: var(--ik-discussion-card-avatar-size);
   height: var(--ik-discussion-card-avatar-size);
+  padding: var(--ik-discussion-card-avatar-padding);
+  border-radius: 999px;
+  background: var(--ik-discussion-card-inner-bg);
+  flex-shrink: 0;
+}
+
+.ik-card-skeleton__avatar-inner {
+  width: 100%;
+  height: 100%;
   border-radius: 999px;
   background: var(--ik-discussion-card-placeholder-bg);
-  flex-shrink: 0;
 }
 
 .ik-card-skeleton__author-block {
@@ -143,7 +153,6 @@ defineProps<{
   width: 100%;
   height: 1px;
   background: var(--ik-discussion-card-divider-bg);
-  margin-top: 4px;
 }
 
 /* 标题占位（单行 placeholder，与真实卡片"短标题占 1 行"的形态一致） */
@@ -153,7 +162,7 @@ defineProps<{
 }
 
 .ik-card-skeleton__title {
-  height: var(--ik-discussion-card-title-size);
+  height: calc(var(--ik-discussion-card-title-size) * 1.25);
   background: var(--ik-discussion-card-placeholder-bg);
   border-radius: 4px;
 }
