@@ -26,12 +26,14 @@ const DEFAULT_SKELETON_LAYOUT: SkeletonLayout = {
   titleWidth: "86%",
 };
 
+// 三种 cover 比例分布尽量均衡（约 LANDSCAPE 44% / SQUARE 28% / PORTRAIT 28%），
+// 避免视觉上 LANDSCAPE 一边倒导致的重复感。
 const SKELETON_LAYOUTS: SkeletonLayout[] = [
-  DEFAULT_SKELETON_LAYOUT,
-  { coverAspectRatio: RATIO_LANDSCAPE, authorWidth: "62%", titleWidth: "86%" },
+  DEFAULT_SKELETON_LAYOUT, // LANDSCAPE
+  { coverAspectRatio: RATIO_PORTRAIT, authorWidth: "70%", titleWidth: "64%" },
   { coverAspectRatio: RATIO_SQUARE, authorWidth: "48%", titleWidth: "72%" },
   { coverAspectRatio: RATIO_LANDSCAPE, authorWidth: "56%", titleWidth: "90%" },
-  { coverAspectRatio: RATIO_PORTRAIT, authorWidth: "70%", titleWidth: "64%" },
+  { coverAspectRatio: RATIO_PORTRAIT, authorWidth: "58%", titleWidth: "82%" },
   { coverAspectRatio: RATIO_LANDSCAPE, authorWidth: "52%", titleWidth: "78%" },
   { coverAspectRatio: RATIO_SQUARE, authorWidth: "66%", titleWidth: "94%" },
 ];
@@ -42,6 +44,8 @@ const SKELETON_CARD_PADDING = 4;
 // 骨架卡片固定部分高度（不含封面）：
 //   card padding top+bottom(8) + body padding-bottom(12) + author-row min-height(32)
 // + body gap(8) + title placeholder(ceil(17*1.25)=22) = 82px
+// 必须严格匹配 DiscussionCardSkeleton 的实际 DOM 渲染高度，否则 VirtualMasonry
+// 在 measureItems=false 模式下会用估算值做 transform 定位，产生与实际卡片高度不一致的间隙。
 const SKELETON_FIXED_HEIGHT = 82;
 
 export function estimateSkeletonHeight(item: SkeletonItem, itemWidth: number): number {
