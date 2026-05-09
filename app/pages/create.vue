@@ -14,7 +14,6 @@ import {
   PlusIcon,
   PencilSquareIcon,
   MagnifyingGlassIcon,
-  PaperAirplaneIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 
@@ -498,43 +497,6 @@ if (import.meta.client && auth.isLogin) {
       </div>
     </Transition>
 
-    <!-- ── Top Bar ──────────────────────────────── -->
-    <header class="ik-create-topbar">
-      <div class="ik-create-topbar__left">
-        <div class="ik-create-topbar__avatar-shell">
-          <img
-            :src="auth.user?.avatar || '/images/default-avatar.webp'"
-            alt="avatar"
-            class="ik-create-topbar__avatar"
-            @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-          />
-        </div>
-        <div class="ik-create-topbar__info">
-          <span class="ik-create-topbar__name">{{ auth.user?.name || "未登录" }}</span>
-          <span class="ik-create-topbar__badge-label">发布委托</span>
-        </div>
-      </div>
-      <div class="ik-create-topbar__right">
-        <span v-if="isSavingDraft" class="ik-status ik-status--saving">
-          <span class="ik-status__dot"></span>保存中
-        </span>
-        <span v-else-if="hasUnsavedChanges" class="ik-status ik-status--dirty">
-          <span class="ik-status__dot"></span>未保存
-        </span>
-        <span v-else-if="documentId" class="ik-status ik-status--saved">
-          <span class="ik-status__dot"></span>已保存
-        </span>
-        <button
-          v-if="documentId"
-          class="ik-create-topbar__del-btn"
-          :disabled="isDeletingDraft"
-          @click="deleteDraft"
-        >
-          {{ isDeletingDraft ? "删除中..." : "删除草稿" }}
-        </button>
-      </div>
-    </header>
-
     <!-- ── Two-Column Body ─────────────────────── -->
     <div class="ik-create-columns">
       <!-- ── Left: Editing Slot + Drafts (ZMenu) ── -->
@@ -673,25 +635,28 @@ if (import.meta.client && auth.isLogin) {
       </main>
     </div>
 
-    <!-- ── Bottom Footer (Sticky Publish Bar) ───── -->
+    <!-- ── Bottom Footer (mirrors AppHeader) ───── -->
     <footer class="ik-create-footer">
-      <div class="ik-create-footer__hint">
-        <span v-if="documentId" class="ik-create-footer__draft-id">草稿 #{{ documentId.slice(-6) }}</span>
-        <span v-else class="ik-create-footer__draft-id">未保存草稿</span>
-        <span class="ik-create-footer__count">字数 {{ editorWordCount }} · 图片 {{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
+      <div class="ik-create-footer__inner">
+        <div class="ik-create-footer__left">
+          <div class="ik-create-footer__hint">
+            <span v-if="documentId" class="ik-create-footer__draft-id">草稿 #{{ documentId.slice(-6) }}</span>
+            <span v-else class="ik-create-footer__draft-id">未保存草稿</span>
+            <span class="ik-create-footer__count">字数 {{ editorWordCount }} · 图片 {{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
+          </div>
+        </div>
+        <div class="ik-create-footer__right">
+          <z-button
+            type="primary"
+            size="small"
+            :loading="isPublishing"
+            :disabled="!canPublish"
+            @click="publish"
+          >
+            {{ isPublishing ? "发布中..." : "发布委托" }}
+          </z-button>
+        </div>
       </div>
-      <button
-        class="ik-publish-btn"
-        :class="{ 'is-disabled': !canPublish, 'is-loading': isPublishing }"
-        :disabled="!canPublish"
-        @click="publish"
-      >
-        <span class="ik-publish-btn__inner">
-          <PaperAirplaneIcon v-if="!isPublishing" style="width:18px;height:18px" />
-          <span v-else class="ik-publish-btn__spinner"></span>
-          <span class="ik-publish-btn__text">{{ isPublishing ? "发布中..." : "发布委托" }}</span>
-        </span>
-      </button>
     </footer>
   </section>
 </template>
@@ -704,7 +669,7 @@ if (import.meta.client && auth.isLogin) {
   position: relative;
   width: min(1440px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 20px 0 110px;
+  padding: 20px 0 100px;
   min-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
@@ -746,134 +711,6 @@ if (import.meta.client && auth.isLogin) {
 .ik-fade-leave-active { transition: opacity 200ms ease; }
 .ik-fade-enter-from,
 .ik-fade-leave-to { opacity: 0; }
-
-/* ── Top Bar ─────────────────────────────────────── */
-.ik-create-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 24px;
-  background:
-    url("/images/tab-bg-point.webp") repeat,
-    linear-gradient(135deg, #111 0%, #0a0a0a 100%);
-  border: 1px solid #2a2a2a;
-  border-radius: 20px;
-  gap: 12px;
-}
-
-.ik-create-topbar__left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.ik-create-topbar__avatar-shell {
-  flex-shrink: 0;
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  border: 2px solid #333;
-  overflow: hidden;
-  background: #1b1b1b;
-}
-
-.ik-create-topbar__avatar {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 999px;
-}
-
-.ik-create-topbar__info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.ik-create-topbar__name {
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ik-create-topbar__badge-label {
-  font-size: 12px;
-  font-weight: 800;
-  font-style: italic;
-  color: #d7ff00;
-  letter-spacing: 0.5px;
-}
-
-.ik-create-topbar__right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.ik-create-topbar__del-btn {
-  padding: 5px 12px;
-  border: 1px solid rgba(255, 77, 79, 0.5);
-  border-radius: 8px;
-  background: transparent;
-  color: #ff6b6b;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 200ms, border-color 200ms;
-}
-
-.ik-create-topbar__del-btn:hover {
-  background: rgba(255, 77, 79, 0.1);
-  border-color: #ff4d4f;
-}
-
-.ik-create-topbar__del-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ── Status Indicator ────────────────────────────── */
-.ik-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.ik-status__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.ik-status--saving { color: #d7ff00; }
-.ik-status--saving .ik-status__dot {
-  background: #d7ff00;
-  animation: ik-dot-pulse 1s ease-in-out infinite;
-}
-
-.ik-status--dirty { color: #808080; }
-.ik-status--dirty .ik-status__dot { background: #808080; }
-
-.ik-status--saved { color: #4caf50; }
-.ik-status--saved .ik-status__dot { background: #4caf50; }
-
-@keyframes ik-dot-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.3; transform: scale(0.6); }
-}
 
 /* ── Two-Column Layout ───────────────────────────── */
 .ik-create-columns {
@@ -1299,22 +1136,39 @@ if (import.meta.client && auth.isLogin) {
   font-weight: 600;
 }
 
-/* ═════════ Bottom Footer (Sticky Publish Bar) ═════════ */
+/* ═════════ Bottom Footer (mirrors AppHeader) ═════════ */
 .ik-create-footer {
-  position: sticky;
-  bottom: 16px;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  border-top: 1px solid #2b2b2b;
+  background: #000;
+}
+
+.ik-create-footer__inner {
+  min-height: 78px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 20px 12px 24px;
-  background:
-    url("/images/tab-bg-point.webp") repeat,
-    linear-gradient(135deg, #111 0%, #0a0a0a 100%);
-  border: 1px solid #2a2a2a;
-  border-radius: 18px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  z-index: 20;
+  gap: 10px;
+  padding: 8px 32px;
+}
+
+.ik-create-footer__left {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.ik-create-footer__right {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .ik-create-footer__hint {
@@ -1339,71 +1193,6 @@ if (import.meta.client && auth.isLogin) {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Publish Button (slanted) ────────────────────── */
-.ik-publish-btn {
-  flex-shrink: 0;
-  position: relative;
-  padding: 0;
-  height: 50px;
-  min-width: 200px;
-  border: none;
-  background: #d7ff00;
-  color: #0a0a0a;
-  font-family: inherit;
-  cursor: pointer;
-  clip-path: polygon(16px 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
-  transition: filter 200ms, transform 150ms;
-}
-
-.ik-publish-btn:hover:not(.is-disabled):not(.is-loading) {
-  filter: brightness(1.1);
-}
-
-.ik-publish-btn:active:not(.is-disabled):not(.is-loading) {
-  transform: translateY(1px);
-}
-
-.ik-publish-btn.is-disabled {
-  background: #2a2a2a;
-  color: #555;
-  cursor: not-allowed;
-}
-
-.ik-publish-btn.is-loading {
-  background: rgba(215, 255, 0, 0.6);
-  cursor: wait;
-}
-
-.ik-publish-btn__inner {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  height: 100%;
-  padding: 0 32px;
-}
-
-.ik-publish-btn__text {
-  font-size: 16px;
-  font-weight: 800;
-  font-style: italic;
-  letter-spacing: 1px;
-}
-
-.ik-publish-btn__spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(0, 0, 0, 0.3);
-  border-top-color: #0a0a0a;
-  border-radius: 50%;
-  animation: ik-publish-spin 0.8s linear infinite;
-}
-
-@keyframes ik-publish-spin {
-  to { transform: rotate(360deg); }
-}
-
 /* ═══════════════════════════════════════════════
    Responsive
    ═══════════════════════════════════════════════ */
@@ -1417,7 +1206,7 @@ if (import.meta.client && auth.isLogin) {
   .ik-create-page {
     width: calc(100% - 24px);
     gap: 12px;
-    padding: 16px 0 100px;
+    padding: 16px 0 96px;
   }
 
   .ik-create-columns {
@@ -1455,32 +1244,13 @@ if (import.meta.client && auth.isLogin) {
     font-size: 14px;
   }
 
-  .ik-create-footer {
-    padding: 10px 14px 10px 18px;
-  }
-
-  .ik-publish-btn {
-    min-width: 160px;
-    height: 46px;
-  }
-
-  .ik-publish-btn__text {
-    font-size: 14px;
-  }
 }
 
 @media (max-width: 500px) {
   .ik-create-page {
     width: 100%;
-    padding: 0 0 84px;
+    padding: 0 0 90px;
     gap: 0;
-  }
-
-  .ik-create-topbar {
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    padding: 12px 16px;
   }
 
   .ik-create-columns {
@@ -1532,25 +1302,10 @@ if (import.meta.client && auth.isLogin) {
     opacity: 1;
   }
 
-  .ik-create-topbar__name {
-    font-size: 14px;
-  }
-
-  .ik-create-footer {
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    border-radius: 14px;
-  }
-
-  .ik-publish-btn {
-    min-width: 140px;
-    height: 44px;
-  }
-
-  .ik-publish-btn__inner {
-    padding: 0 22px;
+  .ik-create-footer__inner {
+    min-height: 66px;
+    padding: 6px 16px;
+    gap: 8px;
   }
 }
 

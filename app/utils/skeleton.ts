@@ -36,13 +36,17 @@ const SKELETON_LAYOUTS: SkeletonLayout[] = [
   { coverAspectRatio: RATIO_SQUARE, authorWidth: "66%", titleWidth: "94%" },
 ];
 
-// 与 DiscussionCard 真实渲染高度对齐（参见 pages/index.vue 中 DISCUSSION_CARD_FIXED_HEIGHT 注释）
-// 固定部分(68) + 单行 title placeholder(17) ≈ 85px
-// 注：骨架的 title-group 当前只渲染 1 行 placeholder，因此按 1 行高度估算。
-const SKELETON_FIXED_HEIGHT = 85;
+// 卡片外层 padding（--ik-discussion-card-padding: 4px），封面实际宽度 = itemWidth - 2*padding
+const SKELETON_CARD_PADDING = 4;
+
+// 骨架卡片固定部分高度（不含封面）：
+//   card padding top+bottom(8) + body padding-bottom(12) + author-row min-height(32)
+// + body gap(8) + title placeholder(ceil(17*1.25)=22) = 82px
+const SKELETON_FIXED_HEIGHT = 82;
 
 export function estimateSkeletonHeight(item: SkeletonItem, itemWidth: number): number {
-  const coverHeight = itemWidth / item.coverAspectRatio;
+  const innerWidth = itemWidth - SKELETON_CARD_PADDING * 2;
+  const coverHeight = innerWidth / item.coverAspectRatio;
   return Math.ceil(coverHeight + SKELETON_FIXED_HEIGHT);
 }
 
