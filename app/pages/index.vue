@@ -327,7 +327,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="container ik-home-container ik-stack">
+  <section class="ik-home-container ik-stack">
     <!-- Refresh indicator (pull-to-refresh style) -->
     <Transition name="ik-refresh-indicator">
       <div v-if="refreshing" class="ik-refresh-indicator">
@@ -335,63 +335,72 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
-    <!-- 骨架屏：loading=true 且 list 为空时显示 -->
-    <ClientOnly v-if="!list.length && loading">
-      <div class="ik-skeleton-state" role="status" aria-live="polite" aria-busy="true">
-        <span class="ik-sr-only">正在加载帖子...</span>
-        <VirtualMasonry
-          class="ik-masonry"
-          :items="skeletonItems"
-          :column-width="240"
-          :gap="16"
-          :min-columns="2"
-          :max-columns="6"
-          :key-mapper="skeletonKeyMapper"
-          :height-mapper="estimateSkeletonHeight"
-          :measure-items="false"
+    <ClientOnly>
+      <Transition name="ik-list-fade" mode="out-in">
+        <!-- 骨架屏：loading=true 且 list 为空时显示 -->
+        <div
+          v-if="!list.length && loading"
+          key="skeleton"
+          class="ik-skeleton-state"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
         >
-          <template #default="{ item }">
-            <DiscussionCardSkeleton :skeleton="item" />
-          </template>
-        </VirtualMasonry>
-      </div>
-    </ClientOnly>
-
-    <!-- 空状态：loading=false 且 list 为空时显示 -->
-    <div v-else-if="!list.length && !loading" class="ik-empty">暂无相关帖子... [ o_x ]/</div>
-
-    <!-- 实际内容：list 不为空时显示 -->
-    <ClientOnly v-else>
-      <VirtualMasonry
-        class="ik-masonry"
-        :items="list"
-        :column-width="240"
-        :gap="16"
-        :min-columns="2"
-        :max-columns="6"
-        :buffer="2500"
-        :estimated-height="300"
-        :height-mapper="estimateDiscussionCardHeight"
-        :key-mapper="masonryKeyMapper"
-      >
-        <template #default="{ item, index }">
-          <DiscussionCard
-            :class="{ 'ik-masonry-card-enter': shouldAnimateDiscussion(item.id) }"
-            :discussion="item"
-            :eager="index < 6"
-            @open="goDiscussion"
-            @animationend="finishEnterAnimation(item.id)"
-            v-memo="[item.id, item.isRead, item.cover, shouldAnimateDiscussion(item.id)]"
-          />
-        </template>
-      </VirtualMasonry>
-
-      <div ref="loadMoreSentinelRef" class="ik-load-more-sentinel">
-        <div v-if="loadingMore || !hasNextPage" class="ik-scroll-footer">
-          <img v-if="loadingMore" class="ik-scroll-gif" src="/images/Bangboo.gif" alt="加载中" />
-          <span v-else class="ik-meta">已经到底啦 [ O_X ] /</span>
+          <span class="ik-sr-only">正在加载帖子...</span>
+          <VirtualMasonry
+            class="ik-masonry"
+            :items="skeletonItems"
+            :column-width="240"
+            :gap="32"
+            :min-columns="2"
+            :max-columns="5"
+            :key-mapper="skeletonKeyMapper"
+            :height-mapper="estimateSkeletonHeight"
+            :measure-items="false"
+          >
+            <template #default="{ item }">
+              <DiscussionCardSkeleton :skeleton="item" />
+            </template>
+          </VirtualMasonry>
         </div>
-      </div>
+
+        <!-- 空状态：loading=false 且 list 为空时显示 -->
+        <div v-else-if="!list.length && !loading" key="empty" class="ik-empty">暂无相关帖子... [ o_x ]/</div>
+
+        <!-- 实际内容：list 不为空时显示 -->
+        <div v-else key="list" class="ik-list-state">
+          <VirtualMasonry
+            class="ik-masonry"
+            :items="list"
+            :column-width="240"
+            :gap="32"
+            :min-columns="2"
+            :max-columns="5"
+            :buffer="1800"
+            :estimated-height="300"
+            :height-mapper="estimateDiscussionCardHeight"
+            :key-mapper="masonryKeyMapper"
+          >
+            <template #default="{ item, index, columnCount }">
+              <DiscussionCard
+                :class="{ 'ik-masonry-card-enter': shouldAnimateDiscussion(item.id) }"
+                :discussion="item"
+                :eager="index < columnCount * 2"
+                @open="goDiscussion"
+                @animationend="finishEnterAnimation(item.id)"
+                v-memo="[item.id, item.isRead, item.cover, shouldAnimateDiscussion(item.id)]"
+              />
+            </template>
+          </VirtualMasonry>
+
+          <div ref="loadMoreSentinelRef" class="ik-load-more-sentinel">
+            <div v-if="loadingMore || !hasNextPage" class="ik-scroll-footer">
+              <img v-if="loadingMore" class="ik-scroll-gif" src="/images/Bangboo.gif" alt="加载中" />
+              <span v-else class="ik-meta">已经到底啦 [ O_X ] /</span>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </ClientOnly>
     <!-- Refresh FAB -->
     <z-button
@@ -409,6 +418,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .ik-home-container {
   width: min(1600px, calc(100% - 40px));
+  margin: 0 auto;
   padding-top: 24px;
   padding-bottom: 24px;
 }
@@ -442,6 +452,24 @@ onBeforeUnmount(() => {
 
 .ik-skeleton-state {
   width: 100%;
+}
+
+/* 骨架屏 ↔ 真实列表 ↔ 空状态 之间的淡入淡出过渡 */
+.ik-list-fade-enter-active,
+.ik-list-fade-leave-active {
+  transition: opacity 220ms ease;
+}
+
+.ik-list-fade-enter-from,
+.ik-list-fade-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-list-fade-enter-active,
+  .ik-list-fade-leave-active {
+    transition: none;
+  }
 }
 
 .ik-sr-only {
