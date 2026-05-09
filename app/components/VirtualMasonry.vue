@@ -25,6 +25,7 @@ const props = withDefaults(
     items: T[];
     keyMapper: (item: T) => string | number;
     columnWidth?: number;
+    maxColumnWidth?: number;
     gap?: number;
     minColumns?: number;
     maxColumns?: number;
@@ -85,7 +86,20 @@ const columnCount = computed(() => {
 const actualColumnWidth = computed(() => {
   const cols = columnCount.value;
   const totalGap = (cols - 1) * props.gap;
-  return (containerWidth.value - totalGap) / cols;
+  const stretched = (containerWidth.value - totalGap) / cols;
+  if (props.maxColumnWidth && stretched > props.maxColumnWidth) {
+    return props.maxColumnWidth;
+  }
+  return stretched;
+});
+
+// 当列宽被 maxColumnWidth 钳制时，整体在容器中居中，留白分摊到两侧
+const contentLeftOffset = computed(() => {
+  const cols = columnCount.value;
+  const colW = actualColumnWidth.value;
+  const usedWidth = cols * colW + (cols - 1) * props.gap;
+  const remainder = containerWidth.value - usedWidth;
+  return remainder > 0 ? remainder / 2 : 0;
 });
 
 /* ── 布局计算 ──────────────────────────────────── */
@@ -113,6 +127,8 @@ const layout = computed((): {
   if (cols <= 0 || colW <= 0) {
     return { items: [], columns: [], totalHeight: 0 };
   }
+
+  const leftOffset = contentLeftOffset.value;
 
   // colW 变化时清空 heightMapper 缓存
   if (colW !== _cachedColW) {
@@ -155,7 +171,7 @@ const layout = computed((): {
     }
 
     const top = colHeights[minCol] ?? 0;
-    const left = minCol * (colW + gap);
+    const left = leftOffset + minCol * (colW + gap);
 
     const layoutItem = { key, index: i, top, left, width: colW, height: h };
     result.push(layoutItem);
@@ -195,10 +211,22 @@ function findFirstColumnItem(
 }
 
 /* ── 虚拟视口裁剪 ─────────────────────────────── */
+// buffer 按列数反向缩放：列数越多，单位 buffer 高度内承载的卡片数越多，
+// 用 (BUFFER_REFERENCE_COLUMNS / cols) 缩放后，渲染中的卡片总数大致与列数无关，
+// 避免 6 列时同屏 DOM 比 5 列多 20% 导致的滚动卡顿。
+const BUFFER_REFERENCE_COLUMNS = 5;
+const BUFFER_SCALE_MIN = 0.5;
+const BUFFER_SCALE_MAX = 1.5;
+
 const visibleItems = computed(() => {
   const sy = scrollY.value;
   const vh = viewportH.value;
-  const buf = props.buffer;
+  const cols = columnCount.value;
+  const bufScale = Math.min(
+    BUFFER_SCALE_MAX,
+    Math.max(BUFFER_SCALE_MIN, BUFFER_REFERENCE_COLUMNS / Math.max(1, cols)),
+  );
+  const buf = props.buffer * bufScale;
   const dir = scrollDirection.value;
 
   // 根据滚动方向使用温和的非对称缓冲区：滚动方向 1.4x，反方向 1.0x
@@ -454,6 +482,7 @@ defineExpose({ measuredHeights });
         :item="getItem(layoutItem)"
         :index="layoutItem.index"
         :width="layoutItem.width"
+        :column-count="columnCount"
       />
     </div>
   </div>

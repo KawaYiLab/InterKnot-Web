@@ -4,7 +4,7 @@ import { useMessage } from "zenless-ui";
 import type { Comment, Discussion } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
@@ -64,10 +64,146 @@ const coverAspectRatio = computed(() => {
   return 16 / 9;
 });
 
-const openCoverPreview = () => {
+const openCoverPreview = (index = 0) => {
   const images = covers.value.map((c) => ({ src: c.url, width: c.width, height: c.height }));
-  if (images.length) openGallery(images, 0);
+  if (images.length) openGallery(images, Math.min(Math.max(index, 0), images.length - 1));
 };
+
+/* ── 封面轮播 ─────────────────────────────────── */
+const coverScrollerRef = ref<HTMLElement | null>(null);
+const coverIndex = ref(0);
+let coverScrollRAF: number | null = null;
+
+const onCoverScroll = () => {
+  if (coverScrollRAF !== null) return;
+  coverScrollRAF = requestAnimationFrame(() => {
+    coverScrollRAF = null;
+    const el = coverScrollerRef.value;
+    if (!el) return;
+    const w = el.clientWidth;
+    if (w <= 0) return;
+    const idx = Math.round(el.scrollLeft / w);
+    if (idx !== coverIndex.value) coverIndex.value = idx;
+  });
+};
+
+const goCover = (index: number) => {
+  const el = coverScrollerRef.value;
+  if (!el) return;
+  const total = covers.value.length;
+  if (total <= 1) return;
+  const target = Math.min(Math.max(index, 0), total - 1);
+  el.scrollTo({ left: target * el.clientWidth, behavior: "smooth" });
+};
+
+// 拦截滚轮：不允许鼠标/触控板滚轮在轮播上切图，改为转发给外层弹窗垂直滚动
+const onCoverWheel = (e: WheelEvent) => {
+  const parent = scrollRef.value;
+  if (parent) {
+    // deltaY 与多数鼠标/触控板垂直动作一致；deltaX 在水平滚轮上也转发为垂直动作
+    parent.scrollTop += e.deltaY || e.deltaX;
+  }
+};
+
+/* ── 鼠标拖拽切图 ─────────────────────────────── */
+// 触屏由原生 overflow-x 滑动接管；鼠标/笔需要我们手动模拟拖拽，
+// 否则按住拖动会被识别成 click 直接打开预览。
+const DRAG_THRESHOLD_PX = 6;
+// 拖动距离超过单页宽度该比例即切下一张（不到一半也算）
+const DRAG_SNAP_RATIO = 0.01;
+// 释放瞬间速度超过该值（px/ms）也触发切图，方便"轻甩"
+const DRAG_FLING_VELOCITY = 0.01;
+let isDraggingCover = false;
+let coverDragStartX = 0;
+let coverDragStartScroll = 0;
+let coverDragStartIndex = 0;
+let coverDragMoved = false;
+let coverDragLastX = 0;
+let coverDragLastT = 0;
+let coverDragVelocity = 0;
+
+const onCoverPointerDown = (e: PointerEvent) => {
+  if (e.pointerType !== "mouse" && e.pointerType !== "pen") return;
+  if (covers.value.length <= 1) return;
+  const el = coverScrollerRef.value;
+  if (!el) return;
+  isDraggingCover = true;
+  coverDragMoved = false;
+  coverDragStartX = e.clientX;
+  coverDragStartScroll = el.scrollLeft;
+  coverDragStartIndex = coverIndex.value;
+  coverDragLastX = e.clientX;
+  coverDragLastT = performance.now();
+  coverDragVelocity = 0;
+  (e.target as Element).setPointerCapture?.(e.pointerId);
+};
+
+const onCoverPointerMove = (e: PointerEvent) => {
+  if (!isDraggingCover) return;
+  const el = coverScrollerRef.value;
+  if (!el) return;
+  const dx = e.clientX - coverDragStartX;
+  if (!coverDragMoved && Math.abs(dx) > DRAG_THRESHOLD_PX) coverDragMoved = true;
+  el.scrollLeft = coverDragStartScroll - dx;
+
+  // 实时估算速度（px/ms），向右为正、向左为负
+  const now = performance.now();
+  const dt = now - coverDragLastT;
+  if (dt > 0) {
+    const instV = (e.clientX - coverDragLastX) / dt;
+    // 指数平滑，减少抖动
+    coverDragVelocity = coverDragVelocity * 0.5 + instV * 0.5;
+  }
+  coverDragLastX = e.clientX;
+  coverDragLastT = now;
+};
+
+const onCoverPointerUp = (e: PointerEvent) => {
+  if (!isDraggingCover) return;
+  isDraggingCover = false;
+  const el = coverScrollerRef.value;
+  if (!el) return;
+  try {
+    (e.target as Element).releasePointerCapture?.(e.pointerId);
+  } catch {
+    /* ignore */
+  }
+  if (!coverDragMoved) return;
+
+  const w = el.clientWidth;
+  if (w <= 0) return;
+
+  // 起始页相对位移：>0 表示朝下一页，<0 表示朝上一页
+  const offset = el.scrollLeft - coverDragStartIndex * w;
+  // 速度 > 0 表示手指向右移动（看上一张），< 0 表示向左（看下一张）
+  const v = coverDragVelocity;
+  let targetIdx = coverDragStartIndex;
+  if (offset > w * DRAG_SNAP_RATIO || v < -DRAG_FLING_VELOCITY) {
+    targetIdx = coverDragStartIndex + 1;
+  } else if (offset < -w * DRAG_SNAP_RATIO || v > DRAG_FLING_VELOCITY) {
+    targetIdx = coverDragStartIndex - 1;
+  }
+  targetIdx = Math.max(0, Math.min(covers.value.length - 1, targetIdx));
+  el.scrollTo({ left: targetIdx * w, behavior: "smooth" });
+};
+
+// 在 click 捕获阶段拦截：拖动后产生的 click 不应打开预览
+const onCoverClickCapture = (e: MouseEvent) => {
+  if (coverDragMoved) {
+    coverDragMoved = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+};
+
+// 切换帖子时重置封面索引并将容器滚回起点
+watch(() => props.discussionId, () => {
+  coverIndex.value = 0;
+  nextTick(() => {
+    const el = coverScrollerRef.value;
+    if (el) el.scrollLeft = 0;
+  });
+});
 
 /* ── 数据加载 ──────────────────────────────────── */
 const loadDiscussion = async () => {
@@ -498,16 +634,81 @@ onBeforeUnmount(() => {
                         class="ik-dialog__cover-border"
                         :style="{ aspectRatio: String(coverAspectRatio) }"
                       >
+                        <!-- 单张封面 -->
                         <img
+                          v-if="!hasCovers || covers.length === 1"
                           :src="firstCover?.url || DEFAULT_COVER_IMAGE"
                           :alt="hasCovers ? discussion.title : 'default cover'"
                           class="ik-dialog__cover"
-                          @click="hasCovers && openCoverPreview()"
+                          @click="hasCovers && openCoverPreview(0)"
                           @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                         />
-                        <span v-if="covers.length > 1" class="ik-dialog__cover-count">
-                          {{ covers.length }} 张
-                        </span>
+
+                        <!-- 多图轮播：横向滑动 + 滚动捕捉 -->
+                        <template v-else>
+                          <div
+                            ref="coverScrollerRef"
+                            class="ik-dialog__cover-scroller"
+                            @scroll.passive="onCoverScroll"
+                            @wheel.prevent="onCoverWheel"
+                            @pointerdown="onCoverPointerDown"
+                            @pointermove="onCoverPointerMove"
+                            @pointerup="onCoverPointerUp"
+                            @pointercancel="onCoverPointerUp"
+                            @click.capture="onCoverClickCapture"
+                          >
+                            <div
+                              v-for="(c, i) in covers"
+                              :key="c.url + i"
+                              class="ik-dialog__cover-slide"
+                            >
+                              <img
+                                :src="c.url"
+                                :alt="`${discussion.title} - ${i + 1}`"
+                                class="ik-dialog__cover"
+                                draggable="false"
+                                @click="openCoverPreview(i)"
+                                @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
+                              />
+                            </div>
+                          </div>
+
+                          <button
+                            v-show="coverIndex > 0"
+                            type="button"
+                            class="ik-dialog__cover-nav ik-dialog__cover-nav--prev"
+                            aria-label="上一张"
+                            @click.stop="goCover(coverIndex - 1)"
+                          >
+                            <ChevronLeftIcon style="width:20px;height:20px" />
+                          </button>
+                          <button
+                            v-show="coverIndex < covers.length - 1"
+                            type="button"
+                            class="ik-dialog__cover-nav ik-dialog__cover-nav--next"
+                            aria-label="下一张"
+                            @click.stop="goCover(coverIndex + 1)"
+                          >
+                            <ChevronRightIcon style="width:20px;height:20px" />
+                          </button>
+
+                          <div class="ik-dialog__cover-dots">
+                            <button
+                              v-for="(_, i) in covers"
+                              :key="i"
+                              type="button"
+                              class="ik-dialog__cover-dot"
+                              :class="{ 'ik-dialog__cover-dot--active': i === coverIndex }"
+                              :aria-label="`第 ${i + 1} 张`"
+                              :aria-current="i === coverIndex ? 'true' : undefined"
+                              @click.stop="goCover(i)"
+                            />
+                          </div>
+
+                          <span class="ik-dialog__cover-count ik-dialog__cover-count--top">
+                            {{ coverIndex + 1 }} / {{ covers.length }}
+                          </span>
+                        </template>
                       </div>
                     </div>
 
@@ -981,6 +1182,111 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 600;
   pointer-events: none;
+  z-index: 2;
+}
+
+.ik-dialog__cover-count--top {
+  top: 10px;
+  bottom: auto;
+}
+
+/* 多图轮播 */
+.ik-dialog__cover-scroller {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-x;
+}
+
+.ik-dialog__cover-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.ik-dialog__cover-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+
+.ik-dialog__cover-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: var(--ik-cursor-pointer);
+  transition: background 160ms ease, opacity 160ms ease;
+  z-index: 2;
+}
+
+.ik-dialog__cover-nav:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.ik-dialog__cover-nav--prev {
+  left: 10px;
+}
+
+.ik-dialog__cover-nav--next {
+  right: 10px;
+}
+
+.ik-dialog__cover-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  z-index: 2;
+}
+
+.ik-dialog__cover-dot {
+  appearance: none;
+  border: none;
+  padding: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  cursor: var(--ik-cursor-pointer);
+  transition: width 200ms ease, background-color 200ms ease, transform 160ms ease;
+}
+
+.ik-dialog__cover-dot:hover {
+  background: rgba(255, 255, 255, 0.8);
+  transform: scale(1.2);
+}
+
+.ik-dialog__cover-dot--active {
+  width: 18px;
+  background: var(--ik-primary);
+}
+
+.ik-dialog__cover-dot--active:hover {
+  background: var(--ik-primary);
+  transform: none;
 }
 
 /* 正文 */
