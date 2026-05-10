@@ -33,8 +33,7 @@ export const useAuthStore = defineStore("auth", {
       }
       // Listen for session expiry events from the API plugin
       window.addEventListener("auth:session-expired", () => {
-        this.token = "";
-        this.user = null;
+        this.clearSession();
       });
     },
     async fetchSelfUser() {
@@ -61,6 +60,13 @@ export const useAuthStore = defineStore("auth", {
       if (import.meta.client) {
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_ID_KEY);
+        // 登出/会话过期：清空查询缓存，避免上一用户的 liked/isRead 等残留到新登录
+        try {
+          const api = useApi();
+          api.clearAllCache();
+        } catch {
+          // useApi 依赖 Nuxt 上下文，极端情况下可能不可用，忽略
+        }
       }
     },
   },

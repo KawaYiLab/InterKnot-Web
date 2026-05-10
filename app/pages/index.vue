@@ -67,6 +67,13 @@ let cooldownTimer: ReturnType<typeof setTimeout> | null = null;
 const loadMoreSentinelRef = ref<HTMLElement | null>(null);
 const loadMoreObserverRef = shallowRef<IntersectionObserver | null>(null);
 
+// ── 后台轮询：检测有无新帖（仅在无搜索关键词时启用） ─────────
+const NEW_ARTICLES_POLL_MS = 60_000;
+const newArticleIds = shallowRef<string[]>([]);
+const hasNewArticles = computed(() => newArticleIds.value.length > 0);
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let polling = false;
+
 const masonryKeyMapper = (discussion: Discussion) => discussion.id;
 const skeletonKeyMapper = (item: SkeletonItem) => item.id;
 const { width: viewportWidth } = useWindowSize({ initialWidth: 0 });
@@ -215,9 +222,75 @@ const handleRefresh = async () => {
   window.scrollTo({ top: 0, behavior: "instant" });
   // Minimum visible duration so the animation feels intentional
   const minDelay = new Promise((r) => setTimeout(r, 600));
+  // 用户明确下拉刷新：跳过 staleTime 缓存，强制重拉最新首页列表
+  api.invalidateQueries(["articles", "search"]);
   await fetchList(true);
+  // 刷新后清掉"新帖提示"
+  newArticleIds.value = [];
   await minDelay;
   refreshing.value = false;
+};
+
+// ── 后台静默轮询：只比对最新一页第一条 id 与本地 list 的差集 ────
+const pollLatestArticles = async () => {
+  // 仅在推荐流（无搜索词）下做轮询
+  if (query.value.trim()) return;
+  // 不与正在进行的请求/刷新冲突
+  if (polling || loading.value || refreshing.value || loadingMore.value) return;
+  if (import.meta.client && document.visibilityState !== "visible") return;
+  // 列表还没加载出来时不必探测
+  if (!list.value.length) return;
+
+  polling = true;
+  try {
+    // 强制失效空搜索的第一页，让 fetchQuery 真正打到后端
+    api.invalidateQueries(["articles", "search", ""]);
+    const page = await api.searchArticles("", "");
+    if (!page.nodes.length) return;
+
+    const knownIds = new Set(list.value.map((d) => d.id));
+    const fresh: string[] = [];
+    for (const node of page.nodes) {
+      if (!node.id) continue;
+      // 第一页中第一个已知 id 之前的都是"新增"
+      if (knownIds.has(node.id)) break;
+      fresh.push(node.id);
+    }
+    if (fresh.length) {
+      // 取并集，避免短时间内多次轮询重复计数
+      const merged = new Set<string>(newArticleIds.value);
+      for (const id of fresh) merged.add(id);
+      newArticleIds.value = Array.from(merged);
+    }
+  } catch {
+    // 网络错误静默忽略：下次轮询再试
+  } finally {
+    polling = false;
+  }
+};
+
+const startPolling = () => {
+  if (pollTimer) return;
+  pollTimer = setInterval(() => {
+    void pollLatestArticles();
+  }, NEW_ARTICLES_POLL_MS);
+};
+
+const stopPolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+};
+
+// 用户点击"有 N 条新内容" → 顶部刷新
+const applyNewArticles = () => {
+  void handleRefresh();
+};
+
+// Tab 回到前台：立即跳一次轮询，让用户尽快看到提示
+const onTabVisible = () => {
+  void pollLatestArticles();
 };
 
 const doLoadMore = () => {
@@ -272,8 +345,16 @@ const debouncedSearch = useDebounceFn(() => fetchList(true), 300);
 
 watch(
   () => query.value,
-  () => {
+  (q) => {
+    // 切换到搜索时清掉"新帖提示"，搜索流不轮询
+    newArticleIds.value = [];
     debouncedSearch();
+    // q 非空 ⇒ 进入搜索；空 ⇒ 回到推荐流（轮询照常运行）
+    if (q.trim()) {
+      stopPolling();
+    } else {
+      startPolling();
+    }
   },
 );
 
@@ -307,16 +388,21 @@ const onHomeRefreshEvent = () => {
 onMounted(async () => {
   if (import.meta.client) {
     window.addEventListener("ik:home-refresh", onHomeRefreshEvent);
+    window.addEventListener("ik:tab-visible", onTabVisible);
   }
   await initialFetchPromise;
   await nextTick();
   observeLoadMoreSentinel();
+  // 仅在推荐流下启动轮询；搜索状态由 watch(query) 控制
+  if (!query.value.trim()) startPolling();
 });
 
 onBeforeUnmount(() => {
   if (import.meta.client) {
     window.removeEventListener("ik:home-refresh", onHomeRefreshEvent);
+    window.removeEventListener("ik:tab-visible", onTabVisible);
   }
+  stopPolling();
   loadMoreObserverRef.value?.disconnect();
   loadMoreObserverRef.value = null;
   if (cooldownTimer) {
@@ -333,6 +419,19 @@ onBeforeUnmount(() => {
       <div v-if="refreshing" class="ik-refresh-indicator">
         <i class="z-icon-loading ik-refresh-spin" />
       </div>
+    </Transition>
+
+    <!-- New articles toast: 后台轮询发现新帖时弹出 -->
+    <Transition name="ik-new-articles-pill">
+      <button
+        v-if="hasNewArticles && !refreshing"
+        class="ik-new-articles-pill"
+        type="button"
+        @click="applyNewArticles"
+      >
+        <ArrowPathIcon class="ik-new-articles-pill-icon" aria-hidden="true" />
+        <span>有 {{ newArticleIds.length }} 条新内容，点击查看</span>
+      </button>
     </Transition>
 
     <ClientOnly>
@@ -599,6 +698,78 @@ onBeforeUnmount(() => {
   :deep(.z-backtop) {
     right: 16px !important;
     bottom: calc(58px + 16px + 56px + 12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* ── 新帖提示药丸按钮 ───────────────────────── */
+.ik-new-articles-pill {
+  position: fixed;
+  top: calc(78px + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 999px;
+  background: #d7ff00;
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: var(--ik-cursor-pointer);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.6) inset;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.ik-new-articles-pill:hover {
+  background: #e8ff44;
+  transform: translateX(-50%) translateY(-1px);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.6) inset;
+}
+
+.ik-new-articles-pill:active {
+  transform: translateX(-50%) translateY(0);
+}
+
+.ik-new-articles-pill-icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.5;
+}
+
+.ik-new-articles-pill-enter-active,
+.ik-new-articles-pill-leave-active {
+  transition: opacity 220ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ik-new-articles-pill-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-12px);
+}
+
+.ik-new-articles-pill-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+@media (max-width: 768px) {
+  .ik-new-articles-pill {
+    top: calc(78px + 8px);
+    padding: 7px 14px;
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-new-articles-pill,
+  .ik-new-articles-pill-enter-active,
+  .ik-new-articles-pill-leave-active {
+    transition: none;
   }
 }
 </style>
