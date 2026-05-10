@@ -3,6 +3,7 @@ import { useMessage } from "zenless-ui";
 import type { Avatar, BusinessCard, Discussion, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
+import { readProfilePageSnapshot, writeProfilePageSnapshot } from "~/utils/profile-page-cache";
 
 const route = useRoute();
 const router = useRouter();
@@ -14,6 +15,7 @@ const message = useMessage();
 const profile = ref<Profile | null>(null);
 const loadError = ref(false);
 const loading = ref(false);
+const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
 
 const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'pinned', 'social', 'logout'];
 const modalQuery = computed(() => String(route.query.modal || ''));
@@ -38,18 +40,166 @@ const profileId = computed(() => String(route.params.id || ""));
 
 const PROFILE_ARTICLES_MAX = 6;
 
-const loadProfileArticles = async () => {
-  if (articleLoading.value || !articleHasNext.value) return;
+/** Bumped on each full profile page load; stale responses must not write UI or storage. */
+const profilePageLoadSeq = ref(0);
+
+const persistProfileSnapshot = (roundSeq?: number) => {
+  if (roundSeq !== undefined && roundSeq !== profilePageLoadSeq.value) return;
+  if (!import.meta.client || !profile.value) return;
+  if (profile.value.documentId !== profileId.value) return;
+  writeProfilePageSnapshot({
+    profileId: profileId.value,
+    profile: profile.value,
+    articles: articles.value,
+    articleCursor: articleCursor.value,
+    articleHasNext: articleHasNext.value,
+  });
+};
+
+/** Restore profile + article grid from sessionStorage; returns true if a snapshot was applied (including empty articles). */
+const tryHydrateFromCache = (id: string): boolean => {
+  if (!import.meta.client || !id) return false;
+  const snap = readProfilePageSnapshot(id);
+  if (snap === null) return false;
+  profile.value = snap.profile;
+  articles.value = [...snap.articles];
+  articleCursor.value = snap.articleCursor;
+  articleHasNext.value = snap.articleHasNext;
+  profileTabLabel.value = snap.profile.isSelf
+    ? null
+    : (snap.profile.name || snap.profile.login || null);
+  loadError.value = false;
+  return true;
+};
+
+/**
+ * One page of profile articles for a fixed `pid` (not live route).
+ * Returns true if a response was applied; false if stale/skipped (no ref changes).
+ * For `replace`, always requests the first page (start "") so silent refresh need not mutate cursor before fetch.
+ */
+const loadProfileArticlesGridOnce = async (
+  pid: string,
+  roundSeq: number,
+  opts?: { replace?: boolean },
+): Promise<boolean> => {
+  const replace = opts?.replace === true;
+  if (roundSeq !== profilePageLoadSeq.value) return false;
+  if (!pid) return false;
+  if (!replace && !articleHasNext.value) return false;
+  const fetchCursor = replace ? "" : articleCursor.value;
+  // Do not gate on articleLoading: an older round may still hold true until its request ends;
+  // stale completions clear loading only when roundSeq still matches (see finally).
   articleLoading.value = true;
   try {
-    const page = await api.getProfileArticles(profileId.value, articleCursor.value, PROFILE_ARTICLES_MAX);
-    articles.value.push(...page.nodes);
+    const page = await api.getProfileArticles(pid, fetchCursor, PROFILE_ARTICLES_MAX);
+    if (roundSeq !== profilePageLoadSeq.value) return false;
+    if (replace) {
+      articles.value = [...page.nodes];
+    } else {
+      articles.value.push(...page.nodes);
+    }
     articleCursor.value = page.endCursor;
-    articleHasNext.value = false;
+    articleHasNext.value = page.hasNextPage;
+    return true;
   } catch (err) {
-    message.error(resolveErrorMessage(err, "获取用户帖子失败"));
+    if (roundSeq === profilePageLoadSeq.value) {
+      message.error(resolveErrorMessage(err, "获取用户帖子失败"));
+    }
+    throw err;
   } finally {
-    articleLoading.value = false;
+    if (roundSeq === profilePageLoadSeq.value) {
+      articleLoading.value = false;
+    }
+  }
+};
+
+const loadProfilePage = async (opts?: { silent?: boolean }) => {
+  const silent = opts?.silent === true;
+  const pid = profileId.value;
+  if (!pid) return;
+
+  const seq = ++profilePageLoadSeq.value;
+  const isStale = () => seq !== profilePageLoadSeq.value;
+  // Drop stale article in-flight lock so this round can always start grid fetch after getProfile.
+  articleLoading.value = false;
+
+  if (!silent) {
+    loading.value = true;
+    loadError.value = false;
+    pageDataLoading.claim();
+  } else {
+    loading.value = false;
+  }
+  try {
+    const p = await api.getProfile(pid);
+    if (isStale()) return;
+
+    let persistOk = true;
+
+    if (silent) {
+      if (p.isHidden) {
+        profile.value = p;
+        profileTabLabel.value = p.isSelf ? null : (p.name || p.login || null);
+        articles.value = [];
+        articleCursor.value = "";
+        articleHasNext.value = false;
+      } else {
+        articleLoading.value = true;
+        try {
+          const page = await api.getProfileArticles(pid, "", PROFILE_ARTICLES_MAX);
+          if (isStale()) return;
+          profile.value = p;
+          profileTabLabel.value = p.isSelf ? null : (p.name || p.login || null);
+          articles.value = [...page.nodes];
+          articleCursor.value = page.endCursor;
+          articleHasNext.value = page.hasNextPage;
+        } catch (err) {
+          if (!isStale()) {
+            message.error(resolveErrorMessage(err, "获取用户帖子失败"));
+          }
+          persistOk = false;
+        } finally {
+          if (seq === profilePageLoadSeq.value) {
+            articleLoading.value = false;
+          }
+        }
+      }
+    } else {
+      profile.value = p;
+      profileTabLabel.value = p.isSelf ? null : (p.name || p.login || null);
+
+      if (p.isHidden) {
+        articles.value = [];
+        articleCursor.value = "";
+        articleHasNext.value = false;
+      } else {
+        articleCursor.value = "";
+        articleHasNext.value = true;
+        articles.value = [];
+        try {
+          persistOk = await loadProfileArticlesGridOnce(pid, seq, { replace: true });
+        } catch {
+          if (isStale()) return;
+          persistOk = false;
+        }
+      }
+    }
+
+    if (isStale() || profileId.value !== pid) return;
+    if (persistOk) {
+      persistProfileSnapshot(seq);
+    }
+  } catch (err) {
+    if (isStale()) return;
+    if (!silent) {
+      loadError.value = true;
+    }
+    message.error(resolveErrorMessage(err, "获取用户信息失败"));
+  } finally {
+    if (!silent && seq === profilePageLoadSeq.value) {
+      loading.value = false;
+      pageDataLoading.finish();
+    }
   }
 };
 
@@ -71,6 +221,7 @@ const authStore = useAuthStore();
 const onCardEquipped = (card: BusinessCard | null) => {
   if (profile.value) {
     profile.value = { ...profile.value, equippedCard: card ?? undefined };
+    persistProfileSnapshot();
   }
 };
 
@@ -81,6 +232,7 @@ const onAvatarEquipped = (avatar: Avatar | null) => {
       equippedAvatar: avatar ?? undefined,
       avatar: avatar?.image || profile.value.avatar,
     };
+    persistProfileSnapshot();
   }
   authStore.fetchSelfUser();
 };
@@ -92,6 +244,7 @@ const onCustomAvatarUploaded = (avatarUrl: string) => {
       equippedAvatar: undefined,
       avatar: avatarUrl,
     };
+    persistProfileSnapshot();
   }
   authStore.fetchSelfUser();
 };
@@ -99,6 +252,7 @@ const onCustomAvatarUploaded = (avatarUrl: string) => {
 const onNameUpdated = (name: string) => {
   if (profile.value) {
     profile.value = { ...profile.value, name };
+    persistProfileSnapshot();
   }
   authStore.fetchSelfUser();
 };
@@ -106,22 +260,42 @@ const onNameUpdated = (name: string) => {
 const onBioUpdated = (bio: string) => {
   if (profile.value) {
     profile.value = { ...profile.value, bio: bio || undefined };
+    persistProfileSnapshot();
   }
 };
 
 const onHiddenUpdated = (h: boolean) => {
   if (profile.value) {
     profile.value = { ...profile.value, profileHidden: h };
+    persistProfileSnapshot();
   }
 };
 
 const onPinnedUpdated = async (_pinned: string[] | null) => {
+  const pid = profileId.value;
+  if (!pid) return;
+  // 新轮次：取消进行中的整页/文章请求，避免与 loadProfilePage 内的 grid 请求互锁（articleLoading）
+  const seq = ++profilePageLoadSeq.value;
+  articleLoading.value = false;
+  loading.value = false;
+  pageDataLoading.finish();
   // 重置文章列表并重新加载，以应用新的精选配置
   articles.value = [];
   articleCursor.value = "";
   articleHasNext.value = true;
+  let persistOk = true;
   if (!profile.value?.isHidden) {
-    await loadProfileArticles();
+    try {
+      persistOk = await loadProfileArticlesGridOnce(pid, seq, { replace: true });
+    } catch {
+      persistOk = false;
+    }
+  } else {
+    articleHasNext.value = false;
+  }
+  if (seq !== profilePageLoadSeq.value || profileId.value !== pid) return;
+  if (persistOk) {
+    persistProfileSnapshot(seq);
   }
 };
 
@@ -150,8 +324,6 @@ useSeoMeta({
   ogDescription: profileDescription,
   ogImage: () => profile.value?.avatar || "/images/zzzicon_200x200.png",
 });
-
-const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
 
 // Lock page scroll only on large landscape viewports where the layout is
 // designed to fit in a single screen. On medium/portrait/mobile viewports
@@ -185,25 +357,25 @@ onMounted(async () => {
     applyScrollLock(_scrollLockMql.matches);
   }
 
-  loading.value = true;
-  loadError.value = false;
-  pageDataLoading.claim();
-  try {
-    profile.value = await api.getProfile(profileId.value);
-    profileTabLabel.value = profile.value?.isSelf
-      ? null
-      : (profile.value?.name || profile.value?.login || null);
-  } catch (err) {
-    loadError.value = true;
-    message.error(resolveErrorMessage(err, "获取用户信息失败"));
-  } finally {
-    loading.value = false;
-    pageDataLoading.finish();
-  }
-  if (profile.value && !profile.value.isHidden) {
-    void loadProfileArticles();
-  }
+  const hadCache = import.meta.client ? tryHydrateFromCache(profileId.value) : false;
+  await loadProfilePage({ silent: hadCache });
 });
+
+watch(
+  () => profileId.value,
+  async (id, prevId) => {
+    if (!import.meta.client || !id || id === prevId) return;
+    profileTabLabel.value = null;
+    const had = tryHydrateFromCache(id);
+    if (!had) {
+      profile.value = null;
+      articles.value = [];
+      articleCursor.value = "";
+      articleHasNext.value = true;
+    }
+    await loadProfilePage({ silent: had });
+  },
+);
 
 onBeforeUnmount(() => {
   profileTabLabel.value = null;
