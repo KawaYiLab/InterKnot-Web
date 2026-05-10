@@ -199,7 +199,7 @@ const floorLabel = computed(() =>
 
 .ik-comment__name {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   color: #999;
   white-space: nowrap;
   overflow: hidden;

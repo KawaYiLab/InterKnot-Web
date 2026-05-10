@@ -467,7 +467,7 @@ onBeforeUnmount(() => {
 .ik-pin__card-title {
   padding: 8px 10px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -486,7 +486,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   background: #fbfe00;
   color: #000;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 14px;
   border-radius: 50%;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);

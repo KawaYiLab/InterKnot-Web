@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
   background: #d7ff00;
   color: #000;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
   font-style: italic;
   display: flex;
   align-items: center;
@@ -466,7 +466,7 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.04);
   color: rgba(255, 255, 255, 0.6);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }

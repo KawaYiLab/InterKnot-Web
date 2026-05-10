@@ -885,7 +885,7 @@ onBeforeUnmount(() => {
   background: rgba(0, 0, 0, 0.65);
   color: #fff;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   pointer-events: none;
 }
 
@@ -1264,7 +1264,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 999px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 900;
   cursor: pointer;
   transition: opacity 140ms ease, transform 140ms ease, background-color 140ms ease;
 }
