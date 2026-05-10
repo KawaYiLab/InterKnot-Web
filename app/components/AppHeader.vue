@@ -280,7 +280,6 @@ watch(
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid #2b2b2b;
   background: #000;
   transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
@@ -373,7 +372,7 @@ watch(
 .ik-search-shell {
   width: clamp(400px, 30vw, 540px);
   max-width: 100%;
-  min-width: 320px;
+  min-width: 240px;
   display: flex;
   align-items: center;
 }
@@ -609,11 +608,13 @@ watch(
   }
 
   .ik-search-shell {
-    width: clamp(340px, 26vw, 440px);
+    width: clamp(280px, 28vw, 420px);
   }
 }
 
-@media (max-width: 900px) {
+/* 中屏拥挤区间：tabs 与搜索框抢空间会重叠，参考 Flutter isCompact 策略
+   直接隐藏 tabs，让搜索框占据中部，导航交由 MobileBottomNav。 */
+@media (max-width: 1100px) {
   .ik-header__middle {
     flex: 1 1 0;
     min-width: 0;
@@ -626,7 +627,6 @@ watch(
   .ik-header-tabs {
     display: none;
   }
-
 }
 
 @media (max-width: 768px) {

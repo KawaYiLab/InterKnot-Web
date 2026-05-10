@@ -647,6 +647,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 10px;
+  padding-right: 12px;
 }
 
 .ik-bc-grid__item {

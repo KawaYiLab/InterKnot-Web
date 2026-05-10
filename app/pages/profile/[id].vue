@@ -866,8 +866,8 @@ onBeforeUnmount(() => {
   }
 }
 
-/* Mobile: account for fixed MobileBottomNav (58px) */
-@media (max-width: 768px) {
+/* Account for fixed MobileBottomNav (58px) — shown on screens ≤1100px */
+@media (max-width: 1100px) {
   .ik-profile {
     padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 16px);
   }

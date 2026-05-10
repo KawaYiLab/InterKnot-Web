@@ -587,7 +587,8 @@ onBeforeUnmount(() => {
   to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-@media (max-width: 768px) {
+/* Avoid overlap with the fixed MobileBottomNav (58px) — shown on screens ≤1100px */
+@media (max-width: 1100px) {
   .ik-refresh-fab {
     right: 16px;
     /* Lift above the fixed MobileBottomNav (58px) plus iOS safe area */
