@@ -20,6 +20,8 @@ export default defineNuxtConfig({
     public: {
       apiBaseUrl: "",
       appName: "绳网",
+      /** Dev/preview: set `NUXT_PUBLIC_ENABLE_SERVICE_WORKER=true` to register `/sw.js`. Production always registers via the client plugin. */
+      enableServiceWorker: process.env.NUXT_PUBLIC_ENABLE_SERVICE_WORKER === "true",
     },
   },
   app: {
