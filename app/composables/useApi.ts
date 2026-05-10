@@ -1,3 +1,4 @@
+import type { QueryClient, QueryKey } from "@tanstack/vue-query";
 import type { ApiClientError, Pagination } from "~/types/api";
 import type {
   Author,
@@ -19,6 +20,45 @@ import {
   DEFAULT_PAGE_SIZE,
   parseStart,
 } from "~/utils/pagination";
+
+// ── 集中定义 queryKey，便于写接口精准 invalidate ─────────────
+const qk = {
+  me: {
+    self: ["me", "self"] as QueryKey,
+    profile: ["me", "profile"] as QueryKey,
+    drafts: ["me", "drafts"] as QueryKey,
+    draft: (id: string) => ["me", "drafts", id] as QueryKey,
+    businessCards: (type?: BusinessCardType) =>
+      type ? (["me", "business-cards", type] as QueryKey) : (["me", "business-cards"] as QueryKey),
+    avatars: ["me", "avatars"] as QueryKey,
+    pinnedArticles: ["me", "pinned-articles"] as QueryKey,
+  },
+  articles: {
+    search: (query: string, start: number, limit: number) =>
+      ["articles", "search", query, start, limit] as QueryKey,
+    searchAll: ["articles", "search"] as QueryKey,
+    detail: (id: string) => ["articles", "detail", id] as QueryKey,
+    detailAll: ["articles", "detail"] as QueryKey,
+    comments: (discussionId: string, start: number, limit: number) =>
+      ["articles", "comments", discussionId, start, limit] as QueryKey,
+    commentsOf: (discussionId: string) =>
+      ["articles", "comments", discussionId] as QueryKey,
+  },
+  profile: {
+    detail: (documentId: string) => ["profile", documentId] as QueryKey,
+    articles: (documentId: string, start: number, limit: number) =>
+      ["profile", documentId, "articles", start, limit] as QueryKey,
+    articlesOf: (documentId: string) => ["profile", documentId, "articles"] as QueryKey,
+    comments: (documentId: string, start: number, limit: number) =>
+      ["profile", documentId, "comments", start, limit] as QueryKey,
+    commentsOf: (documentId: string) => ["profile", documentId, "comments"] as QueryKey,
+  },
+};
+
+// 单条资源类接口的默认 staleTime（稍短），列表可稍长
+const STALE_DETAIL = 2 * 60 * 1000; // 2 min
+const STALE_LIST = 1 * 60 * 1000; // 1 min
+const STALE_ME = 2 * 60 * 1000; // 2 min
 
 interface AuthResult {
   token: string | null;
@@ -364,9 +404,35 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
 }
 
 export function useApi() {
-  const { $api } = useNuxtApp();
+  const { $api, $queryClient } = useNuxtApp();
   const config = useRuntimeConfig();
   const apiBaseUrl = String(config.public.apiBaseUrl || "").replace(/\/+$/, "");
+
+  // 统一的读接口缓存包裹器（staleTime 内同 queryKey 直接命中，不触发 queryFn）
+  const cachedRead = <T>(
+    queryKey: QueryKey,
+    queryFn: () => Promise<T>,
+    staleTime = STALE_LIST,
+  ): Promise<T> => {
+    const qc = $queryClient as QueryClient | undefined;
+    if (!qc) return queryFn();
+    return qc.fetchQuery({ queryKey, queryFn, staleTime });
+  };
+
+  const invalidate = (queryKey: QueryKey) => {
+    const qc = $queryClient as QueryClient | undefined;
+    if (!qc) return;
+    // 非 exact：以 queryKey 为前缀批量失效；下次 fetchQuery 时会真正重新拉取
+    qc.invalidateQueries({ queryKey });
+  };
+
+  const clearAllCache = () => {
+    const qc = $queryClient as QueryClient | undefined;
+    qc?.clear();
+  };
+
+  // 供页面在"用户明确刷新"等场景下跳过 staleTime 缓存使用
+  const invalidateQueries = (queryKey: QueryKey) => invalidate(queryKey);
 
   const login = async (
     email: string,
@@ -377,6 +443,8 @@ export function useApi() {
       body: { identifier: email, password },
     });
     const data = response as Record<string, unknown>;
+    // 身份变更：清空所有缓存，避免带上旧用户的 isRead / liked 等个性化字段
+    clearAllCache();
     return {
       token: (data.jwt as string | undefined) || null,
       user: toAuthor(data.user, apiBaseUrl),
@@ -409,6 +477,7 @@ export function useApi() {
       body: { email, code, password },
     });
     const data = response as Record<string, unknown>;
+    clearAllCache();
     return {
       token: (data.jwt as string | undefined) || null,
       user: toAuthor(data.user, apiBaseUrl),
@@ -416,8 +485,14 @@ export function useApi() {
   };
 
   const getSelfUser = async (): Promise<Author> => {
-    const response = await $api("/api/me/profile");
-    return toAuthor(response, apiBaseUrl);
+    return cachedRead(
+      qk.me.self,
+      async () => {
+        const response = await $api("/api/me/profile");
+        return toAuthor(response, apiBaseUrl);
+      },
+      STALE_ME,
+    );
   };
 
   const mergeReadStatus = async (discussions: Discussion[]) => {
@@ -451,26 +526,38 @@ export function useApi() {
     endCur = "",
   ): Promise<Pagination<Discussion>> => {
     const start = parseStart(endCur);
-    const endpoint = query ? "/api/articles/search" : "/api/articles/list";
-    const response = await $api(endpoint, {
-      query: {
-        ...(query ? { q: query } : {}),
-        start: String(start),
-        limit: String(DEFAULT_PAGE_SIZE),
+    return cachedRead(
+      qk.articles.search(query, start, DEFAULT_PAGE_SIZE),
+      async () => {
+        const endpoint = query ? "/api/articles/search" : "/api/articles/list";
+        const response = await $api(endpoint, {
+          query: {
+            ...(query ? { q: query } : {}),
+            start: String(start),
+            limit: String(DEFAULT_PAGE_SIZE),
+          },
+        });
+        const meta = extractPaginationMeta(response);
+        const data = unwrapData<unknown[]>(response) || [];
+        const page = buildPagination(data.map((item) => toDiscussion(item, apiBaseUrl)), start, meta);
+        await mergeReadStatus(page.nodes);
+        return page;
       },
-    });
-    const meta = extractPaginationMeta(response);
-    const data = unwrapData<unknown[]>(response) || [];
-    const page = buildPagination(data.map((item) => toDiscussion(item, apiBaseUrl)), start, meta);
-    await mergeReadStatus(page.nodes);
-    return page;
+      STALE_LIST,
+    );
   };
 
   const getDiscussion = async (id: string): Promise<Discussion> => {
-    const response = await $api(`/api/articles/detail/${id}`);
-    const discussion = toDiscussion(unwrapData(response), apiBaseUrl);
-    await mergeReadStatus([discussion]);
-    return discussion;
+    return cachedRead(
+      qk.articles.detail(id),
+      async () => {
+        const response = await $api(`/api/articles/detail/${id}`);
+        const discussion = toDiscussion(unwrapData(response), apiBaseUrl);
+        await mergeReadStatus([discussion]);
+        return discussion;
+      },
+      STALE_DETAIL,
+    );
   };
 
   const recordArticleView = async (id: string): Promise<number | undefined> => {
@@ -489,16 +576,22 @@ export function useApi() {
     endCur = "",
   ): Promise<Pagination<Comment>> => {
     const start = parseStart(endCur);
-    const response = await $api("/api/comments/list", {
-      query: {
-        article: discussionId,
-        start: String(start),
-        limit: String(DEFAULT_PAGE_SIZE),
+    return cachedRead(
+      qk.articles.comments(discussionId, start, DEFAULT_PAGE_SIZE),
+      async () => {
+        const response = await $api("/api/comments/list", {
+          query: {
+            article: discussionId,
+            start: String(start),
+            limit: String(DEFAULT_PAGE_SIZE),
+          },
+        });
+        const meta = extractPaginationMeta(response);
+        const data = unwrapData<unknown[]>(response) || [];
+        return buildPagination(data.map((item) => toComment(item, apiBaseUrl)), start, meta);
       },
-    });
-    const meta = extractPaginationMeta(response);
-    const data = unwrapData<unknown[]>(response) || [];
-    return buildPagination(data.map((item) => toComment(item, apiBaseUrl)), start, meta);
+      STALE_LIST,
+    );
   };
 
   const addDiscussionComment = async ({
@@ -507,7 +600,7 @@ export function useApi() {
     parentId,
     authorDocumentId,
   }: DiscussionCommentPayload) => {
-    return await $api("/api/comments", {
+    const res = await $api("/api/comments", {
       method: "POST",
       body: {
         data: {
@@ -518,12 +611,20 @@ export function useApi() {
         },
       },
     });
+    // 评论数 & 评论列表改变
+    invalidate(qk.articles.commentsOf(discussionId));
+    invalidate(qk.articles.detail(discussionId));
+    return res;
   };
 
   const deleteComment = async (commentId: string): Promise<void> => {
     await $api(`/api/comments/${commentId}`, {
       method: "DELETE",
     });
+    // 不知道 discussionId，保守批量失效所有评论列表 & 帖子详情（评论数） & profile 评论
+    invalidate(["articles", "comments"]);
+    invalidate(["articles", "detail"]);
+    invalidate(["profile"]);
   };
 
   const toggleLike = async (
@@ -564,9 +665,18 @@ export function useApi() {
       method: "POST",
       body: { articleDocumentIds, markAsRead: true },
     });
+    // 已读状态变化不一定需要立刻失效（页面通常已本地同步），但下次重拉时保持正确
   };
 
   const getProfile = async (documentId: string): Promise<Profile> => {
+    return cachedRead(
+      qk.profile.detail(documentId),
+      () => getProfileImpl(documentId),
+      STALE_DETAIL,
+    );
+  };
+
+  const getProfileImpl = async (documentId: string): Promise<Profile> => {
     const response = await $api(`/api/profiles/${documentId}`);
     const data = unwrapData<Record<string, unknown>>(response);
 
@@ -637,21 +747,27 @@ export function useApi() {
     limit = DEFAULT_PAGE_SIZE,
   ): Promise<Pagination<Discussion>> => {
     const start = parseStart(endCur);
-    const response = await $api(`/api/profiles/${documentId}/articles`, {
-      query: {
-        start: String(start),
-        limit: String(limit),
+    return cachedRead(
+      qk.profile.articles(documentId, start, limit),
+      async () => {
+        const response = await $api(`/api/profiles/${documentId}/articles`, {
+          query: {
+            start: String(start),
+            limit: String(limit),
+          },
+        });
+        const meta = extractPaginationMeta(response);
+        const data = unwrapData<unknown[]>(response) || [];
+        const page = buildPagination(data.map((item) => toDiscussion(item, apiBaseUrl)), start, meta);
+        // Must await: merging mutates the raw nodes in-place. If we fire-and-forget,
+        // the caller pushes them into a reactive ref before mutation happens, and
+        // direct mutation on the raw target won't trigger Vue's reactivity, so
+        // every card stays in the unread (blue) state until the next re-render.
+        await mergeReadStatus(page.nodes);
+        return page;
       },
-    });
-    const meta = extractPaginationMeta(response);
-    const data = unwrapData<unknown[]>(response) || [];
-    const page = buildPagination(data.map((item) => toDiscussion(item, apiBaseUrl)), start, meta);
-    // Must await: merging mutates the raw nodes in-place. If we fire-and-forget,
-    // the caller pushes them into a reactive ref before mutation happens, and
-    // direct mutation on the raw target won't trigger Vue's reactivity, so
-    // every card stays in the unread (blue) state until the next re-render.
-    await mergeReadStatus(page.nodes);
-    return page;
+      STALE_LIST,
+    );
   };
 
   const getProfileComments = async (
@@ -659,15 +775,21 @@ export function useApi() {
     endCur = "",
   ): Promise<Pagination<Comment>> => {
     const start = parseStart(endCur);
-    const response = await $api(`/api/profiles/${documentId}/comments`, {
-      query: {
-        start: String(start),
-        limit: String(DEFAULT_PAGE_SIZE),
+    return cachedRead(
+      qk.profile.comments(documentId, start, DEFAULT_PAGE_SIZE),
+      async () => {
+        const response = await $api(`/api/profiles/${documentId}/comments`, {
+          query: {
+            start: String(start),
+            limit: String(DEFAULT_PAGE_SIZE),
+          },
+        });
+        const meta = extractPaginationMeta(response);
+        const data = unwrapData<unknown[]>(response) || [];
+        return buildPagination(data.map((item) => toComment(item, apiBaseUrl)), start, meta);
       },
-    });
-    const meta = extractPaginationMeta(response);
-    const data = unwrapData<unknown[]>(response) || [];
-    return buildPagination(data.map((item) => toComment(item, apiBaseUrl)), start, meta);
+      STALE_LIST,
+    );
   };
 
   const createArticleDraft = async (payload: {
@@ -694,6 +816,7 @@ export function useApi() {
       body: { data },
     });
     const raw = unwrapData<Record<string, unknown>>(response);
+    invalidate(qk.me.drafts);
     return toDraftArticle(raw);
   };
 
@@ -720,6 +843,9 @@ export function useApi() {
       body: { data },
     });
     const raw = unwrapData<Record<string, unknown>>(response);
+    invalidate(qk.me.draft(id));
+    invalidate(qk.me.drafts);
+    invalidate(qk.articles.detail(id));
     return toDraftArticle(raw);
   };
 
@@ -728,37 +854,57 @@ export function useApi() {
       method: "POST",
       body: {},
     });
+    invalidate(qk.me.drafts);
+    invalidate(qk.articles.detail(id));
+    invalidate(qk.articles.searchAll);
+    invalidate(["profile"]);
   };
 
   const deleteArticle = async (id: string): Promise<void> => {
     await $api(`/api/articles/${id}`, {
       method: "DELETE",
     });
+    invalidate(qk.me.drafts);
+    invalidate(qk.articles.detail(id));
+    invalidate(qk.articles.searchAll);
+    invalidate(["profile"]);
   };
 
   const getMyDrafts = async (
     endCur = "",
   ): Promise<Pagination<DraftArticle>> => {
     const start = parseStart(endCur);
-    const response = await $api("/api/articles/my/drafts", {
-      query: {
-        start: String(start),
-        limit: String(DEFAULT_PAGE_SIZE),
+    return cachedRead(
+      ["me", "drafts", start, DEFAULT_PAGE_SIZE] as QueryKey,
+      async () => {
+        const response = await $api("/api/articles/my/drafts", {
+          query: {
+            start: String(start),
+            limit: String(DEFAULT_PAGE_SIZE),
+          },
+        });
+        const meta = extractPaginationMeta(response);
+        const data = unwrapData<unknown[]>(response) || [];
+        return buildPagination(
+          data.map((item) => toDraftArticle(item as Record<string, unknown>)),
+          start,
+          meta,
+        );
       },
-    });
-    const meta = extractPaginationMeta(response);
-    const data = unwrapData<unknown[]>(response) || [];
-    return buildPagination(
-      data.map((item) => toDraftArticle(item as Record<string, unknown>)),
-      start,
-      meta,
+      STALE_LIST,
     );
   };
 
   const getMyDraftDetail = async (documentId: string): Promise<DraftArticle> => {
-    const response = await $api(`/api/articles/my/detail/${documentId}`);
-    const raw = unwrapData<Record<string, unknown>>(response);
-    return toDraftArticle(raw);
+    return cachedRead(
+      qk.me.draft(documentId),
+      async () => {
+        const response = await $api(`/api/articles/my/detail/${documentId}`);
+        const raw = unwrapData<Record<string, unknown>>(response);
+        return toDraftArticle(raw);
+      },
+      STALE_DETAIL,
+    );
   };
 
   const signUpload = async (payload: {
@@ -835,16 +981,22 @@ export function useApi() {
   };
 
   const getMyBusinessCards = async (type?: BusinessCardType): Promise<MyBusinessCardsResult> => {
-    const response = await $api("/api/me/business-cards", {
-      query: type ? { type } : undefined,
-    });
-    const data = response as Record<string, unknown>;
-    const rawCards = Array.isArray(data.data) ? data.data : [];
-    return {
-      cards: rawCards.map((item) => toBusinessCard(item, apiBaseUrl)).filter(Boolean) as BusinessCard[],
-      equippedCardDocumentId: (data.equippedCardDocumentId as string) || null,
-      equippedCard: toBusinessCard(data.equippedCard, apiBaseUrl) || null,
-    };
+    return cachedRead(
+      qk.me.businessCards(type),
+      async () => {
+        const response = await $api("/api/me/business-cards", {
+          query: type ? { type } : undefined,
+        });
+        const data = response as Record<string, unknown>;
+        const rawCards = Array.isArray(data.data) ? data.data : [];
+        return {
+          cards: rawCards.map((item) => toBusinessCard(item, apiBaseUrl)).filter(Boolean) as BusinessCard[],
+          equippedCardDocumentId: (data.equippedCardDocumentId as string) || null,
+          equippedCard: toBusinessCard(data.equippedCard, apiBaseUrl) || null,
+        };
+      },
+      STALE_ME,
+    );
   };
 
   const equipBusinessCard = async (documentId: string | null): Promise<void> => {
@@ -852,16 +1004,24 @@ export function useApi() {
       method: "PUT",
       body: { documentId },
     });
+    invalidate(["me", "business-cards"]);
+    invalidate(["profile"]);
   };
 
   const getMyAvatars = async (): Promise<{ avatars: Avatar[]; equippedAvatarDocumentId: string | null }> => {
-    const response = await $api("/api/me/avatars");
-    const data = response as Record<string, unknown>;
-    const rawAvatars = Array.isArray(data.data) ? data.data : [];
-    return {
-      avatars: rawAvatars.map((item) => toAvatar(item, apiBaseUrl)).filter(Boolean) as Avatar[],
-      equippedAvatarDocumentId: (data.equippedAvatarDocumentId as string) || null,
-    };
+    return cachedRead(
+      qk.me.avatars,
+      async () => {
+        const response = await $api("/api/me/avatars");
+        const data = response as Record<string, unknown>;
+        const rawAvatars = Array.isArray(data.data) ? data.data : [];
+        return {
+          avatars: rawAvatars.map((item) => toAvatar(item, apiBaseUrl)).filter(Boolean) as Avatar[],
+          equippedAvatarDocumentId: (data.equippedAvatarDocumentId as string) || null,
+        };
+      },
+      STALE_ME,
+    );
   };
 
   const equipAvatar = async (documentId: string | null): Promise<void> => {
@@ -869,6 +1029,9 @@ export function useApi() {
       method: "PUT",
       body: { documentId },
     });
+    invalidate(qk.me.avatars);
+    invalidate(qk.me.self);
+    invalidate(["profile"]);
   };
 
   const uploadCustomAvatar = async (
@@ -883,6 +1046,9 @@ export function useApi() {
     onProgress?.(100);
     const data = response as Record<string, unknown>;
     const avatar = data.avatar as Record<string, unknown> | undefined;
+    invalidate(qk.me.avatars);
+    invalidate(qk.me.self);
+    invalidate(["profile"]);
     return { url: normalizeMediaUrl(avatar?.url, apiBaseUrl) };
   };
 
@@ -892,6 +1058,9 @@ export function useApi() {
       body: { name },
     });
     const data = response as Record<string, unknown>;
+    invalidate(qk.me.self);
+    invalidate(qk.me.profile);
+    invalidate(["profile"]);
     return { name: String(data.name || name) };
   };
 
@@ -901,6 +1070,9 @@ export function useApi() {
       body: { bio },
     });
     const data = response as Record<string, unknown>;
+    invalidate(qk.me.self);
+    invalidate(qk.me.profile);
+    invalidate(["profile"]);
     return { bio: String(data.bio ?? bio) };
   };
 
@@ -910,13 +1082,22 @@ export function useApi() {
       body: { profileHidden },
     });
     const data = response as Record<string, unknown>;
+    invalidate(qk.me.self);
+    invalidate(qk.me.profile);
+    invalidate(["profile"]);
     return { profileHidden: data.profileHidden === true };
   };
 
   const getMyProfileSettings = async (): Promise<{ profileHidden: boolean }> => {
-    const response = await $api("/api/me/profile");
-    const data = response as Record<string, unknown>;
-    return { profileHidden: data.profileHidden === true };
+    return cachedRead(
+      qk.me.profile,
+      async () => {
+        const response = await $api("/api/me/profile");
+        const data = response as Record<string, unknown>;
+        return { profileHidden: data.profileHidden === true };
+      },
+      STALE_ME,
+    );
   };
 
   const getPinnedArticles = async (
@@ -931,28 +1112,34 @@ export function useApi() {
     }>;
     max: number;
   }> => {
-    const response = await $api("/api/me/profile/pinned-articles", {
-      query: limit != null ? { limit: String(limit) } : undefined,
-    });
-    const data = response as Record<string, unknown>;
-    const pinnedRaw = data.pinned;
-    const pinned = Array.isArray(pinnedRaw)
-      ? pinnedRaw.filter((id): id is string => typeof id === "string")
-      : pinnedRaw === null
-        ? null
-        : null;
-    const candidatesRaw = Array.isArray(data.candidates) ? data.candidates : [];
-    const candidates = candidatesRaw.map((item) => {
-      const c = item as Record<string, unknown>;
-      return {
-        documentId: String(c.documentId || ""),
-        title: String(c.title || ""),
-        cover: extractMediaMeta(c.cover, apiBaseUrl),
-        updatedAt: typeof c.updatedAt === "string" ? c.updatedAt : undefined,
-      };
-    });
-    const max = Number(data.max) || 6;
-    return { pinned, candidates, max };
+    return cachedRead(
+      [...qk.me.pinnedArticles, limit ?? null] as QueryKey,
+      async () => {
+        const response = await $api("/api/me/profile/pinned-articles", {
+          query: limit != null ? { limit: String(limit) } : undefined,
+        });
+        const data = response as Record<string, unknown>;
+        const pinnedRaw = data.pinned;
+        const pinned = Array.isArray(pinnedRaw)
+          ? pinnedRaw.filter((id): id is string => typeof id === "string")
+          : pinnedRaw === null
+            ? null
+            : null;
+        const candidatesRaw = Array.isArray(data.candidates) ? data.candidates : [];
+        const candidates = candidatesRaw.map((item) => {
+          const c = item as Record<string, unknown>;
+          return {
+            documentId: String(c.documentId || ""),
+            title: String(c.title || ""),
+            cover: extractMediaMeta(c.cover, apiBaseUrl),
+            updatedAt: typeof c.updatedAt === "string" ? c.updatedAt : undefined,
+          };
+        });
+        const max = Number(data.max) || 6;
+        return { pinned, candidates, max };
+      },
+      STALE_ME,
+    );
   };
 
   const updatePinnedArticles = async (
@@ -964,6 +1151,8 @@ export function useApi() {
     });
     const data = response as Record<string, unknown>;
     const result = data.pinned;
+    invalidate(qk.me.pinnedArticles);
+    invalidate(["profile"]);
     return {
       pinned: Array.isArray(result)
         ? result.filter((id): id is string => typeof id === "string")
@@ -974,6 +1163,8 @@ export function useApi() {
   };
 
   return {
+    clearAllCache,
+    invalidateQueries,
     login,
     sendRegisterCode,
     registerWithCode,

@@ -1,0 +1,35 @@
+# Netlify / Cloudflare Pages cache headers
+# 约定：_nuxt/ 下的产物含内容 hash，可以 immutable 长缓存；
+# index.html 必须 no-cache，保证新版能即时生效。
+
+# Nuxt/Vite 构建产物（带 hash）
+/_nuxt/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 字体
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 图片资源（站内静态图）
+/images/*
+  Cache-Control: public, max-age=2592000
+
+# 自定义光标
+/cursors/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 其他可以长缓存的静态根资源
+/favicon.png
+  Cache-Control: public, max-age=2592000
+/icon.webp
+  Cache-Control: public, max-age=2592000
+/robots.txt
+  Cache-Control: public, max-age=86400
+
+# SPA 入口：绝不允许长缓存，否则用户看不到新版
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/404.html
+  Cache-Control: public, max-age=0, must-revalidate
