@@ -27,9 +27,18 @@ export function resolveErrorMessage(error: unknown, fallback = "请求失败"): 
   if (e.code === "REGISTER_CODE_INVALID" && typeof attemptsRemaining === "number") {
     return `验证码错误，还可尝试 ${attemptsRemaining} 次`;
   }
+  // 网络错误：无 statusCode 且命中网络错误特征
   if (!statusCode && NETWORK_ERROR_PATTERNS.some((pattern) => message.includes(pattern))) {
     return "网络异常，请稍后重试";
   }
+  // 后端返回了具体的业务 code 或可读 message（即 plugins/api.ts:toApiError 从 body 提取到了 error.code/error.message）
+  // 优先展示后端文案，避免被 5xx 等通用文案覆盖（如后端把 "账号或密码错误" 用 5xx + ValidationError 返回的情况）
+  const hasBusinessCode = typeof e.code === "string" && e.code.length > 0;
+  const hasBusinessMessage = !!message && message !== "请求失败";
+  if (hasBusinessCode || hasBusinessMessage) {
+    return message || fallback;
+  }
+  // 兜底：服务器错误且无业务文案时给通用提示
   if (statusCode && statusCode >= 500) {
     return "服务器异常，请稍后重试";
   }
