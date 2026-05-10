@@ -1181,7 +1181,7 @@ if (import.meta.client && auth.isLogin) {
   align-items: center;
   gap: 4px;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 900;
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1332,7 +1332,7 @@ if (import.meta.client && auth.isLogin) {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 900;
   color: #f0f0f0;
   letter-spacing: 0.4px;
 }
@@ -1343,7 +1343,7 @@ if (import.meta.client && auth.isLogin) {
 
 .ik-create-section__hint {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: #777;
   letter-spacing: 0.2px;
 }
@@ -1364,7 +1364,7 @@ if (import.meta.client && auth.isLogin) {
   background: rgba(215, 255, 0, 0.12);
   color: #d7ff00;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.3px;
   font-variant-numeric: tabular-nums;
 }
@@ -1384,7 +1384,7 @@ if (import.meta.client && auth.isLogin) {
   background: transparent;
   color: #fff;
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.3px;
   line-height: 1.4;
   border: none;
@@ -1393,7 +1393,7 @@ if (import.meta.client && auth.isLogin) {
 
 .ik-create-title-input :deep(.z-textarea__inner)::placeholder {
   color: #4a4a4a;
-  font-weight: 600;
+  font-weight: 700;
   font-style: normal;
 }
 
@@ -1539,13 +1539,13 @@ if (import.meta.client && auth.isLogin) {
   background: #d7ff00;
   color: #000;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.3px;
 }
 
 .ik-cover-thumb__pct {
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 900;
   color: #fff;
   letter-spacing: 0.3px;
   font-variant-numeric: tabular-nums;
@@ -1588,7 +1588,7 @@ if (import.meta.client && auth.isLogin) {
   background: #d7ff00;
   color: #000;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.3px;
   pointer-events: none;
 }
@@ -1716,7 +1716,7 @@ if (import.meta.client && auth.isLogin) {
 
 .ik-create-footer__count {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: #777;
   font-variant-numeric: tabular-nums;
 }
@@ -1970,7 +1970,7 @@ if (import.meta.client && auth.isLogin) {
     background: #d7ff00;
     color: #000;
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 900;
     cursor: pointer;
   }
   .ik-mobile-cover-tile__primary {
@@ -1982,7 +1982,7 @@ if (import.meta.client && auth.isLogin) {
     background: rgba(215, 255, 0, 0.85);
     color: #000;
     font-size: 10px;
-    font-weight: 800;
+    font-weight: 900;
     letter-spacing: 0.5px;
   }
   .ik-mobile-cover-tile__remove {
@@ -2081,7 +2081,7 @@ if (import.meta.client && auth.isLogin) {
   }
   .ik-mobile-row__title {
     flex: 1;
-    font-weight: 600;
+    font-weight: 700;
   }
   .ik-mobile-row__value {
     color: #9a9a9a;
@@ -2144,7 +2144,7 @@ if (import.meta.client && auth.isLogin) {
     background: #fbc02d;
     color: #000;
     font-size: 10px;
-    font-weight: 800;
+    font-weight: 900;
     line-height: 16px;
     text-align: center;
   }
@@ -2158,7 +2158,7 @@ if (import.meta.client && auth.isLogin) {
     color: #000;
     font-family: inherit;
     font-size: 15px;
-    font-weight: 800;
+    font-weight: 900;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -2371,7 +2371,7 @@ if (import.meta.client && auth.isLogin) {
   flex: 1;
   color: #fff;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
 }
 .ik-mobile-settings-row__chevron {
   width: 18px;
