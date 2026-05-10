@@ -724,7 +724,7 @@ onBeforeUnmount(() => {
 }
 .ik-stat__label {
   color: rgba(255, 255, 255, 0.85);
-  font-weight: 600;
+  font-weight: 700;
 }
 .ik-stat__num {
   font-weight: 900;
@@ -745,7 +745,7 @@ onBeforeUnmount(() => {
 .ik-banner-footer__sig {
   margin: 0;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   color: rgba(255,255,255,0.95);
   line-height: 1.5;
 }

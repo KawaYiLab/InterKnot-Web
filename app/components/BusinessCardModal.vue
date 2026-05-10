@@ -607,7 +607,7 @@ onBeforeUnmount(() => {
   border-radius: 0 0 14px 14px;
   overflow: hidden;
 }
-.ik-bc-preview__sig { margin: 0; font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.95); line-height: 1.5; }
+.ik-bc-preview__sig { margin: 0; font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.95); line-height: 1.5; }
 .ik-bc-preview__sig--empty { color: rgba(255,255,255,0.35); font-style: italic; }
 
 /* ── Bottom split ── */
