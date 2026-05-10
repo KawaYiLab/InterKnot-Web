@@ -12,8 +12,10 @@ import {
   PhotoIcon,
   XMarkIcon,
   PlusIcon,
-  PencilSquareIcon,
-  MagnifyingGlassIcon,
+  Cog6ToothIcon,
+  TrashIcon,
+  ChevronRightIcon,
+  RectangleStackIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 
@@ -26,6 +28,7 @@ const api = useApi();
 const auth = useAuthStore();
 const router = useRouter();
 const loginDialog = useLoginDialog();
+const confirmDialog = useConfirmDialog();
 const message = useMessage();
 
 useSeoMeta({
@@ -47,6 +50,12 @@ const isSavingDraft = ref(false);
 const isPublishing = ref(false);
 const isDeletingDraft = ref(false);
 const hasUnsavedChanges = ref(false);
+
+/* ── Mobile-only UI state ─────────────────────────── */
+const isMobileDraftsOpen = ref(false);
+const isMobileSettingsOpen = ref(false);
+const mobileCoverInputRef = ref<HTMLInputElement | null>(null);
+
 const suppressTracking = ref(false);
 const lastSavedSnapshot = ref("");
 
@@ -134,15 +143,29 @@ const performSaveDraft = async (force = false) => {
     };
 
     let result: DraftArticle;
-    if (!documentId.value) {
+    const isCreate = !documentId.value;
+    if (isCreate) {
       result = await api.createArticleDraft(payload);
     } else {
-      result = await api.updateArticleDraft(documentId.value, payload);
+      result = await api.updateArticleDraft(documentId.value!, payload);
     }
 
     if (result.documentId) {
       documentId.value = result.documentId;
     }
+
+    // 同步左侧草稿列表
+    if (result.documentId) {
+      const idx = drafts.value.findIndex(
+        (d) => d.documentId === result.documentId,
+      );
+      if (idx === -1) {
+        drafts.value.unshift(result);
+      } else {
+        drafts.value[idx] = { ...drafts.value[idx], ...result };
+      }
+    }
+
     syncSnapshot();
   } catch (err) {
     hasUnsavedChanges.value = true;
@@ -220,7 +243,10 @@ function handleFileSelect(files: FileList | File[]) {
   for (const file of toUpload) {
     const task = createUploadTask(file);
     uploadTasks.value.push(task);
-    executeUploadTask(task);
+    // ⚠️ push 进 reactive 数组后，task 的原始引用不再受 Proxy 拦截，
+    // 必须取出代理后的元素，否则上传过程中 progress/status 的更新无法触发渲染。
+    const reactiveTask = uploadTasks.value[uploadTasks.value.length - 1]!;
+    executeUploadTask(reactiveTask);
   }
 }
 
@@ -284,7 +310,8 @@ async function publish() {
 /* ── Delete Draft ─────────────────────────────────── */
 async function deleteDraft() {
   if (!documentId.value) return;
-  if (!confirm("确定要删除这个草稿吗？此操作不可恢复。")) return;
+  const ok = await confirmDialog.open({ title: "删除草稿", message: "确定要删除这个草稿吗？此操作不可恢复。", confirmText: "删除", danger: true });
+  if (!ok) return;
 
   isDeletingDraft.value = true;
 
@@ -304,15 +331,6 @@ function isDraftActive(draft: DraftArticle): boolean {
   return !!documentId.value && draft.documentId === documentId.value;
 }
 
-function isNewDraftMarker(draft: DraftArticle): boolean {
-  if (isDraftActive(draft)) return false;
-  const ts = draft.updatedAt || draft.createdAt;
-  if (!ts) return false;
-  const t = new Date(ts).getTime();
-  if (Number.isNaN(t)) return false;
-  return Date.now() - t < 24 * 60 * 60 * 1000;
-}
-
 function draftPreviewText(draft: DraftArticle): string {
   const txt = (draft.text || "").trim();
   return txt ? txt.slice(0, 40) : "无内容";
@@ -325,6 +343,27 @@ const EDITING_KEY = "__editing__";
 const activeMenuKey = computed<string>(
   () => documentId.value || EDITING_KEY,
 );
+
+/* ── Mobile sheet handlers ────────────────────────── */
+function openMobileCoverPicker() {
+  mobileCoverInputRef.value?.click();
+}
+
+function onMobileNewDraft() {
+  isMobileDraftsOpen.value = false;
+  if (documentId.value) newDraft();
+}
+
+function onMobileSelectDraft(draft: DraftArticle) {
+  isMobileDraftsOpen.value = false;
+  if (draft.documentId === documentId.value) return;
+  onMenuChange(draft.documentId);
+}
+
+async function onMobileDeleteDraft() {
+  isMobileSettingsOpen.value = false;
+  await deleteDraft();
+}
 
 function onMenuChange(name: string | number) {
   const key = String(name);
@@ -442,29 +481,108 @@ function resetEditor() {
   }
 }
 
-function newDraft() {
+async function newDraft() {
   if (hasUnsavedChanges.value && (documentId.value || hasAnyContent.value)) {
-    performSaveDraft(true).catch(() => undefined);
+    try {
+      await performSaveDraft(true);
+    } catch {
+      /* best effort */
+    }
   }
   resetEditor();
 }
 
 /* ── Drag & Drop ──────────────────────────────────── */
 const isDragging = ref(false);
+// 内部缩略图排序状态
+const draggingIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
+
+function isFileDrag(e: DragEvent): boolean {
+  // 区分外部文件拖入（dataTransfer.types 含 'Files'）与页面内拖拽
+  const types = e.dataTransfer?.types;
+  if (!types) return false;
+  // types 在不同浏览器是 DOMStringList 或数组，统一为数组判断
+  return Array.from(types as ArrayLike<string>).includes("Files");
+}
 
 function onDragOver(e: DragEvent) {
+  if (!isFileDrag(e)) return;
   e.preventDefault();
   isDragging.value = true;
 }
-function onDragLeave() {
+function onDragLeave(e: DragEvent) {
+  if (!isFileDrag(e)) return;
   isDragging.value = false;
 }
 function onDrop(e: DragEvent) {
+  if (!isFileDrag(e)) return;
   e.preventDefault();
   isDragging.value = false;
-  if (e.dataTransfer?.files) {
+  if (e.dataTransfer?.files?.length) {
     handleFileSelect(e.dataTransfer.files);
   }
+}
+
+/* ── Cover preview (lightGallery, done tasks only) ── */
+const { openGallery: openLightGallery, preload: preloadGallery } = useLightGallery();
+
+function openCoverPreview(index: number) {
+  const task = uploadTasks.value[index];
+  if (!task || task.status !== "done") return;
+  // 仅收集已上传完成的图，保持当前显示顺序
+  const doneTasks = uploadTasks.value.filter((t) => t.status === "done");
+  if (!doneTasks.length) return;
+  const images = doneTasks.map((t) => ({ src: t.serverUrl || t.previewUrl }));
+  const currentIndex = doneTasks.findIndex((t) => t.localId === task.localId);
+  openLightGallery(images, currentIndex >= 0 ? currentIndex : 0);
+}
+
+/* ── Cover thumbnail reorder (drag inside grid) ──── */
+function onThumbDragStart(e: DragEvent, index: number) {
+  const task = uploadTasks.value[index];
+  // 仅允许已上传完成的图片参与排序
+  if (!task || task.status !== "done") {
+    e.preventDefault();
+    return;
+  }
+  draggingIndex.value = index;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "move";
+    // 标记为内部拖拽载荷（与外部 'Files' 拖拽互斥）
+    e.dataTransfer.setData("application/x-cover-index", String(index));
+  }
+}
+
+function onThumbDragOver(e: DragEvent, index: number) {
+  if (draggingIndex.value === null) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  if (dragOverIndex.value !== index) dragOverIndex.value = index;
+}
+
+function onThumbDrop(e: DragEvent, index: number) {
+  if (draggingIndex.value === null) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const from = draggingIndex.value;
+  const to = index;
+  draggingIndex.value = null;
+  dragOverIndex.value = null;
+  if (from === to) return;
+  const target = uploadTasks.value[to];
+  // 排序的目标位置必须也是已上传完成的图片，避免穿插到上传中/失败的项
+  if (!target || target.status !== "done") return;
+  const arr = uploadTasks.value;
+  const [moved] = arr.splice(from, 1);
+  if (moved) arr.splice(to, 0, moved);
+  markDirty();
+}
+
+function onThumbDragEnd() {
+  draggingIndex.value = null;
+  dragOverIndex.value = null;
 }
 
 /* ── Lifecycle ────────────────────────────────────── */
@@ -487,12 +605,15 @@ if (import.meta.client && auth.isLogin) {
 
 <template>
   <section class="ik-create-page" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+    <!-- 45° 斜线纹理背景 -->
+    <div class="ik-create-page__stripe" aria-hidden="true"></div>
+
     <!-- Drag overlay -->
     <Transition name="ik-fade">
       <div v-if="isDragging" class="ik-create-drop-overlay">
         <div class="ik-create-drop-overlay__inner">
           <ArrowUpTrayIcon style="width:48px;height:48px;color:#d7ff00" />
-          <span class="ik-create-drop-overlay__text">释放以上传封面图片</span>
+          <span class="ik-create-drop-overlay__text">释放以上传图片</span>
         </div>
       </div>
     </Transition>
@@ -511,11 +632,9 @@ if (import.meta.client && auth.isLogin) {
             <div class="ik-nav-item__content">
               <span class="ik-nav-item__title">
                 <span class="ik-nav-item__editing-arrow">▶</span>
-                {{ title.trim() || "新建文章" }}
+                {{ documentId ? "编辑新委托" : (title.trim() || "编辑委托") }}
               </span>
-              <span class="ik-nav-item__meta">
-                {{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }} 图 · {{ editorWordCount }} 字
-              </span>
+              <span v-if="documentId" class="ik-nav-item__meta">点击开始编辑新委托</span>
             </div>
           </z-menu-item>
 
@@ -526,7 +645,6 @@ if (import.meta.client && auth.isLogin) {
             :name="draft.documentId"
           >
             <div class="ik-nav-item__content">
-              <span v-if="isNewDraftMarker(draft)" class="ik-nav-item__badge">NEW!</span>
               <span class="ik-nav-item__title">{{ draft.title || "无标题" }}</span>
               <span class="ik-nav-item__meta">{{ draftPreviewText(draft) }}</span>
             </div>
@@ -552,54 +670,63 @@ if (import.meta.client && auth.isLogin) {
 
       <!-- ── Right: Form Panel ───────────────── -->
       <main class="ik-create-panel">
-        <div class="ik-create-panel__inner">
-          <h3 class="ik-section-title">委托详情</h3>
-
-          <!-- Title field -->
-          <div class="ik-field-row">
-            <span class="ik-field-row__label">委托标题</span>
-            <input
+        <div class="ik-create-panel__body">
+          <!-- Title field — flat TextField with bottom divider (Flutter desktop style) -->
+          <div class="ik-create-section ik-create-section--title">
+            <ZTextarea
               v-model="title"
-              class="ik-field-row__input"
-              type="text"
-              placeholder="请输入标题..."
+              class="ik-create-title-input"
+              placeholder="请输入标题"
+              rows="1"
               maxlength="200"
             />
-            <span class="ik-field-row__count">{{ editorTitleCount }}/200</span>
+            <span class="ik-create-section__count">{{ editorTitleCount }}/200</span>
           </div>
 
-          <!-- Body field -->
-          <div class="ik-field-block">
-            <div class="ik-field-block__header">
-              <span class="ik-field-block__label">委托附言</span>
-              <span class="ik-field-block__hint">若仅上传图片，正文可留空</span>
+          <!-- Body section -->
+          <div class="ik-create-section">
+            <div class="ik-create-section__head">
+              <span class="ik-create-section__label">正文</span>
+              <span class="ik-create-section__hint">若仅上传图片，正文可留空</span>
             </div>
-            <div class="ik-field-block__body">
+            <div class="ik-create-editor-frame">
               <ZTextarea
                 v-model="body"
                 class="ik-create-editor__body"
                 placeholder="请尽情发挥吧..."
               />
-              <PencilSquareIcon class="ik-field-block__pencil" />
             </div>
           </div>
 
-          <!-- Covers preview -->
-          <div class="ik-field-block ik-field-block--covers">
-            <div class="ik-field-block__header">
-              <span class="ik-field-block__label">
-                <MagnifyingGlassIcon style="width:14px;height:14px" />
-                战利品预览
+          <!-- Covers section (grid layout) -->
+          <div class="ik-create-section">
+            <div class="ik-create-section__head">
+              <span class="ik-create-section__label">
+                <PhotoIcon style="width:14px;height:14px" />
+                封面图片
+                <span class="ik-create-section__count-pill">{{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
               </span>
-              <span class="ik-field-block__hint">委托发布后将作为讨论封面展示</span>
+              <span class="ik-create-section__hint">第一张图片将作为封面展示</span>
             </div>
-            <div class="ik-cover-rail">
+            <div class="ik-cover-grid">
               <div
                 v-for="(task, idx) in uploadTasks"
                 :key="task.localId"
                 class="ik-cover-thumb"
+                :class="{
+                  'ik-cover-thumb--dragging': draggingIndex === idx,
+                  'ik-cover-thumb--drag-over': dragOverIndex === idx && draggingIndex !== null && draggingIndex !== idx,
+                  'ik-cover-thumb--reorderable': task.status === 'done',
+                }"
+                :draggable="task.status === 'done'"
+                @dragstart="onThumbDragStart($event, idx)"
+                @dragover="onThumbDragOver($event, idx)"
+                @drop="onThumbDrop($event, idx)"
+                @dragend="onThumbDragEnd"
+                @mouseenter="task.status === 'done' && preloadGallery()"
+                @click="openCoverPreview(idx)"
               >
-                <img :src="task.previewUrl" :alt="task.filename" class="ik-cover-thumb__img" />
+                <img :src="task.previewUrl" :alt="task.filename" class="ik-cover-thumb__img" draggable="false" />
                 <div v-if="task.status === 'uploading'" class="ik-cover-thumb__overlay">
                   <span class="ik-cover-thumb__pct">{{ task.progress }}%</span>
                   <div class="ik-cover-thumb__bar">
@@ -607,18 +734,29 @@ if (import.meta.client && auth.isLogin) {
                   </div>
                 </div>
                 <div
-                  v-if="task.status === 'error'"
-                  class="ik-cover-thumb__overlay ik-cover-thumb__overlay--error"
-                  @click="retryUpload(task)"
+                  v-else-if="task.status === 'pending'"
+                  class="ik-cover-thumb__overlay"
                 >
-                  <span>失败</span>
-                  <span style="font-size:11px">点击重试</span>
+                  <span class="ik-cover-thumb__spinner" aria-hidden="true"></span>
                 </div>
-                <button class="ik-cover-thumb__remove" @click="removeUpload(idx)" aria-label="移除">
-                  <XMarkIcon style="width:12px;height:12px" />
+                <div
+                  v-else-if="task.status === 'error'"
+                  class="ik-cover-thumb__overlay ik-cover-thumb__overlay--error"
+                  @click.stop="retryUpload(task)"
+                >
+                  <span class="ik-cover-thumb__error-label">上传失败</span>
+                  <span class="ik-cover-thumb__retry">重试</span>
+                </div>
+                <span v-if="idx === 0" class="ik-cover-thumb__primary">封面</span>
+                <button class="ik-cover-thumb__remove" @click.stop.prevent="removeUpload(idx)" aria-label="移除">
+                  <XMarkIcon style="width:14px;height:14px" />
                 </button>
               </div>
-              <label v-if="uploadTasks.length < MAX_COVER_IMAGES" class="ik-cover-add">
+              <label
+                v-if="uploadTasks.length < MAX_COVER_IMAGES"
+                class="ik-cover-add"
+                :class="{ 'ik-cover-add--dragging': isDragging }"
+              >
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/gif,image/webp"
@@ -626,29 +764,33 @@ if (import.meta.client && auth.isLogin) {
                   hidden
                   @change="onCoverFileInput"
                 />
-                <PhotoIcon style="width:22px;height:22px" />
-                <span class="ik-cover-add__text">添加图片</span>
+                <component :is="isDragging ? ArrowUpTrayIcon : PlusIcon" class="ik-cover-add__icon" />
+                <span class="ik-cover-add__text">{{ isDragging ? '释放以上传' : '添加图片' }}</span>
               </label>
             </div>
           </div>
+
         </div>
       </main>
     </div>
 
-    <!-- ── Bottom Footer (mirrors AppHeader) ───── -->
+    <!-- ── Bottom Footer (desktop) ─────────────── -->
     <footer class="ik-create-footer">
       <div class="ik-create-footer__inner">
-        <div class="ik-create-footer__left">
-          <div class="ik-create-footer__hint">
-            <span v-if="documentId" class="ik-create-footer__draft-id">草稿 #{{ documentId.slice(-6) }}</span>
-            <span v-else class="ik-create-footer__draft-id">未保存草稿</span>
-            <span class="ik-create-footer__count">字数 {{ editorWordCount }} · 图片 {{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
-          </div>
-        </div>
+        <div class="ik-create-footer__left"></div>
         <div class="ik-create-footer__right">
           <z-button
-            type="primary"
-            size="small"
+            v-if="documentId"
+            class="ik-create-delete"
+            :loading="isDeletingDraft"
+            :disabled="isDeletingDraft"
+            @click="deleteDraft"
+          >
+            删除草稿
+          </z-button>
+          <z-button
+            class="ik-create-publish"
+            :type="canPublish ? undefined : 'primary'"
             :loading="isPublishing"
             :disabled="!canPublish"
             @click="publish"
@@ -658,6 +800,257 @@ if (import.meta.client && auth.isLogin) {
         </div>
       </div>
     </footer>
+
+    <!-- ═══════════════════════════════════════════
+         Mobile (≤768px) — Flutter-style Editor
+         本区块默认隐藏，由 CSS @media 切换显示
+         ═══════════════════════════════════════════ -->
+    <div class="ik-create-mobile" aria-hidden="true">
+      <!-- Hidden file input for "封面" setting row -->
+      <input
+        ref="mobileCoverInputRef"
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        multiple
+        hidden
+        @change="onCoverFileInput"
+      />
+
+      <!-- Cover strip (horizontal scroll) -->
+      <div class="ik-mobile-cover-strip">
+        <label
+          v-if="uploadTasks.length < MAX_COVER_IMAGES"
+          class="ik-mobile-cover-add"
+          aria-label="添加图片"
+        >
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            multiple
+            hidden
+            @change="onCoverFileInput"
+          />
+          <PlusIcon class="ik-mobile-cover-add__icon" />
+        </label>
+        <div
+          v-for="(task, idx) in uploadTasks"
+          :key="task.localId"
+          class="ik-mobile-cover-tile"
+          @click="task.status === 'done' && openCoverPreview(idx)"
+        >
+          <img
+            :src="task.previewUrl"
+            :alt="task.filename"
+            class="ik-mobile-cover-tile__img"
+            draggable="false"
+          />
+          <div
+            v-if="task.status === 'uploading'"
+            class="ik-mobile-cover-tile__overlay"
+          >
+            <span class="ik-mobile-cover-tile__pct">{{ task.progress }}%</span>
+          </div>
+          <div
+            v-else-if="task.status === 'pending'"
+            class="ik-mobile-cover-tile__overlay"
+          >
+            <span class="ik-mobile-cover-tile__spinner" aria-hidden="true"></span>
+          </div>
+          <div
+            v-else-if="task.status === 'error'"
+            class="ik-mobile-cover-tile__overlay"
+          >
+            <button
+              type="button"
+              class="ik-mobile-cover-tile__retry"
+              @click.stop="retryUpload(task)"
+            >
+              重试
+            </button>
+          </div>
+          <span v-if="idx === 0" class="ik-mobile-cover-tile__primary">封面</span>
+          <button
+            type="button"
+            class="ik-mobile-cover-tile__remove"
+            aria-label="移除"
+            @click.stop.prevent="removeUpload(idx)"
+          >
+            <XMarkIcon style="width:12px;height:12px" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Title (flat) -->
+      <input
+        v-model="title"
+        class="ik-mobile-title-input"
+        type="text"
+        placeholder="请输入标题"
+        maxlength="200"
+      />
+
+      <div class="ik-mobile-divider"></div>
+
+      <!-- Body (flat textarea) -->
+      <textarea
+        v-model="body"
+        class="ik-mobile-body-input"
+        placeholder="请尽情发挥吧"
+        rows="6"
+      ></textarea>
+
+      <div class="ik-mobile-divider"></div>
+
+      <!-- Setting rows -->
+      <button type="button" class="ik-mobile-row" @click="openMobileCoverPicker">
+        <PhotoIcon class="ik-mobile-row__icon" />
+        <span class="ik-mobile-row__title">封面</span>
+        <span class="ik-mobile-row__value">{{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
+        <ChevronRightIcon class="ik-mobile-row__chevron" />
+      </button>
+
+      <div class="ik-mobile-divider"></div>
+
+      <button
+        type="button"
+        class="ik-mobile-row"
+        :disabled="!documentId"
+        @click="isMobileSettingsOpen = true"
+      >
+        <Cog6ToothIcon class="ik-mobile-row__icon" />
+        <span class="ik-mobile-row__title">帖子设置</span>
+        <ChevronRightIcon class="ik-mobile-row__chevron" />
+      </button>
+    </div>
+
+    <!-- ── Mobile bottom nav (drafts + publish) ── -->
+    <div class="ik-mobile-footer" aria-hidden="true">
+      <button
+        v-if="auth.isLogin"
+        type="button"
+        class="ik-mobile-footer__drafts"
+        aria-label="打开草稿箱"
+        @click="isMobileDraftsOpen = true"
+      >
+        <RectangleStackIcon class="ik-mobile-footer__drafts-icon" />
+        <span v-if="drafts.length" class="ik-mobile-footer__drafts-count">
+          {{ drafts.length }}
+        </span>
+      </button>
+      <button
+        type="button"
+        class="ik-mobile-footer__publish"
+        :class="{ 'is-disabled': !canPublish }"
+        :disabled="!canPublish"
+        @click="publish"
+      >
+        <span v-if="isPublishing" class="ik-mobile-footer__spinner" aria-hidden="true"></span>
+        {{ isPublishing ? "发布中..." : isSavingDraft ? "正在保存" : "发布" }}
+      </button>
+    </div>
+
+    <!-- ── Mobile Drafts Sheet (slide up from bottom, near full height) ── -->
+    <Teleport to="body">
+      <Transition name="ik-mobile-sheet">
+        <div
+          v-if="isMobileDraftsOpen"
+          class="ik-mobile-sheet ik-mobile-sheet--full"
+          role="dialog"
+          aria-modal="true"
+          @click.self="isMobileDraftsOpen = false"
+        >
+          <div class="ik-mobile-sheet__panel ik-mobile-sheet__panel--full">
+            <div class="ik-mobile-sheet__handle"></div>
+            <header class="ik-mobile-sheet__header">
+              <span class="ik-mobile-sheet__title">草稿箱</span>
+              <button
+                type="button"
+                class="ik-mobile-sheet__close"
+                aria-label="关闭"
+                @click="isMobileDraftsOpen = false"
+              >
+                <XMarkIcon style="width:20px;height:20px" />
+              </button>
+            </header>
+            <div class="ik-mobile-sheet__body">
+              <button
+                type="button"
+                class="ik-mobile-draft-row ik-mobile-draft-row--new"
+                :class="{ 'is-active': !documentId }"
+                @click="onMobileNewDraft"
+              >
+                <span class="ik-mobile-draft-row__title">编辑新委托</span>
+                <span class="ik-mobile-draft-row__meta">
+                  {{ documentId ? "点击开始编辑新委托" : "当前正在编辑" }}
+                </span>
+              </button>
+              <button
+                v-for="draft in drafts"
+                :key="draft.documentId"
+                type="button"
+                class="ik-mobile-draft-row"
+                :class="{ 'is-active': draft.documentId === documentId }"
+                @click="onMobileSelectDraft(draft)"
+              >
+                <span class="ik-mobile-draft-row__title">
+                  {{ draft.title || "无标题" }}
+                </span>
+                <span class="ik-mobile-draft-row__meta">
+                  {{ draftPreviewText(draft) }}
+                </span>
+              </button>
+              <div v-if="!auth.isLogin" class="ik-mobile-draft-empty">
+                请先登录
+              </div>
+              <div v-else-if="draftsLoading && !drafts.length" class="ik-mobile-draft-empty">
+                加载中...
+              </div>
+              <button
+                v-if="auth.isLogin && draftsHasNext && drafts.length"
+                type="button"
+                class="ik-mobile-draft-loadmore"
+                :disabled="draftsLoading"
+                @click="loadMoreDrafts"
+              >
+                {{ draftsLoading ? "加载中..." : "加载更多" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ── Mobile Post Settings Sheet (bottom, short) ── -->
+    <Teleport to="body">
+      <Transition name="ik-mobile-sheet">
+        <div
+          v-if="isMobileSettingsOpen"
+          class="ik-mobile-sheet"
+          role="dialog"
+          aria-modal="true"
+          @click.self="isMobileSettingsOpen = false"
+        >
+          <div class="ik-mobile-sheet__panel">
+            <div class="ik-mobile-sheet__handle"></div>
+            <span class="ik-mobile-sheet__title">帖子设置</span>
+            <div class="ik-mobile-sheet__body ik-mobile-sheet__body--compact">
+              <button
+                v-if="documentId"
+                type="button"
+                class="ik-mobile-settings-row ik-mobile-settings-row--danger"
+                :disabled="isDeletingDraft"
+                @click="onMobileDeleteDraft"
+              >
+                <TrashIcon class="ik-mobile-settings-row__icon" />
+                <span class="ik-mobile-settings-row__title">删除草稿</span>
+                <ChevronRightIcon class="ik-mobile-settings-row__chevron" />
+              </button>
+              <div v-else class="ik-mobile-draft-empty">该委托尚未保存为草稿</div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>
 
@@ -674,6 +1067,31 @@ if (import.meta.client && auth.isLogin) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* 45° 斜线纹理（与帖子弹窗一致） */
+.ik-create-page__stripe {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    40deg,
+    transparent,
+    transparent 3.5px,
+    rgba(255, 255, 255, 0.09) 4.5px,
+    rgba(255, 255, 255, 0.09) 7.5px,
+    transparent 8.5px
+  );
+}
+
+.ik-create-page > .ik-create-columns {
+  position: relative;
+  z-index: 1;
+}
+
+.ik-create-footer {
+  z-index: 50;
 }
 
 /* ── Drag & Drop Overlay ─────────────────────────── */
@@ -716,10 +1134,10 @@ if (import.meta.client && auth.isLogin) {
 .ik-create-columns {
   flex: 1;
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 230px 1fr;
   gap: 16px;
   min-height: 0;
-  align-items: start;
+  align-items: stretch;
 }
 
 /* ═════════ Left Nav: Editing + Drafts (ZMenu) ═════════ */
@@ -795,19 +1213,6 @@ if (import.meta.client && auth.isLogin) {
   color: #0a0a0a;
 }
 
-.ik-nav-item__badge {
-  position: absolute;
-  top: -6px;
-  left: -2px;
-  font-size: 9px;
-  font-weight: 800;
-  font-style: italic;
-  color: #ff4d4f;
-  letter-spacing: 0.5px;
-  text-shadow: 0 0 4px rgba(255, 77, 79, 0.4);
-  pointer-events: none;
-}
-
 .ik-nav-loadmore {
   flex-shrink: 0;
   padding: 8px 10px;
@@ -840,152 +1245,193 @@ if (import.meta.client && auth.isLogin) {
   padding: 12px 0;
 }
 
-/* ═════════ Right Panel ═════════ */
+/* ═════════ Right Panel (mirrors DiscussionOverlay border) ═════════ */
 .ik-create-panel {
   display: flex;
   flex-direction: column;
-  background:
-    url("/images/tab-bg-point.webp") repeat,
-    linear-gradient(180deg, #0c0c0c 0%, #080808 100%);
-  border: 1px solid #2a2a2a;
-  border-radius: 20px;
+  padding: 4px;
+  background: #2D2C2D;
+  border-radius: 24px 0 24px 24px;
   overflow: hidden;
   min-height: 480px;
 }
 
-.ik-create-panel__inner {
+.ik-create-panel__body {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 22px 26px 26px;
+  gap: 18px;
+  padding: 24px 26px 28px;
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(180deg, #0a0a0a 0%, #070707 100%);
+  border: 4px solid #000;
+  border-radius: 22px 0 22px 22px;
+  overflow: hidden;
 }
 
-.ik-section-title {
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 800;
-  font-style: italic;
-  color: #888;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-/* ── Field Row (Title-like) ──────────────────────── */
-.ik-field-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 18px;
-  background: #0a0a0a;
-  border: 1px solid #1a1a1a;
-  border-radius: 14px;
-  transition: border-color 200ms, background 200ms;
-}
-
-.ik-field-row:focus-within {
-  border-color: rgba(215, 255, 0, 0.5);
-  background: #0d0d0d;
-}
-
-.ik-field-row__label {
-  flex-shrink: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: #888;
-  letter-spacing: 0.3px;
-}
-
-.ik-field-row__input {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 0;
-  border: none;
-  background: transparent;
-  color: #fff;
+/* ── Delete draft button (in footer) ─────────────────── */
+.ik-create-delete {
+  min-width: 120px;
   font-size: 16px;
-  font-weight: 700;
-  font-family: inherit;
-  outline: none;
+  font-weight: 900;
+  --z-button-color: #ff4444;
 }
 
-.ik-field-row__input::placeholder {
-  color: #444;
-  font-style: italic;
-  font-weight: 400;
+.ik-create-delete :deep(.z-button__inner),
+.ik-create-delete :deep(button) {
+  padding: 14px 28px;
+  font-size: 16px;
+  letter-spacing: 1px;
 }
 
-.ik-field-row__count {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: #555;
-  font-variant-numeric: tabular-nums;
+/* ── Publish button (in footer) ──────────────────── */
+.ik-create-publish {
+  min-width: 140px;
+  font-size: 16px;
+  font-weight: 900;
 }
 
-/* ── Field Block (Body / Covers) ─────────────────── */
-.ik-field-block {
+.ik-create-publish :deep(.z-button__inner),
+.ik-create-publish :deep(button) {
+  padding: 14px 32px;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+/* ── Section (flat, divider-based) ─────────────── */
+.ik-create-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px 18px 16px;
-  background: #0a0a0a;
-  border: 1px solid #1a1a1a;
-  border-radius: 14px;
 }
 
-.ik-field-block__header {
+.ik-create-section--title {
+  position: relative;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 4px 2px 14px;
+  border-bottom: 1px solid #1f1f1f;
+}
+
+.ik-create-section--title:focus-within {
+  border-bottom-color: rgba(215, 255, 0, 0.55);
+}
+
+.ik-create-section__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 0 2px;
 }
 
-.ik-field-block__label {
+.ik-create-section__label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 13px;
-  font-weight: 700;
-  color: #aaa;
-  letter-spacing: 0.3px;
+  font-weight: 800;
+  color: #f0f0f0;
+  letter-spacing: 0.4px;
 }
 
-.ik-field-block__label svg {
-  color: #666;
+.ik-create-section__label svg {
+  color: #d7ff00;
 }
 
-.ik-field-block__hint {
+.ik-create-section__hint {
   font-size: 11px;
-  font-style: italic;
-  color: #555;
+  font-weight: 600;
+  color: #777;
+  letter-spacing: 0.2px;
 }
 
-.ik-field-block__body {
+.ik-create-section__count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+  padding-bottom: 8px;
+}
+
+.ik-create-section__count-pill {
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(215, 255, 0, 0.12);
+  color: #d7ff00;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Title input (large, flat) ──────────────────── */
+.ik-create-title-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.ik-create-title-input :deep(.z-textarea__inner) {
+  padding: 6px 0;
+  background: transparent;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  line-height: 1.4;
+  border: none;
+  resize: none;
+}
+
+.ik-create-title-input :deep(.z-textarea__inner)::placeholder {
+  color: #4a4a4a;
+  font-weight: 600;
+  font-style: normal;
+}
+
+.ik-create-title-input :deep(.z-textarea__inner):focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.ik-create-title-input::after {
+  display: none;
+}
+
+/* ── Body editor frame (Flutter-like grey outline) ── */
+.ik-create-editor-frame {
   position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: #050505;
+  transition: border-color 220ms, box-shadow 220ms;
+  overflow: hidden;
 }
 
-.ik-field-block__pencil {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
-  width: 18px;
-  height: 18px;
-  color: #444;
-  pointer-events: none;
+.ik-create-editor-frame:focus-within {
+  border-color: rgba(215, 255, 0, 0.4);
+  box-shadow: 0 0 0 2px rgba(215, 255, 0, 0.06);
 }
 
-/* ── Body Textarea (within field block) ──────────── */
+/* ── Body Textarea (within editor frame) ────────── */
 .ik-create-editor__body {
   width: 100%;
-  min-height: 220px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: #050505;
+  min-height: 240px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   font-size: 15px;
   line-height: 1.75;
   font-family: inherit;
   outline: none;
-  transition: border-color 300ms, box-shadow 300ms;
 }
 
 .ik-create-editor__body::after {
@@ -993,44 +1439,64 @@ if (import.meta.client && auth.isLogin) {
   animation: none;
 }
 
-.ik-create-editor__body.is-focused {
-  border-color: rgba(215, 255, 0, 0.4);
-  box-shadow: 0 0 0 2px rgba(215, 255, 0, 0.06);
-}
-
 .ik-create-editor__body :deep(.z-textarea__inner) {
-  padding: 16px 40px 16px 18px;
+  padding: 16px;
   color: #e0e0e0;
   resize: vertical;
   background: transparent;
+  border: none;
 }
 
 .ik-create-editor__body :deep(.z-textarea__inner)::placeholder {
-  color: #444;
+  color: #4a4a4a;
 }
 
-/* ── Cover Rail (horizontal grid) ────────────────── */
-.ik-cover-rail {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 4px 0 2px;
+.ik-create-editor__body :deep(.z-textarea__inner):focus {
+  box-shadow: none;
+  outline: none;
+}
+
+/* ── Cover Grid (Flutter SliverGrid maxCrossAxisExtent=160) ── */
+.ik-cover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+  padding: 2px 0;
 }
 
 /* ── Cover Thumbnail ─────────────────────────────── */
 .ik-cover-thumb {
   position: relative;
-  width: 100px;
-  height: 100px;
-  border-radius: 14px;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  border-radius: 8px;
   overflow: hidden;
-  border: 2px solid #222;
-  flex-shrink: 0;
+  border: 1px solid #2a2a2a;
+  background: #1e1e1e;
   transition: border-color 200ms, transform 200ms;
 }
 
 .ik-cover-thumb:hover {
-  border-color: #444;
+  border-color: #d7ff00;
+  transform: translateY(-2px);
+}
+
+.ik-cover-thumb--reorderable {
+  cursor: grab;
+}
+
+.ik-cover-thumb--reorderable:active {
+  cursor: grabbing;
+}
+
+.ik-cover-thumb--dragging {
+  opacity: 0.4;
+  transform: scale(0.96);
+}
+
+.ik-cover-thumb--drag-over {
+  border-color: #d7ff00;
+  box-shadow: 0 0 0 2px rgba(215, 255, 0, 0.45);
   transform: translateY(-2px);
 }
 
@@ -1048,28 +1514,47 @@ if (import.meta.client && auth.isLogin) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  background: rgba(0, 0, 0, 0.7);
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.55);
   color: #fff;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .ik-cover-thumb__overlay--error {
-  background: rgba(255, 60, 60, 0.65);
+  background: rgba(0, 0, 0, 0.7);
   cursor: pointer;
 }
 
-.ik-cover-thumb__pct {
-  font-size: 16px;
+.ik-cover-thumb__error-label {
+  color: #ff6b6b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.ik-cover-thumb__retry {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: #d7ff00;
+  color: #000;
+  font-size: 11px;
   font-weight: 800;
-  color: #d7ff00;
+  letter-spacing: 0.3px;
+}
+
+.ik-cover-thumb__pct {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ik-cover-thumb__bar {
   width: 70%;
   height: 3px;
-  background: #444;
+  background: rgba(255, 255, 255, 0.18);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -1081,15 +1566,42 @@ if (import.meta.client && auth.isLogin) {
   transition: width 200ms;
 }
 
-.ik-cover-thumb__remove {
-  position: absolute;
-  top: 4px;
-  right: 4px;
+.ik-cover-thumb__spinner {
   width: 22px;
   height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(215, 255, 0, 0.25);
+  border-top-color: #d7ff00;
+  animation: ik-cover-spin 800ms linear infinite;
+}
+
+@keyframes ik-cover-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ik-cover-thumb__primary {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #d7ff00;
+  color: #000;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  pointer-events: none;
+}
+
+.ik-cover-thumb__remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.7);
   color: #fff;
   display: flex;
   align-items: center;
@@ -1099,12 +1611,13 @@ if (import.meta.client && auth.isLogin) {
   transition: opacity 150ms, background 150ms;
 }
 
-.ik-cover-thumb:hover .ik-cover-thumb__remove {
+.ik-cover-thumb:hover .ik-cover-thumb__remove,
+.ik-cover-thumb:focus-within .ik-cover-thumb__remove {
   opacity: 1;
 }
 
 .ik-cover-thumb__remove:hover {
-  background: rgba(255, 60, 60, 0.8);
+  background: rgba(255, 80, 80, 0.85);
 }
 
 /* ── Cover Add Button ────────────────────────────── */
@@ -1113,27 +1626,40 @@ if (import.meta.client && auth.isLogin) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  width: 100px;
-  height: 100px;
-  border-radius: 14px;
-  border: 2px dashed #2a2a2a;
+  gap: 8px;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  border-radius: 8px;
+  border: 2px dashed #313132;
+  background: #1e1e1e;
   cursor: pointer;
-  transition: border-color 200ms, background 200ms, transform 200ms;
-  flex-shrink: 0;
-  color: #555;
+  transition: border-color 200ms, background 200ms, transform 200ms, color 200ms;
+  color: #909090;
 }
 
 .ik-cover-add:hover {
   border-color: #d7ff00;
-  background: rgba(215, 255, 0, 0.04);
+  background: rgba(215, 255, 0, 0.06);
   color: #d7ff00;
   transform: translateY(-2px);
 }
 
+.ik-cover-add--dragging {
+  border-color: #fbc02d;
+  background: rgba(251, 192, 45, 0.1);
+  color: #fbc02d;
+}
+
+.ik-cover-add__icon {
+  width: 28px;
+  height: 28px;
+  stroke-width: 2;
+}
+
 .ik-cover-add__text {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
 }
 
 /* ═════════ Bottom Footer (mirrors AppHeader) ═════════ */
@@ -1143,16 +1669,17 @@ if (import.meta.client && auth.isLogin) {
   left: 0;
   right: 0;
   z-index: 50;
-  border-top: 1px solid #2b2b2b;
   background: #000;
 }
 
 .ik-create-footer__inner {
+  width: min(1440px, calc(100% - 40px));
+  margin: 0 auto;
   min-height: 78px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 32px;
+  padding: 8px 0;
 }
 
 .ik-create-footer__left {
@@ -1169,6 +1696,7 @@ if (import.meta.client && auth.isLogin) {
   display: inline-flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 12px;
 }
 
 .ik-create-footer__hint {
@@ -1191,6 +1719,14 @@ if (import.meta.client && auth.isLogin) {
   font-weight: 600;
   color: #777;
   font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════
+   Mobile (≤768px) editor – default hidden
+   ═══════════════════════════════════════════════ */
+.ik-create-mobile,
+.ik-mobile-footer {
+  display: none;
 }
 
 /* ═══════════════════════════════════════════════
@@ -1222,26 +1758,27 @@ if (import.meta.client && auth.isLogin) {
     min-height: 200px !important;
   }
 
-  .ik-create-panel__inner {
-    padding: 18px 18px 22px;
-    gap: 12px;
+  .ik-create-panel__body {
+    padding: 20px 20px 24px;
+    gap: 14px;
   }
 
-  .ik-field-row {
-    padding: 10px 14px;
-  }
-
-  .ik-field-row__input {
-    font-size: 15px;
-  }
-
-  .ik-field-block {
-    padding: 12px 14px 14px;
+  .ik-create-title-input :deep(.z-textarea__inner) {
+    font-size: 18px;
   }
 
   .ik-create-editor__body {
     min-height: 180px;
     font-size: 14px;
+  }
+
+  .ik-create-editor__body :deep(.z-textarea__inner) {
+    padding: 14px;
+  }
+
+  .ik-cover-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
   }
 
 }
@@ -1266,16 +1803,22 @@ if (import.meta.client && auth.isLogin) {
     border-radius: 14px;
   }
 
-  .ik-create-panel__inner {
-    padding: 14px 14px 18px;
+  .ik-create-panel__body {
+    padding: 16px 16px 20px;
   }
 
-  .ik-field-row {
+  .ik-create-section--title {
     flex-wrap: wrap;
+    padding-bottom: 10px;
   }
 
-  .ik-field-row__count {
+  .ik-create-section__count {
     margin-left: auto;
+    padding-bottom: 0;
+  }
+
+  .ik-create-title-input :deep(.z-textarea__inner) {
+    font-size: 17px;
   }
 
   .ik-create-editor__body {
@@ -1283,19 +1826,20 @@ if (import.meta.client && auth.isLogin) {
   }
 
   .ik-create-editor__body :deep(.z-textarea__inner) {
-    padding: 14px 38px 14px 14px;
+    padding: 12px 14px;
+  }
+
+  .ik-cover-grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 10px;
   }
 
   .ik-cover-thumb {
-    width: 76px;
-    height: 76px;
-    border-radius: 10px;
+    border-radius: 8px;
   }
 
   .ik-cover-add {
-    width: 76px;
-    height: 76px;
-    border-radius: 10px;
+    border-radius: 8px;
   }
 
   .ik-cover-thumb__remove {
@@ -1307,6 +1851,555 @@ if (import.meta.client && auth.isLogin) {
     padding: 6px 16px;
     gap: 8px;
   }
+}
+
+/* ═══════════════════════════════════════════════
+   Mobile (≤768px) — Flutter-inspired flat editor
+   隐藏桌面双栏布局，启用紧凑垂直布局 + 底部固定操作栏
+   ═══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .ik-create-page {
+    width: 100%;
+    margin: 0;
+    padding: 0 0 calc(62px + env(safe-area-inset-bottom, 0px));
+    gap: 0;
+    background: #121212;
+    /* 抑制 iOS/Android 纵向橡皮筋导致暴露 fixed 背景层 */
+    overscroll-behavior-y: contain;
+  }
+  /* Flutter mobile 设计无斜纹底纹，避免 overscroll / 软键盘缝隙时露出 */
+  .ik-create-page__stripe {
+    display: none;
+  }
+  .ik-create-page > .ik-create-columns,
+  .ik-create-footer {
+    display: none !important;
+  }
+  .ik-create-mobile {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: 1;
+    min-height: calc(100vh - 62px);
+    background: #121212;
+  }
+  .ik-mobile-footer {
+    display: flex;
+  }
+
+  /* ── Cover strip (horizontal scroll) ─────────── */
+  .ik-mobile-cover-strip {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 14px 16px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .ik-mobile-cover-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ik-mobile-cover-add {
+    flex: 0 0 auto;
+    width: 90px;
+    height: 90px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px dashed #2a2a2a;
+    background: #1a1a1a;
+    cursor: pointer;
+    transition: border-color 160ms ease, background 160ms ease;
+  }
+  .ik-mobile-cover-add:active {
+    background: #232323;
+    border-color: #3a3a3a;
+  }
+  .ik-mobile-cover-add__icon {
+    width: 30px;
+    height: 30px;
+    color: #909090;
+  }
+
+  .ik-mobile-cover-tile {
+    flex: 0 0 auto;
+    position: relative;
+    width: 90px;
+    height: 90px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #1a1a1a;
+    cursor: pointer;
+  }
+  .ik-mobile-cover-tile__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .ik-mobile-cover-tile__overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+  }
+  .ik-mobile-cover-tile__pct {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .ik-mobile-cover-tile__spinner {
+    width: 22px;
+    height: 22px;
+    border: 2.5px solid rgba(215, 255, 0, 0.25);
+    border-top-color: #d7ff00;
+    border-radius: 50%;
+    animation: ik-mobile-spin 800ms linear infinite;
+  }
+  .ik-mobile-cover-tile__retry {
+    appearance: none;
+    border: 0;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: #d7ff00;
+    color: #000;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .ik-mobile-cover-tile__primary {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(215, 255, 0, 0.85);
+    color: #000;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+  .ik-mobile-cover-tile__remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  @keyframes ik-mobile-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ── Title (flat) ─────────────────────────────── */
+  .ik-mobile-title-input {
+    width: 100%;
+    appearance: none;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #fff;
+    font-family: inherit;
+    font-size: 20px;
+    font-weight: 700;
+    padding: 12px 16px;
+  }
+  .ik-mobile-title-input::placeholder {
+    color: #505050;
+    font-weight: 700;
+  }
+
+  /* ── Divider (1px hairline) ───────────────────── */
+  .ik-mobile-divider {
+    height: 1px;
+    background: #2a2a2a;
+  }
+
+  /* ── Body (flat textarea) ─────────────────────── */
+  .ik-mobile-body-input {
+    width: 100%;
+    min-height: 220px;
+    appearance: none;
+    border: 0;
+    outline: 0;
+    resize: none;
+    background: transparent;
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1.6;
+    padding: 14px 16px;
+  }
+  .ik-mobile-body-input::placeholder {
+    color: #505050;
+  }
+
+  /* ── Setting row ──────────────────────────────── */
+  .ik-mobile-row {
+    width: 100%;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    font-family: inherit;
+    font-size: 16px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 140ms ease;
+  }
+  .ik-mobile-row:active {
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .ik-mobile-row:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .ik-mobile-row__icon {
+    width: 20px;
+    height: 20px;
+    color: #9a9a9a;
+    flex-shrink: 0;
+  }
+  .ik-mobile-row__title {
+    flex: 1;
+    font-weight: 600;
+  }
+  .ik-mobile-row__value {
+    color: #9a9a9a;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .ik-mobile-row__chevron {
+    width: 20px;
+    height: 20px;
+    color: #686868;
+    flex-shrink: 0;
+  }
+
+  /* ── Mobile footer (fixed) ────────────────────── */
+  .ik-mobile-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    height: calc(62px + env(safe-area-inset-bottom, 0px));
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: #181818;
+    border-top: 1px solid #2a2a2a;
+    align-items: center;
+    gap: 8px;
+  }
+  .ik-mobile-footer__drafts {
+    flex: 0 0 auto;
+    position: relative;
+    width: 46px;
+    height: 42px;
+    padding: 0;
+    appearance: none;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #a0a0a0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 140ms ease;
+  }
+  .ik-mobile-footer__drafts:active {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .ik-mobile-footer__drafts-icon {
+    width: 24px;
+    height: 24px;
+  }
+  .ik-mobile-footer__drafts-count {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: #fbc02d;
+    color: #000;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 16px;
+    text-align: center;
+  }
+  .ik-mobile-footer__publish {
+    flex: 1;
+    appearance: none;
+    border: 0;
+    height: 42px;
+    border-radius: 21px;
+    background: #d7ff00;
+    color: #000;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: filter 140ms ease, background 140ms ease;
+  }
+  .ik-mobile-footer__publish:active:not(.is-disabled) {
+    filter: brightness(0.92);
+  }
+  .ik-mobile-footer__publish.is-disabled {
+    background: rgba(215, 255, 0, 0.32);
+    color: rgba(0, 0, 0, 0.6);
+    cursor: not-allowed;
+  }
+  .ik-mobile-footer__spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: ik-mobile-spin 700ms linear infinite;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   Mobile bottom sheets (Teleported to body, so NOT
+   inside scoped <style scoped>'s subtree restriction
+   if Vue treats them as scoped slot. Using global
+   selectors via :global() is unnecessary here because
+   Teleport descendants still receive the [data-v-*]
+   attribute from the host component.)
+   ═══════════════════════════════════════════════ */
+.ik-mobile-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.ik-mobile-sheet__panel {
+  width: 100%;
+  max-width: 640px;
+  background: #181818;
+  border-radius: 16px 16px 0 0;
+  padding: 10px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.ik-mobile-sheet__panel--full {
+  height: 88vh;
+  padding-top: 6px;
+}
+
+.ik-mobile-sheet__handle {
+  width: 36px;
+  height: 4px;
+  margin: 6px auto 4px;
+  border-radius: 99px;
+  background: #383838;
+}
+
+.ik-mobile-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 6px;
+}
+
+.ik-mobile-sheet__title {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ik-mobile-sheet__close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #a0a0a0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.ik-mobile-sheet__close:active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.ik-mobile-sheet__body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.ik-mobile-sheet__body--compact {
+  flex: 0 0 auto;
+  padding: 6px 0 0;
+}
+
+/* ── Draft list rows (in drafts sheet) ────────── */
+.ik-mobile-draft-row {
+  width: 100%;
+  appearance: none;
+  border: 1px solid #2a2a2a;
+  background: #1f1f1f;
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+  font-family: inherit;
+}
+.ik-mobile-draft-row:active {
+  background: #262626;
+}
+.ik-mobile-draft-row.is-active {
+  border-color: #d7ff00;
+  background: rgba(215, 255, 0, 0.06);
+}
+.ik-mobile-draft-row__title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ik-mobile-draft-row__meta {
+  color: #9a9a9a;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ik-mobile-draft-row--new .ik-mobile-draft-row__title {
+  color: #d7ff00;
+}
+
+.ik-mobile-draft-empty {
+  text-align: center;
+  color: #6a6a6a;
+  font-size: 13px;
+  padding: 24px 0;
+}
+
+.ik-mobile-draft-loadmore {
+  appearance: none;
+  border: 1px solid #2a2a2a;
+  background: transparent;
+  color: #b0b0b0;
+  border-radius: 999px;
+  height: 40px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  margin: 8px auto 4px;
+  padding: 0 18px;
+  align-self: center;
+}
+.ik-mobile-draft-loadmore:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Settings rows (in settings sheet) ────────── */
+.ik-mobile-settings-row {
+  width: 100%;
+  appearance: none;
+  border: 1px solid #2a2a2a;
+  background: #1f1f1f;
+  border-radius: 12px;
+  padding: 14px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 140ms ease;
+}
+.ik-mobile-settings-row:active {
+  background: #262626;
+}
+.ik-mobile-settings-row__icon {
+  width: 20px;
+  height: 20px;
+  color: #c0c0c0;
+  flex-shrink: 0;
+}
+.ik-mobile-settings-row__title {
+  flex: 1;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+.ik-mobile-settings-row__chevron {
+  width: 18px;
+  height: 18px;
+  color: #686868;
+  flex-shrink: 0;
+}
+.ik-mobile-settings-row--danger .ik-mobile-settings-row__icon,
+.ik-mobile-settings-row--danger .ik-mobile-settings-row__title {
+  color: #ff6b6b;
+}
+
+/* ── Sheet enter/leave transitions ────────────── */
+.ik-mobile-sheet-enter-active,
+.ik-mobile-sheet-leave-active {
+  transition: opacity 220ms ease;
+}
+.ik-mobile-sheet-enter-active .ik-mobile-sheet__panel,
+.ik-mobile-sheet-leave-active .ik-mobile-sheet__panel {
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ik-mobile-sheet-enter-from,
+.ik-mobile-sheet-leave-to {
+  opacity: 0;
+}
+.ik-mobile-sheet-enter-from .ik-mobile-sheet__panel,
+.ik-mobile-sheet-leave-to .ik-mobile-sheet__panel {
+  transform: translateY(100%);
 }
 
 @media (prefers-reduced-motion: reduce) {

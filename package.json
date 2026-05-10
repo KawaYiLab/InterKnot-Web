@@ -1,6 +1,6 @@
 {
-  "name": "inter-knot-nuxt",
-  "version": "0.1.0",
+  "name": "interknot-nuxt",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {

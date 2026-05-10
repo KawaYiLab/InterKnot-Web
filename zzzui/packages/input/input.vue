@@ -154,6 +154,10 @@ watch(() => props.value, (value) => {
 }, {
   immediate: true
 })
+watch(modelValue, (value) => {
+  if (!isValidValue(value)) return
+  setInputValue(value)
+})
 const resizeTextarea = () => {
   if (props.type === 'textarea' && props.autoSize) {
     const height = calcTextareaHeight(textareaRef.value)
