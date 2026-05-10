@@ -129,7 +129,9 @@ const handleCreatePost = () => {
   z-index: 30;
 }
 
-@media (max-width: 768px) {
+/* 与 AppHeader.vue tabs 隐藏断点（≤1100px）保持一致，
+   保证中屏窗口下用户也能从底部访问主要导航。 */
+@media (max-width: 1100px) {
   .ik-mobile-nav {
     display: flex;
   }

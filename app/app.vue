@@ -28,6 +28,10 @@ if (import.meta.client) {
 const handleOverlayClose = () => {
   discussionModal.close();
 };
+
+// create 页有自带的移动端底部操作栏（发布 / 草稿），全局 MobileBottomNav 在此隐藏避免堆叠
+const route = useRoute();
+const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
 </script>
 
 <template>
@@ -36,7 +40,7 @@ const handleOverlayClose = () => {
     <main class="ik-page">
       <NuxtPage />
     </main>
-    <MobileBottomNav />
+    <MobileBottomNav v-if="showMobileBottomNav" />
 
     <!-- 登录弹窗 -->
     <ClientOnly>
