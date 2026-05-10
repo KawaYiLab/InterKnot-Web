@@ -9,6 +9,7 @@ import {
   getCoverAspectRatio,
   getNormalizedCoverAspectRatio,
 } from "~/utils/cover";
+import { readHomeFeedSnapshot, writeHomeFeedSnapshot } from "~/utils/home-feed-cache";
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 
@@ -134,18 +135,31 @@ const toUniqueNodes = (nodes: Discussion[], reset: boolean): Discussion[] => {
   return unique;
 };
 
-const scrollToTopAfterReset = async (reset: boolean) => {
+const scrollToTopAfterReset = async (reset: boolean, skipScroll = false) => {
   await nextTick();
-  if (reset && import.meta.client) {
+  if (reset && import.meta.client && !skipScroll) {
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 };
 
-const fetchList = async (reset = false) => {
+/** Restore list from sessionStorage for this search query; returns true if a snapshot was applied (including empty list). */
+const tryHydrateFromCache = (q: string): boolean => {
+  if (!import.meta.client) return false;
+  const snap = readHomeFeedSnapshot(q);
+  if (snap === null) return false;
+  list.value = snap.nodes;
+  endCursor.value = snap.endCursor;
+  hasNextPage.value = snap.hasNextPage;
+  seenIds = new Set(snap.nodes.map((d) => d.id).filter(Boolean));
+  return true;
+};
+
+const fetchList = async (reset = false, opts?: { silent?: boolean }) => {
   if (loading.value || loadingMore.value) return;
   if (!hasNextPage.value && !reset) return;
 
-  const shouldShowPageProgress = reset && !refreshing.value;
+  const silent = Boolean(opts?.silent && reset);
+  const shouldShowPageProgress = reset && !refreshing.value && !silent;
   if (shouldShowPageProgress) {
     if (!pageDataLoading.isActive.value) {
       pageDataLoading.start();
@@ -153,11 +167,14 @@ const fetchList = async (reset = false) => {
     pageDataLoading.claim();
   }
 
-  if (reset && !refreshing.value) {
+  if (reset && !refreshing.value && !silent) {
     loading.value = true;
   } else if (!reset) {
     loadingMore.value = true;
   }
+
+  const previousIds =
+    reset && silent && import.meta.client ? new Set(list.value.map((d) => d.id)) : null;
 
   const currentVersion = ++requestVersion.value;
   try {
@@ -169,8 +186,15 @@ const fetchList = async (reset = false) => {
     const uniqueNodes = toUniqueNodes(page.nodes, reset);
 
     if (reset) {
-      enterAnimationIds.value = new Set();
-      list.value = uniqueNodes;
+      if (silent && previousIds && previousIds.size > 0) {
+        const newOnes = uniqueNodes.filter((n) => n.id && !previousIds.has(n.id));
+        enterAnimationIds.value = new Set();
+        if (newOnes.length) addEnterAnimations(newOnes);
+        list.value = uniqueNodes;
+      } else {
+        enterAnimationIds.value = new Set();
+        list.value = uniqueNodes;
+      }
     } else {
       addEnterAnimations(uniqueNodes);
       list.value = [...list.value, ...uniqueNodes];
@@ -179,7 +203,16 @@ const fetchList = async (reset = false) => {
     endCursor.value = page.endCursor;
     hasNextPage.value = page.hasNextPage;
 
-    await scrollToTopAfterReset(reset);
+    await scrollToTopAfterReset(reset, silent);
+
+    if (import.meta.client) {
+      writeHomeFeedSnapshot({
+        query: query.value.trim(),
+        nodes: list.value,
+        endCursor: endCursor.value,
+        hasNextPage: hasNextPage.value,
+      });
+    }
   } catch (err) {
     message.error(resolveErrorMessage(err, "获取帖子失败"));
   } finally {
@@ -205,6 +238,12 @@ const goDiscussion = (discussion: Discussion, event: MouseEvent) => {
       d.id === discussion.id ? { ...d, isRead: true } : d,
     );
     list.value = next;
+    writeHomeFeedSnapshot({
+      query: query.value.trim(),
+      nodes: list.value,
+      endCursor: endCursor.value,
+      hasNextPage: hasNextPage.value,
+    });
   }
   api.markAsReadBatch([discussion.id]).catch(() => {});
 };
@@ -268,7 +307,12 @@ const observeLoadMoreSentinel = () => {
   loadMoreObserverRef.value = observer;
 };
 
-const debouncedSearch = useDebounceFn(() => fetchList(true), 300);
+const debouncedSearch = useDebounceFn(() => {
+  if (!import.meta.client) return;
+  const q = query.value.trim();
+  const had = tryHydrateFromCache(q);
+  void fetchList(true, { silent: had });
+}, 300);
 
 watch(
   () => query.value,
@@ -295,8 +339,9 @@ watch(
   { flush: "post" },
 );
 
-// 在 setup 阶段提前发起首屏数据请求，不等 onMounted
-const initialFetchPromise = fetchList(true);
+// 在 setup 阶段：有同关键词快照则先展示，再静默拉取；否则骨架 + 网络首屏
+const initialHadCache = import.meta.client ? tryHydrateFromCache(query.value.trim()) : false;
+const initialFetchPromise = fetchList(true, { silent: initialHadCache });
 
 // Triggered by MobileBottomNav when the user double-taps the active
 // "推送" entry — mirrors the Flutter app's pull-to-refresh shortcut.
