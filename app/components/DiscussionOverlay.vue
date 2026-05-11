@@ -69,6 +69,9 @@ const openCoverPreview = (index = 0) => {
   if (images.length) openGallery(images, Math.min(Math.max(index, 0), images.length - 1));
 };
 
+// 只预加载当前帧 ± 1 的封面图，避免弹窗打开时并发下载所有大图
+const isCoverNearby = (i: number) => Math.abs(i - coverIndex.value) <= 1;
+
 /* ── 封面轮播 ─────────────────────────────────── */
 const coverScrollerRef = ref<HTMLElement | null>(null);
 const coverIndex = ref(0);
@@ -663,9 +666,10 @@ onBeforeUnmount(() => {
                               class="ik-dialog__cover-slide"
                             >
                               <img
-                                :src="c.url"
+                                :src="isCoverNearby(i) ? c.url : undefined"
                                 :alt="`${discussion.title} - ${i + 1}`"
                                 class="ik-dialog__cover"
+                                :loading="i === 0 ? 'eager' : 'lazy'"
                                 draggable="false"
                                 @click="openCoverPreview(i)"
                                 @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
