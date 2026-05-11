@@ -26,13 +26,24 @@ const avatarSrc = ref(DEFAULT_AVATAR_IMAGE);
 const cardRef = ref<HTMLElement | null>(null);
 const coverImgRef = ref<HTMLImageElement | null>(null);
 
+const hasBackendCoverSize = computed(() =>
+  typeof props.discussion.coverWidth === "number" &&
+  typeof props.discussion.coverHeight === "number" &&
+  props.discussion.coverWidth > 0 &&
+  props.discussion.coverHeight > 0,
+);
+
 const coverAspectRatio = computed(() => {
-  // fallback 时使用占位图原生比例，让占位图完美填满 frame
-  if (coverIsFallback.value) return FALLBACK_COVER_ASPECT_RATIO;
-  return getNormalizedCoverAspectRatio(
-    props.discussion.coverWidth,
-    props.discussion.coverHeight,
-  );
+  // 只要后端提供了原图尺寸，就始终按原比例占位；即便缩略图加载失败（如七牛云对 30MB+
+  // 大图返回 "File too large"），也保持容器尺寸不变，避免瀑布流重排引发列表跳动。
+  // 仅当后端完全没有尺寸信息时，才回落到默认占位图的原生比例。
+  if (hasBackendCoverSize.value) {
+    return getNormalizedCoverAspectRatio(
+      props.discussion.coverWidth,
+      props.discussion.coverHeight,
+    );
+  }
+  return FALLBACK_COVER_ASPECT_RATIO;
 });
 
 const coverReady = computed(() => coverImageLoaded.value);
