@@ -27,6 +27,11 @@ export default defineNuxtConfig({
       title: "绳网",
       link: [
         { rel: "icon", type: "image/png", href: "/favicon.png" },
+        // 首屏关键图片预加载：SPA loading 屏的 GIF 与首页底图 main.avif
+        // 目的：避免生产环境下 JS 挂载早于 GIF 解码导致 loading 屏一闪而过，
+        // 以及 #__nuxt::before 背景图未就绪出现的"黑屏"过渡。
+        { rel: "preload", as: "image", href: "/images/loading.gif", fetchpriority: "high" },
+        { rel: "preload", as: "image", href: "/images/main.avif", fetchpriority: "high" },
         // 首屏关键字体分片预加载：仅 Latin/常用范围的 Regular & Bold（中文分片由 unicode-range 按需触发）
         // 注：crossorigin 是 woff2 preload 的硬性要求，否则浏览器会发起第二次请求
         {
