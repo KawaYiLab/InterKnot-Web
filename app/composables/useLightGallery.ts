@@ -97,7 +97,7 @@ export function useLightGallery() {
       dynamic: true,
       dynamicEl: images.map((img) => ({
         src: img.src,
-        thumb: img.thumb || img.src,
+        thumb: img.thumb || `${img.src}-small.webp`,
       })),
       plugins: [lgZoom, lgThumbnail, lgFullscreen, lgRotate, lgAutoplay],
 
