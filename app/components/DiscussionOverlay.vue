@@ -69,15 +69,58 @@ const openCoverPreview = (index = 0) => {
   if (images.length) openGallery(images, Math.min(Math.max(index, 0), images.length - 1));
 };
 
-// 只预加载当前帧 ± 1 的封面图，避免弹窗打开时并发下载所有大图
-const isCoverNearby = (i: number) => Math.abs(i - coverIndex.value) <= 1;
-
 /* ── 封面轮播 ─────────────────────────────────── */
 const coverScrollerRef = ref<HTMLElement | null>(null);
 const coverIndex = ref(0);
 let coverScrollRAF: number | null = null;
 
+// 已批准加载的封面索引集合：只有命中其中的图片才会真正请求 src。
+// 设计目的：让新图的网络请求 + 解码不要砸在切换动画的同一帧里。
+// 切换动画进行时窗口保持不变；动画结束（滚动稳定）后，再把当前 ±2 加入窗口。
+const loadedCoverIndices = ref<Set<number>>(new Set([0, 1, 2]));
+const LOAD_WINDOW_RADIUS = 2;
+const COVER_SETTLE_DELAY_MS = 160;
+let coverSettleTimer: ReturnType<typeof setTimeout> | null = null;
+
+const expandLoadWindow = () => {
+  const i = coverIndex.value;
+  const total = covers.value.length;
+  if (total === 0) return;
+  const next = new Set(loadedCoverIndices.value);
+  let changed = false;
+  for (let k = i - LOAD_WINDOW_RADIUS; k <= i + LOAD_WINDOW_RADIUS; k++) {
+    if (k >= 0 && k < total && !next.has(k)) {
+      next.add(k);
+      changed = true;
+    }
+  }
+  if (changed) loadedCoverIndices.value = next;
+};
+
+const scheduleExpandLoadWindow = () => {
+  if (coverSettleTimer !== null) clearTimeout(coverSettleTimer);
+  coverSettleTimer = setTimeout(() => {
+    coverSettleTimer = null;
+    expandLoadWindow();
+  }, COVER_SETTLE_DELAY_MS);
+};
+
+const resetLoadWindow = () => {
+  if (coverSettleTimer !== null) {
+    clearTimeout(coverSettleTimer);
+    coverSettleTimer = null;
+  }
+  // 重置到初始窗口（前三张），与首次进入时一致
+  loadedCoverIndices.value = new Set([0, 1, 2]);
+};
+
+// 命中加载窗口、或正好是当前焦点的图片，才允许真正请求 src。
+const isCoverNearby = (i: number) =>
+  i === coverIndex.value || loadedCoverIndices.value.has(i);
+
 const onCoverScroll = () => {
+  // 任何一次 scroll 事件都会重置 settle 定时器，确保动画进行中窗口不会扩张
+  scheduleExpandLoadWindow();
   if (coverScrollRAF !== null) return;
   coverScrollRAF = requestAnimationFrame(() => {
     coverScrollRAF = null;
@@ -99,13 +142,14 @@ const goCover = (index: number) => {
   el.scrollTo({ left: target * el.clientWidth, behavior: "smooth" });
 };
 
-// 拦截滚轮：不允许鼠标/触控板滚轮在轮播上切图，改为转发给外层弹窗垂直滚动
+// 拦截滚轮：只拦截会被横向滑动吞掉的那部分（平板/鼠标水平滚轮），
+// 转换为外层弹窗的垂直滚动，避免被诤判为切图。
+// 垂直滚轮（deltaY）不拦截——交给浏览器原生平滑滚动处理，避免"瞬移"感。
 const onCoverWheel = (e: WheelEvent) => {
+  if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+  e.preventDefault();
   const parent = scrollRef.value;
-  if (parent) {
-    // deltaY 与多数鼠标/触控板垂直动作一致；deltaX 在水平滚轮上也转发为垂直动作
-    parent.scrollTop += e.deltaY || e.deltaX;
-  }
+  if (parent) parent.scrollTop += e.deltaX;
 };
 
 /* ── 鼠标拖拽切图 ─────────────────────────────── */
@@ -202,10 +246,17 @@ const onCoverClickCapture = (e: MouseEvent) => {
 // 切换帖子时重置封面索引并将容器滚回起点
 watch(() => props.discussionId, () => {
   coverIndex.value = 0;
+  resetLoadWindow();
   nextTick(() => {
     const el = coverScrollerRef.value;
     if (el) el.scrollLeft = 0;
   });
+});
+
+// 首次拿到封面列表后，根据当前 coverIndex 立即扩张一次窗口，
+// 保证打开弹窗时前几张就处于可加载状态。
+watch(() => covers.value.length, (n) => {
+  if (n > 0) expandLoadWindow();
 });
 
 /* ── 数据加载 ──────────────────────────────────── */
@@ -511,6 +562,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown);
   destroyPreview();
+  if (coverSettleTimer !== null) {
+    clearTimeout(coverSettleTimer);
+    coverSettleTimer = null;
+  }
 });
 </script>
 
@@ -643,6 +698,7 @@ onBeforeUnmount(() => {
                           :src="firstCover?.url || DEFAULT_COVER_IMAGE"
                           :alt="hasCovers ? discussion.title : 'default cover'"
                           class="ik-dialog__cover"
+                          decoding="async"
                           @click="hasCovers && openCoverPreview(0)"
                           @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                         />
@@ -653,7 +709,7 @@ onBeforeUnmount(() => {
                             ref="coverScrollerRef"
                             class="ik-dialog__cover-scroller"
                             @scroll.passive="onCoverScroll"
-                            @wheel.prevent="onCoverWheel"
+                            @wheel="onCoverWheel"
                             @pointerdown="onCoverPointerDown"
                             @pointermove="onCoverPointerMove"
                             @pointerup="onCoverPointerUp"
@@ -670,6 +726,7 @@ onBeforeUnmount(() => {
                                 :alt="`${discussion.title} - ${i + 1}`"
                                 class="ik-dialog__cover"
                                 :loading="i === 0 ? 'eager' : 'lazy'"
+                                decoding="async"
                                 draggable="false"
                                 @click="openCoverPreview(i)"
                                 @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
