@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useMessage } from "zenless-ui";
 import type { Comment, Discussion } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
+import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
@@ -323,7 +324,8 @@ useSeoMeta({
 });
 
 onMounted(async () => {
-  preloadGallery();
+  // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
+  // 让只看文字、不点图的用户不必下载这套资源。
   pageDataLoading.claim();
   try {
     await loadDiscussion();
@@ -478,10 +480,16 @@ onBeforeUnmount(() => {
               <!-- 正文 -->
               <div class="ik-page__detail">
                 <h1 class="ik-page__title">{{ discussion.title }}</h1>
-                <div v-if="discussion.body" class="ik-page__content" v-html="discussion.body"></div>
-                <p v-else-if="discussion.bodyText" class="ik-page__content">
-                  {{ discussion.bodyText }}
-                </p>
+                <div
+                  v-if="discussion.body"
+                  class="ik-page__content"
+                  v-html="sanitizeBodyHtml(discussion.body)"
+                ></div>
+                <div
+                  v-else-if="discussion.bodyText"
+                  class="ik-page__content"
+                  v-html="formatBodyText(discussion.bodyText)"
+                ></div>
                 <p v-else class="ik-page__content" style="color: #808080">
                   暂无正文内容
                 </p>
@@ -907,8 +915,15 @@ onBeforeUnmount(() => {
   font-size: 16px;
   line-height: 1.7;
   color: #e0e0e0;
-  white-space: pre-wrap;
+  /* 内容已由 markdown-it 渲染成正规 HTML（含 <br>/<p>），这里不再用 pre-wrap，
+     否则源串里保留的字面换行会被重复渲染出多余空行。 */
+  white-space: normal;
   word-wrap: break-word;
+}
+
+/* markdown-it 在"段落内嵌块级 HTML"场景会产出空 <p></p>，过滤掉避免多余间距。 */
+.ik-page__content :deep(p:empty) {
+  display: none;
 }
 
 .ik-page__content :deep(img) {
