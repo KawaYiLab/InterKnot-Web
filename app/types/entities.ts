@@ -154,6 +154,8 @@ export interface SignedUploadResult {
   publicUrl: string;
   headers: Record<string, string>;
   expiresAt: string;
+  // 内容级去重命中：服务端检测到同 SHA-256 的已存在文件，直接复用，跳过 S3 PUT。
+  existing?: UploadedFile;
 }
 
 export interface UploadedFile {
