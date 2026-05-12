@@ -19,7 +19,9 @@
     "@pinia/nuxt": "^0.11.2",
     "@tanstack/vue-query": "^5.90.7",
     "@vueuse/core": "^13.9.0",
+    "isomorphic-dompurify": "^3.12.0",
     "lightgallery": "^2.9.0",
+    "markdown-it": "^14.1.1",
     "nuxt": "^4.4.2",
     "ofetch": "^1.4.1",
     "pinia": "^3.0.3",
@@ -30,6 +32,7 @@
   "devDependencies": {
     "@playwright/test": "^1.56.0",
     "@testing-library/vue": "^8.1.0",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.7.2",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vitest/coverage-v8": "^3.2.4",

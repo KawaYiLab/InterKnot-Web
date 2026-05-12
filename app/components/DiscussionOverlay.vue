@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useMessage } from "zenless-ui";
 import type { Comment, Discussion } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
+import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
@@ -552,7 +553,8 @@ watch(newComment, () => {
 
 onMounted(async () => {
   window.addEventListener("keydown", onKeyDown);
-  preloadGallery();
+  // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
+  // 让只看文字、不点图的用户不必下载这套资源。
   loading.value = true;
   await loadDiscussion();
   await Promise.all([recordView(), loadComments()]);
@@ -776,10 +778,16 @@ onBeforeUnmount(() => {
                     <!-- 正文 -->
                     <div class="ik-dialog__detail">
                       <h1 class="ik-dialog__title">{{ discussion.title }}</h1>
-                      <div v-if="discussion.body" class="ik-dialog__content" v-html="discussion.body"></div>
-                      <p v-else-if="discussion.bodyText" class="ik-dialog__content">
-                        {{ discussion.bodyText }}
-                      </p>
+                      <div
+                        v-if="discussion.body"
+                        class="ik-dialog__content"
+                        v-html="sanitizeBodyHtml(discussion.body)"
+                      ></div>
+                      <div
+                        v-else-if="discussion.bodyText"
+                        class="ik-dialog__content"
+                        v-html="formatBodyText(discussion.bodyText)"
+                      ></div>
                       <p v-else class="ik-dialog__content" style="color: #808080">
                         暂无正文内容
                       </p>
@@ -1368,8 +1376,14 @@ onBeforeUnmount(() => {
   font-size: 16px;
   line-height: 1.7;
   color: #e0e0e0;
-  white-space: pre-wrap;
+  /* 由 markdown-it 渲染成 HTML，无需 pre-wrap；详见 utils/format-body.ts。 */
+  white-space: normal;
   word-wrap: break-word;
+}
+
+/* markdown-it 在"段落内嵌块级 HTML"场景会产出空 <p></p>，过滤掉避免多余间距。 */
+.ik-dialog__content :deep(p:empty) {
+  display: none;
 }
 
 .ik-dialog__content :deep(img) {
