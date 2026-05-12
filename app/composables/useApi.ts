@@ -351,6 +351,27 @@ function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
   };
 }
 
+// 用浏览器原生 SubtleCrypto 计算文件内容 SHA-256（hex 小写），用于内容级去重。
+// 在非安全上下文（HTTP 且非 localhost）或不支持 SubtleCrypto 的环境下返回 undefined，
+// 此时上传链路自动退化为普通直传，不影响功能。
+async function computeFileSha256(file: File): Promise<string | undefined> {
+  if (typeof globalThis === "undefined") return undefined;
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle || typeof file.arrayBuffer !== "function") return undefined;
+  try {
+    const buffer = await file.arrayBuffer();
+    const digest = await subtle.digest("SHA-256", buffer);
+    const bytes = new Uint8Array(digest);
+    let hex = "";
+    for (let i = 0; i < bytes.length; i += 1) {
+      hex += bytes[i]!.toString(16).padStart(2, "0");
+    }
+    return hex;
+  } catch {
+    return undefined;
+  }
+}
+
 function getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) {
@@ -907,16 +928,26 @@ export function useApi() {
     );
   };
 
+  const toUploadedFile = (raw: Record<string, unknown>): UploadedFile => ({
+    id: Number(raw.id || 0),
+    documentId: String(raw.documentId || ""),
+    url: String(raw.url || ""),
+    width: parsePositiveNumber(raw.width),
+    height: parsePositiveNumber(raw.height),
+  });
+
   const signUpload = async (payload: {
     filename: string;
     mimeType: string;
     size: number;
+    contentHash?: string;
   }): Promise<SignedUploadResult> => {
     const response = await $api("/api/direct-upload/sign", {
       method: "POST",
       body: payload,
     });
     const data = unwrapData<Record<string, unknown>>(response);
+    const existingRaw = data.existing as Record<string, unknown> | undefined;
     return {
       uploadUrl: String(data.uploadUrl || ""),
       uploadToken: String(data.uploadToken || ""),
@@ -925,6 +956,7 @@ export function useApi() {
       publicUrl: String(data.publicUrl || ""),
       headers: (data.headers as Record<string, string>) || {},
       expiresAt: String(data.expiresAt || ""),
+      existing: existingRaw ? toUploadedFile(existingRaw) : undefined,
     };
   };
 
@@ -937,14 +969,7 @@ export function useApi() {
       method: "POST",
       body: payload,
     });
-    const data = unwrapData<Record<string, unknown>>(response);
-    return {
-      id: Number(data.id || 0),
-      documentId: String(data.documentId || ""),
-      url: String(data.url || ""),
-      width: parsePositiveNumber(data.width),
-      height: parsePositiveNumber(data.height),
-    };
+    return toUploadedFile(unwrapData<Record<string, unknown>>(response));
   };
 
   const uploadImage = async (
@@ -953,11 +978,22 @@ export function useApi() {
   ): Promise<UploadedFile> => {
     onProgress?.(0);
 
+    // 在签名前计算内容 SHA-256，用于服务端的内容级去重。
+    const contentHash = await computeFileSha256(file);
+    onProgress?.(5);
+
     const signed = await signUpload({
       filename: file.name,
       mimeType: file.type || "image/jpeg",
       size: file.size,
+      contentHash,
     });
+
+    // 服务端命中同内容的已有文件，直接复用，不走 S3 PUT 与 complete。
+    if (signed.existing) {
+      onProgress?.(100);
+      return signed.existing;
+    }
     onProgress?.(10);
 
     await fetch(signed.uploadUrl, {
