@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>灵感源自「绝区零」世界观中的"绳网"——一个面向玩家与开发者的游戏交流社区。</strong>
+  <strong>模仿制作的「绝区零」世界观中的"绳网"——新艾利都最大的匿名委托中枢。</strong>
 </p>
 
 <p align="center">
@@ -42,7 +42,7 @@
 | **状态管理** | [Pinia](https://pinia.vuejs.org/) |
 | **数据请求** | [TanStack Vue Query](https://tanstack.com/query/latest/docs/vue/overview) + [ofetch](https://github.com/unjs/ofetch) |
 | **工具库** | [VueUse](https://vueuse.org/) |
-| **组件库** | [zenless-ui](https://github.com/ChrisChan13/zenless-ui)（绝区零风格 Vue 组件） |
+| **组件库** | [zenless-ui](https://github.com/ChrisChan13/zenless-ui)|
 | **图标** | [Heroicons](https://heroicons.com/) |
 | **图片画廊** | [lightGallery](https://www.lightgalleryjs.com/) |
 | **样式** | SCSS + CSS 变量主题系统 |
@@ -129,20 +129,27 @@ InterKnot-web/
 
 ## ✅ 路线图
 
-- [x] 帖子广场（瀑布流 + 虚拟滚动）
-- [x] 帖子弹窗式详情浏览
-- [x] 评论 & 回复系统
-- [x] 用户登录 & 个人主页
-- [x] 自定义光标
-- [x] 响应式布局（桌面 + 移动端）
-- [x] 搜索功能
-- [ ] 消息通知
+- [x] 帖子推荐（瀑布流 + 虚拟滚动 + 骨架屏）
+- [x] 帖子弹窗式详情浏览（路由级弹窗 + 双栏布局）
+- [x] 评论 & 回复系统（乐观更新 + 分页加载）
+- [x] 用户登录 & 注册（验证码 + JWT 自动续期）
+- [x] 个人主页（帖子 / 评论 / 经验等级 / 名片）
+- [x] 发帖 & 草稿自动保存
+- [x] 图片上传（S3 直传 + 内容去重）
+- [x] 点赞系统（文章 & 评论）
+- [x] 已读状态同步
+- [x] 搜索功能（全站搜索 + 防抖）
+- [x] 自定义光标（16 套绝区零风格）
+- [x] 响应式布局（桌面 + 平板 + 移动端）
+- [x] 图片画廊（lightGallery 惰性加载）
+- [ ] 消息通知（敲敲）
+- [ ] 收藏功能
 
 ---
 
 ## 🤝 贡献指南
 
-欢迎提交 Issue 或 Pull Request，一起完善绳网 Web 端。
+欢迎提交 Issue 或 Pull Request，一起完善绳网。
 
 > ⚠️ **注意**：本项目使用Claude Opus 4.6辅助开发，使用前请自行评估。
 
