@@ -204,6 +204,11 @@ const goDiscussion = (discussion: Discussion, event: MouseEvent) => {
   event.preventDefault();
   discussionModal.open(discussion.id, {
     coverAspectRatio: getCoverAspectRatio(discussion.coverWidth, discussion.coverHeight),
+    preview: {
+      title: discussion.title,
+      author: discussion.author,
+      createdAt: discussion.createdAt,
+    },
   });
 
   // 标记已读并更新本地列表状态
