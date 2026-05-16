@@ -11,9 +11,6 @@ export default defineNuxtConfig({
   ssr: false,
   nitro: {
     preset: "static",
-    prerender: {
-      routes: ["/", "/login"],
-    },
   },
   css: ["~/assets/styles/theme.css"],
   runtimeConfig: {
