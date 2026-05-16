@@ -647,10 +647,11 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   max-height: 280px;
+  border-radius: 16px;
+  overflow: hidden;
 }
 .ik-av-grid-scroll :deep(.z-scrollbar__wrap) {
   background: #00000065;
-  border-radius: 16px;
 }
 .ik-av-grid-scroll :deep(.z-scrollbar__view) {
   min-height: auto;
@@ -731,7 +732,8 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   display: flex;
   justify-content: center;
-  padding: 14px 16px 18px;
+  margin-top: -18px;
+  padding: 0 16px 18px;
 }
 .ik-av-submit-wrap :deep(.z-button) {
   min-width: 130px;
