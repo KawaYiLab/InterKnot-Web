@@ -669,9 +669,10 @@ onBeforeUnmount(() => {
 
 .ik-av-grid {
   display: grid;
-  grid-template-columns: repeat(8, 70px);
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  justify-items: center;
   gap: 0;
-  padding: 20px;
+  padding: 20px 28px 20px 20px;
 }
 .ik-av-grid__item {
   position: relative;

@@ -959,6 +959,34 @@ onBeforeUnmount(() => {
   color: #b0b0b0;
 }
 
+.ik-page__content :deep(table) {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+}
+.ik-page__content :deep(table th),
+.ik-page__content :deep(table td) {
+  padding: 8px 12px;
+  border: 1px solid #2a2a2a;
+  text-align: left;
+  vertical-align: top;
+}
+.ik-page__content :deep(table thead th) {
+  background: #1a1a1a;
+  color: #fff;
+  font-weight: 700;
+}
+.ik-page__content :deep(table tbody tr:nth-child(even)) {
+  background: #161616;
+}
+
 /* ── Right Column ─────────────────────────────── */
 .ik-page__right {
   flex: 2;
