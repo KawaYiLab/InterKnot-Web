@@ -5,21 +5,37 @@
  * 帖子内容以全屏弹窗渲染，首页保持 mounted。
  * 直接访问 /discussion/:id 时走正常的页面路由（discussion/[id].vue）。
  */
+import type { Author } from "~/types/entities";
+
 // 模块级单例，确保所有 useDiscussionModal() 实例共享同一份标记
 let _historyPushed = false;
 let _savedTitle = "";
 
 const DEFAULT_TITLE = "绳网";
 
+export interface DiscussionPreview {
+  title?: string;
+  author?: Author;
+  createdAt?: string;
+}
+
 export function useDiscussionModal() {
   const isOpen = useState("dm:open", () => false);
   const discussionId = useState<string | null>("dm:id", () => null);
   const coverHint = useState<number | null>("dm:coverHint", () => null);
-  function open(id: string, opts?: { coverAspectRatio?: number }) {
+  const preview = useState<DiscussionPreview | null>("dm:preview", () => null);
+  function open(
+    id: string,
+    opts?: {
+      coverAspectRatio?: number;
+      preview?: DiscussionPreview;
+    },
+  ) {
     if (!import.meta.client) return;
 
     discussionId.value = id;
     coverHint.value = opts?.coverAspectRatio ?? null;
+    preview.value = opts?.preview ?? null;
     isOpen.value = true;
     _historyPushed = true;
 
@@ -61,6 +77,7 @@ export function useDiscussionModal() {
    */
   function clearAfterLeave() {
     discussionId.value = null;
+    preview.value = null;
   }
 
   /**
@@ -83,6 +100,7 @@ export function useDiscussionModal() {
     isOpen: readonly(isOpen),
     discussionId: readonly(discussionId),
     coverHint: readonly(coverHint),
+    preview: readonly(preview),
     open,
     close,
     setTitle,

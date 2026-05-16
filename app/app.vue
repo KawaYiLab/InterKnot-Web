@@ -6,6 +6,20 @@ const discussionModal = useDiscussionModal();
 if (import.meta.client) {
   auth.hydrateFromStorage();
 
+  // 弱网优化：空闲时预取帖子弹窗 chunk，避免用户点击后还要下载组件 JS。
+  const prefetchDiscussionOverlay = () => {
+    void import("~/components/DiscussionOverlay.vue");
+  };
+  type IdleWindow = Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+  };
+  const ric = (window as IdleWindow).requestIdleCallback;
+  if (typeof ric === "function") {
+    ric(prefetchDiscussionOverlay, { timeout: 3000 });
+  } else {
+    setTimeout(prefetchDiscussionOverlay, 1500);
+  }
+
   const url = new URL(window.location.href);
   const fallbackPath = url.searchParams.get("p");
   if (fallbackPath) {
@@ -60,6 +74,7 @@ const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
             v-if="discussionModal.isOpen.value"
             :discussion-id="discussionModal.discussionId.value || ''"
             :cover-hint="discussionModal.coverHint.value"
+            :preview="discussionModal.preview.value"
             @close="handleOverlayClose"
           />
         </Transition>

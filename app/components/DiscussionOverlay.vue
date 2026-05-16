@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMessage } from "zenless-ui";
-import type { Comment, Discussion } from "~/types/entities";
+import type { Author, Comment, Discussion } from "~/types/entities";
+import type { DiscussionPreview } from "~/composables/useDiscussionModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
@@ -15,6 +16,7 @@ const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: gal
 const props = defineProps<{
   discussionId: string;
   coverHint?: number | null;
+  preview?: DiscussionPreview | null;
 }>();
 
 const emit = defineEmits<{
@@ -31,6 +33,11 @@ const message = useMessage();
 const discussion = ref<Discussion | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
+
+// 弹窗刚打开时优先展示首页卡片传入的 preview，等接口数据回来后无缝替换。
+const headerAuthor = computed<Author | null>(() => discussion.value?.author ?? props.preview?.author ?? null);
+const headerCreatedAt = computed<string | undefined>(() => discussion.value?.createdAt ?? props.preview?.createdAt);
+const headerTitle = computed<string>(() => discussion.value?.title ?? props.preview?.title ?? "");
 
 const comments = ref<Comment[]>([]);
 const commentsCursor = ref("");
@@ -59,10 +66,22 @@ const syncCommentInputHeight = async () => {
 };
 
 const firstCover = computed(() => covers.value[0] ?? null);
+
+// 真实图片解码完成的索引集合：用于在解码完成前继续显示骨架屏，
+// 避免"骨架结束 → 黑色封面框 → 图片淡入"的中间黑屏。
+const loadedCoverImages = ref<Set<number>>(new Set());
+const isCoverImageLoaded = (i: number) => loadedCoverImages.value.has(i);
+const onCoverImageLoad = (i: number) => {
+  if (!loadedCoverImages.value.has(i)) {
+    loadedCoverImages.value = new Set([...loadedCoverImages.value, i]);
+  }
+};
 const coverAspectRatio = computed(() => {
   const c = firstCover.value;
   if (c?.width && c?.height && c.width > 0 && c.height > 0) return c.width / c.height;
-  return 16 / 9;
+  // 无真实封面时优先沿用骨架阶段使用的 coverHint，避免骨架→默认占位图之间的高度跳动。
+  if (props.coverHint && props.coverHint > 0) return props.coverHint;
+  return 643 / 408;
 });
 
 const openCoverPreview = (index = 0) => {
@@ -248,6 +267,7 @@ const onCoverClickCapture = (e: MouseEvent) => {
 watch(() => props.discussionId, () => {
   coverIndex.value = 0;
   resetLoadWindow();
+  loadedCoverImages.value = new Set();
   nextTick(() => {
     const el = coverScrollerRef.value;
     if (el) el.scrollLeft = 0;
@@ -534,8 +554,10 @@ const resetAndLoad = async () => {
     scrollRef.value.scrollTop = 0;
   }
   await loadDiscussion();
-  await Promise.all([recordView(), loadComments()]);
+  // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
+  void recordView();
+  void loadComments();
 };
 
 watch(
@@ -557,8 +579,10 @@ onMounted(async () => {
   // 让只看文字、不点图的用户不必下载这套资源。
   loading.value = true;
   await loadDiscussion();
-  await Promise.all([recordView(), loadComments()]);
+  // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
+  void recordView();
+  void loadComments();
 });
 
 onBeforeUnmount(() => {
@@ -585,32 +609,33 @@ onBeforeUnmount(() => {
             <!-- ── Header Bar ─────────────────────── -->
             <div class="ik-dialog__header">
               <div class="ik-dialog__header-left">
-                <UserHoverCard :author-id="discussion?.author?.documentId" clickable>
+                <UserHoverCard :author-id="headerAuthor?.documentId" clickable>
                   <div class="ik-dialog__avatar-shell">
                     <img
-                      v-if="discussion"
-                      :src="discussion.author.avatar || '/images/default-avatar.webp'"
-                      :alt="discussion.author.name || ''"
+                      v-if="headerAuthor"
+                      :src="headerAuthor.avatar || '/images/default-avatar.webp'"
+                      :alt="headerAuthor.name || ''"
                       class="ik-dialog__avatar"
                       @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
                     />
                     <div v-else class="ik-skel" style="width:100%;height:100%;border-radius:999px"></div>
                   </div>
                 </UserHoverCard>
-                <div v-if="discussion" class="ik-dialog__author-info">
+                <div v-if="headerAuthor" class="ik-dialog__author-info">
                   <div class="ik-dialog__author-row">
-                    <UserHoverCard :author-id="discussion.author?.documentId" clickable>
+                    <UserHoverCard :author-id="headerAuthor.documentId" clickable>
                       <span class="ik-dialog__author-name">
-                        {{ discussion.author.name || "匿名用户" }}
+                        {{ headerAuthor.name || "匿名用户" }}
                       </span>
                     </UserHoverCard>
-                    <span v-if="discussion.author.level" class="ik-dialog__level">
-                      Lv.{{ discussion.author.level }}
+                    <span v-if="headerAuthor.level" class="ik-dialog__level">
+                      Lv.{{ headerAuthor.level }}
                     </span>
                   </div>
-                  <span class="ik-dialog__time">
-                    {{ formatTime(discussion.createdAt) }}
+                  <span v-if="headerCreatedAt" class="ik-dialog__time">
+                    {{ formatTime(headerCreatedAt) }}
                   </span>
+                  <div v-else class="ik-skel" style="width:60px;height:16px;border-radius:3px"></div>
                 </div>
                 <div v-else class="ik-dialog__author-info">
                   <div class="ik-skel" style="width:100px;height:20px;border-radius:3px"></div>
@@ -632,12 +657,16 @@ onBeforeUnmount(() => {
               <div class="ik-dialog__left">
                 <div class="ik-dialog__left-scroll">
                   <div class="ik-dialog__cover-wrap">
-                    <div class="ik-dialog__cover-border">
-                      <div class="ik-skel ik-skel--cover" :style="props.coverHint ? { aspectRatio: String(props.coverHint) } : {}"></div>
+                    <div
+                      class="ik-dialog__cover-border"
+                      :style="props.coverHint ? { aspectRatio: String(props.coverHint) } : {}"
+                    >
+                      <div class="ik-skel ik-dialog__cover-skel" aria-hidden="true"></div>
                     </div>
                   </div>
                   <div class="ik-dialog__detail">
-                    <div class="ik-skel ik-skel--title"></div>
+                    <h1 v-if="headerTitle" class="ik-dialog__title">{{ headerTitle }}</h1>
+                    <div v-else class="ik-skel ik-skel--title"></div>
                     <div class="ik-skel ik-skel--line" style="width:100%"></div>
                     <div class="ik-skel ik-skel--line" style="width:90%"></div>
                     <div class="ik-skel ik-skel--line" style="width:75%"></div>
@@ -645,30 +674,15 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </div>
-              <!-- 骨架屏：右栏 -->
+              <!-- 骨架屏：右栏（与评论自身骨架保持一致） -->
               <div class="ik-dialog__right">
                 <div style="flex:1;padding:16px;overflow:hidden">
-                  <div v-for="n in 4" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
-                    <div style="flex-shrink:0">
-                      <div class="ik-skel" style="width:36px;height:36px;border-radius:999px"></div>
-                    </div>
-                    <div style="flex:1;min-width:0">
-                      <div style="display:flex;align-items:center;gap:6px">
-                        <div class="ik-skel" style="width:80px;height:14px;border-radius:3px"></div>
-                        <div class="ik-skel" style="width:32px;height:12px;border-radius:3px"></div>
-                        <div class="ik-skel" style="margin-left:auto;width:28px;height:18px;border-radius:0 6px 6px 6px"></div>
-                      </div>
-                      <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
-                        <div class="ik-skel" style="width:95%;height:14px;border-radius:3px"></div>
-                        <div class="ik-skel" style="width:60%;height:14px;border-radius:3px"></div>
-                      </div>
-                      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
-                        <div class="ik-skel" style="width:60px;height:12px;border-radius:3px"></div>
-                        <div style="display:flex;align-items:center;gap:16px;color:#666">
-                          <HandThumbUpIcon style="width:16px;height:16px" />
-                          <ChatBubbleLeftIcon style="width:16px;height:16px" />
-                        </div>
-                      </div>
+                  <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
+                    <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+                      <div class="ik-skel" style="width:80px;height:14px;border-radius:3px"></div>
+                      <div class="ik-skel" style="width:95%;height:14px;border-radius:3px"></div>
+                      <div class="ik-skel" style="width:60%;height:14px;border-radius:3px"></div>
                     </div>
                   </div>
                 </div>
@@ -695,15 +709,22 @@ onBeforeUnmount(() => {
                         :style="{ aspectRatio: String(coverAspectRatio) }"
                       >
                         <!-- 单张封面 -->
-                        <img
-                          v-if="!hasCovers || covers.length === 1"
-                          :src="firstCover?.url || DEFAULT_COVER_IMAGE"
-                          :alt="hasCovers ? discussion.title : 'default cover'"
-                          class="ik-dialog__cover"
-                          decoding="async"
-                          @click="hasCovers && openCoverPreview(0)"
-                          @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
-                        />
+                        <template v-if="!hasCovers || covers.length === 1">
+                          <img
+                            :src="firstCover?.url || DEFAULT_COVER_IMAGE"
+                            :alt="hasCovers ? discussion.title : 'default cover'"
+                            class="ik-dialog__cover"
+                            decoding="async"
+                            @load="onCoverImageLoad(0)"
+                            @click="hasCovers && openCoverPreview(0)"
+                            @error="onCoverImageLoad(0); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
+                          />
+                          <div
+                            v-if="!isCoverImageLoaded(0)"
+                            class="ik-skel ik-dialog__cover-skel"
+                            aria-hidden="true"
+                          ></div>
+                        </template>
 
                         <!-- 多图轮播：横向滑动 + 滚动捕捉 -->
                         <template v-else>
@@ -730,9 +751,15 @@ onBeforeUnmount(() => {
                                 :loading="i === 0 ? 'eager' : 'lazy'"
                                 decoding="async"
                                 draggable="false"
+                                @load="onCoverImageLoad(i)"
                                 @click="openCoverPreview(i)"
-                                @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
+                                @error="onCoverImageLoad(i); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                               />
+                              <div
+                                v-if="!isCoverImageLoaded(i)"
+                                class="ik-skel ik-dialog__cover-skel"
+                                aria-hidden="true"
+                              ></div>
                             </div>
                           </div>
 
@@ -799,7 +826,17 @@ onBeforeUnmount(() => {
                 <div class="ik-dialog__right">
                   <div class="ik-dialog__comments-scroll">
                     <div class="ik-dialog__comments-inner">
-                      <div v-if="!comments.length" class="ik-empty" style="padding: 40px 0">暂时还没有评论</div>
+                      <div v-if="commentsLoading && !comments.length">
+                        <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
+                          <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
+                          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+                            <div class="ik-skel" style="width:80px;height:14px;border-radius:3px"></div>
+                            <div class="ik-skel" style="width:95%;height:14px;border-radius:3px"></div>
+                            <div class="ik-skel" style="width:60%;height:14px;border-radius:3px"></div>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else-if="!comments.length" class="ik-empty" style="padding: 40px 0">暂时还没有评论</div>
                       <CommentItem
                         v-for="(comment, idx) in comments"
                         :key="comment.id"
@@ -813,7 +850,7 @@ onBeforeUnmount(() => {
                         @delete-comment="handleDeleteComment"
                         @delete-reply="handleDeleteReply"
                       />
-                      <div v-if="commentsHasNext" class="ik-dialog__load-more">
+                      <div v-if="commentsHasNext && comments.length" class="ik-dialog__load-more">
                         <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>
                       </div>
                       <div v-else-if="comments.length" class="ik-dialog__load-more">
@@ -1230,6 +1267,14 @@ onBeforeUnmount(() => {
   border: 4px solid #313132;
   overflow: hidden;
   background: #0a0a0a;
+}
+
+.ik-dialog__cover-skel {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .ik-dialog__cover {
