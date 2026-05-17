@@ -165,3 +165,91 @@ export interface UploadedFile {
   width?: number;
   height?: number;
 }
+
+// ── Knock Knock（私信弹窗）相关 ──────────────────────────
+
+export type NotificationType =
+  | "comment"
+  | "reply"
+  | "like"
+  | "favorite"
+  | "mention"
+  | "system";
+
+export interface NotificationSenderAvatar {
+  url: string;
+  width?: number;
+  height?: number;
+}
+
+export interface NotificationSenderAuthor {
+  documentId: string | null;
+  name: string | null;
+  avatar: NotificationSenderAvatar | null;
+}
+
+export interface NotificationSender {
+  id: number | null;
+  username: string | null;
+  level: number | null;
+  author: NotificationSenderAuthor | null;
+}
+
+export interface NotificationArticleRef {
+  documentId: string;
+  title: string;
+}
+
+export interface NotificationCommentRef {
+  documentId: string;
+  content: string;
+  isAnonymous: boolean;
+}
+
+export interface NotificationDto {
+  documentId: string;
+  type: NotificationType;
+  rawType?: NotificationType;
+  isRead: boolean;
+  createdAt: string;
+  sender: NotificationSender | null;
+  article: NotificationArticleRef | null;
+  comment: NotificationCommentRef | null;
+}
+
+/** 私聊弹窗里的子分类。private chat tab 顶层切换用。 */
+export type KnockCategory = "contacts" | "anonymous" | "other";
+
+/**
+ * 一个会话 = 一组关联到同一对端的 notifications 聚合视图。
+ * 后端 `/api/knock/conversations` 只返回摘要（无 items）；具体消息流由
+ * `/api/knock/conversations/:id/messages` 懒加载，前端按 conversation id 缓存。
+ */
+export interface KnockConversation {
+  category: KnockCategory;
+  /** 稳定的会话 key：base64url 编码后的 `${category}:${peerKey}` */
+  id: string;
+  /** 对端身份的原始 key（sender.id / 匿名 seed / "system"） */
+  peerKey: string;
+  peerName: string;
+  peerAvatar: string | null;
+  unread: number;
+  lastPreview: string;
+  lastAt: string;
+  /** 最近一条通知的 type，用于在列表上展示图标 */
+  lastType: NotificationType;
+}
+
+/** 后端 SSE 推送的事件类型 */
+export type KnockSseEventType =
+  | "notification.created"
+  | "notification.read"
+  | "notification.read.bulk";
+
+export interface KnockSseEvent {
+  type: KnockSseEventType;
+  conversationId?: string;
+  notificationId?: string;
+  count?: number;
+  at: string;
+}
