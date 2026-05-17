@@ -598,6 +598,7 @@ onBeforeUnmount(() => {
   border-radius: 0 0 14px 14px;
   overflow: hidden;
   background: #2a2d33 url("/images/banner.png") center/cover no-repeat;
+  background-position: 26% center;
   min-height: 240px;
   display: flex;
   flex-direction: column;
