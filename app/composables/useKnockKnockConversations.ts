@@ -225,12 +225,20 @@ export function useKnockKnockConversations(): UseKnockKnockConversations {
 
   function handleSseEvent(event: KnockSseEvent) {
     if (event.type === "notification.created") {
-      // 当前打开的会话直接 force-reload 消息，否则刷新摘要让红点亮起来
-      const targetId = event.conversationId;
-      if (targetId && messagesById.value[targetId]?.hydrated) {
-        void ensureMessages(targetId, true);
-      }
+      // 红点 / 列表
       scheduleRefresh();
+
+      // 当前打开（hydrated）的会话都 force-reload。
+      // 不只靠 event.conversationId 匹配是为了兜底两类问题：
+      //   1) 后端 lifecycle 偶尔拿不全 sender/Comment 导致 conversationId 缺失
+      //   2) 多端 / 不同来源的 id 编码漂移
+      // 已 hydrated 的会话数量通常是 1（用户当前打开的那个），开销可忽略。
+      const hydratedIds = Object.entries(messagesById.value)
+        .filter(([, state]) => state?.hydrated)
+        .map(([id]) => id);
+      for (const id of hydratedIds) {
+        void ensureMessages(id, true);
+      }
       return;
     }
 
