@@ -67,6 +67,12 @@ export const useAuthStore = defineStore("auth", {
         } catch {
           // useApi 依赖 Nuxt 上下文，极端情况下可能不可用，忽略
         }
+        // 通知其它模块（如敲敲 composable）一并清理本地状态 / 断开 SSE
+        try {
+          window.dispatchEvent(new CustomEvent("auth:logout"));
+        } catch {
+          // 老浏览器对 CustomEvent 的兼容已经不需要考虑
+        }
       }
     },
   },

@@ -18,9 +18,6 @@ type KnockTab = "calls" | "contacts" | "groups";
 
 const activeTab = ref<KnockTab>("contacts");
 
-/** 当前选中的会话 ID（即 KnockConversation.id；null 表示右栏显示 EMPTY 占位） */
-const activeConversationId = ref<string | null>(null);
-
 const {
   conversations: allConversations,
   isLoading,
@@ -29,6 +26,8 @@ const {
   ensureMessages,
   messageStateOf,
   markConversationAsRead,
+  /** 当前选中的会话 ID（共享自 composable；null 表示右栏显示 EMPTY 占位） */
+  activeConversationId,
   startStream,
   stopStream,
 } = useKnockKnockConversations();
@@ -94,9 +93,40 @@ const shouldShowTime = (index: number): boolean => {
   return dCurr - dPrev > TIME_GAP_MS;
 };
 
+/**
+ * 用户在切换/打开会话前是否处于"接近底部"。
+ * SSE 触发的新消息只有在 wasNearBottom 时才自动滚动，
+ * 否则保持用户当前的滚动位置（避免打断用户读历史）。
+ * 切换会话时重置为 true（新会话默认看最新）。
+ */
+const NEAR_BOTTOM_THRESHOLD_PX = 80;
+const wasNearBottom = ref(true);
+
+const isNearBottom = (el: HTMLElement): boolean => {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_THRESHOLD_PX;
+};
+
+/**
+ * 滚到底部。用 rAF 双重 + 一次延后探测，覆盖：
+ * - Vue patch 之后 DOM 已就位但浏览器尚未布局（rAF1）
+ * - 布局完成但 inline 图片仍在加载导致 scrollHeight 后涨（200ms 兜底）
+ */
+const scrollToBottom = (el: HTMLElement) => {
+  const doScroll = () => {
+    el.scrollTop = el.scrollHeight;
+  };
+  requestAnimationFrame(() => {
+    requestAnimationFrame(doScroll);
+  });
+  // 兜底：等待图片等异步资源完成布局后再校正一次
+  setTimeout(doScroll, 200);
+};
+
 /** 选中会话时：懒加载消息 → 批量 mark-read → 滚到最新消息 */
 watch(activeConversationId, async (id) => {
   if (!id) return;
+  // 新会话默认看最新消息
+  wasNearBottom.value = true;
   try {
     await ensureMessages(id);
   } catch {
@@ -105,9 +135,35 @@ watch(activeConversationId, async (id) => {
   markConversationAsRead(id);
   nextTick(() => {
     const el = messagesRef.value;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) scrollToBottom(el);
   });
 });
+
+/**
+ * 用户滚动时持续更新 wasNearBottom；
+ * 这是 SSE/合并刷新后决定「是否自动跟随到底」的依据。
+ */
+const onMessagesScroll = () => {
+  const el = messagesRef.value;
+  if (!el) return;
+  wasNearBottom.value = isNearBottom(el);
+};
+
+/**
+ * 消息流变化时，如果用户原本就靠底，跟随到新底部。
+ * 否则保持当前 scrollTop，让用户继续读历史。
+ */
+watch(
+  () => activeMessages.value.length,
+  (next, prev) => {
+    if (next <= (prev ?? 0)) return;
+    if (!wasNearBottom.value) return;
+    nextTick(() => {
+      const el = messagesRef.value;
+      if (el) scrollToBottom(el);
+    });
+  },
+);
 
 /** 不同 notification 类型在没有 comment.content 时的兜底正文 */
 const fallbackBubbleText = (item: NotificationDto): string => {
@@ -343,6 +399,7 @@ const handleConversationClick = (id: string) => {
                       v-if="activeConversation && activeMessages.length"
                       ref="messagesRef"
                       class="ik-knock__messages"
+                      @scroll.passive="onMessagesScroll"
                     >
                       <template
                         v-for="(msg, idx) in activeMessages"
