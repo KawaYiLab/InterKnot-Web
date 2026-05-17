@@ -66,6 +66,11 @@ const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
       <LazyConfirmDialog />
     </ClientOnly>
 
+    <!-- 敲敲弹窗（消息通知 / 私聊 / 群聊入口） -->
+    <ClientOnly>
+      <LazyKnockKnockModal />
+    </ClientOnly>
+
     <!-- 帖子详情弹窗（从首页点击卡片时弹出） -->
     <ClientOnly>
       <Teleport to="body">

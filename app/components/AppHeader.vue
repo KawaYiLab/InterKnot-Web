@@ -1,12 +1,11 @@
 ﻿<script setup lang="ts">
-import { useMessage } from "zenless-ui";
 import { useEventListener } from "@vueuse/core";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const message = useMessage();
 const loginDialog = useLoginDialog();
+const knockKnockModal = useKnockKnockModal();
 const { isActive: showProgress, progress: progressValue, isClaimed, start: startProgress, finish: finishProgress } = usePageDataLoading();
 
 // Auto-hide header on mobile when scrolling down, reveal on scroll up.
@@ -125,7 +124,13 @@ const handleTabChange = async (next: string | number) => {
   }
 
   if (tab === "notification") {
-    message.warning("敲敲即将开放");
+    if (!auth.isLogin) {
+      loginDialog.open();
+      activeTab.value = resolveActiveTab(route.path);
+      return;
+    }
+    knockKnockModal.open();
+    // 敲敲是弹窗而非独立路由，保持当前路由对应的 tab 视觉选中态
     activeTab.value = resolveActiveTab(route.path);
     return;
   }
@@ -227,10 +232,7 @@ watch(
                 fill="currentColor"
               />
             </svg>
-            <span class="ik-header-tab__content">
-              <span class="ik-tab-label">敲敲</span>
-              <span class="ik-tab-dot" />
-            </span>
+            <span class="ik-header-tab__content">敲敲</span>
           </button>
 
           <button
@@ -587,19 +589,6 @@ watch(
   100% {
     transform: scale(1.1);
   }
-}
-
-.ik-tab-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.ik-tab-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ff4d4f;
 }
 
 @media (max-width: 1180px) {
