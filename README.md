@@ -151,7 +151,7 @@ InterKnot-web/
 
 欢迎提交 Issue 或 Pull Request，一起完善绳网。
 
-> ⚠️ **注意**：本项目使用Claude Opus 4.6辅助开发，使用前请自行评估。
+> ⚠️ **注意**：本项目使用Claude Opus 4.6/Claude Opus 4.7辅助开发，使用前请自行评估。
 
 ---
 
