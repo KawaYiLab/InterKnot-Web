@@ -167,11 +167,52 @@ watch(
 
 /** 不同 notification 类型在没有 comment.content 时的兜底正文 */
 const fallbackBubbleText = (item: NotificationDto): string => {
-  if (item.type === "like") return "赞了你的内容";
+  if (item.type === "like") {
+    // like-on-comment 时 notification 关联了被点赞的评论；like-on-article 则没有
+    return item.comment ? "赞了你的评论" : "赞了你的帖子";
+  }
   if (item.type === "favorite") return "收藏了你的帖子";
   if (item.type === "mention") return "在帖子中提到了你";
   if (item.type === "system") return "系统消息";
   return "";
+};
+
+/**
+ * 气泡正文：
+ * - 交互类（like/favorite）的 notification.comment 是「被点赞的评论」，即收件人自己写的内容，
+ *   不能当作来自 sender 的发言展示，必须走 fallback
+ * - 其它类型优先用 comment.content（即评论原文）
+ */
+const bubbleText = (item: NotificationDto): string => {
+  if (item.type === "like" || item.type === "favorite") {
+    return fallbackBubbleText(item);
+  }
+  return item.comment?.content || fallbackBubbleText(item);
+};
+
+/**
+ * like-on-comment：notification 既有 article（评论所在的帖子）也有 comment（被赞的评论）。
+ * 这个组合用来决定 quote 卡是引用「帖子」还是引用「评论原文」。
+ */
+const isLikeOnComment = (item: NotificationDto): boolean =>
+  item.type === "like" && !!item.comment;
+
+/** quote 卡片左侧 label：根据交互类型不同，文案不同 */
+const quoteLabel = (item: NotificationDto): string => {
+  if (isLikeOnComment(item)) return "评论";
+  if (item.type === "like" || item.type === "favorite") return "帖子";
+  // comment / reply / mention 都展示评论的帖子上下文
+  return "评论帖子";
+};
+
+/**
+ * quote 卡片右侧主标题：
+ * - like-on-comment 引用被赞评论的原文（让收件人看到自己写了什么被赞）
+ * - 其它情况引用所在帖子的标题
+ */
+const quoteTitle = (item: NotificationDto): string => {
+  if (isLikeOnComment(item)) return item.comment?.content ?? "";
+  return item.article?.title ?? "";
 };
 
 /** 点击评论帖子卡：保留敲敲弹窗，帖子弹窗叠加显示（项目已有路由级弹窗机制） */
@@ -425,7 +466,7 @@ const handleConversationClick = (id: string) => {
                           </div>
                           <div class="ik-knock__msg-body">
                             <div class="ik-knock__msg-bubble">
-                              {{ msg.comment?.content || fallbackBubbleText(msg) }}
+                              {{ bubbleText(msg) }}
                             </div>
                             <button
                               v-if="msg.article"
@@ -438,9 +479,9 @@ const handleConversationClick = (id: string) => {
                                 aria-hidden="true"
                               />
                               <span class="ik-knock__msg-quote-text">
-                                <span class="ik-knock__msg-quote-label">评论帖子</span>
+                                <span class="ik-knock__msg-quote-label">{{ quoteLabel(msg) }}</span>
                                 <span class="ik-knock__msg-quote-title">
-                                  {{ msg.article.title }}
+                                  {{ quoteTitle(msg) }}
                                 </span>
                               </span>
                             </button>

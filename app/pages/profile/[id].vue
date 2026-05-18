@@ -598,13 +598,15 @@ onBeforeUnmount(() => {
   border-radius: 0 0 14px 14px;
   overflow: hidden;
   background: #2a2d33 url("/images/banner.png") center/cover no-repeat;
-  background-position: 26% center;
   min-height: 240px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 24px;
   padding: 32px 36px;
+}
+@media (min-width: 1024px) and (orientation: landscape) {
+  .ik-banner { background-position: 26% center; }
 }
 .ik-banner--skeleton {
   background: linear-gradient(135deg, #1a1a1a 0%, #222 50%, #1a1a1a 100%);
