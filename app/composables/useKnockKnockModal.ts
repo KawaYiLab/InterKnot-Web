@@ -5,20 +5,20 @@
  * 外壳动画复用项目帖子弹窗的 .ik-overlay / .ik-dialog 样式。
  */
 const knockKnockVisible = ref(false);
+/** 唯一 token：所有 useKnockKnockModal 实例共享，确保 open/close 配对 */
+const SCROLL_LOCK_TOKEN = Symbol("knock-knock-modal");
 
 export function useKnockKnockModal() {
+  const { acquire, release } = useBodyScrollLock();
+
   const open = () => {
     knockKnockVisible.value = true;
-    if (import.meta.client) {
-      document.body.style.overflow = "hidden";
-    }
+    acquire(SCROLL_LOCK_TOKEN);
   };
 
   const close = () => {
     knockKnockVisible.value = false;
-    if (import.meta.client) {
-      document.body.style.overflow = "";
-    }
+    release(SCROLL_LOCK_TOKEN);
   };
 
   return {

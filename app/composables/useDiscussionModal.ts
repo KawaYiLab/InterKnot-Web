@@ -12,6 +12,8 @@ let _historyPushed = false;
 let _savedTitle = "";
 
 const DEFAULT_TITLE = "绳网";
+/** 唯一 token：所有 useDiscussionModal 实例共享，确保 open/close 配对 */
+const SCROLL_LOCK_TOKEN = Symbol("discussion-modal");
 
 export interface DiscussionPreview {
   title?: string;
@@ -24,6 +26,8 @@ export function useDiscussionModal() {
   const discussionId = useState<string | null>("dm:id", () => null);
   const coverHint = useState<number | null>("dm:coverHint", () => null);
   const preview = useState<DiscussionPreview | null>("dm:preview", () => null);
+  const { acquire, release } = useBodyScrollLock();
+
   function open(
     id: string,
     opts?: {
@@ -40,7 +44,7 @@ export function useDiscussionModal() {
     _historyPushed = true;
 
     _savedTitle = document.title;
-    document.body.style.overflow = "hidden";
+    acquire(SCROLL_LOCK_TOKEN);
     window.history.pushState(
       { __discussionModal: true, discussionId: id },
       "",
@@ -67,7 +71,9 @@ export function useDiscussionModal() {
     isOpen.value = false;
     // discussionId 保留到离场动画结束后再清理
     if (import.meta.client) {
-      document.body.style.overflow = "";
+      // 只 release 自己的锁；如果还有别的 overlay（如 KnockKnockModal）持有，
+      // body.overflow 保持 hidden，避免下方页面意外可滚。
+      release(SCROLL_LOCK_TOKEN);
       document.title = _savedTitle || DEFAULT_TITLE;
     }
   }
