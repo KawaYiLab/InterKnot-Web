@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { resolveErrorMessage } from "~/utils/api-error";
 import type { Profile } from "~/types/entities";
 
 const props = withDefaults(defineProps<{
@@ -9,6 +10,10 @@ const props = withDefaults(defineProps<{
 });
 
 const api = useApi();
+const auth = useAuthStore();
+const loginDialog = useLoginDialog();
+const knockKnockModal = useKnockKnockModal();
+const dm = useDmConversations();
 
 const triggerRef = ref<HTMLElement | null>(null);
 const cardRef = ref<HTMLElement | null>(null);
@@ -16,6 +21,20 @@ const visible = ref(false);
 const profile = ref<Profile | null>(null);
 const loading = ref(false);
 const fetchError = ref(false);
+
+/** "发消息"按钮加载态 & 错误态：避免短时间内连点重复打开 direct API */
+const dmStarting = ref(false);
+const dmError = ref<string | null>(null);
+
+/** 自己不能给自己发消息；profileHidden 用户后端也会拒，前端先隐 */
+const canSendDm = computed<boolean>(() => {
+  if (!profile.value) return false;
+  if (profile.value.isSelf) return false;
+  if (profile.value.profileHidden) return false;
+  // 没有 uid（极少数老数据）也禁用
+  if (typeof profile.value.uid !== "number") return false;
+  return true;
+});
 
 const cardStyle = ref<Record<string, string>>({});
 
@@ -131,6 +150,34 @@ const goProfile = () => {
   navigateTo(`/profile/${props.authorId}`);
 };
 
+/**
+ * 发起私聊：
+ *  1. 未登录 → 弹登录框
+ *  2. canSendDm = false → 不应进到这里（按钮也会 disabled）
+ *  3. 调 /api/dm/conversations/direct 找/建私聊
+ *  4. 拿到 documentId 后打开敲敲弹窗并定位到该会话
+ */
+const startDm = async () => {
+  if (!auth.isLogin) {
+    visible.value = false;
+    loginDialog.open();
+    return;
+  }
+  if (!canSendDm.value || !profile.value || typeof profile.value.uid !== "number") return;
+  if (dmStarting.value) return;
+  dmStarting.value = true;
+  dmError.value = null;
+  try {
+    const { summary } = await dm.openDirectConversation(profile.value.uid);
+    visible.value = false;
+    knockKnockModal.open({ dmConversationId: summary.documentId });
+  } catch (err) {
+    dmError.value = resolveErrorMessage(err, "无法发起私聊");
+  } finally {
+    dmStarting.value = false;
+  }
+};
+
 const formatNumber = (n: number) => {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -244,7 +291,21 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="ik-hovercard__footer">
-            <button class="ik-hovercard__profile-btn" @click="goProfile">查看主页</button>
+            <div v-if="dmError" class="ik-hovercard__dm-error" role="alert">
+              {{ dmError }}
+            </div>
+            <div class="ik-hovercard__footer-actions">
+              <button
+                v-if="canSendDm"
+                type="button"
+                class="ik-hovercard__send-dm-btn"
+                :disabled="dmStarting"
+                @click="startDm"
+              >
+                {{ dmStarting ? "..." : "发消息" }}
+              </button>
+              <button class="ik-hovercard__profile-btn" @click="goProfile">查看主页</button>
+            </div>
           </div>
         </template>
 
@@ -455,11 +516,17 @@ onBeforeUnmount(() => {
   position: relative;
   padding: 0 16px 14px;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ik-hovercard__footer-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .ik-hovercard__profile-btn {
-  width: 100%;
+  flex: 1;
   padding: 6px 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -475,6 +542,46 @@ onBeforeUnmount(() => {
   background: rgba(215, 255, 0, 0.1);
   border-color: rgba(215, 255, 0, 0.3);
   color: #d7ff00;
+}
+
+/* 主操作：发消息（黄底黑字，强调） */
+.ik-hovercard__send-dm-btn {
+  flex: 1;
+  padding: 6px 0;
+  border: 1px solid #fbfe00;
+  border-radius: 8px;
+  background: #fbfe00;
+  color: #000;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 80ms ease, opacity 140ms ease;
+}
+
+.ik-hovercard__send-dm-btn:hover:not(:disabled) {
+  background: #e8eb00;
+  border-color: #e8eb00;
+}
+
+.ik-hovercard__send-dm-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.ik-hovercard__send-dm-btn:disabled {
+  background: rgba(251, 254, 0, 0.35);
+  border-color: rgba(251, 254, 0, 0.35);
+  color: rgba(0, 0, 0, 0.55);
+  cursor: not-allowed;
+}
+
+.ik-hovercard__dm-error {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 80, 80, 0.15);
+  color: #ff8080;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
 }
 
 /* ── Error ─────────────────────────────────────── */

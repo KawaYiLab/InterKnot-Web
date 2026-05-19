@@ -5,12 +5,19 @@ import {
   UserIcon,
   UserGroupIcon,
   ChatBubbleLeftIcon,
+  PaperAirplaneIcon,
 } from "@heroicons/vue/24/solid";
 import { XCircleIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
-import type { KnockConversation, NotificationArticleRef, NotificationDto } from "~/types/entities";
+import type { DmConversationSummary, DmMessage } from "~/types/entities";
 import { formatTime } from "~/utils/time";
+import { resolveErrorMessage } from "~/utils/api-error";
 
-const { visible, close } = useKnockKnockModal();
+const {
+  visible,
+  close,
+  consumePendingDmConversationId,
+} = useKnockKnockModal();
+const auth = useAuthStore();
 const discussionModal = useDiscussionModal();
 
 /** 顶部 tab：通话记录（未来 AI 对话占位） / 私聊 / 群聊（未来占位） */
@@ -26,42 +33,82 @@ const {
   ensureMessages,
   messageStateOf,
   markConversationAsRead,
-  /** 当前选中的会话 ID（共享自 composable；null 表示右栏显示 EMPTY 占位） */
+  sendMessage,
+  editMessage,
+  withdrawMessage,
+  /** 当前选中的会话 documentId（共享自 composable；null 表示右栏显示 EMPTY 占位） */
   activeConversationId,
   startStream,
   stopStream,
-} = useKnockKnockConversations();
+} = useDmConversations();
 
-/** 弹窗打开：拉会话列表 + 开 SSE；关闭：清空选中 + 关 SSE */
-watch(visible, (next) => {
-  if (next) {
-    refresh();
-    startStream();
-  } else {
+/** 当前登录用户的 user.id；用于区分消息气泡是「我发的」还是「对方发的」 */
+const selfUserId = computed<number | null>(() => {
+  const id = auth.user?.id;
+  if (typeof id === "number") return id;
+  if (typeof id === "string" && /^\d+$/.test(id)) return Number(id);
+  return null;
+});
+
+/** 弹窗打开：拉会话列表 + 开 WS；关闭：清空选中 + 关 WS */
+watch(visible, async (next) => {
+  if (!next) {
     activeConversationId.value = null;
     stopStream();
+    return;
+  }
+  // 拉列表 + 起 WS（startStream 内部对 SSR / 未登录都做了护栏）
+  startStream();
+  await refresh();
+  // 若是由 UserHoverCard「发消息」打开，定位到指定会话
+  const pending = consumePendingDmConversationId();
+  if (pending) {
+    activeTab.value = "contacts";
+    activeConversationId.value = pending;
   }
 });
 
 /**
  * 当前 tab 应展示的会话列表。
- * "私聊" tab 默认展示 contacts；其他两个 tab 暂留空。
+ * "私聊" tab 展示所有 DM 会话；其他两个 tab 暂留空。
  */
-const conversations = computed<KnockConversation[]>(() => {
+const conversations = computed<DmConversationSummary[]>(() => {
   if (activeTab.value !== "contacts") return [];
-  return allConversations.value.filter((c) => c.category === "contacts");
+  return allConversations.value;
 });
 
-const activeConversation = computed<KnockConversation | null>(() => {
+const activeConversation = computed<DmConversationSummary | null>(() => {
   if (!activeConversationId.value) return null;
-  return conversations.value.find((c) => c.id === activeConversationId.value) ?? null;
+  return conversations.value.find((c) => c.documentId === activeConversationId.value) ?? null;
 });
 
 /**
- * 当前会话的消息流：后端已按 createdAt ASC 返回，直接使用。
- * 消息由 ensureMessages(id) 懒加载到 composable 内部缓存。
+ * 当前激活会话是否禁止发送消息：
+ *  - pseudo:anonymous（匿名通知）：对端没有真实身份，无法回复
+ *  - pseudo:system（系统通知）：单向通知，不可回复
+ *  - pseudo:user：可发，发出去的瞬间会 lazy 实质化为真 DM（见 useDmConversations.sendMessage）
  */
-const activeMessages = computed<NotificationDto[]>(() => {
+const composerDisabled = computed<boolean>(() => {
+  const conv = activeConversation.value;
+  if (!conv) return true;
+  return conv.pseudoKind === "anonymous" || conv.pseudoKind === "system";
+});
+
+/** 输入框 placeholder：根据 pseudoKind 给出更精确的提示 */
+const composerPlaceholder = computed<string>(() => {
+  const conv = activeConversation.value;
+  if (!conv) return "";
+  if (conv.pseudoKind === "anonymous") return "匿名用户的通知不可回复";
+  if (conv.pseudoKind === "system") return "系统通知不可回复";
+  if (conv.pseudoKind === "user") return "发送将开启与该用户的私聊";
+  return "输入消息，Enter 发送，Shift+Enter 换行";
+});
+
+/**
+ * 当前会话的消息流（createdAt asc）。消息由 ensureMessages(id) 懒加载到
+ * composable 内部缓存；WS 事件到达时按 documentId 去重合并。
+ */
+const activeMessages = computed<DmMessage[]>(() => {
   const id = activeConversationId.value;
   if (!id) return [];
   return messageStateOf(id).value.items;
@@ -74,6 +121,82 @@ const activeMessageLoading = computed<boolean>(() => {
   const state = messageStateOf(id).value;
   return state.loading && !state.hydrated;
 });
+
+/** 单条消息是否是我自己发的（通知类永远不是「我自己发的」，因此一直靠左） */
+const isMine = (msg: DmMessage): boolean => {
+  if (msg.kind === "notification") return false;
+  const uid = selfUserId.value;
+  return uid != null && msg.sender?.userId === uid;
+};
+
+/**
+ * 气泡正文如何渲染：
+ * - 通知 + comment/reply/mention + 有评论原文 → 走 CommentBody，做 @mention 高亮
+ * - 其它一律 plain string（普通 DM 消息正文 / 通知预渲染文案）
+ *
+ * 返回值约定：
+ *  - 字符串：直接 {{ }} 出
+ *  - { mode: "rich", content } → 走 <CommentBody>
+ */
+type BubbleRender = string | { mode: "rich"; content: string };
+
+const bubbleText = (msg: DmMessage): BubbleRender => {
+  if (msg.deletedAt) return "消息已撤回";
+  if (msg.kind === "notification") {
+    const k = msg.notificationKind;
+    // 评论 / 回复 / @提到：评论原文里可能含 @[name](id) token，让 CommentBody 渲染高亮
+    if ((k === "comment" || k === "reply" || k === "mention") && msg.comment?.content) {
+      return { mode: "rich", content: msg.comment.content };
+    }
+    // 互动类（like / favorite / system）→ 走后端预渲染的 plain content
+  }
+  return msg.content ?? "";
+};
+
+/** like-on-comment：通知关联帖子+评论时，quote 卡引用「评论原文」而不是帖子标题 */
+const isLikeOnComment = (msg: DmMessage): boolean =>
+  msg.notificationKind === "like" && !!msg.comment;
+
+/** quote 卡左侧 label */
+const quoteLabel = (msg: DmMessage): string => {
+  if (isLikeOnComment(msg)) return "评论";
+  if (msg.notificationKind === "like" || msg.notificationKind === "favorite") return "帖子";
+  return "评论帖子"; // comment / reply / mention：引用所在帖子
+};
+
+/** quote 卡右侧主标题：like-on-comment 引用评论原文，其余引用帖子标题 */
+const quoteTitle = (msg: DmMessage): string => {
+  if (isLikeOnComment(msg)) return msg.comment?.content ?? "";
+  return msg.article?.title ?? "";
+};
+
+/** quote 卡是否应该展示：comment/reply/mention 的主体已是评论原文，不再放卡 */
+const shouldShowQuote = (msg: DmMessage): boolean => {
+  if (msg.kind !== "notification") return false;
+  // 有 article 引用就有卡片可点
+  if (!msg.article && !msg.comment) return false;
+  // comment/reply/mention：主气泡已是评论正文，再放 quote 帖子卡
+  // like / favorite / like-on-comment 都需要卡
+  return true;
+};
+
+const goDiscussion = (msg: DmMessage) => {
+  if (!msg.article?.documentId) return;
+  discussionModal.open(msg.article.documentId, {
+    coverAspectRatio: msg.article.coverAspectRatio ?? undefined,
+    preview: { title: msg.article.title },
+  });
+};
+
+/** 列表预览文案：撤回 / 图片 / 系统 / 通知 / 正常 */
+const conversationPreview = (conv: DmConversationSummary): string => {
+  const last = conv.lastMessage;
+  if (!last) return "";
+  if (last.kind === "image") return "[图片]";
+  if (last.kind === "system") return last.content || "";
+  // notification 走后端预渲染的 content（"赞了你的评论" / 评论正文 等）
+  return last.content || "";
+};
 
 /** 消息流容器，用于切换会话时自动滚到底部 */
 const messagesRef = ref<HTMLElement | null>(null);
@@ -94,6 +217,16 @@ const shouldShowTime = (index: number): boolean => {
   const dPrev = new Date(prev.createdAt).getTime();
   if (Number.isNaN(dCurr) || Number.isNaN(dPrev)) return false;
   return dCurr - dPrev > TIME_GAP_MS;
+};
+
+/** 5 分钟内自己发的、未撤回的文本消息可以编辑/撤回 */
+const EDIT_WINDOW_MS = 5 * 60 * 1000;
+const canModifyMessage = (msg: DmMessage): boolean => {
+  if (!isMine(msg)) return false;
+  if (msg.deletedAt) return false;
+  if (msg.kind !== "text") return false;
+  const ageMs = Date.now() - new Date(msg.createdAt).getTime();
+  return ageMs < EDIT_WINDOW_MS;
 };
 
 /**
@@ -127,13 +260,16 @@ const scrollToBottom = (el: HTMLElement) => {
 
 /** 选中会话时：懒加载消息 → 批量 mark-read → 滚到最新消息 */
 watch(activeConversationId, async (id) => {
+  // 切换会话时关闭编辑态
+  editingMessageId.value = null;
+  editingDraft.value = "";
   if (!id) return;
   // 新会话默认看最新消息
   wasNearBottom.value = true;
   try {
     await ensureMessages(id);
-  } catch {
-    /* 加载失败不阅出，错误与会话列表一并在右栏提示 */
+  } catch (err) {
+    sendError.value = resolveErrorMessage(err, "加载消息失败");
   }
   // 切换途中用户又点了别的会话 → 放弃后续操作，避免竞态
   if (activeConversationId.value !== id) return;
@@ -172,76 +308,134 @@ watch(
   },
 );
 
-/** 不同 notification 类型在没有 comment.content 时的兜底正文 */
-const fallbackBubbleText = (item: NotificationDto): string => {
-  if (item.type === "like") {
-    // like-on-comment 时 notification 关联了被点赞的评论；like-on-article 则没有
-    return item.comment ? "赞了你的评论" : "赞了你的帖子";
-  }
-  if (item.type === "favorite") return "收藏了你的帖子";
-  if (item.type === "mention") return "在帖子中提到了你";
-  if (item.type === "system") return "系统消息";
-  return "";
+// （bubbleBody 已被 bubbleText 取代——见上方，支持富文本 mention 渲染）
+
+// ── 输入 / 发送 / 编辑 / 撤回 ───────────────────────────
+const draft = ref("");
+const sending = ref(false);
+const sendError = ref<string | null>(null);
+const composerRef = ref<HTMLTextAreaElement | null>(null);
+
+/** 当前正在编辑的消息 documentId（null 表示无）；编辑时输入框临时改为修改模式 */
+const editingMessageId = ref<string | null>(null);
+const editingDraft = ref("");
+
+/** 当前消息上下文菜单：右键/长按 触发 */
+const contextMenuMessageId = ref<string | null>(null);
+const contextMenuStyle = ref<Record<string, string>>({});
+const showContextMenu = (e: MouseEvent, msg: DmMessage) => {
+  if (!canModifyMessage(msg)) return;
+  e.preventDefault();
+  contextMenuMessageId.value = msg.documentId;
+  // 菜单贴近鼠标位置；屏幕边缘 clamp
+  const x = Math.min(e.clientX, window.innerWidth - 160);
+  const y = Math.min(e.clientY, window.innerHeight - 100);
+  contextMenuStyle.value = {
+    left: `${x}px`,
+    top: `${y}px`,
+  };
+};
+const hideContextMenu = () => {
+  contextMenuMessageId.value = null;
 };
 
-/**
- * 气泡正文：
- * - 交互类（like/favorite）的 notification.comment 是「被点赞的评论」，即收件人自己写的内容，
- *   不能当作来自 sender 的发言展示，必须走 fallback
- * - 其它类型优先用 comment.content（即评论原文，可能含 @[name](id) token）
- *
- * 返回值约定：
- * - 字符串：直接以 {{ }} 渲染（不含 mention token，或交互类兜底文案）
- * - { mode: "rich", content }：交给 <CommentBody> 渲染 mention 芯片
- */
-type BubbleRender = string | { mode: "rich"; content: string };
-
-const bubbleText = (item: NotificationDto): BubbleRender => {
-  if (item.type === "like" || item.type === "favorite") {
-    return fallbackBubbleText(item);
-  }
-  const raw = item.comment?.content;
-  if (raw) return { mode: "rich", content: raw };
-  return fallbackBubbleText(item);
-};
-
-/**
- * like-on-comment：notification 既有 article（评论所在的帖子）也有 comment（被赞的评论）。
- * 这个组合用来决定 quote 卡是引用「帖子」还是引用「评论原文」。
- */
-const isLikeOnComment = (item: NotificationDto): boolean =>
-  item.type === "like" && !!item.comment;
-
-/** quote 卡片左侧 label：根据交互类型不同，文案不同 */
-const quoteLabel = (item: NotificationDto): string => {
-  if (isLikeOnComment(item)) return "评论";
-  if (item.type === "like" || item.type === "favorite") return "帖子";
-  // comment / reply / mention 都展示评论的帖子上下文
-  return "评论帖子";
-};
-
-/**
- * quote 卡片右侧主标题：
- * - like-on-comment 引用被赞评论的原文（让收件人看到自己写了什么被赞）
- * - 其它情况引用所在帖子的标题
- */
-const quoteTitle = (item: NotificationDto): string => {
-  if (isLikeOnComment(item)) return item.comment?.content ?? "";
-  return item.article?.title ?? "";
-};
-
-/** 点击评论帖子卡：保留敲敲弹窗，帖子弹窗叠加显示（项目已有路由级弹窗机制） */
-const goDiscussion = (article: NotificationArticleRef) => {
-  discussionModal.open(article.documentId, {
-    coverAspectRatio: article.coverAspectRatio ?? undefined,
-    preview: { title: article.title },
+const beginEdit = (msg: DmMessage) => {
+  editingMessageId.value = msg.documentId;
+  editingDraft.value = msg.content ?? "";
+  hideContextMenu();
+  nextTick(() => {
+    composerRef.value?.focus();
   });
 };
 
-/** ESC 关闭敲敲弹窗：若帖子弹窗叠加在上层，则让其优先消费 ESC */
+const cancelEdit = () => {
+  editingMessageId.value = null;
+  editingDraft.value = "";
+};
+
+const doWithdraw = async (msg: DmMessage) => {
+  const cid = activeConversationId.value;
+  if (!cid) return;
+  hideContextMenu();
+  try {
+    await withdrawMessage(cid, msg.documentId);
+  } catch (err) {
+    sendError.value = resolveErrorMessage(err, "撤回失败");
+  }
+};
+
+/** 上下文菜单的两种操作的统一入口：根据当前 contextMenuMessageId 查到消息再分发 */
+const onContextMenuAction = (action: "edit" | "withdraw") => {
+  const id = contextMenuMessageId.value;
+  if (!id) return;
+  const msg = activeMessages.value.find((m) => m.documentId === id);
+  if (!msg) {
+    hideContextMenu();
+    return;
+  }
+  if (action === "edit") beginEdit(msg);
+  else void doWithdraw(msg);
+};
+
+const doSend = async () => {
+  const cid = activeConversationId.value;
+  if (!cid) return;
+  if (sending.value) return;
+
+  // 编辑模式
+  if (editingMessageId.value) {
+    const newContent = editingDraft.value.trim();
+    if (!newContent) return;
+    sending.value = true;
+    sendError.value = null;
+    try {
+      await editMessage(cid, editingMessageId.value, newContent);
+      cancelEdit();
+    } catch (err) {
+      sendError.value = resolveErrorMessage(err, "编辑失败");
+    } finally {
+      sending.value = false;
+    }
+    return;
+  }
+
+  const content = draft.value.trim();
+  if (!content) return;
+  sending.value = true;
+  sendError.value = null;
+  try {
+    await sendMessage(cid, { content });
+    draft.value = "";
+    nextTick(() => {
+      const el = messagesRef.value;
+      if (el) scrollToBottom(el);
+    });
+  } catch (err) {
+    sendError.value = resolveErrorMessage(err, "发送失败");
+  } finally {
+    sending.value = false;
+  }
+};
+
+/** Enter 发送，Shift+Enter 换行（与主流 IM 一致） */
+const onComposerKeyDown = (e: KeyboardEvent) => {
+  if (e.key !== "Enter") return;
+  if (e.shiftKey || e.ctrlKey || e.metaKey) return; // 组合键允许换行
+  e.preventDefault();
+  void doSend();
+};
+
+/** ESC 优先关闭：上下文菜单 → 编辑模式 → 弹窗本体 */
 const onKeyDown = (e: KeyboardEvent) => {
   if (e.key !== "Escape" || !visible.value) return;
-  if (discussionModal.isOpen.value) return;
+  if (contextMenuMessageId.value) {
+    hideContextMenu();
+    return;
+  }
+  if (editingMessageId.value) {
+    cancelEdit();
+    return;
+  }
   close();
 };
 
@@ -392,39 +586,39 @@ const handleConversationClick = (id: string) => {
                   <div class="ik-knock__list" role="listbox">
                     <button
                       v-for="item in conversations"
-                      :key="item.id"
+                      :key="item.documentId"
                       type="button"
                       role="option"
                       class="ik-knock__list-item"
                       :class="{
-                        'is-active': activeConversationId === item.id,
-                        'has-unread': item.unread > 0,
+                        'is-active': activeConversationId === item.documentId,
+                        'has-unread': item.unreadCount > 0,
                       }"
-                      :aria-selected="activeConversationId === item.id"
-                      @click="handleConversationClick(item.id)"
+                      :aria-selected="activeConversationId === item.documentId"
+                      @click="handleConversationClick(item.documentId)"
                     >
                       <span class="ik-knock__avatar" aria-hidden="true">
                         <img
-                          v-if="item.peerAvatar"
-                          :src="item.peerAvatar"
-                          :alt="item.peerName"
+                          v-if="item.peer?.avatar || item.avatar"
+                          :src="(item.peer?.avatar || item.avatar) as string"
+                          :alt="item.peer?.name || item.title || ''"
                           class="ik-knock__avatar-img"
                           draggable="false"
                         />
                         <XCircleIcon v-else class="ik-knock__avatar-icon" />
                       </span>
                       <span class="ik-knock__item-text">
-                        <span class="ik-knock__item-title">{{ item.peerName }}</span>
+                        <span class="ik-knock__item-title">{{ item.peer?.name || item.title || "未知会话" }}</span>
                         <span class="ik-knock__item-subtitle">
-                          {{ item.lastPreview || "暂无消息" }}
+                          {{ conversationPreview(item) || "暂无消息" }}
                         </span>
                       </span>
                       <span
-                        v-if="item.unread > 0"
+                        v-if="item.unreadCount > 0"
                         class="ik-knock__item-badge"
                         aria-label="未读"
                       >
-                        {{ item.unread > 99 ? "99+" : item.unread }}
+                        {{ item.unreadCount > 99 ? "99+" : item.unreadCount }}
                       </span>
                     </button>
                     <div
@@ -447,7 +641,7 @@ const handleConversationClick = (id: string) => {
                       aria-hidden="true"
                     />
                     <span class="ik-knock__main-title">
-                      {{ activeConversation?.peerName ?? "NoData" }}
+                      {{ activeConversation?.peer?.name || activeConversation?.title || "NoData" }}
                     </span>
                   </header>
                   <div class="ik-knock__main-body">
@@ -470,29 +664,43 @@ const handleConversationClick = (id: string) => {
                         >
                           {{ formatTime(msg.createdAt) }}
                         </div>
-                        <div class="ik-knock__msg" :class="{ 'is-new': !knownMessageIds.has(msg.documentId) }">
+                        <div
+                          class="ik-knock__msg"
+                          :class="{
+                            'is-new': !knownMessageIds.has(msg.documentId),
+                            'is-mine': isMine(msg),
+                          }"
+                          @contextmenu="showContextMenu($event, msg)"
+                        >
                           <div class="ik-knock__msg-avatar" aria-hidden="true">
                             <img
-                              v-if="activeConversation.peerAvatar"
-                              :src="activeConversation.peerAvatar"
-                              :alt="activeConversation.peerName"
+                              v-if="msg.sender?.avatar"
+                              :src="msg.sender.avatar"
+                              :alt="msg.sender?.name || ''"
                               class="ik-knock__msg-avatar-img"
                               draggable="false"
                             />
                             <XCircleIcon v-else class="ik-knock__msg-avatar-icon" />
                           </div>
                           <div class="ik-knock__msg-body">
-                            <div class="ik-knock__msg-bubble">
+                            <div
+                              class="ik-knock__msg-bubble"
+                              :class="{ 'is-deleted': !!msg.deletedAt }"
+                            >
                               <template v-if="typeof bubbleText(msg) === 'object'">
-                                <CommentBody :content="(bubbleText(msg) as { mode: 'rich'; content: string }).content" />
+                                <CommentBody
+                                  :content="(bubbleText(msg) as { mode: 'rich'; content: string }).content"
+                                />
                               </template>
                               <template v-else>{{ bubbleText(msg) }}</template>
+                              <span v-if="msg.editedAt && !msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
                             </div>
+                            <!-- 通知 quote 卡：点击跳到关联帖子（discussionModal） -->
                             <button
-                              v-if="msg.article"
+                              v-if="shouldShowQuote(msg) && msg.article"
                               type="button"
                               class="ik-knock__msg-quote"
-                              @click="goDiscussion(msg.article)"
+                              @click="goDiscussion(msg)"
                             >
                               <DocumentTextIcon
                                 class="ik-knock__msg-quote-icon"
@@ -513,6 +721,69 @@ const handleConversationClick = (id: string) => {
                     <div v-else class="ik-knock__empty-pill">
                       {{ activeMessageLoading ? "加载中…" : "EMPTY" }}
                     </div>
+
+                    <!-- 输入框：仅在有选中会话时显示 -->
+                    <div v-if="activeConversation" class="ik-knock__composer">
+                      <div
+                        v-if="editingMessageId"
+                        class="ik-knock__composer-edit-banner"
+                      >
+                        <span>正在编辑消息</span>
+                        <button
+                          type="button"
+                          class="ik-knock__composer-edit-cancel"
+                          @click="cancelEdit"
+                        >
+                          取消
+                        </button>
+                      </div>
+                      <div
+                        v-if="sendError"
+                        class="ik-knock__composer-error"
+                        role="alert"
+                      >
+                        {{ sendError }}
+                      </div>
+                      <div
+                        class="ik-knock__composer-row"
+                        :class="{ 'is-disabled': composerDisabled }"
+                      >
+                        <textarea
+                          v-if="editingMessageId"
+                          ref="composerRef"
+                          v-model="editingDraft"
+                          class="ik-knock__composer-input"
+                          placeholder="编辑消息…"
+                          rows="1"
+                          maxlength="4000"
+                          :disabled="composerDisabled"
+                          @keydown="onComposerKeyDown"
+                        />
+                        <textarea
+                          v-else
+                          ref="composerRef"
+                          v-model="draft"
+                          class="ik-knock__composer-input"
+                          :placeholder="composerPlaceholder"
+                          rows="1"
+                          maxlength="4000"
+                          :disabled="composerDisabled"
+                          @keydown="onComposerKeyDown"
+                        />
+                        <button
+                          type="button"
+                          class="ik-knock__composer-send"
+                          :disabled="composerDisabled || sending || (editingMessageId ? !editingDraft.trim() : !draft.trim())"
+                          :aria-label="editingMessageId ? '保存编辑' : '发送'"
+                          @click="doSend"
+                        >
+                          <PaperAirplaneIcon
+                            class="ik-knock__composer-send-icon"
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </section>
               </div>
@@ -521,6 +792,37 @@ const handleConversationClick = (id: string) => {
         </div>
       </div>
     </Transition>
+  </Teleport>
+
+  <!-- 消息上下文菜单（编辑 / 撤回）：Teleport 到 body 避免被弹窗剪裁 -->
+  <Teleport to="body">
+    <div
+      v-if="contextMenuMessageId"
+      class="ik-knock__context-menu-mask"
+      @click="hideContextMenu"
+      @contextmenu.prevent="hideContextMenu"
+    >
+      <div
+        class="ik-knock__context-menu"
+        :style="contextMenuStyle"
+        @click.stop
+      >
+        <button
+          type="button"
+          class="ik-knock__context-menu-item"
+          @click="onContextMenuAction('edit')"
+        >
+          编辑
+        </button>
+        <button
+          type="button"
+          class="ik-knock__context-menu-item ik-knock__context-menu-item--danger"
+          @click="onContextMenuAction('withdraw')"
+        >
+          撤回
+        </button>
+      </div>
+    </div>
   </Teleport>
 </template>
 
@@ -1379,4 +1681,238 @@ const handleConversationClick = (id: string) => {
     animation: none;
   }
 }
+
+/* ═══════════════════════════════════════════════
+   DM 私聊：自己的消息（右侧） + 编辑/撤回态 + Composer + 上下文菜单
+   ═══════════════════════════════════════════════ */
+
+/* 自己发的消息：头像 + 气泡整体右对齐；nipple 改右上 */
+.ik-knock__msg.is-mine {
+  flex-direction: row-reverse;
+}
+
+.ik-knock__msg.is-mine .ik-knock__msg-body {
+  align-items: flex-end;
+}
+
+.ik-knock__msg.is-mine .ik-knock__msg-bubble {
+  align-self: flex-end;
+  /* 主题黄底，与列表 active 一致 */
+  background: #fbfe00;
+  color: #000;
+}
+
+/* 把左侧 nipple 隐掉，画一个右侧的 nipple */
+.ik-knock__msg.is-mine .ik-knock__msg-bubble::before {
+  left: auto;
+  right: -0.4375em;
+  transform: scaleX(-1);
+}
+
+/* 撤回的消息：灰色斜体小占位 */
+.ik-knock__msg-bubble.is-deleted {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+  font-style: italic;
+  font-weight: 500;
+}
+
+.ik-knock__msg-bubble.is-deleted::before {
+  display: none;
+}
+
+/* "(已编辑)" 小标 */
+.ik-knock__msg-edited {
+  margin-left: 6px;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* 自己气泡里的"(已编辑)"用淡黑 */
+.ik-knock__msg.is-mine .ik-knock__msg-edited {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* 对端气泡是白底，"(已编辑)"用浅灰 */
+.ik-knock__msg:not(.is-mine) .ik-knock__msg-edited {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* ── Composer ──────────────────────────────── */
+.ik-knock__composer {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 2px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ik-knock__composer-edit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(251, 254, 0, 0.12);
+  color: #fbfe00;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ik-knock__composer-edit-cancel {
+  border: 0;
+  background: transparent;
+  color: #fbfe00;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.ik-knock__composer-error {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255, 80, 80, 0.15);
+  color: #ff8080;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ik-knock__composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 140ms ease;
+}
+
+.ik-knock__composer-row:focus-within {
+  border-color: rgba(251, 254, 0, 0.5);
+}
+
+/* pseudo:anonymous / pseudo:system 会话：输入框整体禁用态 */
+.ik-knock__composer-row.is-disabled {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.05);
+  cursor: not-allowed;
+}
+
+.ik-knock__composer-row.is-disabled .ik-knock__composer-input {
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.ik-knock__composer-input {
+  flex: 1;
+  min-height: 36px;
+  max-height: 140px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.45;
+  resize: none;
+  outline: none;
+}
+
+.ik-knock__composer-input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.ik-knock__composer-send {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: #fbfe00;
+  color: #000;
+  cursor: pointer;
+  transition: background 140ms ease, transform 100ms ease, opacity 140ms ease;
+}
+
+.ik-knock__composer-send:hover:not(:disabled) {
+  background: #e8eb00;
+}
+
+.ik-knock__composer-send:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.ik-knock__composer-send:disabled {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.3);
+  cursor: not-allowed;
+}
+
+.ik-knock__composer-send-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* ── 上下文菜单（编辑/撤回） ───────────────── */
+/* 全屏遮罩：捕获点击关闭菜单 */
+.ik-knock__context-menu-mask {
+  position: fixed;
+  inset: 0;
+  /* 高于弹窗主体；与帖子弹窗 9000 同级或略高 */
+  z-index: 9100;
+}
+
+.ik-knock__context-menu {
+  position: fixed;
+  min-width: 130px;
+  padding: 4px;
+  background: #1a1a1a;
+  border: 2px solid #3a3a3a;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ik-knock__context-menu-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #e0e0e0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.ik-knock__context-menu-item:hover,
+.ik-knock__context-menu-item:focus-visible {
+  background: rgba(251, 254, 0, 0.18);
+  color: #fbfe00;
+  outline: none;
+}
+
+.ik-knock__context-menu-item--danger {
+  color: #ff8080;
+}
+
+.ik-knock__context-menu-item--danger:hover,
+.ik-knock__context-menu-item--danger:focus-visible {
+  background: rgba(255, 80, 80, 0.18);
+  color: #ff5050;
+}
+
 </style>
