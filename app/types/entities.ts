@@ -198,7 +198,6 @@ export interface NotificationSender {
 export interface NotificationArticleRef {
   documentId: string;
   title: string;
-  coverAspectRatio?: number | null;
 }
 
 export interface NotificationCommentRef {
