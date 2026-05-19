@@ -7,7 +7,7 @@ import {
   ChatBubbleLeftIcon,
 } from "@heroicons/vue/24/solid";
 import { XCircleIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
-import type { KnockConversation, NotificationDto } from "~/types/entities";
+import type { KnockConversation, NotificationArticleRef, NotificationDto } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 
 const { visible, close } = useKnockKnockModal();
@@ -216,9 +216,10 @@ const quoteTitle = (item: NotificationDto): string => {
 };
 
 /** 点击评论帖子卡：保留敲敲弹窗，帖子弹窗叠加显示（项目已有路由级弹窗机制） */
-const goDiscussion = (articleDocumentId: string, articleTitle: string) => {
-  discussionModal.open(articleDocumentId, {
-    preview: { title: articleTitle },
+const goDiscussion = (article: NotificationArticleRef) => {
+  discussionModal.open(article.documentId, {
+    coverAspectRatio: article.coverAspectRatio ?? undefined,
+    preview: { title: article.title },
   });
 };
 
@@ -472,7 +473,7 @@ const handleConversationClick = (id: string) => {
                               v-if="msg.article"
                               type="button"
                               class="ik-knock__msg-quote"
-                              @click="goDiscussion(msg.article.documentId, msg.article.title)"
+                              @click="goDiscussion(msg.article)"
                             >
                               <DocumentTextIcon
                                 class="ik-knock__msg-quote-icon"
