@@ -72,6 +72,41 @@ const goArticle = (discussion: Discussion, event: MouseEvent) => {
 };
 
 const authStore = useAuthStore();
+const loginDialog = useLoginDialog();
+const knockKnockModal = useKnockKnockModal();
+const dm = useDmConversations();
+
+/** 是否能给当前 profile 用户发私聊：非自己、未隐藏、有 uid */
+const canSendDm = computed<boolean>(() => {
+  const p = profile.value;
+  if (!p) return false;
+  if (p.isSelf) return false;
+  if (p.profileHidden) return false;
+  if (typeof p.uid !== "number") return false;
+  return true;
+});
+
+const dmStarting = ref(false);
+
+/** 发起私聊：与 UserHoverCard 同款流程（找/建会话 → 打开敲敲弹窗并定位） */
+const startDm = async () => {
+  if (!authStore.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  const p = profile.value;
+  if (!canSendDm.value || !p || typeof p.uid !== "number") return;
+  if (dmStarting.value) return;
+  dmStarting.value = true;
+  try {
+    const { summary } = await dm.openDirectConversation(p.uid);
+    knockKnockModal.open({ dmConversationId: summary.documentId });
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "无法发起私聊"));
+  } finally {
+    dmStarting.value = false;
+  }
+};
 
 const onCardEquipped = (card: BusinessCard | null) => {
   if (profile.value) {
@@ -304,6 +339,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <z-button v-if="profile.isSelf" @click="openModal('settings')">更多操作</z-button>
+        <z-button v-else-if="canSendDm" :loading="dmStarting" @click="startDm">发消息</z-button>
       </div>
 
       <!-- ── A-Frame (包含名片 + 帖子) ────────── -->
