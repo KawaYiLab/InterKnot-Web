@@ -8,6 +8,7 @@ import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
+import { useMentionInput } from "~/composables/useMentionInput";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -49,6 +50,19 @@ const sendingComment = ref(false);
 const commentInputBoxRef = ref<HTMLElement | null>(null);
 const commentInputFocused = ref(false);
 const replyTarget = ref<{ id: string; authorName: string } | null>(null);
+
+/** 真实底层 textarea：z-input 是个包装，原生 keydown / overlay 都需要它 */
+const commentTextareaRef = ref<HTMLTextAreaElement | null>(null);
+
+/**
+ * 评论编辑器的 @ 提及处理。逻辑与路由页 pages/discussion/[id].vue 完全对称——
+ * 弹窗模式只是同一编辑器的另一种呈现，没有理由维护两份分支。
+ */
+const mention = useMentionInput({
+  text: newComment,
+  textareaRef: commentTextareaRef,
+  search: api.searchAuthors,
+});
 
 const scrollRef = ref<HTMLElement | null>(null);
 const covers = computed(() => discussion.value?.covers ?? []);
@@ -329,11 +343,13 @@ const sendComment = async () => {
   sendingComment.value = true;
   const isReply = !!replyTarget.value;
   try {
-    const trimmed = newComment.value.trim();
+    // serializeForSend 把显示串里的 `@<name>` 段还原成 `@[name](docId)` token；
+    // 没有任何 mention 时等价于原 newComment.value
+    const serialized = mention.serializeForSend().trim();
     const parentId = replyTarget.value?.id;
     const res = await api.addDiscussionComment({
       discussionId: props.discussionId,
-      content: trimmed,
+      content: serialized,
       authorDocumentId: auth.user?.authorId,
       parentId,
     });
@@ -350,7 +366,8 @@ const sendComment = async () => {
       if (parent) {
         parent.replies.push({
           id: localId,
-          content: trimmed,
+          // 本地乐观插入用 token 串，CommentBody 会自动渲染成芯片
+          content: serialized,
           liked: false,
           likesCount: 0,
           createdAt: new Date().toISOString(),
@@ -360,7 +377,7 @@ const sendComment = async () => {
     } else {
       comments.value.unshift({
         id: localId,
-        content: trimmed,
+        content: serialized,
         liked: false,
         likesCount: 0,
         createdAt: new Date().toISOString(),
@@ -374,6 +391,7 @@ const sendComment = async () => {
       el.blur();
     }
     newComment.value = "";
+    mention.reset();
     commentInputFocused.value = false;
     replyTarget.value = null;
     syncCommentInputHeight();
@@ -418,6 +436,7 @@ const cancelComment = () => {
     el.blur();
   }
   newComment.value = "";
+  mention.reset();
   commentInputFocused.value = false;
   replyTarget.value = null;
   syncCommentInputHeight();
@@ -573,6 +592,43 @@ watch(newComment, () => {
   syncCommentInputHeight();
 });
 
+/**
+ * 把真实 textarea 拿到并接上 mention 事件钩子。
+ * 与 pages/discussion/[id].vue 完全对称。
+ */
+let teardownMentionListeners: (() => void) | null = null;
+const attachMentionToTextarea = () => {
+  const root = commentInputBoxRef.value;
+  if (!root) return;
+  const ta = root.querySelector("textarea") as HTMLTextAreaElement | null;
+  if (!ta || ta === commentTextareaRef.value) return;
+
+  teardownMentionListeners?.();
+  commentTextareaRef.value = ta;
+
+  const onInput = () => mention.refresh();
+  const onKeyDownMention = (e: KeyboardEvent) => mention.onKeyDown(e);
+  const onSelect = () => mention.refresh();
+
+  ta.addEventListener("input", onInput);
+  ta.addEventListener("keydown", onKeyDownMention);
+  ta.addEventListener("click", onSelect);
+  ta.addEventListener("keyup", onSelect);
+
+  teardownMentionListeners = () => {
+    ta.removeEventListener("input", onInput);
+    ta.removeEventListener("keydown", onKeyDownMention);
+    ta.removeEventListener("click", onSelect);
+    ta.removeEventListener("keyup", onSelect);
+  };
+};
+
+// 编辑器从 placeholder 模式切到激活模式时 z-input 会重新挂载，
+// 需要重新查找真实 textarea 并 attach 一次。
+watch(commentInputFocused, () => {
+  nextTick(() => attachMentionToTextarea());
+});
+
 onMounted(async () => {
   window.addEventListener("keydown", onKeyDown);
   // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
@@ -583,6 +639,8 @@ onMounted(async () => {
   loading.value = false;
   void recordView();
   void loadComments();
+  await nextTick();
+  attachMentionToTextarea();
 });
 
 onBeforeUnmount(() => {
@@ -592,6 +650,8 @@ onBeforeUnmount(() => {
     clearTimeout(coverSettleTimer);
     coverSettleTimer = null;
   }
+  teardownMentionListeners?.();
+  teardownMentionListeners = null;
 });
 </script>
 
@@ -874,6 +934,12 @@ onBeforeUnmount(() => {
                             @input="syncCommentInputHeight"
                             @keydown.enter.exact.prevent="sendComment"
                           />
+                          <!-- @ 提及高亮叠加层：teleport 到 textarea 父级，pointer-events:none -->
+                          <MentionHighlightOverlay
+                            :target="commentTextareaRef"
+                            :text="newComment"
+                            :mentions="mention.mentions.value"
+                          />
                           <div v-if="replyTarget && isCommentEditorActive" class="ik-engage-bar__reply-hint">
                             <span>回复 {{ replyTarget.authorName }}</span>
                             <button type="button" class="ik-engage-bar__reply-close" @click="replyTarget = null">✕</button>
@@ -925,7 +991,16 @@ onBeforeUnmount(() => {
                       <div class="ik-engage-bar__bottom">
                         <div class="ik-engage-bar__bottom-inner">
                           <div class="ik-engage-bar__left-icons">
-                            <button type="button" class="ik-engage-bar__tool" aria-label="@">
+                            <!-- @ 按钮：在光标处插入 @ 并立即弹出 picker。
+                                 click.stop 阻止冒泡到外层的 focusCommentInput。 -->
+                            <button
+                              type="button"
+                              class="ik-engage-bar__tool"
+                              aria-label="@"
+                              :disabled="mention.isAtLimit.value"
+                              :title="mention.isAtLimit.value ? '已达到提及上限' : '提及用户'"
+                              @click.stop="mention.insertAtTrigger"
+                            >
                               <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                             </button>
                             <button type="button" class="ik-engage-bar__tool" aria-label="表情">
@@ -955,6 +1030,18 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
+
+      <!-- @ 提及候选下拉：组件内部 Teleport 到 body，避免父级 overflow 截断；
+           放在 .ik-overlay 内只是为了保持单根模板，不影响渲染位置。 -->
+      <MentionPicker
+        :visible="mention.pickerVisible.value"
+        :loading="mention.pickerLoading.value"
+        :results="mention.pickerResults.value"
+        :active-index="mention.pickerActiveIndex.value"
+        :anchor="mention.pickerAnchor.value"
+        @select="mention.selectCandidate"
+        @hover="(idx: number) => (mention.pickerActiveIndex.value = idx)"
+      />
     </div>
 </template>
 
