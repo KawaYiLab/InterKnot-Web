@@ -448,7 +448,27 @@ const startReply = (comment: Comment) => {
 };
 
 const startReplyToReply = (reply: Comment["replies"][number], parentComment: Comment) => {
+  // 楼中楼是「扁平到顶层」的单层结构：parentId 仍指向顶层 comment，
+  // 但被回复 reply 的作者会丢失通知链路与视觉语境。
+  // 修复方式：自动在 textarea 最前预填一个指向被回复 reply 作者的 @mention chip。
+  // 这样 mention 通知系统会把通知发给被回复者；CommentBody 渲染也会自然带「回复 @X」语境。
   replyTarget.value = { id: parentComment.id, authorName: reply.author?.name || "匿名用户" };
+  const replyAuthor = reply.author;
+  const myAuthorId = auth.user?.authorId;
+  if (
+    replyAuthor?.documentId &&
+    replyAuthor?.name &&
+    // 自己回复自己时不预填——notifyMentions 也会跳过 self-mention，纯属冗余
+    replyAuthor.documentId !== myAuthorId
+  ) {
+    mention.prependMentionChip({
+      documentId: replyAuthor.documentId,
+      name: replyAuthor.name,
+      username: null,
+      avatar: replyAuthor.avatar ?? null,
+      level: replyAuthor.level ?? null,
+    });
+  }
   focusCommentInput();
 };
 

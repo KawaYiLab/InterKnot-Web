@@ -449,6 +449,54 @@ export function useMentionInput(opts: UseMentionInputOptions) {
   }
 
   /**
+   * 父组件主动调用：在文本最前面预填一个 mention chip。
+   *
+   * 使用场景：reply→reply 时自动 @ 被回复 reply 的作者，让通知派发与视觉
+   * 语境一并在 mention 链路上完成。详细原因见 startReplyToReply 调用点。
+   *
+   * 行为：
+   * - 已有 mention 上限保护
+   * - 已经在 start=0 处存在指向同一用户的 chip 时短路（防止重复回复链多次累加）
+   * - 不与 picker 的常规插入冲突：picker 的插入用 selectCandidate
+   */
+  function prependMentionChip(cand: MentionCandidate) {
+    if (mentions.value.length >= maxMentions) return;
+    if (
+      mentions.value.some(
+        (m) => m.start === 0 && m.authorDocumentId === cand.documentId,
+      )
+    ) {
+      return;
+    }
+    const insertion = `@${cand.name} `;
+    const delta = insertion.length;
+    const newRange: MentionRange = {
+      start: 0,
+      end: 1 + cand.name.length,
+      name: cand.name,
+      authorDocumentId: cand.documentId,
+    };
+    mentions.value = [
+      newRange,
+      ...mentions.value.map((m) => ({
+        ...m,
+        start: m.start + delta,
+        end: m.end + delta,
+      })),
+    ];
+    text.value = insertion + text.value;
+    nextTick(() => {
+      const el = textareaRef.value;
+      if (el) {
+        const caret = insertion.length;
+        el.selectionStart = caret;
+        el.selectionEnd = caret;
+        el.focus();
+      }
+    });
+  }
+
+  /**
    * 父组件主动调用：用户点 @ 按钮时插入一个 `@` 并让 picker 立即激活。
    */
   function insertAtTrigger() {
@@ -553,6 +601,7 @@ export function useMentionInput(opts: UseMentionInputOptions) {
     onKeyDown,
     selectCandidate,
     insertAtTrigger,
+    prependMentionChip,
 
     // 发送 / 重置 / 还原
     serializeForSend,
