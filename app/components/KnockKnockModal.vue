@@ -78,6 +78,9 @@ const activeMessageLoading = computed<boolean>(() => {
 /** 消息流容器，用于切换会话时自动滚到底部 */
 const messagesRef = ref<HTMLElement | null>(null);
 
+/** 快照当前批量加载的消息 ID，仅增量到达的新消息才播入场动画 */
+const knownMessageIds = ref(new Set<string>());
+
 /** 时间戳显隐：只在“首条”或与前一条间隔 > 5 分钟时展示，避免逐条时间戳过于嘈杂 */
 const TIME_GAP_MS = 5 * 60 * 1000;
 const shouldShowTime = (index: number): boolean => {
@@ -132,6 +135,10 @@ watch(activeConversationId, async (id) => {
   } catch {
     /* 加载失败不阅出，错误与会话列表一并在右栏提示 */
   }
+  // 切换途中用户又点了别的会话 → 放弃后续操作，避免竞态
+  if (activeConversationId.value !== id) return;
+  // 快照当前消息 ID，后续增量到达的消息才播放入场动画
+  knownMessageIds.value = new Set(activeMessages.value.map((m) => m.documentId));
   markConversationAsRead(id);
   nextTick(() => {
     const el = messagesRef.value;
@@ -451,10 +458,11 @@ const handleConversationClick = (id: string) => {
                         <div
                           v-if="shouldShowTime(idx)"
                           class="ik-knock__time-divider"
+                          :class="{ 'is-new': !knownMessageIds.has(msg.documentId) }"
                         >
                           {{ formatTime(msg.createdAt) }}
                         </div>
-                        <div class="ik-knock__msg">
+                        <div class="ik-knock__msg" :class="{ 'is-new': !knownMessageIds.has(msg.documentId) }">
                           <div class="ik-knock__msg-avatar" aria-hidden="true">
                             <img
                               v-if="activeConversation.peerAvatar"
@@ -1077,6 +1085,19 @@ const handleConversationClick = (id: string) => {
   pointer-events: none;
 }
 
+/* ── 消息入场动画（仅增量到达的新消息，仅动画 transform + opacity 不触发重排） ── */
+@keyframes ik-msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.ik-knock__msg.is-new,
+.ik-knock__time-divider.is-new {
+  animation: ik-msg-enter 300ms ease-out both;
+}
+
 /* 引用帖子卡片：与正常 DM 区分，hint 标签 + 标题 + 文档图标 */
 .ik-knock__msg-quote {
   display: inline-flex;
@@ -1319,6 +1340,11 @@ const handleConversationClick = (id: string) => {
 
   .ik-overlay-enter-active .ik-overlay__stripe,
   .ik-overlay-leave-active .ik-overlay__stripe {
+    animation: none;
+  }
+
+  .ik-knock__msg.is-new,
+  .ik-knock__time-divider.is-new {
     animation: none;
   }
 }
