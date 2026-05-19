@@ -188,13 +188,21 @@ const fallbackBubbleText = (item: NotificationDto): string => {
  * 气泡正文：
  * - 交互类（like/favorite）的 notification.comment 是「被点赞的评论」，即收件人自己写的内容，
  *   不能当作来自 sender 的发言展示，必须走 fallback
- * - 其它类型优先用 comment.content（即评论原文）
+ * - 其它类型优先用 comment.content（即评论原文，可能含 @[name](id) token）
+ *
+ * 返回值约定：
+ * - 字符串：直接以 {{ }} 渲染（不含 mention token，或交互类兜底文案）
+ * - { mode: "rich", content }：交给 <CommentBody> 渲染 mention 芯片
  */
-const bubbleText = (item: NotificationDto): string => {
+type BubbleRender = string | { mode: "rich"; content: string };
+
+const bubbleText = (item: NotificationDto): BubbleRender => {
   if (item.type === "like" || item.type === "favorite") {
     return fallbackBubbleText(item);
   }
-  return item.comment?.content || fallbackBubbleText(item);
+  const raw = item.comment?.content;
+  if (raw) return { mode: "rich", content: raw };
+  return fallbackBubbleText(item);
 };
 
 /**
@@ -475,7 +483,10 @@ const handleConversationClick = (id: string) => {
                           </div>
                           <div class="ik-knock__msg-body">
                             <div class="ik-knock__msg-bubble">
-                              {{ bubbleText(msg) }}
+                              <template v-if="typeof bubbleText(msg) === 'object'">
+                                <CommentBody :content="(bubbleText(msg) as { mode: 'rich'; content: string }).content" />
+                              </template>
+                              <template v-else>{{ bubbleText(msg) }}</template>
                             </div>
                             <button
                               v-if="msg.article"
@@ -1083,6 +1094,26 @@ const handleConversationClick = (id: string) => {
   background-size: contain;
   background-repeat: no-repeat;
   pointer-events: none;
+}
+
+/*
+ * 白底气泡里的 @mention 芯片需要单独配色：
+ * 默认 MentionChip 是「黄绿字 + 透明底」，在白底上几乎不可读。
+ * 这里用 :deep 穿透 scoped 边界，把它改成「黄底黑字小标签」——
+ * 与 KnockKnock 选中态的 #fbfe00 主色一致，整体语言统一。
+ */
+.ik-knock__msg-bubble :deep(.ik-mention) {
+  background-color: #fbfe00;
+  color: #000;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.ik-knock__msg-bubble :deep(.ik-mention:hover),
+.ik-knock__msg-bubble :deep(.ik-mention:focus-visible) {
+  background-color: #e8eb00;
+  color: #000;
 }
 
 /* ── 消息入场动画（仅增量到达的新消息，仅动画 transform + opacity 不触发重排） ── */
