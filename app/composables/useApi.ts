@@ -20,6 +20,7 @@ import {
   DEFAULT_PAGE_SIZE,
   parseStart,
 } from "~/utils/pagination";
+import type { MentionCandidate } from "~/composables/useMentionInput";
 
 // ── 集中定义 queryKey，便于写接口精准 invalidate ─────────────
 const qk = {
@@ -1178,6 +1179,37 @@ export function useApi() {
     );
   };
 
+  /**
+   * 评论编辑器里 @ 触发的用户搜索。
+   * - 不缓存：输入快、命中率低，缓存只会增加状态复杂度
+   * - 限流交给后端 Redis 计数；前端只对 q 做最简校验
+   */
+  const searchAuthors = async (
+    q: string,
+    limit = 8,
+  ): Promise<MentionCandidate[]> => {
+    const trimmed = q?.trim() ?? "";
+    if (!trimmed) return [];
+    const response = await $api("/api/authors/search", {
+      query: { q: trimmed, limit: String(limit) },
+    });
+    const data = (response as Record<string, unknown>)?.data;
+    if (!Array.isArray(data)) return [];
+    return data.map((raw) => {
+      const item = raw as Record<string, unknown>;
+      const avatarUrl = item.avatar;
+      return {
+        documentId: String(item.documentId || ""),
+        name: String(item.name || ""),
+        username: typeof item.username === "string" ? item.username : null,
+        level: typeof item.level === "number" ? item.level : null,
+        avatar: typeof avatarUrl === "string" && avatarUrl
+          ? normalizeMediaUrl(avatarUrl, apiBaseUrl)
+          : null,
+      };
+    });
+  };
+
   const updatePinnedArticles = async (
     pinned: string[] | null,
   ): Promise<{ pinned: string[] | null }> => {
@@ -1237,6 +1269,7 @@ export function useApi() {
     getMyProfileSettings,
     getPinnedArticles,
     updatePinnedArticles,
+    searchAuthors,
   };
 }
 

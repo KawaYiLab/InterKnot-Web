@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMessage } from "zenless-ui";
 import type { Comment, Discussion } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -7,6 +7,7 @@ import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
+import { useMentionInput } from "~/composables/useMentionInput";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -36,7 +37,25 @@ const commentInputBoxRef = ref<HTMLElement | null>(null);
 const commentInputFocused = ref(false);
 const replyTarget = ref<{ id: string; authorName: string } | null>(null);
 
+/** 真实底层 textarea：z-input 是个包装，原生 keydown / overlay 都需要它 */
+const commentTextareaRef = ref<HTMLTextAreaElement | null>(null);
+
 const scrollRef = ref<HTMLElement | null>(null);
+
+/**
+ * 评论编辑器的 @ 提及处理。
+ * - text 复用 newComment（与 z-input v-model 同步的显示串）
+ * - search 走 api.searchAuthors（防抖在 composable 内部）
+ *
+ * 注：onKeyDown / refresh 不能直接用 @keydown / @input 绑在 z-input 上——
+ * z-input 是个组件，向外冒泡的事件可能被改写。我们在 onMounted 里把
+ * 真实 textarea 找出来，用 addEventListener 直接挂原生事件。
+ */
+const mention = useMentionInput({
+  text: newComment,
+  textareaRef: commentTextareaRef,
+  search: api.searchAuthors,
+});
 
 const discussionId = computed(() => String(route.params.id || ""));
 const covers = computed(() => discussion.value?.covers ?? []);
@@ -116,11 +135,13 @@ const sendComment = async () => {
   sendingComment.value = true;
   const isReply = !!replyTarget.value;
   try {
-    const trimmed = newComment.value.trim();
+    // serializeForSend 把显示串里的 `@<name>` 段还原成 `@[name](docId)` token；
+    // 没有任何 mention 时等价于原 newComment.value
+    const serialized = mention.serializeForSend().trim();
     const parentId = replyTarget.value?.id;
     const res = await api.addDiscussionComment({
       discussionId: discussionId.value,
-      content: trimmed,
+      content: serialized,
       authorDocumentId: auth.user?.authorId,
       parentId,
     });
@@ -137,7 +158,8 @@ const sendComment = async () => {
       if (parent) {
         parent.replies.push({
           id: localId,
-          content: trimmed,
+          // 本地乐观插入用 token 串，CommentBody 会自动渲染成芯片
+          content: serialized,
           liked: false,
           likesCount: 0,
           createdAt: new Date().toISOString(),
@@ -147,7 +169,7 @@ const sendComment = async () => {
     } else {
       comments.value.unshift({
         id: localId,
-        content: trimmed,
+        content: serialized,
         liked: false,
         likesCount: 0,
         createdAt: new Date().toISOString(),
@@ -161,6 +183,7 @@ const sendComment = async () => {
       el.blur();
     }
     newComment.value = "";
+    mention.reset();
     commentInputFocused.value = false;
     replyTarget.value = null;
     syncCommentInputHeight();
@@ -189,6 +212,7 @@ const cancelComment = () => {
     el.blur();
   }
   newComment.value = "";
+  mention.reset();
   commentInputFocused.value = false;
   replyTarget.value = null;
   syncCommentInputHeight();
@@ -323,6 +347,44 @@ useSeoMeta({
   ogType: "article",
 });
 
+/**
+ * 把真实 textarea 拿到并接上 mention 事件钩子。
+ * z-input 被多次重新渲染时（例如登录 / 切讨论）需要重新查找；用 watch 监视容器即可。
+ */
+let teardownMentionListeners: (() => void) | null = null;
+const attachMentionToTextarea = () => {
+  const root = commentInputBoxRef.value;
+  if (!root) return;
+  const ta = root.querySelector("textarea") as HTMLTextAreaElement | null;
+  if (!ta || ta === commentTextareaRef.value) return;
+
+  // 卸载旧的（如有）
+  teardownMentionListeners?.();
+
+  commentTextareaRef.value = ta;
+
+  // input：z-input 的 v-model 已经把 newComment 同步过来了；此处拿到事件后再
+  // 跑一次 mention.refresh() 以更新 picker 状态 / 高亮 segment。
+  const onInput = () => mention.refresh();
+  // keydown：直接挂原生 textarea 上，确保比 z-input 包装层先收到事件，
+  // 这样 picker 打开时 Enter / Tab / Esc 能被正确拦截，不会落到 sendComment。
+  const onKeyDown = (e: KeyboardEvent) => mention.onKeyDown(e);
+  // selection 变化（点击 / 方向键移动光标）也要刷新一次 picker
+  const onSelect = () => mention.refresh();
+
+  ta.addEventListener("input", onInput);
+  ta.addEventListener("keydown", onKeyDown);
+  ta.addEventListener("click", onSelect);
+  ta.addEventListener("keyup", onSelect);
+
+  teardownMentionListeners = () => {
+    ta.removeEventListener("input", onInput);
+    ta.removeEventListener("keydown", onKeyDown);
+    ta.removeEventListener("click", onSelect);
+    ta.removeEventListener("keyup", onSelect);
+  };
+};
+
 onMounted(async () => {
   // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
   // 让只看文字、不点图的用户不必下载这套资源。
@@ -333,10 +395,21 @@ onMounted(async () => {
   } finally {
     pageDataLoading.finish();
   }
+  // 等数据加载完 z-input 已挂载到 DOM
+  await nextTick();
+  attachMentionToTextarea();
+});
+
+// 评论编辑器从 placeholder 模式切到激活模式时 z-input 可能重新挂载，
+// 重新尝试 attach（attach 函数内部对相同 textarea 是幂等的）
+watch(commentInputFocused, () => {
+  nextTick(() => attachMentionToTextarea());
 });
 
 onBeforeUnmount(() => {
   destroyPreview();
+  teardownMentionListeners?.();
+  teardownMentionListeners = null;
 });
 </script>
 
@@ -556,6 +629,13 @@ onBeforeUnmount(() => {
                       @input="syncCommentInputHeight"
                       @keydown.enter.exact.prevent="sendComment"
                     />
+                    <!-- @ 提及高亮叠加层：teleport 到 textarea 父级，与 textarea 同位置；
+                         pointer-events:none 不影响输入。 -->
+                    <MentionHighlightOverlay
+                      :target="commentTextareaRef"
+                      :text="newComment"
+                      :mentions="mention.mentions.value"
+                    />
                     <div v-if="replyTarget && isCommentEditorActive" class="ik-engage-bar__reply-hint">
                       <span>回复 {{ replyTarget.authorName }}</span>
                       <button type="button" class="ik-engage-bar__reply-close" @click="replyTarget = null">✕</button>
@@ -607,7 +687,16 @@ onBeforeUnmount(() => {
                 <div class="ik-engage-bar__bottom">
                   <div class="ik-engage-bar__bottom-inner">
                     <div class="ik-engage-bar__left-icons">
-                      <button type="button" class="ik-engage-bar__tool" aria-label="@">
+                      <!-- @ 按钮：在光标处插入 @ 并立即弹出 picker。
+                           click.stop 阻止冒泡到外层的 focusCommentInput。 -->
+                      <button
+                        type="button"
+                        class="ik-engage-bar__tool"
+                        aria-label="@"
+                        :disabled="mention.isAtLimit.value"
+                        :title="mention.isAtLimit.value ? '已达到提及上限' : '提及用户'"
+                        @click.stop="mention.insertAtTrigger"
+                      >
                         <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                       </button>
                       <button type="button" class="ik-engage-bar__tool" aria-label="表情">
@@ -638,6 +727,16 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
+    <!-- @ 提及候选下拉：组件内部 Teleport 到 body，避免父级 overflow 截断 -->
+    <MentionPicker
+      :visible="mention.pickerVisible.value"
+      :loading="mention.pickerLoading.value"
+      :results="mention.pickerResults.value"
+      :active-index="mention.pickerActiveIndex.value"
+      :anchor="mention.pickerAnchor.value"
+      @select="mention.selectCandidate"
+      @hover="(idx: number) => (mention.pickerActiveIndex.value = idx)"
+    />
   </section>
 </template>
 

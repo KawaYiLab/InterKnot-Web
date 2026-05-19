@@ -25,7 +25,10 @@ export function shouldAttachToken(path: string, method: string, token: string): 
     upperMethod === "GET" &&
     (pathname.startsWith("/api/articles/detail/") ||
       pathname.startsWith("/api/comments/list") ||
-      pathname.startsWith("/api/profiles/"))
+      pathname.startsWith("/api/profiles/") ||
+      // /api/authors/search 走鉴权（后端按 user.id 做 Redis 限流），但路径前缀
+      // 与公共的 /api/authors/* 撞车，必须显式列在白名单里把 token 带上。
+      pathname.startsWith("/api/authors/search"))
   ) {
     return true;
   }

@@ -59,7 +59,9 @@ const floorLabel = computed(() =>
       </div>
 
       <!-- Body -->
-      <div class="ik-comment__body">{{ comment.content }}</div>
+      <div class="ik-comment__body">
+        <CommentBody :content="comment.content" />
+      </div>
 
       <!-- Footer: date left · interactions right -->
       <div class="ik-comment__footer">
@@ -117,7 +119,9 @@ const floorLabel = computed(() =>
                 Lv.{{ reply.author.level }}
               </span>
             </div>
-            <div class="ik-comment__body ik-comment__body--reply">{{ reply.content }}</div>
+            <div class="ik-comment__body ik-comment__body--reply">
+              <CommentBody :content="reply.content" />
+            </div>
             <div class="ik-comment__footer">
               <div class="ik-comment__meta">
                 <span class="ik-comment__time">{{ formatTime(reply.createdAt) }}</span>
