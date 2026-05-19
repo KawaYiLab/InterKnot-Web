@@ -216,9 +216,11 @@ const quoteTitle = (item: NotificationDto): string => {
 };
 
 /** 点击评论帖子卡：保留敲敲弹窗，帖子弹窗叠加显示（项目已有路由级弹窗机制） */
-const goDiscussion = (articleDocumentId: string, articleTitle: string) => {
-  discussionModal.open(articleDocumentId, {
-    preview: { title: articleTitle },
+const goDiscussion = (msg: NotificationDto) => {
+  if (!msg.article) return;
+  discussionModal.open(msg.article.documentId, {
+    coverAspectRatio: msg.article.coverAspectRatio ?? undefined,
+    preview: { title: msg.article.title },
   });
 };
 
@@ -438,56 +440,60 @@ const handleConversationClick = (id: string) => {
                     <!-- 会话消息流 -->
                     <div
                       v-if="activeConversation && activeMessages.length"
+                      :key="activeConversationId!"
                       ref="messagesRef"
                       class="ik-knock__messages"
                       @scroll.passive="onMessagesScroll"
                     >
-                      <template
-                        v-for="(msg, idx) in activeMessages"
-                        :key="msg.documentId"
-                      >
-                        <!-- 时间分隔行：首条或与上条间隔 > 5min 时显示 -->
+                      <TransitionGroup name="ik-msg">
                         <div
-                          v-if="shouldShowTime(idx)"
-                          class="ik-knock__time-divider"
+                          v-for="(msg, idx) in activeMessages"
+                          :key="msg.documentId"
+                          class="ik-knock__msg-group"
                         >
-                          {{ formatTime(msg.createdAt) }}
-                        </div>
-                        <div class="ik-knock__msg">
-                          <div class="ik-knock__msg-avatar" aria-hidden="true">
-                            <img
-                              v-if="activeConversation.peerAvatar"
-                              :src="activeConversation.peerAvatar"
-                              :alt="activeConversation.peerName"
-                              class="ik-knock__msg-avatar-img"
-                              draggable="false"
-                            />
-                            <XCircleIcon v-else class="ik-knock__msg-avatar-icon" />
+                          <!-- 时间分隔行：首条或与上条间隔 > 5min 时显示 -->
+                          <div
+                            v-if="shouldShowTime(idx)"
+                            class="ik-knock__time-divider"
+                          >
+                            {{ formatTime(msg.createdAt) }}
                           </div>
-                          <div class="ik-knock__msg-body">
-                            <div class="ik-knock__msg-bubble">
-                              {{ bubbleText(msg) }}
-                            </div>
-                            <button
-                              v-if="msg.article"
-                              type="button"
-                              class="ik-knock__msg-quote"
-                              @click="goDiscussion(msg.article.documentId, msg.article.title)"
-                            >
-                              <DocumentTextIcon
-                                class="ik-knock__msg-quote-icon"
-                                aria-hidden="true"
+                          <div class="ik-knock__msg">
+                            <div class="ik-knock__msg-avatar" aria-hidden="true">
+                              <img
+                                v-if="activeConversation.peerAvatar"
+                                :src="activeConversation.peerAvatar"
+                                :alt="activeConversation.peerName"
+                                class="ik-knock__msg-avatar-img"
+                                draggable="false"
                               />
-                              <span class="ik-knock__msg-quote-text">
-                                <span class="ik-knock__msg-quote-label">{{ quoteLabel(msg) }}</span>
-                                <span class="ik-knock__msg-quote-title">
-                                  {{ quoteTitle(msg) }}
+                              <XCircleIcon v-else class="ik-knock__msg-avatar-icon" />
+                            </div>
+                            <div class="ik-knock__msg-body">
+                              <div class="ik-knock__msg-bubble">
+                                {{ bubbleText(msg) }}
+                              </div>
+                              <button
+                                v-if="msg.article"
+                                type="button"
+                                class="ik-knock__msg-quote"
+                                @click="goDiscussion(msg)"
+                              >
+                                <DocumentTextIcon
+                                  class="ik-knock__msg-quote-icon"
+                                  aria-hidden="true"
+                                />
+                                <span class="ik-knock__msg-quote-text">
+                                  <span class="ik-knock__msg-quote-label">{{ quoteLabel(msg) }}</span>
+                                  <span class="ik-knock__msg-quote-title">
+                                    {{ quoteTitle(msg) }}
+                                  </span>
                                 </span>
-                              </span>
-                            </button>
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </template>
+                      </TransitionGroup>
                     </div>
                     <!-- 占位 / 加载态 -->
                     <div v-else class="ik-knock__empty-pill">
@@ -987,6 +993,11 @@ const handleConversationClick = (id: string) => {
   border-radius: 2px;
 }
 
+.ik-knock__msg-group {
+  display: flex;
+  flex-direction: column;
+}
+
 .ik-knock__msg {
   display: flex;
   /* 参考 chat-generator：头像与气泡间留出昵尖角的位置 */
@@ -1132,6 +1143,16 @@ const handleConversationClick = (id: string) => {
   max-width: 100%;
 }
 
+/* ── 消息入场动画（仅 opacity + transform，GPU 合成层，零回流） ── */
+.ik-msg-enter-active {
+  transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ik-msg-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
 
 /* ═══════════════════════════════════════════════
    Animations —— 与帖子弹窗完全一致
@@ -1319,6 +1340,10 @@ const handleConversationClick = (id: string) => {
   .ik-overlay-enter-active .ik-overlay__stripe,
   .ik-overlay-leave-active .ik-overlay__stripe {
     animation: none;
+  }
+
+  .ik-msg-enter-active {
+    transition: none;
   }
 }
 </style>
