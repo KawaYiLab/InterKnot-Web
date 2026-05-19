@@ -397,7 +397,6 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
   const data = (raw || {}) as Record<string, unknown>;
   const repliesRaw = Array.isArray(data.replies) ? data.replies : [];
   const articleRaw = data.article as Record<string, unknown> | null | undefined;
-  const parentRaw = data.parent as Record<string, unknown> | null | undefined;
   return {
     id: String(data.documentId || data.id || ""),
     content: String(data.content || ""),
@@ -418,10 +417,6 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
     }),
     articleId: articleRaw ? String(articleRaw.documentId || "") : undefined,
     articleTitle: articleRaw ? String(articleRaw.title || "") : undefined,
-    parentContent: parentRaw ? String(parentRaw.content || "").slice(0, 60) : undefined,
-    parentAuthorName: parentRaw && parentRaw.author
-      ? String((parentRaw.author as Record<string, unknown>).name || "")
-      : undefined,
   };
 }
 

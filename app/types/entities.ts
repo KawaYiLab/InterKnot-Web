@@ -57,8 +57,6 @@ export interface Comment {
   replies: CommentReply[];
   articleId?: string;
   articleTitle?: string;
-  parentContent?: string;
-  parentAuthorName?: string;
 }
 
 export interface ProfileStats {
