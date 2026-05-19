@@ -201,6 +201,14 @@ const conversationPreview = (conv: DmConversationSummary): string => {
 /** 消息流容器，用于切换会话时自动滚到底部 */
 const messagesRef = ref<HTMLElement | null>(null);
 
+/**
+ * 切换会话时的"沉降态"：在 DOM 渲染完成 → scrollTop 校正到底部之间，
+ * 容器先 visibility: hidden，校正完成后才 visible。
+ * 避免长消息流刚渲染时 paint 在顶部（默认 scrollTop=0），紧接着 rAF
+ * 才滚到底部造成的"先看见最早消息一闪 → 瞬间跳底"抖动。
+ */
+const messagesSettling = ref(false);
+
 /** 快照当前批量加载的消息 ID，仅增量到达的新消息才播入场动画 */
 const knownMessageIds = ref(new Set<string>());
 
@@ -243,17 +251,19 @@ const isNearBottom = (el: HTMLElement): boolean => {
 };
 
 /**
- * 滚到底部。用 rAF 双重 + 一次延后探测，覆盖：
- * - Vue patch 之后 DOM 已就位但浏览器尚未布局（rAF1）
- * - 布局完成但 inline 图片仍在加载导致 scrollHeight 后涨（200ms 兜底）
+ * 滚到底部。先**同步**落一次 scrollTop，避免浏览器 paint 出 scrollTop=0
+ * 的初始帧（用户会看到最早消息一闪）；再用 rAF + 200ms 兜底校正图片
+ * 懒加载等异步资源完成布局后的 scrollHeight 增量。
  */
 const scrollToBottom = (el: HTMLElement) => {
   const doScroll = () => {
     el.scrollTop = el.scrollHeight;
   };
-  requestAnimationFrame(() => {
-    requestAnimationFrame(doScroll);
-  });
+  // 同步：nextTick 后 DOM 已 patch，此时 scrollHeight 即便不完全准确，
+  // 也比"什么都不做让浏览器 paint 顶部"好
+  doScroll();
+  // 第一帧布局完成后校正（处理 paddings/margins/字体加载引起的 scrollHeight 微调）
+  requestAnimationFrame(doScroll);
   // 兜底：等待图片等异步资源完成布局后再校正一次
   setTimeout(doScroll, 200);
 };
@@ -266,19 +276,33 @@ watch(activeConversationId, async (id) => {
   if (!id) return;
   // 新会话默认看最新消息
   wasNearBottom.value = true;
+  // 进入沉降态：隐藏容器直到完成首次滚到底（避免顶部 flash）
+  messagesSettling.value = true;
   try {
     await ensureMessages(id);
   } catch (err) {
     sendError.value = resolveErrorMessage(err, "加载消息失败");
   }
   // 切换途中用户又点了别的会话 → 放弃后续操作，避免竞态
-  if (activeConversationId.value !== id) return;
+  if (activeConversationId.value !== id) {
+    messagesSettling.value = false;
+    return;
+  }
   // 快照当前消息 ID，后续增量到达的消息才播放入场动画
   knownMessageIds.value = new Set(activeMessages.value.map((m) => m.documentId));
   markConversationAsRead(id);
   nextTick(() => {
     const el = messagesRef.value;
-    if (el) scrollToBottom(el);
+    if (!el) {
+      messagesSettling.value = false;
+      return;
+    }
+    scrollToBottom(el);
+    // 第一帧滚动校正完成后再 reveal——doScroll 同步先调一次足够把
+    // scrollTop 设到当前 scrollHeight，后续 rAF / setTimeout 兜底进一步精修
+    requestAnimationFrame(() => {
+      messagesSettling.value = false;
+    });
   });
 });
 
@@ -650,6 +674,7 @@ const handleConversationClick = (id: string) => {
                       v-if="activeConversation && activeMessages.length"
                       ref="messagesRef"
                       class="ik-knock__messages"
+                      :class="{ 'is-settling': messagesSettling }"
                       @scroll.passive="onMessagesScroll"
                     >
                       <template
@@ -1301,6 +1326,12 @@ const handleConversationClick = (id: string) => {
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
+/* 切会话沉降态：消息已渲染但 scrollTop 还没校正到底前先隐藏，
+   避免长消息流首帧 paint 在顶部造成"先看到最早消息一闪 → 跳底"抖动 */
+.ik-knock__messages.is-settling {
+  visibility: hidden;
+}
+
 .ik-knock__messages::-webkit-scrollbar {
   width: 4px;
 }
@@ -1697,16 +1728,19 @@ const handleConversationClick = (id: string) => {
 
 .ik-knock__msg.is-mine .ik-knock__msg-bubble {
   align-self: flex-end;
-  /* 主题黄底，与列表 active 一致 */
-  background: #fbfe00;
-  color: #000;
+  /* 参考 zenless-tools chat-generator：Right 侧 accent-dark (#2c58e2) + 白字
+     是 ZZZ 游戏内蓝色对话框的视觉语言；之前的黄底是项目自创版本，统一回原版 */
+  background: #2c58e2;
+  color: #fff;
 }
 
-/* 把左侧 nipple 隐掉，画一个右侧的 nipple */
+/* 右侧 nipple：使用专门的右箭头 webp（zenless-tools chat_message_arrow_right.webp），
+   注意右侧偏移 -0.34375em 与左侧 -0.4375em 不同——原始资源箭头形状不对称 */
 .ik-knock__msg.is-mine .ik-knock__msg-bubble::before {
   left: auto;
-  right: -0.4375em;
-  transform: scaleX(-1);
+  right: -0.34375em;
+  background-image: url("/images/chat_message_arrow_right.webp");
+  transform: none;
 }
 
 /* 撤回的消息：灰色斜体小占位 */
@@ -1729,9 +1763,9 @@ const handleConversationClick = (id: string) => {
   font-weight: 600;
 }
 
-/* 自己气泡里的"(已编辑)"用淡黑 */
+/* 自己气泡是蓝底白字 → "(已编辑)" 用半透明白保持层级 */
 .ik-knock__msg.is-mine .ik-knock__msg-edited {
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* 对端气泡是白底，"(已编辑)"用浅灰 */

@@ -147,8 +147,14 @@ const doConnect = async (
       return;
     }
 
-    // 1) 拿 ticket
+    // 同步阶段先把 Nuxt 上下文相关的资源都拿到——await 之后 useNuxtApp /
+    // useRuntimeConfig 可能因为脱离 setup() 上下文而抛错，被外层 catch 静默
+    // 吞掉时会导致连接循环（一直 POST ticket 但永远不到 new WebSocket）。
     const { $api } = useNuxtApp();
+    const config = useRuntimeConfig();
+    const apiBaseUrl = String((config.public as { apiBaseUrl?: string })?.apiBaseUrl || "");
+
+    // 1) 拿 ticket
     const resp = await $api<TicketResponse>(TICKET_PATH, { method: "POST" });
     const ticket = resp?.data?.ticket;
     if (!ticket) {
@@ -157,8 +163,6 @@ const doConnect = async (
     }
 
     // 2) 构造 WS URL 并连接
-    const config = useRuntimeConfig();
-    const apiBaseUrl = String((config.public as { apiBaseUrl?: string })?.apiBaseUrl || "");
     const url = buildWsUrl(apiBaseUrl, ticket);
 
     teardownSocket(); // 防御性：上一个旧实例必须先清掉
@@ -192,19 +196,30 @@ const doConnect = async (
       }
     };
 
-    socket.onerror = () => {
-      // 不在这里做太多——onclose 会跟着到，集中在 onclose 里处理重连
+    socket.onerror = (ev) => {
+      // 把握手 / 升级失败的具体原因暴露到 console，便于定位 CSP / 代理 /
+      // 端口等部署侧问题；onclose 紧跟着会到，重连逻辑放在 onclose 里。
+      // eslint-disable-next-line no-console
+      console.warn("[dm-ws] socket error", ev);
     };
 
-    socket.onclose = () => {
+    socket.onclose = (ev) => {
       connected.value = false;
       if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
       if (ws === socket) ws = null;
+      // 异常关闭（code != 1000 / 1001）打 console 帮助定位，比如 1006 通常是
+      // 网络中断 / 反代未配置 ws upgrade；1008 是后端拒绝（ticket 失效等）。
+      if (ev.code !== 1000 && ev.code !== 1001) {
+        // eslint-disable-next-line no-console
+        console.warn(`[dm-ws] socket closed code=${ev.code} reason=${ev.reason || "<none>"}`);
+      }
       // 服务端主动关闭 + 客户端主动 stop 都不重连
       if (!manualStop) scheduleReconnect(connected);
     };
-  } catch {
-    // ticket 401 / 网络异常等
+  } catch (err) {
+    // ticket 401 / 网络异常 / new WebSocket SyntaxError 等：打 console 而不是静默
+    // eslint-disable-next-line no-console
+    console.warn("[dm-ws] doConnect failed", err);
     connected.value = false;
     scheduleReconnect(connected);
   } finally {

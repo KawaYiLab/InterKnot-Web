@@ -571,7 +571,40 @@ export function useDmConversations(): UseDmConversations {
     const msg = event.data?.message;
     if (!cid || !msg?.documentId) return;
 
+    const senderUserId = msg.sender?.userId;
+    const isMine = selfUserId.value != null && senderUserId === selfUserId.value;
+
+    // ── M3 通知融合边界 ──
+    // 如果 recipient 列表里只有 pseudo:user:senderId（之前只有通知历史，从未
+    // 真 DM 过），sender 第一次发 DM 时后端会 lazy 化为真 DM 会话并推送 ws
+    // 事件——但本地列表 / 桶 / active 都还停留在 pseudo。这里做就地迁移：
+    //  1) 把 pseudo 桶里的历史（通知）合并到真 DM 桶
+    //  2) active 若指向 pseudo，切到真 DM docId
+    //  3) 删 pseudo 列表项与桶；conversations 列表交给下面 refresh 兜底拉权威
+    if (!isMine && typeof senderUserId === "number") {
+      const pseudoId = `pseudo:user:${senderUserId}`;
+      const pseudoIsActive = activeConversationId.value === pseudoId;
+      const pseudoExists = conversations.value.some((c) => c.documentId === pseudoId);
+      const realExists = conversations.value.some((c) => c.documentId === cid);
+      if (pseudoExists && !realExists) {
+        const pseudoBucket = messagesById.value[pseudoId];
+        if (pseudoBucket?.items?.length) {
+          const realBucket = messagesById.value[cid];
+          patchMessageState(cid, {
+            items: mergeMessages(realBucket?.items ?? [], pseudoBucket.items),
+            hydrated: realBucket?.hydrated || pseudoBucket.hydrated,
+            hasMore: realBucket?.hasMore ?? pseudoBucket.hasMore,
+            nextCursor: realBucket?.nextCursor ?? pseudoBucket.nextCursor,
+            loading: false,
+          });
+        }
+        if (pseudoIsActive) activeConversationId.value = cid;
+        removeConversation(pseudoId);
+      }
+    }
+
     // 写入消息缓存（dedup by documentId）
+    // 注意：上面 pseudo 迁移可能已经更新过 messagesById[cid]，所以这里重新读 bucket
     const bucket = messagesById.value[cid];
     if (bucket?.hydrated) {
       patchMessageState(cid, {
@@ -581,7 +614,6 @@ export function useDmConversations(): UseDmConversations {
 
     // 更新会话列表预览 + 未读
     const conv = conversations.value.find((c) => c.documentId === cid);
-    const isMine = selfUserId.value != null && msg.sender?.userId === selfUserId.value;
     const isActive = activeConversationId.value === cid;
 
     if (conv) {
@@ -603,7 +635,8 @@ export function useDmConversations(): UseDmConversations {
         true,
       );
     } else if (!isMine) {
-      // 列表里还没这个会话（新私聊由对端发起）→ 拉一次列表
+      // 列表里还没这个会话（新私聊 / pseudo 已迁移）→ 拉一次列表拿权威数据
+      // refresh 完成后真 DM 项会出现，lastMessage 来自后端最新口径
       void refresh();
     }
 
