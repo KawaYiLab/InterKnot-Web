@@ -179,7 +179,14 @@ const layout = computed((): {
     colHeights[minCol] = top + h + gap;
   }
 
-  const totalHeight = Math.max(...colHeights, 0);
+  // colHeights 每列累加值末尾都带了一个 gap（colHeights[col] = top + h + gap），
+  // 直接 max 会让容器底部多出一个 gap 像素的空白。减去 gap 得到真实内容总高。
+  let maxCol = 0;
+  for (let c = 0; c < colHeights.length; c++) {
+    const v = colHeights[c] ?? 0;
+    if (v > maxCol) maxCol = v;
+  }
+  const totalHeight = maxCol > 0 ? maxCol - gap : 0;
   return { items: result, columns, totalHeight };
 });
 
@@ -214,9 +221,13 @@ function findFirstColumnItem(
 // buffer 按列数反向缩放：列数越多，单位 buffer 高度内承载的卡片数越多，
 // 用 (BUFFER_REFERENCE_COLUMNS / cols) 缩放后，渲染中的卡片总数大致与列数无关，
 // 避免 6 列时同屏 DOM 比 5 列多 20% 导致的滚动卡顿。
+//
+// 注：MAX 设为 1.0 而非更大值——cols < 5 时手机 / 窄屏 viewport 也小，单屏卡片
+// 本来就不多，再放大 buffer 等于让 cols=2 一次性渲染 30~40 张卡（+ 频繁 RO 测量），
+// 反而劣化首屏帧率。1.0 即"不放大、只缩小"。
 const BUFFER_REFERENCE_COLUMNS = 5;
 const BUFFER_SCALE_MIN = 0.5;
-const BUFFER_SCALE_MAX = 1.5;
+const BUFFER_SCALE_MAX = 1.0;
 
 const visibleItems = computed(() => {
   const sy = scrollY.value;
@@ -267,14 +278,13 @@ const containerStyle = computed<StyleValue>(() => ({
   height: `${layout.value.totalHeight}px`,
 }));
 
+// 只输出动态字段（width + transform）；静态 position/top/left/contain 由
+// .ik-vm-item class 承担。减少每帧 50+ 个对象字面量的 GC 压力，
+// 也避免每个 item 都把 contain 等冗余属性走 Vue patch。
 function itemStyle(it: LayoutItem): StyleValue {
   return {
-    position: "absolute" as const,
-    top: "0",
-    left: "0",
     width: `${it.width}px`,
     transform: `translate(${it.left}px, ${it.top}px)`,
-    contain: "layout style paint",
   };
 }
 
@@ -445,12 +455,18 @@ onMounted(async () => {
   scrollY.value = window.scrollY;
   _prevScrollY = window.scrollY;
   viewportH.value = window.innerHeight;
+  // 同步读一次 clientWidth：container 已 attached（外层 <ClientOnly> 保证客户端
+  // 才渲染本组件），避免首帧 containerWidth=0 → cols 退回 minColumns → 用户可见
+  // 一次"假布局 → 真布局"的重排闪烁。
+  if (containerRef.value) {
+    containerWidth.value = containerRef.value.clientWidth;
+    updateContainerOffset();
+  }
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onScroll, { passive: true });
   setupResizeObserver();
   await nextTick();
   setupContainerResize();
-  updateContainerOffset();
 });
 
 onBeforeUnmount(() => {
@@ -475,6 +491,7 @@ defineExpose({ measuredHeights });
     <div
       v-for="layoutItem in visibleItems"
       :key="layoutItem.key"
+      class="ik-vm-item"
       :ref="(el: any) => setItemRef(el as Element, layoutItem.key)"
       :style="itemStyle(layoutItem)"
     >
@@ -487,3 +504,14 @@ defineExpose({ measuredHeights });
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 所有 item 共用静态定位，只让动态部分（width / transform）走 inline style，
+   减少每帧大量字面量对象创建与 Vue patch 比较成本。 */
+.ik-vm-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  contain: layout style paint;
+}
+</style>

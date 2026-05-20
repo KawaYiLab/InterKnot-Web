@@ -564,6 +564,24 @@ export function useApi() {
     );
   };
 
+  /**
+   * 同步读取 searchArticles 的缓存——不触发网络请求。
+   * 用于 pages/index.vue 在切回首页时同步预填 list，跳过 skeleton → fade → list
+   * 双重过渡 440ms 的拖慢体验。命中后调用方应继续走 searchArticles 拿权威数据
+   * （fresh 时同步返回相同引用，stale 时后台 refetch 并替换）。
+   */
+  const peekArticles = (
+    query: string,
+    endCur = "",
+  ): Pagination<Discussion> | undefined => {
+    const qc = $queryClient as QueryClient | undefined;
+    if (!qc) return undefined;
+    const start = parseStart(endCur);
+    return qc.getQueryData<Pagination<Discussion>>(
+      qk.articles.search(query, start, DEFAULT_PAGE_SIZE),
+    );
+  };
+
   const getDiscussion = async (id: string): Promise<Discussion> => {
     return cachedRead(
       qk.articles.detail(id),
@@ -1233,6 +1251,7 @@ export function useApi() {
     registerWithCode,
     getSelfUser,
     searchArticles,
+    peekArticles,
     getDiscussion,
     recordArticleView,
     getComments,

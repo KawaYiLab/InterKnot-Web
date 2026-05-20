@@ -26,14 +26,18 @@ useSeoMeta({
 });
 
 const scrollTarget = ref<HTMLElement>();
+// z-backtop listens on target's "scroll" event and reads target.scrollTop
+// But document.documentElement may not fire "scroll" events in all browsers.
+// Bridge window scroll events to the element so z-backtop works correctly.
+// 记住函数引用 + 使用 passive，使浏览器可以乐观滚动；onBeforeUnmount 里清理
+// 避免路由切走后仍在全局 dispatch 事件。
+let scrollBridge: (() => void) | null = null;
 onMounted(() => {
   const el = document.documentElement;
-  // z-backtop listens on target's "scroll" event and reads target.scrollTop
-  // But document.documentElement may not fire "scroll" events in all browsers.
-  // Bridge window scroll events to the element so z-backtop works correctly.
-  window.addEventListener("scroll", () => {
+  scrollBridge = () => {
     el.dispatchEvent(new Event("scroll"));
-  });
+  };
+  window.addEventListener("scroll", scrollBridge, { passive: true });
   scrollTarget.value = el;
 });
 
@@ -99,26 +103,58 @@ const estimateDiscussionCardHeight = (discussion: Discussion, itemWidth: number)
   return Math.ceil(coverHeight + DISCUSSION_CARD_FIXED_HEIGHT + titleHeight);
 };
 
+// 动画时长（与 CSS .ik-masonry-card-enter 严格对应）
+const CARD_ENTER_ANIMATION_MS = 240;
+// 兜底清理延迟：略大于动画时长，避免清理过早误伤还在播放的动画
+const CARD_ENTER_CLEANUP_MS = CARD_ENTER_ANIMATION_MS + 60;
+
 const addEnterAnimations = (nodes: Discussion[]) => {
   if (!nodes.length) return;
 
   const nextIds = new Set(enterAnimationIds.value);
+  const addedIds: string[] = [];
   for (const node of nodes) {
-    if (node.id) nextIds.add(node.id);
+    if (node.id) {
+      nextIds.add(node.id);
+      addedIds.push(node.id);
+    }
   }
   enterAnimationIds.value = nextIds;
+
+  // 兜底清理：虚拟化场景下，卡片在视口外被卸载时 `animationend` 不会触发，
+  // 导致 id 残留在 enterAnimationIds 里——用户滚回去时该卡片会**再次**应用
+  // ik-masonry-card-enter class，DOM 重挂时 CSS 动画又播一遍，造成"已经看过的
+  // 卡片入场动画重播"的怪异观感。300ms 后强制清除这一批 id，让动画状态终止。
+  // 走 finishEnterAnimation 复用 queueMicrotask 批量合并逻辑。
+  if (import.meta.client) {
+    setTimeout(() => {
+      for (const id of addedIds) finishEnterAnimation(id);
+    }, CARD_ENTER_CLEANUP_MS);
+  }
 };
 
 const shouldAnimateDiscussion = (discussionId: string) => {
   return enterAnimationIds.value.has(discussionId);
 };
 
+// 一批新增卡片 240ms 内集中 animationend → 以前每次都 new Set(...) 拷贝，
+// N 条同时结束 → O(N²) 拷贝。改用微任务批量合并：同一任务队内所有 finish
+// 调用只触发一次 Set 重建 + 一次 reactive trigger。
+let pendingFinish: Set<string> | null = null;
 const finishEnterAnimation = (discussionId: string) => {
   if (!enterAnimationIds.value.has(discussionId)) return;
-
-  const nextIds = new Set(enterAnimationIds.value);
-  nextIds.delete(discussionId);
-  enterAnimationIds.value = nextIds;
+  if (!pendingFinish) {
+    pendingFinish = new Set();
+    queueMicrotask(() => {
+      const ids = pendingFinish;
+      pendingFinish = null;
+      if (!ids || ids.size === 0) return;
+      const next = new Set(enterAnimationIds.value);
+      for (const id of ids) next.delete(id);
+      enterAnimationIds.value = next;
+    });
+  }
+  pendingFinish.add(discussionId);
 };
 
 const skeletonCount = computed(() => {
@@ -152,7 +188,24 @@ const fetchList = async (reset = false) => {
   if (loading.value || loadingMore.value) return;
   if (!hasNextPage.value && !reset) return;
 
-  const shouldShowPageProgress = reset && !refreshing.value;
+  // 缓存命中预填：避免从其他页面切回首页时 skeleton → fade → list 双重过渡 440ms。
+  // 同步把缓存数据填进 list，模板首帧就走 "list" 分支，跳过 <Transition> 切换。
+  // 之后仍然 await searchArticles：fresh 时返回同引用无副作用；stale 时后台刷新替换。
+  // 仅对 reset=true（首屏 / 切回 / 切搜索词）启用；refreshing 是用户明确下拉，不走捷径。
+  let cacheHit = false;
+  if (reset && !refreshing.value) {
+    const cached = api.peekArticles(query.value.trim(), "0");
+    if (cached) {
+      const uniqueNodes = toUniqueNodes(cached.nodes, true);
+      enterAnimationIds.value = new Set();
+      list.value = uniqueNodes;
+      endCursor.value = cached.endCursor;
+      hasNextPage.value = cached.hasNextPage;
+      cacheHit = true;
+    }
+  }
+
+  const shouldShowPageProgress = reset && !refreshing.value && !cacheHit;
   if (shouldShowPageProgress) {
     if (!pageDataLoading.isActive.value) {
       pageDataLoading.start();
@@ -160,7 +213,8 @@ const fetchList = async (reset = false) => {
     pageDataLoading.claim();
   }
 
-  if (reset && !refreshing.value) {
+  // 缓存命中时不显 skeleton（loading 保持 false）；仅 cold load 才占位
+  if (reset && !refreshing.value && !cacheHit) {
     loading.value = true;
   } else if (!reset) {
     loadingMore.value = true;
@@ -186,7 +240,8 @@ const fetchList = async (reset = false) => {
     endCursor.value = page.endCursor;
     hasNextPage.value = page.hasNextPage;
 
-    await scrollToTopAfterReset(reset);
+    // 缓存命中路径下，scrollToTopAfterReset 不再需要（避免破坏用户期望的滚动位置）
+    if (!cacheHit) await scrollToTopAfterReset(reset);
   } catch (err) {
     message.error(resolveErrorMessage(err, "获取帖子失败"));
   } finally {
@@ -211,14 +266,20 @@ const goDiscussion = (discussion: Discussion, event: MouseEvent) => {
     },
   });
 
-  // 标记已读并更新本地列表状态
-  if (!discussion.isRead) {
-    const next = list.value.map((d) =>
-      d.id === discussion.id ? { ...d, isRead: true } : d,
+  // 乐观标记已读 → 后端失败时回滚，避免“UI 已读、服务端未读”状态不一致
+  // （下次 refresh 会被服务端数据覆盖，造成已读闪烁）。
+  if (discussion.isRead) return;
+  const targetId = discussion.id;
+  list.value = list.value.map((d) =>
+    d.id === targetId ? { ...d, isRead: true } : d,
+  );
+  api.markAsReadBatch([targetId]).catch(() => {
+    // 回滚仅限本地中依然是已读的那一条。用户可能中间又点过别的卡片，
+    // 或者 refresh 后列表被替换；都不需要动。
+    list.value = list.value.map((d) =>
+      d.id === targetId && d.isRead ? { ...d, isRead: false } : d,
     );
-    list.value = next;
-  }
-  api.markAsReadBatch([discussion.id]).catch(() => {});
+  });
 };
 
 const handleRefresh = async () => {
@@ -406,6 +467,10 @@ onBeforeUnmount(() => {
   if (import.meta.client) {
     window.removeEventListener("ik:home-refresh", onHomeRefreshEvent);
     window.removeEventListener("ik:tab-visible", onTabVisible);
+    if (scrollBridge) {
+      window.removeEventListener("scroll", scrollBridge);
+      scrollBridge = null;
+    }
   }
   stopPolling();
   loadMoreObserverRef.value?.disconnect();
