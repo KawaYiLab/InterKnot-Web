@@ -82,8 +82,13 @@ interface UseDmConversations {
     targetUserId: number,
   ) => Promise<{ summary: DmConversationSummary; isNew: boolean }>;
 
-  /** 取某会话的消息状态（响应式） */
-  messageStateOf: (id: string) => ComputedRef<ConversationMessageState>;
+  /**
+   * 取某会话的消息状态。返回 plain object 而非 ComputedRef——调用方在
+   * setup 阶段自己用 `computed(() => messageStateOf(id))` 包装一次即可。
+   * 之前返回 `computed(...)` 工厂在响应式上下文每次访问都新建实例，
+   * 触发 Vue effect 嵌套警告 + GC 压力。
+   */
+  messageStateOf: (id: string) => ConversationMessageState;
   ensureMessages: (id: string, force?: boolean) => Promise<void>;
   loadMoreMessages: (id: string) => Promise<void>;
 
@@ -257,7 +262,8 @@ export function useDmConversations(): UseDmConversations {
     } catch (err) {
       const e = err as ApiClientError;
       error.value = e?.message || "加载失败";
-      conversations.value = [];
+      // 不清空 conversations：网络抖动 / 短暂 5xx 时保留旧列表，避免用户看到的
+      // 私聊列表瞬间消失；error 已暴露给上层 UI 提示用户重试
     } finally {
       isLoading.value = false;
     }
@@ -499,11 +505,8 @@ export function useDmConversations(): UseDmConversations {
 
   async function markConversationAsRead(id: string): Promise<void> {
     const conv = conversations.value.find((c) => c.documentId === id);
-    if (!conv || conv.unreadCount <= 0) {
-      // 即使是 0，也允许调一次（推动 lastReadAt），但避免重复请求
-      // 这里直接保护，0 时不调
-      if (conv && conv.unreadCount === 0) return;
-    }
+    // 没找到会话 / 已经全部已读 → 不发请求
+    if (!conv || conv.unreadCount === 0) return;
 
     // 乐观：本地置 unread=0
     patchConversation(id, { unreadCount: 0 });
@@ -634,9 +637,12 @@ export function useDmConversations(): UseDmConversations {
         },
         true,
       );
-    } else if (!isMine) {
-      // 列表里还没这个会话（新私聊 / pseudo 已迁移）→ 拉一次列表拿权威数据
-      // refresh 完成后真 DM 项会出现，lastMessage 来自后端最新口径
+    } else {
+      // 列表里还没这个会话——可能是：
+      //  1) 对端新建会话给我发了第一条消息（!isMine）
+      //  2) 多端登录：我在端 1 发完消息触发 pseudo 实质化，端 2 还没刷新列表
+      //     (isMine=true 但端 2 conversations 里没有该真 DM 项)
+      // 两种情况都需要 refresh 拿权威列表
       void refresh();
     }
 
@@ -763,9 +769,11 @@ export function useDmConversations(): UseDmConversations {
     unsubscribeAll = [];
     subscribed = false;
     stream.stop();
-    // 清 typing 超时
+    // 清 typing 超时 + 视觉状态：否则关弹窗后 typing 残留
+    // 下次打开会显示"对方正在输入..."
     for (const t of typingTimers.values()) clearTimeout(t);
     typingTimers.clear();
+    typing.value = {};
   };
 
   const reset = () => {
@@ -793,7 +801,7 @@ export function useDmConversations(): UseDmConversations {
     refresh,
     openDirectConversation,
     messageStateOf: (id: string) =>
-      computed(() => messagesById.value[id] ?? emptyMessageState()),
+      messagesById.value[id] ?? emptyMessageState(),
     ensureMessages,
     loadMoreMessages,
     sendMessage,
