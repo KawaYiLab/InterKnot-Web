@@ -8,6 +8,16 @@ const loginDialog = useLoginDialog();
 const knockKnockModal = useKnockKnockModal();
 const { isActive: showProgress, progress: progressValue, isClaimed, start: startProgress, finish: finishProgress } = usePageDataLoading();
 
+// 敲敲未读：登录态由 knock-auth-bridge 插件在登录后自动启动 stream + refresh，
+// 所以此处只需要订阅 totalUnread 即可——未登录时一直为 0，不显示 badge。
+const { totalUnread: knockUnread } = useDmConversations();
+/** badge 文案：>99 显示 "99+"，否则原数字 */
+const knockUnreadLabel = computed(() => {
+  const n = knockUnread.value;
+  if (n <= 0) return "";
+  return n > 99 ? "99+" : String(n);
+});
+
 // Auto-hide header on mobile when scrolling down, reveal on scroll up.
 // Only the CSS targets the mobile breakpoint; the JS state is harmless on
 // desktop because `.is-hidden` has no effect there.
@@ -224,6 +234,7 @@ watch(
             class="ik-header-tab ik-header-tab--middle"
             :class="{ 'is-active': activeTab === 'notification' }"
             :aria-selected="activeTab === 'notification'"
+            :aria-label="knockUnread > 0 ? `敲敲，${knockUnread} 条未读` : '敲敲'"
             @click="handleTabChange('notification')"
           >
             <svg class="ik-tab-highlight ik-tab-highlight--middle" viewBox="0 0 121.4 42" aria-hidden="true">
@@ -232,7 +243,14 @@ watch(
                 fill="currentColor"
               />
             </svg>
-            <span class="ik-header-tab__content">敲敲</span>
+            <span class="ik-header-tab__content">
+              敲敲
+              <span
+                v-if="knockUnreadLabel"
+                class="ik-header-tab__badge"
+                aria-hidden="true"
+              >{{ knockUnreadLabel }}</span>
+            </span>
           </button>
 
           <button
@@ -529,6 +547,34 @@ watch(
   align-items: center;
   justify-content: center;
   height: 100%;
+}
+
+/* 敲敲未读 badge：贴在 tab 文字右上角。
+   - 用 .ik-header-tab__content 作为定位上下文（z-index:2，恒在 tab-highlight 之上）
+   - is-active 时 tab 文字变黑、底色为亮黄；badge 保持红底白字以维持可读性
+   - 双位数 / "99+" 时自动变成胶囊形（min-width + padding） */
+.ik-header-tab__badge {
+  position: absolute;
+  top: -3px;
+  left: 100%;
+  margin-left: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #ff3838;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0;
+  line-height: 1;
+  box-shadow: 0 0 0 2px #000;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .ik-tab-highlight {
