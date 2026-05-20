@@ -105,21 +105,28 @@ const composerPlaceholder = computed<string>(() => {
 });
 
 /**
+ * 当前会话的消息状态——一次 computed 复用给下面 activeMessages /
+ * activeMessageLoading，避免多次访问 messageStateOf 工厂在响应式上下文
+ * 反复创建对象。
+ */
+const activeMessageState = computed(() => {
+  const id = activeConversationId.value;
+  if (!id) return null;
+  return messageStateOf(id);
+});
+
+/**
  * 当前会话的消息流（createdAt asc）。消息由 ensureMessages(id) 懒加载到
  * composable 内部缓存；WS 事件到达时按 documentId 去重合并。
  */
-const activeMessages = computed<DmMessage[]>(() => {
-  const id = activeConversationId.value;
-  if (!id) return [];
-  return messageStateOf(id).value.items;
-});
+const activeMessages = computed<DmMessage[]>(
+  () => activeMessageState.value?.items ?? [],
+);
 
 /** 右栏 loading 占位用：当前会话首次加载消息中且本地尚无缓存 */
 const activeMessageLoading = computed<boolean>(() => {
-  const id = activeConversationId.value;
-  if (!id) return false;
-  const state = messageStateOf(id).value;
-  return state.loading && !state.hydrated;
+  const s = activeMessageState.value;
+  return !!s && s.loading && !s.hydrated;
 });
 
 /** 单条消息是否是我自己发的（通知类永远不是「我自己发的」，因此一直靠左） */
@@ -226,6 +233,45 @@ const shouldShowTime = (index: number): boolean => {
   if (Number.isNaN(dCurr) || Number.isNaN(dPrev)) return false;
   return dCurr - dPrev > TIME_GAP_MS;
 };
+
+/**
+ * 一次性把每条消息的派生信息算好——避免 template v-for 内重复调用
+ * isMine / bubbleText / shouldShowQuote / quoteLabel / quoteTitle 等
+ * 函数。100 条消息每次 re-render 节省 ~1000 次函数调用。
+ *
+ * 注：依赖 activeMessages + knownMessageIds + selfUserId；任一变更 → re-eval。
+ */
+interface EnrichedMessage {
+  msg: DmMessage;
+  isMine: boolean;
+  isNew: boolean;
+  showTime: boolean;
+  rendered: BubbleRender;
+  quote: {
+    label: string;
+    title: string;
+    article: NonNullable<DmMessage["article"]>;
+  } | null;
+}
+
+const enrichedMessages = computed<EnrichedMessage[]>(() => {
+  const list = activeMessages.value;
+  const known = knownMessageIds.value;
+  return list.map((msg, idx) => ({
+    msg,
+    isMine: isMine(msg),
+    isNew: !known.has(msg.documentId),
+    showTime: shouldShowTime(idx),
+    rendered: bubbleText(msg),
+    quote: shouldShowQuote(msg) && msg.article
+      ? {
+          label: quoteLabel(msg),
+          title: quoteTitle(msg),
+          article: msg.article,
+        }
+      : null,
+  }));
+});
 
 /** 5 分钟内自己发的、未撤回的文本消息可以编辑/撤回 */
 const EDIT_WINDOW_MS = 5 * 60 * 1000;
@@ -402,40 +448,35 @@ const onContextMenuAction = (action: "edit" | "withdraw") => {
 };
 
 const doSend = async () => {
+  if (sending.value) return;
+  // 一次性快照所有响应式 ref——await 期间用户可能切会话 / 退出编辑态，
+  // 直接读 .value 会拿到 stale 数据，把消息发到错误的会话里。
   const cid = activeConversationId.value;
   if (!cid) return;
-  if (sending.value) return;
+  const editingId = editingMessageId.value;
+  const newContent = (editingId ? editingDraft.value : draft.value).trim();
+  if (!newContent) return;
 
-  // 编辑模式
-  if (editingMessageId.value) {
-    const newContent = editingDraft.value.trim();
-    if (!newContent) return;
-    sending.value = true;
-    sendError.value = null;
-    try {
-      await editMessage(cid, editingMessageId.value, newContent);
-      cancelEdit();
-    } catch (err) {
-      sendError.value = resolveErrorMessage(err, "编辑失败");
-    } finally {
-      sending.value = false;
-    }
-    return;
-  }
-
-  const content = draft.value.trim();
-  if (!content) return;
   sending.value = true;
   sendError.value = null;
   try {
-    await sendMessage(cid, { content });
-    draft.value = "";
-    nextTick(() => {
-      const el = messagesRef.value;
-      if (el) scrollToBottom(el);
-    });
+    if (editingId) {
+      await editMessage(cid, editingId, newContent);
+      // 仅当用户还在原编辑态时才清理，避免 race 时把别人的编辑态清掉
+      if (editingMessageId.value === editingId) cancelEdit();
+    } else {
+      await sendMessage(cid, { content: newContent });
+      // 同样：仅当用户还在原会话时才清 draft
+      if (activeConversationId.value === cid) {
+        draft.value = "";
+        nextTick(() => {
+          const el = messagesRef.value;
+          if (el) scrollToBottom(el);
+        });
+      }
+    }
   } catch (err) {
-    sendError.value = resolveErrorMessage(err, "发送失败");
+    sendError.value = resolveErrorMessage(err, editingId ? "编辑失败" : "发送失败");
   } finally {
     sending.value = false;
   }
@@ -678,30 +719,30 @@ const handleConversationClick = (id: string) => {
                       @scroll.passive="onMessagesScroll"
                     >
                       <template
-                        v-for="(msg, idx) in activeMessages"
-                        :key="msg.documentId"
+                        v-for="entry in enrichedMessages"
+                        :key="entry.msg.documentId"
                       >
                         <!-- 时间分隔行：首条或与上条间隔 > 5min 时显示 -->
                         <div
-                          v-if="shouldShowTime(idx)"
+                          v-if="entry.showTime"
                           class="ik-knock__time-divider"
-                          :class="{ 'is-new': !knownMessageIds.has(msg.documentId) }"
+                          :class="{ 'is-new': entry.isNew }"
                         >
-                          {{ formatTime(msg.createdAt) }}
+                          {{ formatTime(entry.msg.createdAt) }}
                         </div>
                         <div
                           class="ik-knock__msg"
                           :class="{
-                            'is-new': !knownMessageIds.has(msg.documentId),
-                            'is-mine': isMine(msg),
+                            'is-new': entry.isNew,
+                            'is-mine': entry.isMine,
                           }"
-                          @contextmenu="showContextMenu($event, msg)"
+                          @contextmenu="showContextMenu($event, entry.msg)"
                         >
                           <div class="ik-knock__msg-avatar" aria-hidden="true">
                             <img
-                              v-if="msg.sender?.avatar"
-                              :src="msg.sender.avatar"
-                              :alt="msg.sender?.name || ''"
+                              v-if="entry.msg.sender?.avatar"
+                              :src="entry.msg.sender.avatar"
+                              :alt="entry.msg.sender?.name || ''"
                               class="ik-knock__msg-avatar-img"
                               draggable="false"
                             />
@@ -710,31 +751,29 @@ const handleConversationClick = (id: string) => {
                           <div class="ik-knock__msg-body">
                             <div
                               class="ik-knock__msg-bubble"
-                              :class="{ 'is-deleted': !!msg.deletedAt }"
+                              :class="{ 'is-deleted': !!entry.msg.deletedAt }"
                             >
-                              <template v-if="typeof bubbleText(msg) === 'object'">
-                                <CommentBody
-                                  :content="(bubbleText(msg) as { mode: 'rich'; content: string }).content"
-                                />
+                              <template v-if="typeof entry.rendered === 'object'">
+                                <CommentBody :content="entry.rendered.content" />
                               </template>
-                              <template v-else>{{ bubbleText(msg) }}</template>
-                              <span v-if="msg.editedAt && !msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
+                              <template v-else>{{ entry.rendered }}</template>
+                              <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
                             </div>
                             <!-- 通知 quote 卡：点击跳到关联帖子（discussionModal） -->
                             <button
-                              v-if="shouldShowQuote(msg) && msg.article"
+                              v-if="entry.quote"
                               type="button"
                               class="ik-knock__msg-quote"
-                              @click="goDiscussion(msg)"
+                              @click="goDiscussion(entry.msg)"
                             >
                               <DocumentTextIcon
                                 class="ik-knock__msg-quote-icon"
                                 aria-hidden="true"
                               />
                               <span class="ik-knock__msg-quote-text">
-                                <span class="ik-knock__msg-quote-label">{{ quoteLabel(msg) }}</span>
+                                <span class="ik-knock__msg-quote-label">{{ entry.quote.label }}</span>
                                 <span class="ik-knock__msg-quote-title">
-                                  {{ quoteTitle(msg) }}
+                                  {{ entry.quote.title }}
                                 </span>
                               </span>
                             </button>
