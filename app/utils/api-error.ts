@@ -15,6 +15,12 @@ export function normalizeApiError(error: unknown): ApiClientError {
   return new Error("未知请求异常") as ApiClientError;
 }
 
+/** 判断 API 错误是否为 404 Not Found */
+export function isNotFoundError(error: unknown): boolean {
+  const e = normalizeApiError(error);
+  return typeof e.statusCode === "number" && e.statusCode === 404;
+}
+
 export function resolveErrorMessage(error: unknown, fallback = "请求失败"): string {
   const e = normalizeApiError(error);
   const message = e.message || "";

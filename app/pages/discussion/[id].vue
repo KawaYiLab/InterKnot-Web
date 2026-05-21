@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMessage } from "zenless-ui";
 import type { Comment, Discussion } from "~/types/entities";
-import { resolveErrorMessage } from "~/utils/api-error";
+import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon } from "@heroicons/vue/24/outline";
@@ -91,6 +91,10 @@ const loadDiscussion = async () => {
   try {
     discussion.value = await api.getDiscussion(discussionId.value);
   } catch (err) {
+    if (isNotFoundError(err)) {
+      showError({ statusCode: 404, message: "帖子不存在" });
+      return;
+    }
     loadError.value = true;
     message.error(resolveErrorMessage(err, "获取帖子详情失败"));
   } finally {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
 import type { Avatar, BusinessCard, Discussion, Profile } from "~/types/entities";
-import { resolveErrorMessage } from "~/utils/api-error";
+import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 
 const route = useRoute();
@@ -234,6 +234,10 @@ onMounted(async () => {
       ? null
       : (profile.value?.name || profile.value?.login || null);
   } catch (err) {
+    if (isNotFoundError(err)) {
+      showError({ statusCode: 404, message: "用户不存在" });
+      return;
+    }
     loadError.value = true;
     message.error(resolveErrorMessage(err, "获取用户信息失败"));
   } finally {
