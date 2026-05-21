@@ -33,6 +33,8 @@ const props = withDefaults(
     estimatedHeight?: number;
     heightMapper?: (item: T, itemWidth: number) => number | undefined;
     measureItems?: boolean;
+    /** 预填充的已测量高度，用于列表重建时跳过"估算→测量"阶段，实现精确滚动恢复 */
+    initialHeights?: Iterable<readonly [string | number, number]>;
   }>(),
   {
     columnWidth: 240,
@@ -55,8 +57,9 @@ const containerOffsetY = ref(0);
 // 滚动方向：1 = 向下, -1 = 向上
 const scrollDirection = ref(1);
 
-// 缓存已测量的 item 高度 (key → px)
-const measuredHeights = new Map<string | number, number>();
+// 缓存已测量的 item 高度 (key → px)；支持通过 initialHeights prop 预填充，
+// 使列表重建后能跳过"估算 → 测量"过程，直接用真实高度计算布局。
+const measuredHeights = new Map<string | number, number>(props.initialHeights);
 // 缓存 heightMapper 计算结果 (key → px)，colW 变化时清空
 const mappedHeightCache = new Map<string | number, number>();
 let _cachedColW = 0;

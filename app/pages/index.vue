@@ -13,6 +13,7 @@ import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 
 const api = useApi();
+const homeStateCache = useHomeStateCache();
 const route = useRoute();
 const discussionModal = useDiscussionModal();
 const message = useMessage();
@@ -67,6 +68,11 @@ const requestVersion = ref(0);
 let seenIds = new Set<string>();
 let lastFetchTime = 0;
 let cooldownTimer: ReturnType<typeof setTimeout> | null = null;
+
+// VirtualMasonry 模板引用，用于读取 expose 的 measuredHeights
+const masonryRef = ref<{ measuredHeights: Map<string | number, number>; $el: HTMLElement } | null>(null);
+// 从缓存恢复的已测量高度，传给 VirtualMasonry.initialHeights
+const cachedMeasuredHeights = shallowRef<Map<string | number, number> | undefined>(undefined);
 
 const loadMoreSentinelRef = ref<HTMLElement | null>(null);
 const loadMoreObserverRef = shallowRef<IntersectionObserver | null>(null);
@@ -442,8 +448,27 @@ watch(
   { flush: "post" },
 );
 
-// 在 setup 阶段提前发起首屏数据请求，不等 onMounted
-const initialFetchPromise = fetchList(true);
+// ── 缓存恢复 / 首次加载 ─────────────────────────────
+// scrollY 的恢复由 app/router.options.ts 的 scrollBehavior 在导航阶段统一处理，
+// 此处只负责列表数据 + measuredHeights 的恢复。
+const cached = homeStateCache.restore();
+let initialFetchPromise: Promise<void>;
+
+if (cached && cached.query === query.value) {
+  // 从缓存恢复：跳过网络请求，直接填充列表状态
+  list.value = cached.list;
+  endCursor.value = cached.endCursor;
+  hasNextPage.value = cached.hasNextPage;
+  seenIds = cached.seenIds;
+  cachedMeasuredHeights.value = cached.measuredHeights;
+  // scrollY 由 router.options.ts 的 scrollBehavior 通过 consumeScrollY() 独立消费
+  homeStateCache.clear();
+  initialFetchPromise = Promise.resolve();
+} else {
+  homeStateCache.clear();
+  // 在 setup 阶段提前发起首屏数据请求，不等 onMounted
+  initialFetchPromise = fetchList(true);
+}
 
 // Triggered by MobileBottomNav when the user double-taps the active
 // "推送" entry — mirrors the Flutter app's pull-to-refresh shortcut.
@@ -459,8 +484,28 @@ onMounted(async () => {
   await initialFetchPromise;
   await nextTick();
   observeLoadMoreSentinel();
+
+  // 滚动恢复由 app/router.options.ts 的 scrollBehavior 统一处理，
+  // 此处无需手动 scrollTo——scrollBehavior 在导航到 / 时自动读取缓存的 scrollY。
+
   // 仅在推荐流下启动轮询；搜索状态由 watch(query) 控制
   if (!query.value.trim()) startPolling();
+});
+
+// ── 路由离开前：保存首页状态快照 ──────────────────────
+// onBeforeRouteLeave 在路由变化前触发，此时 DOM 完整无损，window.scrollY 精确。
+// 配合 measuredHeights 缓存，重建后布局像素级一致，scrollY 即可精确恢复。
+onBeforeRouteLeave(() => {
+  const heights = masonryRef.value?.measuredHeights;
+  homeStateCache.save({
+    list: list.value,
+    endCursor: endCursor.value,
+    hasNextPage: hasNextPage.value,
+    query: query.value,
+    seenIds,
+    measuredHeights: heights ? new Map(heights) : new Map(),
+    scrollY: window.scrollY,
+  });
 });
 
 onBeforeUnmount(() => {
@@ -539,6 +584,7 @@ onBeforeUnmount(() => {
         <!-- 实际内容：list 不为空时显示 -->
         <div v-else key="list" class="ik-list-state">
           <VirtualMasonry
+            ref="masonryRef"
             class="ik-masonry"
             :items="list"
             :column-width="240"
@@ -549,6 +595,7 @@ onBeforeUnmount(() => {
             :estimated-height="300"
             :height-mapper="estimateDiscussionCardHeight"
             :key-mapper="masonryKeyMapper"
+            :initial-heights="cachedMeasuredHeights"
           >
             <template #default="{ item, index, columnCount }">
               <DiscussionCard
