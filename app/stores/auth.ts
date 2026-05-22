@@ -52,6 +52,8 @@ export const useAuthStore = defineStore("auth", {
       if (import.meta.client) {
         localStorage.setItem(TOKEN_KEY, token);
         persistUserId(user);
+        // 登录后通知首页刷新帖子列表，使已读状态正确合并
+        window.dispatchEvent(new CustomEvent("ik:home-refresh"));
       }
     },
     clearSession() {
