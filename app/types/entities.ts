@@ -287,8 +287,8 @@ export type DmNotificationKind =
  *
  * 与真 DM 在前端的区别：
  * - 列表项可正常展示与点击
- * - 选中后能拉到通知历史，但 `pseudo:user` 不能直接发消息
- *   （要先调 direct API 升级为真 DM）；anonymous / system 永远不可发消息
+ * - 选中后能拉到通知历史，但 `pseudo:user` 不能直接私信
+ *   （要先调 direct API 升级为真 DM）；anonymous / system 永远不可私信
  */
 export type DmPseudoConversationId =
   | `pseudo:user:${number}`
@@ -336,9 +336,9 @@ export interface DmConversationSummary {
   /**
    * 仅在「会话融合」语义下出现，标识该会话项是否是 pseudo 形态：
    * - `null` / undefined：真 DM 会话
-   * - `"user"`：通知 sender 但暂无 DM 会话；前端首次发消息时调 direct API 升级
-   * - `"anonymous"`：匿名通知聚合（不可发消息）
-   * - `"system"`：系统通知聚合（不可发消息）
+   * - `"user"`：通知 sender 但暂无 DM 会话；前端首次私信时调 direct API 升级
+   * - `"anonymous"`：匿名通知聚合（不可私信）
+   * - `"system"`：系统通知聚合（不可私信）
    *
    * 字段值与 `documentId` 前缀一致：例如 pseudoKind === "user" 对应
    * documentId 为 `pseudo:user:${userId}`。

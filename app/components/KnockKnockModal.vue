@@ -38,6 +38,8 @@ const {
   withdrawMessage,
   /** 当前选中的会话 documentId（共享自 composable；null 表示右栏显示 EMPTY 占位） */
   activeConversationId,
+  typingByConversation,
+  sendTyping,
   startStream,
   stopStream,
 } = useDmConversations();
@@ -60,7 +62,7 @@ watch(visible, async (next) => {
   // 拉列表 + 起 WS（startStream 内部对 SSR / 未登录都做了护栏）
   startStream();
   await refresh();
-  // 若是由 UserHoverCard「发消息」打开，定位到指定会话
+  // 若是由 UserHoverCard「私信」打开，定位到指定会话
   const pending = consumePendingDmConversationId();
   if (pending) {
     activeTab.value = "contacts";
@@ -93,6 +95,39 @@ const composerDisabled = computed<boolean>(() => {
   if (!conv) return true;
   return conv.pseudoKind === "anonymous" || conv.pseudoKind === "system";
 });
+
+/** 对端是否正在输入：当前会话的 typing 用户列表非空且不含自己 */
+const peerIsTyping = computed<boolean>(() => {
+  const cid = activeConversationId.value;
+  if (!cid) return false;
+  const list = typingByConversation.value[cid];
+  if (!list || list.length === 0) return false;
+  const self = selfUserId.value;
+  return list.some((uid) => uid !== self);
+});
+
+/** 节流发送 typing 状态：2s 内最多触发一次 */
+let typingThrottleLast = 0;
+let typingThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+const onComposerInput = () => {
+  const cid = activeConversationId.value;
+  if (!cid) return;
+  const now = Date.now();
+  const remaining = 2000 - (now - typingThrottleLast);
+  if (remaining <= 0) {
+    typingThrottleLast = now;
+    sendTyping(cid);
+  } else if (!typingThrottleTimer) {
+    typingThrottleTimer = setTimeout(() => {
+      typingThrottleTimer = null;
+      const currentCid = activeConversationId.value;
+      if (currentCid) {
+        typingThrottleLast = Date.now();
+        sendTyping(currentCid);
+      }
+    }, remaining);
+  }
+};
 
 /** 输入框 placeholder：根据 pseudoKind 给出更精确的提示 */
 const composerPlaceholder = computed<string>(() => {
@@ -705,9 +740,19 @@ const handleConversationClick = (id: string) => {
                       class="ik-knock__main-icon"
                       aria-hidden="true"
                     />
-                    <span class="ik-knock__main-title">
-                      {{ activeConversation?.peer?.name || activeConversation?.title || "NoData" }}
-                    </span>
+                    <div class="ik-knock__main-title-wrap">
+                      <span class="ik-knock__main-title">
+                        {{ activeConversation?.peer?.name || activeConversation?.title || "NoData" }}
+                      </span>
+                      <Transition name="ik-typing">
+                        <span v-if="peerIsTyping" class="ik-knock__typing-indicator" aria-live="polite">
+                          <span class="ik-knock__typing-dot" />
+                          <span class="ik-knock__typing-dot" />
+                          <span class="ik-knock__typing-dot" />
+                          <span class="ik-knock__typing-label">正在输入</span>
+                        </span>
+                      </Transition>
+                    </div>
                   </header>
                   <div class="ik-knock__main-body">
                     <!-- 会话消息流 -->
@@ -833,6 +878,7 @@ const handleConversationClick = (id: string) => {
                           maxlength="4000"
                           :disabled="composerDisabled"
                           @keydown="onComposerKeyDown"
+                          @input="onComposerInput"
                         />
                         <button
                           type="button"
@@ -1321,10 +1367,66 @@ const handleConversationClick = (id: string) => {
   flex-shrink: 0;
 }
 
+.ik-knock__main-title-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+
 .ik-knock__main-title {
   font-size: 17px;
   font-weight: 900;
   color: #fff;
+}
+
+/* ── 正在输入指示器 ─────────────────────── */
+.ik-knock__typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 14px;
+}
+
+.ik-knock__typing-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-left: 2px;
+  letter-spacing: 0.2px;
+}
+
+.ik-knock__typing-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  animation: ik-typing-bounce 1.2s ease-in-out infinite;
+}
+
+.ik-knock__typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.ik-knock__typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes ik-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.ik-typing-enter-active,
+.ik-typing-leave-active {
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.ik-typing-enter-from,
+.ik-typing-leave-to {
+  opacity: 0;
+  transform: translateY(2px);
 }
 
 .ik-knock__main-body {

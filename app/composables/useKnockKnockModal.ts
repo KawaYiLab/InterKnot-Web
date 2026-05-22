@@ -5,7 +5,7 @@
  * 外壳动画复用项目帖子弹窗的 .ik-overlay / .ik-dialog 样式。
  *
  * open() 支持选参 { dmConversationId? }：当传入时弹窗会自动定位到该
- * DM 私聊会话（用于 UserHoverCard 的「发消息」按钮跳转场景）。
+ * DM 私聊会话（用于 UserHoverCard 的「私信」按钮跳转场景）。
  */
 const knockKnockVisible = ref(false);
 /** 弹窗一开就要定位到的目标 DM 会话；contacts tab 监听这个值后清空 */

@@ -420,7 +420,7 @@ export function useDmConversations(): UseDmConversations {
   ): Promise<DmMessage> {
     // pseudo 会话拦截：
     //  - pseudo:user:N → lazy 实质化为真 DM 会话
-    //  - pseudo:anonymous / pseudo:system → 不可发消息（语义上没有真实 sender）
+    //  - pseudo:anonymous / pseudo:system → 不可私信（语义上没有真实 sender）
     let actualId = conversationId;
     if (conversationId.startsWith("pseudo:user:")) {
       const real = await materializePseudoUserConversation(conversationId);
