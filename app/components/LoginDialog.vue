@@ -14,11 +14,19 @@ const form = reactive({
 });
 
 const isRegister = ref(false);
+const isReset = ref(false);
 const isLoading = ref(false);
 const isCodeSent = ref(false);
 const isSendingCode = ref(false);
 const cooldown = ref(0);
 let cooldownTimer: ReturnType<typeof setInterval> | null = null;
+
+/** 当前模式的标题 */
+const modeTitle = computed(() => {
+  if (isReset.value) return "重置密码";
+  if (isRegister.value) return "注册";
+  return "登录";
+});
 
 const stopCooldown = () => {
   if (cooldownTimer) {
@@ -45,6 +53,7 @@ const resetForm = () => {
   form.password = "";
   form.confirmPassword = "";
   isRegister.value = false;
+  isReset.value = false;
   isLoading.value = false;
   isCodeSent.value = false;
   cooldown.value = 0;
@@ -81,11 +90,19 @@ const sendCode = async () => {
   }
   isSendingCode.value = true;
   try {
-    const res = await api.sendRegisterCode(form.email.trim());
-    isCodeSent.value = true;
-    form.email = res.email;
-    startCooldown(res.cooldown);
-    message.success("验证码已发送，请查收邮箱");
+    if (isReset.value) {
+      const res = await api.sendResetCode(form.email.trim());
+      isCodeSent.value = true;
+      form.email = res.email;
+      startCooldown(res.cooldown);
+      message.success("验证码已发送，请查收邮箱");
+    } else {
+      const res = await api.sendRegisterCode(form.email.trim());
+      isCodeSent.value = true;
+      form.email = res.email;
+      startCooldown(res.cooldown);
+      message.success("验证码已发送，请查收邮箱");
+    }
   } catch (err) {
     message.error(resolveErrorMessage(err, "发送验证码失败"));
   } finally {
@@ -97,6 +114,24 @@ const submit = async () => {
   isLoading.value = true;
 
   try {
+    if (isReset.value) {
+      if (!form.email.trim()) throw new Error("请输入邮箱");
+      if (!form.code.trim()) throw new Error("请输入验证码");
+      if (!form.password.trim()) throw new Error("请输入新密码");
+      if (form.password !== form.confirmPassword) throw new Error("两次输入的密码不一致");
+      await api.resetPassword(form.email.trim(), form.code.trim(), form.password.trim());
+      message.success("密码已重置，请使用新密码登录");
+      isReset.value = false;
+      isRegister.value = false;
+      form.code = "";
+      form.password = "";
+      form.confirmPassword = "";
+      isCodeSent.value = false;
+      cooldown.value = 0;
+      stopCooldown();
+      return;
+    }
+
     if (!isRegister.value) {
       if (!form.email.trim() || !form.password.trim()) {
         throw new Error("请输入邮箱和密码");
@@ -124,16 +159,35 @@ const submit = async () => {
     }
     await onLoginSuccess(registerRes.token, registerRes.user);
   } catch (err) {
-    message.error(resolveErrorMessage(err, isRegister.value ? "注册失败" : "登录失败"));
+    const label = isReset.value ? "重置失败" : isRegister.value ? "注册失败" : "登录失败";
+    message.error(resolveErrorMessage(err, label));
   } finally {
     isLoading.value = false;
   }
 };
 
 const toggleMode = () => {
-  isRegister.value = !isRegister.value;
+  if (isReset.value) {
+    isReset.value = false;
+    isRegister.value = false;
+  } else {
+    isRegister.value = !isRegister.value;
+  }
   isCodeSent.value = false;
   form.code = "";
+  form.password = "";
+  form.confirmPassword = "";
+  cooldown.value = 0;
+  stopCooldown();
+};
+
+const enterResetMode = () => {
+  isReset.value = true;
+  isRegister.value = false;
+  isCodeSent.value = false;
+  form.code = "";
+  form.password = "";
+  form.confirmPassword = "";
   cooldown.value = 0;
   stopCooldown();
 };
@@ -154,9 +208,15 @@ const focusInput = (ref: Ref<{ $el: HTMLElement } | null>) => {
   nextTick(() => ref.value?.$el?.querySelector('input')?.focus());
 };
 
-const handleEnterEmail = () => focusInput(passwordRef);
+const handleEnterEmail = () => {
+  if (isReset.value && !isCodeSent.value) {
+    sendCode();
+  } else {
+    focusInput(passwordRef);
+  }
+};
 const handleEnterPassword = () => {
-  if (isRegister.value) focusInput(confirmPasswordRef);
+  if (isRegister.value || isReset.value) focusInput(confirmPasswordRef);
   else submit();
 };
 const handleEnterConfirmPassword = () => focusInput(codeRef);
@@ -182,7 +242,7 @@ onUnmounted(() => {
               <!-- Header Bar -->
               <div class="ik-dialog__header">
                 <span class="ik-dialog__title">
-                  {{ isRegister ? '注册' : '登录' }}
+                  {{ modeTitle }}
                 </span>
                 <button
                   class="ik-dialog__close"
@@ -195,56 +255,106 @@ onUnmounted(() => {
 
               <!-- Content -->
               <div class="ik-dialog__body">
-                <!-- Login / Register form -->
-                  <div class="ik-login-form">
-                    <z-input ref="emailRef" v-model="form.email" :placeholder="isRegister ? '邮箱' : '用户名/邮箱'" @keydown.enter="handleEnterEmail" />
-                    <z-input
-                      ref="passwordRef"
-                      v-model="form.password"
-                      type="password"
-                      placeholder="密码"
-                      @keydown.enter="handleEnterPassword"
-                    />
+                <div class="ik-login-form">
+                  <!-- 邮箱：始终可见 -->
+                  <z-input
+                    ref="emailRef"
+                    v-model="form.email"
+                    :placeholder="isReset ? '注册邮箱' : isRegister ? '邮箱' : '用户名/邮箱'"
+                    @keydown.enter="handleEnterEmail"
+                  />
 
-                    <div class="ik-login-field-grid" :class="{ 'is-open': isRegister }">
-                      <div class="ik-login-field-grid__inner">
-                        <z-input
-                          ref="confirmPasswordRef"
-                          v-model="form.confirmPassword"
-                          type="password"
-                          placeholder="确认密码"
-                          @keydown.enter="handleEnterConfirmPassword"
-                        />
-                      </div>
-                    </div>
-
-                    <div class="ik-login-field-grid" :class="{ 'is-open': isRegister }">
-                      <div class="ik-login-field-grid__inner">
-                        <z-input
-                          ref="codeRef"
-                          v-model="form.code"
-                          placeholder="验证码"
-                          @keydown.enter="handleEnterCode"
-                        >
-                          <template #suffix>
-                            <span class="ik-code-divider" />
-                            <button
-                              class="ik-code-send-btn"
-                              :disabled="cooldown > 0 || isSendingCode"
-                              @click.stop="sendCode"
-                            >
-                              {{ isSendingCode ? '发送中' : cooldown > 0 ? `${cooldown}s` : (isCodeSent ? '重新发送' : '发送') }}
-                            </button>
-                          </template>
-                        </z-input>
-                      </div>
+                  <!-- 密码：登录/注册时直接显示，重置时验证码发送后展开 -->
+                  <div class="ik-login-field-grid" :class="{ 'is-open': !isReset || (isReset && isCodeSent) }">
+                    <div class="ik-login-field-grid__inner">
+                      <z-input
+                        ref="passwordRef"
+                        v-model="form.password"
+                        type="password"
+                        :placeholder="isReset ? '新密码' : '密码'"
+                        @keydown.enter="handleEnterPassword"
+                      >
+                        <template v-if="!isRegister && !isReset" #append>
+                          <button
+                            type="button"
+                            class="ik-forgot-btn"
+                            @click.stop="enterResetMode"
+                          >
+                            忘记密码
+                          </button>
+                        </template>
+                      </z-input>
                     </div>
                   </div>
 
-                  <div class="ik-login-footer">
-                    <z-button @click="toggleMode">
-                      {{ isRegister ? "返回登录" : "注册账号" }}
+                  <!-- 确认密码：注册 或 重置(验证码已发送) -->
+                  <div class="ik-login-field-grid" :class="{ 'is-open': isRegister || (isReset && isCodeSent) }">
+                    <div class="ik-login-field-grid__inner">
+                      <z-input
+                        ref="confirmPasswordRef"
+                        v-model="form.confirmPassword"
+                        type="password"
+                        :placeholder="isReset ? '确认新密码' : '确认密码'"
+                        @keydown.enter="handleEnterConfirmPassword"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- 验证码：注册 或 重置(验证码已发送) -->
+                  <div class="ik-login-field-grid" :class="{ 'is-open': isRegister || (isReset && isCodeSent) }">
+                    <div class="ik-login-field-grid__inner">
+                      <z-input
+                        ref="codeRef"
+                        v-model="form.code"
+                        placeholder="验证码"
+                        @keydown.enter="handleEnterCode"
+                      >
+                        <template #suffix>
+                          <span class="ik-code-divider" />
+                          <button
+                            class="ik-code-send-btn"
+                            :disabled="cooldown > 0 || isSendingCode"
+                            @click.stop="sendCode"
+                          >
+                            {{ isSendingCode ? '发送中' : cooldown > 0 ? `${cooldown}s` : (isCodeSent ? '重新发送' : '发送') }}
+                          </button>
+                        </template>
+                      </z-input>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ik-login-footer">
+                  <z-button @click="toggleMode">
+                    {{ isReset || isRegister ? "返回登录" : "注册账号" }}
+                  </z-button>
+
+                  <!-- 重置模式 - 未发验证码 -->
+                  <template v-if="isReset && !isCodeSent">
+                    <z-button
+                      v-if="!isSendingCode"
+                      :icon="{ success: '#00cc0d' }"
+                      @click="sendCode"
+                    >
+                      重置密码
                     </z-button>
+                    <z-button v-else loading>重置密码</z-button>
+                  </template>
+
+                  <!-- 重置模式 - 已发验证码 -->
+                  <template v-else-if="isReset && isCodeSent">
+                    <z-button
+                      v-if="!isLoading"
+                      :icon="{ success: '#00cc0d' }"
+                      @click="submit"
+                    >
+                      重置密码
+                    </z-button>
+                    <z-button v-else loading>重置密码</z-button>
+                  </template>
+
+                  <!-- 登录 / 注册模式 -->
+                  <template v-else>
                     <z-button
                       v-if="!isLoading"
                       :icon="{ success: '#00cc0d' }"
@@ -252,10 +362,11 @@ onUnmounted(() => {
                     >
                       {{ isRegister ? "注册" : "登录" }}
                     </z-button>
-                    <z-button v-if="isLoading" loading>
+                    <z-button v-else loading>
                       {{ isRegister ? "注册" : "登录" }}
                     </z-button>
-                  </div>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
@@ -435,6 +546,24 @@ onUnmounted(() => {
 .ik-code-send-btn:disabled {
   color: rgba(255, 255, 255, 0.3);
   cursor: not-allowed;
+}
+
+/* ── 忘记密码（密码输入框 append 区域） ── */
+.ik-forgot-btn {
+  display: flex;
+  align-items: center;
+  padding: 0 14px 0 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.ik-forgot-btn:hover {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 /* ═══════════════════════════════════════════════

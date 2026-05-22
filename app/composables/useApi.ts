@@ -73,6 +73,13 @@ interface SendRegisterCodeResult {
   cooldown: number;
 }
 
+interface SendResetCodeResult {
+  email: string;
+  sent: boolean;
+  expiresIn: number;
+  cooldown: number;
+}
+
 interface DiscussionCommentPayload {
   discussionId: string;
   content: string;
@@ -499,6 +506,35 @@ export function useApi() {
       token: (data.jwt as string | undefined) || null,
       user: toAuthor(data.user, apiBaseUrl),
     };
+  };
+
+  const sendResetCode = async (
+    email: string,
+  ): Promise<SendResetCodeResult> => {
+    const response = await $api("/api/auth/send-reset-code", {
+      method: "POST",
+      body: { email },
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      email: String(data.email || email),
+      sent: data.sent === true,
+      expiresIn: Number(data.expiresIn || 600),
+      cooldown: Number(data.cooldown || 60),
+    };
+  };
+
+  const resetPassword = async (
+    email: string,
+    code: string,
+    password: string,
+  ): Promise<{ success: boolean }> => {
+    const response = await $api("/api/auth/reset-password", {
+      method: "POST",
+      body: { email, code, password },
+    });
+    const data = response as Record<string, unknown>;
+    return { success: data.success === true };
   };
 
   const getSelfUser = async (): Promise<Author> => {
@@ -1249,6 +1285,8 @@ export function useApi() {
     login,
     sendRegisterCode,
     registerWithCode,
+    sendResetCode,
+    resetPassword,
     getSelfUser,
     searchArticles,
     peekArticles,
