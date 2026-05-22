@@ -253,7 +253,7 @@ onUnmounted(() => {
                       {{ isRegister ? "注册" : "登录" }}
                     </z-button>
                     <z-button v-if="isLoading" loading>
-                      {{ isRegister ? "正在注册" : "正在登录" }}
+                      {{ isRegister ? "注册" : "登录" }}
                     </z-button>
                   </div>
               </div>

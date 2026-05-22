@@ -343,7 +343,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <z-button v-if="profile.isSelf" @click="openModal('settings')">更多操作</z-button>
-        <z-button v-else-if="canSendDm" :loading="dmStarting" @click="startDm">发消息</z-button>
+        <z-button v-else-if="canSendDm" :loading="dmStarting" @click="startDm">私信</z-button>
       </div>
 
       <!-- ── A-Frame (包含名片 + 帖子) ────────── -->

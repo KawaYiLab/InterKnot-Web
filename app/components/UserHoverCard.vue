@@ -22,11 +22,11 @@ const profile = ref<Profile | null>(null);
 const loading = ref(false);
 const fetchError = ref(false);
 
-/** "发消息"按钮加载态 & 错误态：避免短时间内连点重复打开 direct API */
+/** "私信"按钮加载态 & 错误态：避免短时间内连点重复打开 direct API */
 const dmStarting = ref(false);
 const dmError = ref<string | null>(null);
 
-/** 自己不能给自己发消息；profileHidden 用户后端也会拒，前端先隐 */
+/** 自己不能给自己私信；profileHidden 用户后端也会拒，前端先隐 */
 const canSendDm = computed<boolean>(() => {
   if (!profile.value) return false;
   if (profile.value.isSelf) return false;
@@ -302,7 +302,7 @@ onBeforeUnmount(() => {
                 :disabled="dmStarting"
                 @click="startDm"
               >
-                {{ dmStarting ? "..." : "发消息" }}
+                {{ dmStarting ? "..." : "私信" }}
               </button>
               <button class="ik-hovercard__profile-btn" @click="goProfile">查看主页</button>
             </div>
@@ -544,7 +544,7 @@ onBeforeUnmount(() => {
   color: #d7ff00;
 }
 
-/* 主操作：发消息（黄底黑字，强调） */
+/* 主操作：私信（黄底黑字，强调） */
 .ik-hovercard__send-dm-btn {
   flex: 1;
   padding: 6px 0;
