@@ -107,6 +107,8 @@ body,
   filter: brightness(0.5);
   z-index: -1;
   pointer-events: none;
+  transform: translate(var(--bg-x, 0), var(--bg-y, 0));
+  transition: transform 0.1s ease-out;
 }
 
 html::-webkit-scrollbar,
@@ -134,6 +136,11 @@ input[type="reset"],
 .ik-dialog__close,
 .ik-comment__like-btn {
   cursor: var(--ik-cursor-pointer) !important;
+}
+
+.ik-dialog__close:hover {
+  opacity: 1 !important;
+  transform: none !important;
 }
 
 input,

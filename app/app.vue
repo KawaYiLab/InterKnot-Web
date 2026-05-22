@@ -6,6 +6,15 @@ const discussionModal = useDiscussionModal();
 if (import.meta.client) {
   auth.hydrateFromStorage();
 
+  // 背景图跟随鼠标轻微晃动
+  const handleMouseMove = (e: MouseEvent) => {
+    const x = (e.clientX / window.innerWidth - 0.5) * 30;
+    const y = (e.clientY / window.innerHeight - 0.5) * 30;
+    document.documentElement.style.setProperty('--bg-x', `${x}px`);
+    document.documentElement.style.setProperty('--bg-y', `${y}px`);
+  };
+  window.addEventListener('mousemove', handleMouseMove);
+
   // 弱网优化：空闲时预取帖子弹窗 chunk，避免用户点击后还要下载组件 JS。
   const prefetchDiscussionOverlay = () => {
     void import("~/components/DiscussionOverlay.vue");
