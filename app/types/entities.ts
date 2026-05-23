@@ -18,7 +18,7 @@ export interface CoverImage {
   height?: number;
 }
 
-export interface Discussion {
+export interface Post {
   id: string;
   title: string;
   body?: string;

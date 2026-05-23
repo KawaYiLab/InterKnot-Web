@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const auth = useAuthStore();
 const router = useRouter();
-const discussionModal = useDiscussionModal();
+const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
 
 if (import.meta.client) {
@@ -25,13 +25,13 @@ if (import.meta.client) {
   }
 
   // 监听浏览器后退/前进：如果弹窗打开，关闭它
-  window.addEventListener("popstate", discussionModal.handlePopState);
+  window.addEventListener("popstate", postModal.handlePopState);
   window.addEventListener("popstate", knockModal.handlePopState);
 
   // 当发生真实路由导航时（例如点击 Header 链接），关闭弹窗
   router.beforeEach(() => {
-    if (discussionModal.isOpen.value) {
-      discussionModal.teardown();
+    if (postModal.isOpen.value) {
+      postModal.teardown();
     }
     if (knockModal.visible.value) {
       knockModal.teardown();
@@ -40,7 +40,7 @@ if (import.meta.client) {
 }
 
 const handleOverlayClose = () => {
-  discussionModal.close();
+  postModal.close();
 };
 
 // create 页有自带的移动端底部操作栏（发布 / 草稿），全局 MobileBottomNav 在此隐藏避免堆叠
@@ -80,16 +80,16 @@ const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
     </ClientOnly>
 
     <!-- 帖子详情弹窗（从首页点击卡片时弹出）
-         注：必须用同步组件而非 LazyDiscussionOverlay。<Transition> 包异步组件时，
+         注：必须用同步组件而非 LazyPostOverlay。<Transition> 包异步组件时，
          弱网下 chunk 加载延迟会让 enter 动画错过首帧 → 用户感知为闪烁。 -->
     <ClientOnly>
       <Teleport to="body">
-        <Transition name="ik-overlay" appear @after-leave="discussionModal.clearAfterLeave()">
-          <DiscussionOverlay
-            v-if="discussionModal.isOpen.value"
-            :discussion-id="discussionModal.discussionId.value || ''"
-            :cover-hint="discussionModal.coverHint.value"
-            :preview="discussionModal.preview.value"
+        <Transition name="ik-overlay" appear @after-leave="postModal.clearAfterLeave()">
+          <PostOverlay
+            v-if="postModal.isOpen.value"
+            :post-id="postModal.postId.value || ''"
+            :cover-hint="postModal.coverHint.value"
+            :preview="postModal.preview.value"
             @close="handleOverlayClose"
           />
         </Transition>
