@@ -91,6 +91,8 @@ export function useDiscussionModal() {
    */
   function handlePopState() {
     if (isOpen.value) {
+      // 如果是回退到自身的 history 条目（如从敲敲弹窗返回帖子弹窗），不关闭
+      if (window.history.state?.__discussionModal) return;
       _historyPushed = false;
       teardown();
     }
