@@ -11,20 +11,32 @@ import { DocumentTextIcon } from "@heroicons/vue/24/outline";
 import type { DmConversationSummary, DmMessage } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import { resolveErrorMessage } from "~/utils/api-error";
+import KkCallSessionList from "./KkCallSessionList.vue";
+import KkCallPanel from "./KkCallPanel.vue";
 
 const {
   visible,
   close,
   consumePendingDmConversationId,
+  consumePendingKkCallSessionId,
   updateUrl,
 } = useKnockKnockModal();
 const auth = useAuthStore();
 const postModal = usePostModal();
 
-/** 顶部 tab：通话记录（未来 AI 对话占位） / 私聊 / 群聊（未来占位） */
+/** 顶部 tab：通话（角色对话） / 私聊 / 群聊（未来占位） */
 type KnockTab = "calls" | "contacts" | "groups";
 
 const activeTab = ref<KnockTab>("contacts");
+
+// 敲敲通话（calls tab）独立维护 activeId，避免与 DM 的 activeConversationId 互相污染
+const {
+  sessions: kkSessions,
+  isLoading: kkLoading,
+  error: kkError,
+  refresh: kkRefresh,
+} = useKkCall();
+const activeKkCallId = ref<string | null>(null);
 
 const {
   conversations: allConversations,
@@ -57,18 +69,33 @@ const selfUserId = computed<number | null>(() => {
 watch(visible, async (next) => {
   if (!next) {
     activeConversationId.value = null;
+    activeKkCallId.value = null;
     stopStream();
     return;
   }
   // 拉列表 + 起 WS（startStream 内部对 SSR / 未登录都做了护栏）
   startStream();
   await refresh();
-  // 若是由 UserHoverCard「私信」打开，定位到指定会话
-  const pending = consumePendingDmConversationId();
-  if (pending) {
-    activeTab.value = "contacts";
-    activeConversationId.value = pending;
-    updateUrl("contacts", pending);
+  // calls pending 优先（来自 /knock?tab=calls&c=... 的直接访问入口）：
+  // 切到 calls tab、设置 activeKkCallId 并触发一次列表拉取。
+  const pendingKk = consumePendingKkCallSessionId();
+  if (pendingKk) {
+    activeTab.value = "calls";
+    activeKkCallId.value = pendingKk;
+    void kkRefresh();
+    updateUrl("calls", pendingKk);
+  } else {
+    // 没有 calls 定位需求时，按 tab 状态按需预拉
+    if (activeTab.value === "calls") {
+      void kkRefresh();
+    }
+    // 若是由 UserHoverCard「私信」打开，定位到指定会话
+    const pendingDm = consumePendingDmConversationId();
+    if (pendingDm) {
+      activeTab.value = "contacts";
+      activeConversationId.value = pendingDm;
+      updateUrl("contacts", pendingDm);
+    }
   }
 });
 
@@ -562,14 +589,36 @@ const handleBackdropMouseDown = (e: MouseEvent) => {
 
 const handleTabClick = (tab: KnockTab) => {
   activeTab.value = tab;
-  // 切换 tab 时清掉右栏，避免显示其他 tab 的会话
+  // 切换 tab 时清掉两套右栏 activeId，避免显示别 tab 的会话
   activeConversationId.value = null;
+  activeKkCallId.value = null;
   updateUrl(tab);
+  // 切到 calls 时按需拉一次列表（已 hydrated 时 useKkCall 内部会跳过）
+  if (tab === "calls") {
+    void kkRefresh();
+  }
 };
 
 const handleConversationClick = (id: string) => {
   activeConversationId.value = id;
   updateUrl(activeTab.value, id);
+};
+
+const handleKkCallPick = (id: string) => {
+  activeKkCallId.value = id;
+  updateUrl(activeTab.value, id);
+};
+
+/**
+ * KkCallPanel 在 SSE 首帧拿到真 sessionId 后回调；
+ * 此时把本地 activeKkCallId 与 URL 一并切换到真 id，
+ * useKkCall 内部已经把 sessions 列表里的 pseudo 项替换为真项。
+ */
+const handleKkSessionMaterialized = (realId: string) => {
+  activeKkCallId.value = realId;
+  if (activeTab.value === "calls") {
+    updateUrl("calls", realId);
+  }
 };
 </script>
 
@@ -690,7 +739,12 @@ const handleConversationClick = (id: string) => {
                     </button>
                   </div>
 
-                  <div class="ik-knock__list" role="listbox">
+                  <!-- 私聊：原 DM 会话列表 -->
+                  <div
+                    v-if="activeTab === 'contacts'"
+                    class="ik-knock__list"
+                    role="listbox"
+                  >
                     <button
                       v-for="item in conversations"
                       :key="item.documentId"
@@ -729,7 +783,7 @@ const handleConversationClick = (id: string) => {
                       </span>
                     </button>
                     <div
-                      v-if="!conversations.length && activeTab === 'contacts'"
+                      v-if="!conversations.length"
                       class="ik-knock__list-empty"
                     >
                       <span v-if="isLoading">加载中…</span>
@@ -738,10 +792,39 @@ const handleConversationClick = (id: string) => {
                     </div>
                   </div>
 
+                  <!-- 通话：角色卡 / 会话融合列表 -->
+                  <KkCallSessionList
+                    v-else-if="activeTab === 'calls'"
+                    :items="kkSessions"
+                    :active-id="activeKkCallId"
+                    :is-loading="kkLoading"
+                    :error="kkError"
+                    @pick="handleKkCallPick"
+                  />
+
+                  <!-- 群聊（占位） -->
+                  <div
+                    v-else
+                    class="ik-knock__list"
+                    role="listbox"
+                  >
+                    <div class="ik-knock__list-empty">
+                      <span>暂未开放</span>
+                    </div>
+                  </div>
+
                 </aside>
 
-                <!-- 右栏：会话标题 + 内容 -->
-                <section class="ik-knock__main">
+                <!-- 右栏：通话 tab 时换成 KkCallPanel -->
+                <KkCallPanel
+                  v-if="activeTab === 'calls'"
+                  :session-id="activeKkCallId"
+                  :sessions="kkSessions"
+                  @session-materialized="handleKkSessionMaterialized"
+                />
+
+                <!-- 右栏：会话标题 + 内容（contacts/groups） -->
+                <section v-else class="ik-knock__main">
                   <header class="ik-knock__main-header">
                     <ChatBubbleLeftIcon
                       class="ik-knock__main-icon"
@@ -1470,8 +1553,15 @@ const handleConversationClick = (id: string) => {
   gap: 14px;
   overflow-y: auto;
   padding-right: 6px;
+  /* 底部留呼吸空间，避免最后一条消息贴着 composer 输入框 */
+  padding-bottom: 10px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  /* 滚到底后阻断滚动事件向父级冒泡，避免外层弹窗/页面跟随回弹抖动 */
+  overscroll-behavior: contain;
+  /* 关闭浏览器自动 scroll anchoring，避免拉到底时被悄悄回拉一小段，
+     "永远到不了最底"——我们已在 watch 里手动 scrollTop=scrollHeight */
+  overflow-anchor: none;
 }
 
 /* 切会话沉降态：消息已渲染但 scrollTop 还没校正到底前先隐藏，

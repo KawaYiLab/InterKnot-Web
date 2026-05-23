@@ -433,3 +433,47 @@ export interface DmWsEvent<TData = unknown> {
   data?: TData;
   at: string;
 }
+
+// ── KKCall（敲敲通话）相关 ───────────────────────────────────
+// 后端契约：`server/src/api/kk-call/*`
+// pseudo session id 形如 `pseudo:char:<characterDocumentId>`，
+// 用户首次发送消息时由后端 lazy 实质化为真 session。
+
+/** 角色卡公开信息（不含 providerConfigName 等内部字段） */
+export interface KkCallCharacter {
+  documentId: string;
+  name: string;
+  avatar: string | null;
+  tagline: string;
+  tags: string[];
+  displayOrder: number;
+}
+
+/** 左栏会话项：真 session 或 pseudo（尚未对话过的角色） */
+export interface KkCallSessionSummary {
+  /** 真 session 的 documentId 或 `pseudo:char:<characterDocumentId>` */
+  documentId: string;
+  isPseudo: boolean;
+  character: KkCallCharacter;
+  lastMessageAt: string | null;
+  lastPreview: string;
+}
+
+/** 单条消息 */
+export interface KkCallMessage {
+  documentId: string;
+  role: "user" | "assistant";
+  content: string;
+  pending: boolean;
+  errorReason: string | null;
+  createdAt: string;
+}
+
+/** SSE 事件类型（前端 → 用户视图）；不同 type 的 data 形态见对应 handler */
+export type KkCallSseEventType =
+  | "session.materialized"
+  | "message.user.created"
+  | "message.assistant.started"
+  | "message.assistant.delta"
+  | "message.assistant.done"
+  | "error";
