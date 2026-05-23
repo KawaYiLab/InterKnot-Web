@@ -19,7 +19,7 @@ const {
   updateUrl,
 } = useKnockKnockModal();
 const auth = useAuthStore();
-const discussionModal = useDiscussionModal();
+const postModal = usePostModal();
 
 /** 顶部 tab：通话记录（未来 AI 对话占位） / 私聊 / 群聊（未来占位） */
 type KnockTab = "calls" | "contacts" | "groups";
@@ -224,9 +224,9 @@ const shouldShowQuote = (msg: DmMessage): boolean => {
   return true;
 };
 
-const goDiscussion = (msg: DmMessage) => {
+const goPost = (msg: DmMessage) => {
   if (!msg.article?.documentId) return;
-  discussionModal.open(msg.article.documentId, {
+  postModal.open(msg.article.documentId, {
     coverAspectRatio: msg.article.coverAspectRatio ?? undefined,
     preview: { title: msg.article.title },
   });
@@ -811,12 +811,12 @@ const handleConversationClick = (id: string) => {
                               <template v-else>{{ entry.rendered }}</template>
                               <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
                             </div>
-                            <!-- 通知 quote 卡：点击跳到关联帖子（discussionModal） -->
+                            <!-- 通知 quote 卡：点击跳到关联帖子（postModal） -->
                             <button
                               v-if="entry.quote"
                               type="button"
                               class="ik-knock__msg-quote"
-                              @click="goDiscussion(entry.msg)"
+                              @click="goPost(entry.msg)"
                             >
                               <DocumentTextIcon
                                 class="ik-knock__msg-quote-icon"

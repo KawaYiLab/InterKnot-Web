@@ -1295,7 +1295,7 @@ if (import.meta.client && auth.isLogin) {
   padding: 12px 0;
 }
 
-/* ═════════ Right Panel (mirrors DiscussionOverlay border) ═════════ */
+/* ═════════ Right Panel (mirrors PostOverlay border) ═════════ */
 .ik-create-panel {
   display: flex;
   flex-direction: column;

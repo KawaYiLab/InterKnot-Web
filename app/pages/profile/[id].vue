@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
-import type { Avatar, BusinessCard, Discussion, Profile } from "~/types/entities";
+import type { Avatar, BusinessCard, Post, Profile } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 
 const route = useRoute();
 const router = useRouter();
 const api = useApi();
-const discussionModal = useDiscussionModal();
+const postModal = usePostModal();
 const pageDataLoading = usePageDataLoading();
 const message = useMessage();
 
@@ -29,7 +29,7 @@ const closeModal = () => {
   router.replace({ query: rest });
 };
 
-const articles = ref<Discussion[]>([]);
+const articles = ref<Post[]>([]);
 const articleCursor = ref("");
 const articleHasNext = ref(true);
 const articleLoading = ref(false);
@@ -59,14 +59,14 @@ const formatNumber = (n: number) => {
   return String(n);
 };
 
-const goArticle = (discussion: Discussion, event: MouseEvent) => {
+const goArticle = (post: Post, event: MouseEvent) => {
   event.preventDefault();
-  discussionModal.open(discussion.id, {
-    coverAspectRatio: getCoverAspectRatio(discussion.coverWidth, discussion.coverHeight),
+  postModal.open(post.id, {
+    coverAspectRatio: getCoverAspectRatio(post.coverWidth, post.coverHeight),
     preview: {
-      title: discussion.title,
-      author: discussion.author,
-      createdAt: discussion.createdAt,
+      title: post.title,
+      author: post.author,
+      createdAt: post.createdAt,
     },
   });
 };
@@ -430,8 +430,8 @@ onBeforeUnmount(() => {
             :key="item.id"
             class="ik-article-grid__item"
           >
-            <DiscussionCard
-              :discussion="item"
+            <PostCard
+              :post="item"
               :eager="index < 6"
               @open="goArticle"
             />
@@ -821,8 +821,8 @@ onBeforeUnmount(() => {
   border: 1px solid #1f1f1f;
 }
 .ik-article-grid__item {
-  --ik-discussion-card-radius: 16px;
-  --ik-discussion-card-inner-radius: 12px;
+  --ik-post-card-radius: 16px;
+  --ik-post-card-inner-radius: 12px;
   border-radius: 16px;
   overflow: hidden;
 }

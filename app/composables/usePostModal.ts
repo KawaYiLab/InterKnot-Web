@@ -1,43 +1,43 @@
 /**
- * useDiscussionModal – 路由级弹窗 composable
+ * usePostModal – 路由级弹窗 composable
  *
  * 从首页点击帖子时，通过 history.pushState 改变 URL（不走 Vue Router），
  * 帖子内容以全屏弹窗渲染，首页保持 mounted。
- * 直接访问 /discussion/:id 时走正常的页面路由（discussion/[id].vue）。
+ * 直接访问 /post/:id 时走正常的页面路由（post/[id].vue）。
  */
 import type { Author } from "~/types/entities";
 
-// 模块级单例，确保所有 useDiscussionModal() 实例共享同一份标记
+// 模块级单例，确保所有 usePostModal() 实例共享同一份标记
 let _historyPushed = false;
 let _savedTitle = "";
 
 const DEFAULT_TITLE = "绳网";
-/** 唯一 token：所有 useDiscussionModal 实例共享，确保 open/close 配对 */
-const SCROLL_LOCK_TOKEN = Symbol("discussion-modal");
+/** 唯一 token：所有 usePostModal 实例共享，确保 open/close 配对 */
+const SCROLL_LOCK_TOKEN = Symbol("post-modal");
 
-export interface DiscussionPreview {
+export interface PostPreview {
   title?: string;
   author?: Author;
   createdAt?: string;
 }
 
-export function useDiscussionModal() {
-  const isOpen = useState("dm:open", () => false);
-  const discussionId = useState<string | null>("dm:id", () => null);
-  const coverHint = useState<number | null>("dm:coverHint", () => null);
-  const preview = useState<DiscussionPreview | null>("dm:preview", () => null);
+export function usePostModal() {
+  const isOpen = useState("pm:open", () => false);
+  const postId = useState<string | null>("pm:id", () => null);
+  const coverHint = useState<number | null>("pm:coverHint", () => null);
+  const preview = useState<PostPreview | null>("pm:preview", () => null);
   const { acquire, release } = useBodyScrollLock();
 
   function open(
     id: string,
     opts?: {
       coverAspectRatio?: number;
-      preview?: DiscussionPreview;
+      preview?: PostPreview;
     },
   ) {
     if (!import.meta.client) return;
 
-    discussionId.value = id;
+    postId.value = id;
     coverHint.value = opts?.coverAspectRatio ?? null;
     preview.value = opts?.preview ?? null;
     isOpen.value = true;
@@ -46,9 +46,9 @@ export function useDiscussionModal() {
     _savedTitle = document.title;
     acquire(SCROLL_LOCK_TOKEN);
     window.history.pushState(
-      { __discussionModal: true, discussionId: id },
+      { __postModal: true, postId: id },
       "",
-      `/discussion/${id}`,
+      `/post/${id}`,
     );
   }
 
@@ -69,7 +69,7 @@ export function useDiscussionModal() {
    */
   function teardown() {
     isOpen.value = false;
-    // discussionId 保留到离场动画结束后再清理
+    // postId 保留到离场动画结束后再清理
     if (import.meta.client) {
       // 只 release 自己的锁；如果还有别的 overlay（如 KnockKnockModal）持有，
       // body.overflow 保持 hidden，避免下方页面意外可滚。
@@ -79,10 +79,10 @@ export function useDiscussionModal() {
   }
 
   /**
-   * 离场动画结束后清理 discussionId（由 Transition @after-leave 调用）
+   * 离场动画结束后清理 postId（由 Transition @after-leave 调用）
    */
   function clearAfterLeave() {
-    discussionId.value = null;
+    postId.value = null;
     preview.value = null;
   }
 
@@ -92,7 +92,7 @@ export function useDiscussionModal() {
   function handlePopState() {
     if (isOpen.value) {
       // 如果是回退到自身的 history 条目（如从敲敲弹窗返回帖子弹窗），不关闭
-      if (window.history.state?.__discussionModal) return;
+      if (window.history.state?.__postModal) return;
       _historyPushed = false;
       teardown();
     }
@@ -106,7 +106,7 @@ export function useDiscussionModal() {
 
   return {
     isOpen: readonly(isOpen),
-    discussionId: readonly(discussionId),
+    postId: readonly(postId),
     coverHint: readonly(coverHint),
     preview: readonly(preview),
     open,

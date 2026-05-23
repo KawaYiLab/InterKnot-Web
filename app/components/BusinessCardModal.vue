@@ -344,7 +344,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* ── Overlay (reuse discussion overlay pattern) ── */
+/* ── Overlay (reuse post overlay pattern) ── */
 .ik-overlay {
   position: fixed;
   inset: 0;

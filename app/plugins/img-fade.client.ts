@@ -1,7 +1,7 @@
 /**
  * Global image fade-in plugin.
  *
- * All <img> (except DiscussionCard covers which have their own system)
+ * All <img> (except PostCard covers which have their own system)
  * start at opacity 0 via CSS and get revealed with a 280ms transition
  * once they finish loading.
  */

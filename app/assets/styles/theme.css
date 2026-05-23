@@ -26,45 +26,45 @@
   --ik-cursor-move: url("/cursors/移动.png") 16 16, move;
 
   /* ── Card – structure ───────────────────────── */
-  --ik-discussion-card-radius: 24px 24px 0 24px;
-  --ik-discussion-card-inner-radius: 20px 20px 0 20px;
-  --ik-discussion-card-padding: 4px;
-  --ik-discussion-card-body-gap: 8px;
-  --ik-discussion-card-body-padding: 0 8px 12px;
+  --ik-post-card-radius: 24px 24px 0 24px;
+  --ik-post-card-inner-radius: 20px 20px 0 20px;
+  --ik-post-card-padding: 4px;
+  --ik-post-card-body-gap: 8px;
+  --ik-post-card-body-padding: 0 8px 12px;
 
   /* ── Card – colors ──────────────────────────── */
-  --ik-discussion-card-outer-bg: #000;
-  --ik-discussion-card-inner-bg: #222;
-  --ik-discussion-card-cover-bg: #151515;
-  --ik-discussion-card-placeholder-bg: #2a2a2a;
-  --ik-discussion-card-divider-bg: #3a3a3a;
-  --ik-discussion-card-hover-bg: var(--ik-primary);
+  --ik-post-card-outer-bg: #000;
+  --ik-post-card-inner-bg: #222;
+  --ik-post-card-cover-bg: #151515;
+  --ik-post-card-placeholder-bg: #2a2a2a;
+  --ik-post-card-divider-bg: #3a3a3a;
+  --ik-post-card-hover-bg: var(--ik-primary);
 
   /* ── Card – cover ───────────────────────────── */
-  --ik-discussion-card-cover-aspect-ratio: 1.576;
+  --ik-post-card-cover-aspect-ratio: 1.576;
 
   /* ── Card – views overlay ───────────────────── */
-  --ik-discussion-card-views-font-size: 14px;
-  --ik-discussion-card-views-icon-size: 22px;
+  --ik-post-card-views-font-size: 14px;
+  --ik-post-card-views-icon-size: 22px;
 
   /* ── Card – avatar ──────────────────────────── */
-  --ik-discussion-card-avatar-size: 54px;
-  --ik-discussion-card-avatar-padding: 2px;
-  --ik-discussion-card-avatar-offset: -28px;
-  --ik-discussion-card-avatar-bg: #1b1b1b;
+  --ik-post-card-avatar-size: 54px;
+  --ik-post-card-avatar-padding: 2px;
+  --ik-post-card-avatar-offset: -28px;
+  --ik-post-card-avatar-bg: #1b1b1b;
 
   /* ── Card – author ──────────────────────────── */
-  --ik-discussion-card-author-offset: 4px;
-  --ik-discussion-card-author-block-width: calc(100% - 58px);
-  --ik-discussion-card-author-min-height: 32px;
-  --ik-discussion-card-author-padding-left: 8px;
-  --ik-discussion-card-author-name-size: 15px;
-  --ik-discussion-card-author-name-color: #fff;
+  --ik-post-card-author-offset: 4px;
+  --ik-post-card-author-block-width: calc(100% - 58px);
+  --ik-post-card-author-min-height: 32px;
+  --ik-post-card-author-padding-left: 8px;
+  --ik-post-card-author-name-size: 15px;
+  --ik-post-card-author-name-color: #fff;
 
   /* ── Card – title ───────────────────────────── */
-  --ik-discussion-card-title-size: 17px;
-  --ik-discussion-card-title-color: #2196f3;
-  --ik-discussion-card-title-read-color: #9e9e9e;
+  --ik-post-card-title-size: 17px;
+  --ik-post-card-title-color: #2196f3;
+  --ik-post-card-title-read-color: #9e9e9e;
 }
 
 * {
@@ -320,12 +320,12 @@ img:not(.ik-card__cover).ik-img-revealed {
    ZZZ Overlay Modal Transitions —— 全局共享
    ───────────────────────────────────────────────
    适用：所有用 <Transition name="ik-overlay"> 包裹、根类名为 .ik-overlay
-   的弹窗（DiscussionOverlay / KnockKnockModal / LoginDialog /
+   的弹窗（PostOverlay / KnockKnockModal / LoginDialog /
    ConfirmDialog / ProfileSettingsModal / PinnedArticlesModal /
    BusinessCardModal / AvatarModal …）
 
    设计参考 Flutter showZZZDialog，针对 web 端调优。详见
-   DiscussionOverlay.vue 顶部注释。
+   PostOverlay.vue 顶部注释。
 
    - 时长统一 200ms（enter / leave 同长）
    - 三层（背景 / stripe / dialog）共用同一条曲线同步进退：

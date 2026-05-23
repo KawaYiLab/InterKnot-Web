@@ -5,19 +5,19 @@ const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import type { Discussion } from "~/types/entities";
+import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 
 const props = defineProps<{
-  discussion: Discussion;
+  post: Post;
   eager?: boolean;
 }>();
 
 const emit = defineEmits<{
-  open: [discussion: Discussion, event: MouseEvent];
+  open: [post: Post, event: MouseEvent];
 }>();
 
-const authorName = computed(() => props.discussion.author?.name || "未知作者");
+const authorName = computed(() => props.post.author?.name || "未知作者");
 
 const coverSrc = ref(DEFAULT_COVER_IMAGE);
 const coverImageLoaded = ref(false);
@@ -27,10 +27,10 @@ const cardRef = ref<HTMLElement | null>(null);
 const coverImgRef = ref<HTMLImageElement | null>(null);
 
 const hasBackendCoverSize = computed(() =>
-  typeof props.discussion.coverWidth === "number" &&
-  typeof props.discussion.coverHeight === "number" &&
-  props.discussion.coverWidth > 0 &&
-  props.discussion.coverHeight > 0,
+  typeof props.post.coverWidth === "number" &&
+  typeof props.post.coverHeight === "number" &&
+  props.post.coverWidth > 0 &&
+  props.post.coverHeight > 0,
 );
 
 const coverAspectRatio = computed(() => {
@@ -39,8 +39,8 @@ const coverAspectRatio = computed(() => {
   // 仅当后端完全没有尺寸信息时，才回落到默认占位图的原生比例。
   if (hasBackendCoverSize.value) {
     return getNormalizedCoverAspectRatio(
-      props.discussion.coverWidth,
-      props.discussion.coverHeight,
+      props.post.coverWidth,
+      props.post.coverHeight,
     );
   }
   return FALLBACK_COVER_ASPECT_RATIO;
@@ -49,7 +49,7 @@ const coverAspectRatio = computed(() => {
 const coverReady = computed(() => coverImageLoaded.value);
 
 watch(
-  () => [props.discussion.id, props.discussion.cover] as const,
+  () => [props.post.id, props.post.cover] as const,
   ([newId, newCover], oldValue) => {
     if (oldValue && newId === oldValue[0] && newCover === oldValue[1]) return;
     const cover = newCover?.trim();
@@ -67,9 +67,9 @@ onMounted(() => {
 });
 
 watch(
-  () => [props.discussion.id, props.discussion.author?.avatar] as const,
+  () => [props.post.id, props.post.author?.avatar] as const,
   () => {
-    avatarSrc.value = props.discussion.author?.avatar || DEFAULT_AVATAR_IMAGE;
+    avatarSrc.value = props.post.author?.avatar || DEFAULT_AVATAR_IMAGE;
   },
   { immediate: true },
 );
@@ -94,7 +94,7 @@ const onAvatarError = () => {
 };
 
 const handleOpen = (e: MouseEvent) => {
-  emit("open", props.discussion, e);
+  emit("open", props.post, e);
 };
 
 </script>
@@ -102,7 +102,7 @@ const handleOpen = (e: MouseEvent) => {
 <template>
   <article ref="cardRef" class="ik-card" @click.capture="handleOpen">
     <NuxtLink
-      :to="`/discussion/${discussion.id}`"
+      :to="`/post/${post.id}`"
       class="ik-card__link"
       no-prefetch
     >
@@ -111,7 +111,7 @@ const handleOpen = (e: MouseEvent) => {
           <img
             ref="coverImgRef"
             :src="coverSrc"
-            :alt="coverIsFallback ? 'default cover' : discussion.title"
+            :alt="coverIsFallback ? 'default cover' : post.title"
             class="ik-card__cover"
             :class="{
               'ik-card__cover--fallback': coverIsFallback,
@@ -139,13 +139,13 @@ const handleOpen = (e: MouseEvent) => {
             />
             <circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8" />
           </svg>
-          <span>{{ discussion.views || 0 }}</span>
+          <span>{{ post.views || 0 }}</span>
         </div>
       </div>
 
       <div class="ik-card__body">
         <div class="ik-card__author-row">
-          <UserHoverCard :author-id="discussion.author?.documentId">
+          <UserHoverCard :author-id="post.author?.documentId">
             <div class="ik-card__avatar-shell">
               <img
                 :src="avatarSrc"
@@ -158,15 +158,15 @@ const handleOpen = (e: MouseEvent) => {
             </div>
           </UserHoverCard>
           <div class="ik-card__author-block">
-            <UserHoverCard :author-id="discussion.author?.documentId">
+            <UserHoverCard :author-id="post.author?.documentId">
               <p class="ik-card__author-name">{{ authorName }}</p>
             </UserHoverCard>
             <div class="ik-card__author-divider" />
           </div>
         </div>
 
-        <h3 class="ik-card__title" :class="{ 'ik-card__title--read': discussion.isRead }">
-          {{ discussion.title }}
+        <h3 class="ik-card__title" :class="{ 'ik-card__title--read': post.isRead }">
+          {{ post.title }}
         </h3>
       </div>
     </NuxtLink>
@@ -175,22 +175,22 @@ const handleOpen = (e: MouseEvent) => {
 
 <style scoped>
 .ik-card {
-  border-radius: var(--ik-discussion-card-radius);
-  background: var(--ik-discussion-card-outer-bg);
-  padding: var(--ik-discussion-card-padding);
+  border-radius: var(--ik-post-card-radius);
+  background: var(--ik-post-card-outer-bg);
+  padding: var(--ik-post-card-padding);
   overflow: hidden;
   transition: background-color 180ms ease;
   contain: layout style paint;
 }
 
 .ik-card:hover {
-  background: var(--ik-discussion-card-hover-bg);
+  background: var(--ik-post-card-hover-bg);
 }
 
 .ik-card__link {
   display: block;
-  border-radius: var(--ik-discussion-card-inner-radius);
-  background: var(--ik-discussion-card-inner-bg);
+  border-radius: var(--ik-post-card-inner-radius);
+  background: var(--ik-post-card-inner-bg);
   overflow: hidden;
   outline: none;
 }
@@ -202,7 +202,7 @@ const handleOpen = (e: MouseEvent) => {
 
 .ik-card__cover-frame {
   width: 100%;
-  background: var(--ik-discussion-card-cover-bg);
+  background: var(--ik-post-card-cover-bg);
 }
 
 .ik-card__cover {
@@ -231,7 +231,7 @@ const handleOpen = (e: MouseEvent) => {
 /* fallback 时 frame 已切换为占位图原生比例，
    占位图天然填满 frame，沿用 object-fit: cover 即可 */
 .ik-card__cover--fallback {
-  background: var(--ik-discussion-card-cover-bg);
+  background: var(--ik-post-card-cover-bg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -248,7 +248,7 @@ const handleOpen = (e: MouseEvent) => {
   align-items: center;
   gap: 5px;
   color: #fff;
-  font-size: var(--ik-discussion-card-views-font-size);
+  font-size: var(--ik-post-card-views-font-size);
   font-weight: 700;
   text-shadow: 
     0 0 4px rgba(0, 0, 0, 0.8),
@@ -256,15 +256,15 @@ const handleOpen = (e: MouseEvent) => {
 }
 
 .ik-card__views-icon {
-  width: var(--ik-discussion-card-views-icon-size);
-  height: var(--ik-discussion-card-views-icon-size);
+  width: var(--ik-post-card-views-icon-size);
+  height: var(--ik-post-card-views-icon-size);
 }
 
 .ik-card__body {
   display: flex;
   flex-direction: column;
-  gap: var(--ik-discussion-card-body-gap);
-  padding: var(--ik-discussion-card-body-padding);
+  gap: var(--ik-post-card-body-gap);
+  padding: var(--ik-post-card-body-padding);
 }
 
 .ik-card__author-row {
@@ -275,12 +275,12 @@ const handleOpen = (e: MouseEvent) => {
 
 .ik-card__avatar-shell {
   position: relative;
-  margin-top: var(--ik-discussion-card-avatar-offset);
-  width: var(--ik-discussion-card-avatar-size);
-  height: var(--ik-discussion-card-avatar-size);
-  padding: var(--ik-discussion-card-avatar-padding);
+  margin-top: var(--ik-post-card-avatar-offset);
+  width: var(--ik-post-card-avatar-size);
+  height: var(--ik-post-card-avatar-size);
+  padding: var(--ik-post-card-avatar-padding);
   border-radius: 999px;
-  background: var(--ik-discussion-card-inner-bg);
+  background: var(--ik-post-card-inner-bg);
 }
 
 .ik-card__avatar-image {
@@ -288,24 +288,24 @@ const handleOpen = (e: MouseEvent) => {
   height: 100%;
   border-radius: 999px;
   object-fit: cover;
-  background: var(--ik-discussion-card-avatar-bg);
+  background: var(--ik-post-card-avatar-bg);
 }
 
 .ik-card__author-block {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: var(--ik-discussion-card-author-min-height);
-  padding-left: var(--ik-discussion-card-author-padding-left);
-  margin-left: var(--ik-discussion-card-author-offset);
-  width: var(--ik-discussion-card-author-block-width);
+  min-height: var(--ik-post-card-author-min-height);
+  padding-left: var(--ik-post-card-author-padding-left);
+  margin-left: var(--ik-post-card-author-offset);
+  width: var(--ik-post-card-author-block-width);
 }
 
 .ik-card__author-name {
   margin: 4px 0 4px;
-  font-size: var(--ik-discussion-card-author-name-size);
+  font-size: var(--ik-post-card-author-name-size);
   font-weight: 700;
-  color: var(--ik-discussion-card-author-name-color);
+  color: var(--ik-post-card-author-name-color);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -314,14 +314,14 @@ const handleOpen = (e: MouseEvent) => {
 .ik-card__author-divider {
   width: 100%;
   height: 1px;
-  background: var(--ik-discussion-card-divider-bg);
+  background: var(--ik-post-card-divider-bg);
 }
 
 .ik-card__title {
   margin: 0;
-  font-size: var(--ik-discussion-card-title-size);
+  font-size: var(--ik-post-card-title-size);
   line-height: 1.25;
-  color: var(--ik-discussion-card-title-color);
+  color: var(--ik-post-card-title-color);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -332,7 +332,7 @@ const handleOpen = (e: MouseEvent) => {
 }
 
 .ik-card__title--read {
-  color: var(--ik-discussion-card-title-read-color);
+  color: var(--ik-post-card-title-read-color);
 }
 
 </style>

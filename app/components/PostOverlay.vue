@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMessage } from "zenless-ui";
-import type { Author, Comment, Discussion } from "~/types/entities";
-import type { DiscussionPreview } from "~/composables/useDiscussionModal";
+import type { Author, Comment, Post } from "~/types/entities";
+import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
@@ -15,9 +15,9 @@ const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useLightGallery();
 
 const props = defineProps<{
-  discussionId: string;
+  postId: string;
   coverHint?: number | null;
-  preview?: DiscussionPreview | null;
+  preview?: PostPreview | null;
 }>();
 
 const emit = defineEmits<{
@@ -26,19 +26,19 @@ const emit = defineEmits<{
 
 const api = useApi();
 const auth = useAuthStore();
-const discussionModal = useDiscussionModal();
+const postModal = usePostModal();
 const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const message = useMessage();
 
-const discussion = ref<Discussion | null>(null);
+const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
 
 // 弹窗刚打开时优先展示首页卡片传入的 preview，等接口数据回来后无缝替换。
-const headerAuthor = computed<Author | null>(() => discussion.value?.author ?? props.preview?.author ?? null);
-const headerCreatedAt = computed<string | undefined>(() => discussion.value?.createdAt ?? props.preview?.createdAt);
-const headerTitle = computed<string>(() => discussion.value?.title ?? props.preview?.title ?? "");
+const headerAuthor = computed<Author | null>(() => post.value?.author ?? props.preview?.author ?? null);
+const headerCreatedAt = computed<string | undefined>(() => post.value?.createdAt ?? props.preview?.createdAt);
+const headerTitle = computed<string>(() => post.value?.title ?? props.preview?.title ?? "");
 
 const comments = ref<Comment[]>([]);
 const commentsCursor = ref("");
@@ -56,7 +56,7 @@ const commentAnonymous = ref(false);
 const commentTextareaRef = ref<HTMLTextAreaElement | null>(null);
 
 /**
- * 评论编辑器的 @ 提及处理。逻辑与路由页 pages/discussion/[id].vue 完全对称——
+ * 评论编辑器的 @ 提及处理。逻辑与路由页 pages/post/[id].vue 完全对称——
  * 弹窗模式只是同一编辑器的另一种呈现，没有理由维护两份分支。
  */
 const mention = useMentionInput({
@@ -66,11 +66,11 @@ const mention = useMentionInput({
 });
 
 const scrollRef = ref<HTMLElement | null>(null);
-const covers = computed(() => discussion.value?.covers ?? []);
+const covers = computed(() => post.value?.covers ?? []);
 const hasCovers = computed(() => covers.value.length > 0);
 const isCommentEditorActive = computed(() => commentInputFocused.value);
-const discussionLikeCount = computed(() => discussion.value?.likesCount ?? 0);
-const discussionCommentCount = computed(() => discussion.value?.commentsCount ?? comments.value.length);
+const postLikeCount = computed(() => post.value?.likesCount ?? 0);
+const postCommentCount = computed(() => post.value?.commentsCount ?? comments.value.length);
 
 const syncCommentInputHeight = async () => {
   await nextTick();
@@ -279,7 +279,7 @@ const onCoverClickCapture = (e: MouseEvent) => {
 };
 
 // 切换帖子时重置封面索引并将容器滚回起点
-watch(() => props.discussionId, () => {
+watch(() => props.postId, () => {
   coverIndex.value = 0;
   resetLoadWindow();
   loadedCoverImages.value = new Set();
@@ -296,11 +296,11 @@ watch(() => covers.value.length, (n) => {
 });
 
 /* ── 数据加载 ──────────────────────────────────── */
-const loadDiscussion = async () => {
+const loadPost = async () => {
   try {
-    discussion.value = await api.getDiscussion(props.discussionId);
-    if (discussion.value?.title) {
-      discussionModal.setTitle(discussion.value.title);
+    post.value = await api.getPost(props.postId);
+    if (post.value?.title) {
+      postModal.setTitle(post.value.title);
     }
   } catch (err) {
     loadError.value = true;
@@ -312,7 +312,7 @@ const loadComments = async () => {
   if (commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
   try {
-    const page = await api.getComments(props.discussionId, commentsCursor.value);
+    const page = await api.getComments(props.postId, commentsCursor.value);
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
@@ -324,11 +324,11 @@ const loadComments = async () => {
 };
 
 const recordView = async () => {
-  if (!discussion.value?.id) return;
+  if (!post.value?.id) return;
   try {
-    const views = await api.recordArticleView(discussion.value.id);
+    const views = await api.recordArticleView(post.value.id);
     if (typeof views === "number") {
-      discussion.value.views = views;
+      post.value.views = views;
     }
   } catch {
   }
@@ -348,8 +348,8 @@ const sendComment = async () => {
     // 没有任何 mention 时等价于原 newComment.value
     const serialized = mention.serializeForSend().trim();
     const parentId = replyTarget.value?.id;
-    const res = await api.addDiscussionComment({
-      discussionId: props.discussionId,
+    const res = await api.addPostComment({
+      postId: props.postId,
       content: serialized,
       authorDocumentId: auth.user?.authorId,
       parentId,
@@ -399,8 +399,8 @@ const sendComment = async () => {
     commentInputFocused.value = false;
     replyTarget.value = null;
     syncCommentInputHeight();
-    if (discussion.value) {
-      discussion.value.commentsCount = (discussion.value.commentsCount ?? 0) + 1;
+    if (post.value) {
+      post.value.commentsCount = (post.value.commentsCount ?? 0) + 1;
     }
     message.success(isReply ? "回复发送成功" : "评论发送成功");
   } catch (err) {
@@ -411,15 +411,15 @@ const sendComment = async () => {
 };
 
 const likeArticle = async () => {
-  if (!discussion.value) return;
+  if (!post.value) return;
   if (!auth.isLogin) {
     loginDialog.open();
     return;
   }
   try {
-    const result = await api.toggleLike("article", discussion.value.id);
-    discussion.value.liked = result.liked;
-    discussion.value.likesCount = result.likesCount;
+    const result = await api.toggleLike("article", post.value.id);
+    post.value.liked = result.liked;
+    post.value.likesCount = result.likesCount;
     message.success(result.liked ? "已点赞" : "已取消点赞");
   } catch (err) {
     message.error(resolveErrorMessage(err, "点赞失败"));
@@ -477,19 +477,19 @@ const startReplyToReply = (reply: Comment["replies"][number], parentComment: Com
 };
 
 const isOwner = computed(() => {
-  if (!auth.isLogin || !discussion.value?.author?.documentId) return false;
-  return auth.user?.authorId === discussion.value.author.documentId;
+  if (!auth.isLogin || !post.value?.author?.documentId) return false;
+  return auth.user?.authorId === post.value.author.documentId;
 });
 
 const deletingArticle = ref(false);
 
 const handleDeleteArticle = async () => {
-  if (!discussion.value?.id) return;
+  if (!post.value?.id) return;
   const ok = await confirmDialog.open({ title: "删除帖子", message: "确定删除这篇帖子吗？此操作不可恢复。", confirmText: "删除", danger: true });
   if (!ok) return;
   deletingArticle.value = true;
   try {
-    const deletedId = discussion.value.id;
+    const deletedId = post.value.id;
     await api.deleteArticle(deletedId);
     message.success("帖子已删除");
     window.dispatchEvent(new CustomEvent("ik:article-deleted", { detail: deletedId }));
@@ -539,8 +539,8 @@ const handleDeleteComment = async (comment: Comment) => {
   try {
     await api.deleteComment(comment.id);
     comments.value = comments.value.filter((c) => c.id !== comment.id);
-    if (discussion.value) {
-      discussion.value.commentsCount = Math.max(0, (discussion.value.commentsCount ?? 0) - 1 - (comment.replies?.length ?? 0));
+    if (post.value) {
+      post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1 - (comment.replies?.length ?? 0));
     }
     message.success("评论已删除");
   } catch (err) {
@@ -554,8 +554,8 @@ const handleDeleteReply = async (reply: Comment["replies"][number], parentCommen
   try {
     await api.deleteComment(reply.id);
     parentComment.replies = parentComment.replies.filter((r) => r.id !== reply.id);
-    if (discussion.value) {
-      discussion.value.commentsCount = Math.max(0, (discussion.value.commentsCount ?? 0) - 1);
+    if (post.value) {
+      post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1);
     }
     message.success("回复已删除");
   } catch (err) {
@@ -584,9 +584,9 @@ const onKeyDown = (e: KeyboardEvent) => {
   }
 };
 
-/* ── 当 discussionId 变化时重新加载 ─────────────── */
+/* ── 当 postId 变化时重新加载 ─────────────── */
 const resetAndLoad = async () => {
-  discussion.value = null;
+  post.value = null;
   comments.value = [];
   commentsCursor.value = "";
   commentsHasNext.value = true;
@@ -598,7 +598,7 @@ const resetAndLoad = async () => {
   if (scrollRef.value) {
     scrollRef.value.scrollTop = 0;
   }
-  await loadDiscussion();
+  await loadPost();
   // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
   void recordView();
@@ -606,7 +606,7 @@ const resetAndLoad = async () => {
 };
 
 watch(
-  () => props.discussionId,
+  () => props.postId,
   (newId, oldId) => {
     if (newId && newId !== oldId) {
       resetAndLoad();
@@ -620,7 +620,7 @@ watch(newComment, () => {
 
 /**
  * 把真实 textarea 拿到并接上 mention 事件钩子。
- * 与 pages/discussion/[id].vue 完全对称。
+ * 与 pages/post/[id].vue 完全对称。
  */
 let teardownMentionListeners: (() => void) | null = null;
 const attachMentionToTextarea = () => {
@@ -660,7 +660,7 @@ onMounted(async () => {
   // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
   // 让只看文字、不点图的用户不必下载这套资源。
   loading.value = true;
-  await loadDiscussion();
+  await loadPost();
   // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
   void recordView();
@@ -782,7 +782,7 @@ onBeforeUnmount(() => {
               加载失败，请关闭后重试
             </div>
 
-            <template v-else-if="discussion">
+            <template v-else-if="post">
               <!-- 桌面端：双栏布局 -->
               <div class="ik-dialog__body">
                 <!-- 左栏：封面 + 正文 -->
@@ -798,7 +798,7 @@ onBeforeUnmount(() => {
                         <template v-if="!hasCovers || covers.length === 1">
                           <img
                             :src="firstCover?.url || DEFAULT_COVER_IMAGE"
-                            :alt="hasCovers ? discussion.title : 'default cover'"
+                            :alt="hasCovers ? post.title : 'default cover'"
                             class="ik-dialog__cover"
                             decoding="async"
                             @load="onCoverImageLoad(0)"
@@ -832,7 +832,7 @@ onBeforeUnmount(() => {
                             >
                               <img
                                 :src="isCoverNearby(i) ? c.url : undefined"
-                                :alt="`${discussion.title} - ${i + 1}`"
+                                :alt="`${post.title} - ${i + 1}`"
                                 class="ik-dialog__cover"
                                 :loading="i === 0 ? 'eager' : 'lazy'"
                                 decoding="async"
@@ -890,16 +890,16 @@ onBeforeUnmount(() => {
 
                     <!-- 正文 -->
                     <div class="ik-dialog__detail">
-                      <h1 class="ik-dialog__title">{{ discussion.title }}</h1>
+                      <h1 class="ik-dialog__title">{{ post.title }}</h1>
                       <div
-                        v-if="discussion.body"
+                        v-if="post.body"
                         class="ik-dialog__content"
-                        v-html="sanitizeBodyHtml(discussion.body)"
+                        v-html="sanitizeBodyHtml(post.body)"
                       ></div>
                       <div
-                        v-else-if="discussion.bodyText"
+                        v-else-if="post.bodyText"
                         class="ik-dialog__content"
-                        v-html="formatBodyText(discussion.bodyText)"
+                        v-html="formatBodyText(post.bodyText)"
                       ></div>
                       <p v-else class="ik-dialog__content" style="color: #808080">
                         暂无正文内容
@@ -986,12 +986,12 @@ onBeforeUnmount(() => {
                             <button
                               type="button"
                               class="ik-engage-bar__action"
-                              :class="{ 'ik-engage-bar__action--active': discussion.liked }"
+                              :class="{ 'ik-engage-bar__action--active': post.liked }"
                               @click="likeArticle"
                             >
-                              <HandThumbUpIconSolid v-if="discussion.liked" class="ik-engage-icon" aria-hidden="true" />
+                              <HandThumbUpIconSolid v-if="post.liked" class="ik-engage-icon" aria-hidden="true" />
                               <HandThumbUpIcon v-else class="ik-engage-icon" aria-hidden="true" />
-                              <span>{{ discussionLikeCount > 0 ? discussionLikeCount : '点赞' }}</span>
+                              <span>{{ postLikeCount > 0 ? postLikeCount : '点赞' }}</span>
                             </button>
                             <button type="button" class="ik-engage-bar__action" @click="showCollectComingSoon">
                               <StarIcon class="ik-engage-icon" aria-hidden="true" />
@@ -999,7 +999,7 @@ onBeforeUnmount(() => {
                             </button>
                             <button type="button" class="ik-engage-bar__action" @click="focusCommentInput">
                               <ChatBubbleLeftIcon class="ik-engage-icon" aria-hidden="true" />
-                              <span>{{ discussionCommentCount }}</span>
+                              <span>{{ postCommentCount }}</span>
                             </button>
                             <button
                               v-if="isOwner"
@@ -1083,8 +1083,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* ═══════════════════════════════════════════════
-   ZZZ-Style Discussion Overlay
-   Matches Flutter: showZZZDialog + DiscussionPage
+   ZZZ-Style Post Overlay
+   Matches Flutter: showZZZDialog + PostPage
    ═══════════════════════════════════════════════ */
 
 /* ── Backdrop ──────────────────────────────────── */

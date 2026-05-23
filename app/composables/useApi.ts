@@ -8,7 +8,7 @@ import type {
   BusinessCardType,
   Comment,
   DraftArticle,
-  Discussion,
+  Post,
   LikeToggleResult,
   Profile,
   SignedUploadResult,
@@ -40,10 +40,10 @@ const qk = {
     searchAll: ["articles", "search"] as QueryKey,
     detail: (id: string) => ["articles", "detail", id] as QueryKey,
     detailAll: ["articles", "detail"] as QueryKey,
-    comments: (discussionId: string, start: number, limit: number) =>
-      ["articles", "comments", discussionId, start, limit] as QueryKey,
-    commentsOf: (discussionId: string) =>
-      ["articles", "comments", discussionId] as QueryKey,
+    comments: (postId: string, start: number, limit: number) =>
+      ["articles", "comments", postId, start, limit] as QueryKey,
+    commentsOf: (postId: string) =>
+      ["articles", "comments", postId] as QueryKey,
   },
   profile: {
     detail: (documentId: string) => ["profile", documentId] as QueryKey,
@@ -80,8 +80,8 @@ interface SendResetCodeResult {
   cooldown: number;
 }
 
-interface DiscussionCommentPayload {
-  discussionId: string;
+interface PostCommentPayload {
+  postId: string;
   content: string;
   parentId?: string;
   authorDocumentId?: string;
@@ -279,7 +279,7 @@ function toAuthor(raw: unknown, apiBaseUrl: string): Author {
   };
 }
 
-function toDiscussion(raw: unknown, apiBaseUrl: string): Discussion {
+function toPost(raw: unknown, apiBaseUrl: string): Post {
   const data = (raw || {}) as Record<string, unknown>;
 
   let covers: MediaMeta[];
@@ -550,11 +550,11 @@ export function useApi() {
     );
   };
 
-  const mergeReadStatus = async (discussions: Discussion[]) => {
-    if (!import.meta.client || !discussions.length) return;
+  const mergeReadStatus = async (posts: Post[]) => {
+    if (!import.meta.client || !posts.length) return;
     const userId = localStorage.getItem("user_id");
     if (!userId) return;
-    const ids = discussions.map((d) => d.id);
+    const ids = posts.map((d) => d.id);
     try {
       const res = await $api("/api/article-reads/batch", {
         method: "POST",
@@ -568,7 +568,7 @@ export function useApi() {
           readSet.add(item.articleDocumentId);
         }
       }
-      for (const d of discussions) {
+      for (const d of posts) {
         if (readSet.has(d.id)) d.isRead = true;
       }
     } catch {
@@ -579,7 +579,7 @@ export function useApi() {
   const searchArticles = async (
     query: string,
     endCur = "",
-  ): Promise<Pagination<Discussion>> => {
+  ): Promise<Pagination<Post>> => {
     const start = parseStart(endCur);
     return cachedRead(
       qk.articles.search(query, start, DEFAULT_PAGE_SIZE),
@@ -594,7 +594,7 @@ export function useApi() {
         });
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
-        const page = buildPagination(data.map((item) => toDiscussion(item, apiBaseUrl)), start, meta);
+        const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
         await mergeReadStatus(page.nodes);
         return page;
       },
@@ -611,23 +611,23 @@ export function useApi() {
   const peekArticles = (
     query: string,
     endCur = "",
-  ): Pagination<Discussion> | undefined => {
+  ): Pagination<Post> | undefined => {
     const qc = $queryClient as QueryClient | undefined;
     if (!qc) return undefined;
     const start = parseStart(endCur);
-    return qc.getQueryData<Pagination<Discussion>>(
+    return qc.getQueryData<Pagination<Post>>(
       qk.articles.search(query, start, DEFAULT_PAGE_SIZE),
     );
   };
 
-  const getDiscussion = async (id: string): Promise<Discussion> => {
+  const getPost = async (id: string): Promise<Post> => {
     return cachedRead(
       qk.articles.detail(id),
       async () => {
         const response = await $api(`/api/articles/detail/${id}`);
-        const discussion = toDiscussion(unwrapData(response), apiBaseUrl);
-        await mergeReadStatus([discussion]);
-        return discussion;
+        const post = toPost(unwrapData(response), apiBaseUrl);
+        await mergeReadStatus([post]);
+        return post;
       },
       STALE_DETAIL,
     );
@@ -645,16 +645,16 @@ export function useApi() {
   };
 
   const getComments = async (
-    discussionId: string,
+    postId: string,
     endCur = "",
   ): Promise<Pagination<Comment>> => {
     const start = parseStart(endCur);
     return cachedRead(
-      qk.articles.comments(discussionId, start, DEFAULT_PAGE_SIZE),
+      qk.articles.comments(postId, start, DEFAULT_PAGE_SIZE),
       async () => {
         const response = await $api("/api/comments/list", {
           query: {
-            article: discussionId,
+            article: postId,
             start: String(start),
             limit: String(DEFAULT_PAGE_SIZE),
           },
@@ -667,18 +667,18 @@ export function useApi() {
     );
   };
 
-  const addDiscussionComment = async ({
-    discussionId,
+  const addPostComment = async ({
+    postId,
     content,
     parentId,
     authorDocumentId,
     isAnonymous,
-  }: DiscussionCommentPayload) => {
+  }: PostCommentPayload) => {
     const res = await $api("/api/comments", {
       method: "POST",
       body: {
         data: {
-          article: discussionId,
+          article: postId,
           content,
           ...(authorDocumentId ? { author: authorDocumentId } : {}),
           ...(parentId ? { parent: parentId } : {}),
@@ -687,8 +687,8 @@ export function useApi() {
       },
     });
     // 评论数 & 评论列表改变
-    invalidate(qk.articles.commentsOf(discussionId));
-    invalidate(qk.articles.detail(discussionId));
+    invalidate(qk.articles.commentsOf(postId));
+    invalidate(qk.articles.detail(postId));
     return res;
   };
 
@@ -696,7 +696,7 @@ export function useApi() {
     await $api(`/api/comments/${commentId}`, {
       method: "DELETE",
     });
-    // 不知道 discussionId，保守批量失效所有评论列表 & 帖子详情（评论数） & profile 评论
+    // 不知道 postId，保守批量失效所有评论列表 & 帖子详情（评论数） & profile 评论
     invalidate(["articles", "comments"]);
     invalidate(["articles", "detail"]);
     invalidate(["profile"]);
@@ -820,7 +820,7 @@ export function useApi() {
     documentId: string,
     endCur = "",
     limit = DEFAULT_PAGE_SIZE,
-  ): Promise<Pagination<Discussion>> => {
+  ): Promise<Pagination<Post>> => {
     const start = parseStart(endCur);
     return cachedRead(
       qk.profile.articles(documentId, start, limit),
@@ -833,7 +833,7 @@ export function useApi() {
         });
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
-        const page = buildPagination(data.map((item) => toDiscussion(item, apiBaseUrl)), start, meta);
+        const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
         // Must await: merging mutates the raw nodes in-place. If we fire-and-forget,
         // the caller pushes them into a reactive ref before mutation happens, and
         // direct mutation on the raw target won't trigger Vue's reactivity, so
@@ -1302,10 +1302,10 @@ export function useApi() {
     getSelfUser,
     searchArticles,
     peekArticles,
-    getDiscussion,
+    getPost,
     recordArticleView,
     getComments,
-    addDiscussionComment,
+    addPostComment,
     deleteComment,
     toggleLike,
     batchCheckLikes,

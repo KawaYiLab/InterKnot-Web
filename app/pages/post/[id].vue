@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMessage } from "zenless-ui";
-import type { Comment, Discussion } from "~/types/entities";
+import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
@@ -21,7 +21,7 @@ const confirmDialog = useConfirmDialog();
 const pageDataLoading = usePageDataLoading();
 const message = useMessage();
 
-const discussion = ref<Discussion | null>(null);
+const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
 
@@ -58,12 +58,12 @@ const mention = useMentionInput({
   search: api.searchAuthors,
 });
 
-const discussionId = computed(() => String(route.params.id || ""));
-const covers = computed(() => discussion.value?.covers ?? []);
+const postId = computed(() => String(route.params.id || ""));
+const covers = computed(() => post.value?.covers ?? []);
 const hasCovers = computed(() => covers.value.length > 0);
 const isCommentEditorActive = computed(() => commentInputFocused.value);
-const discussionLikeCount = computed(() => discussion.value?.likesCount ?? 0);
-const discussionCommentCount = computed(() => discussion.value?.commentsCount ?? comments.value.length);
+const postLikeCount = computed(() => post.value?.likesCount ?? 0);
+const postCommentCount = computed(() => post.value?.commentsCount ?? comments.value.length);
 
 const firstCover = computed(() => covers.value[0] ?? null);
 const coverAspectRatio = computed(() => {
@@ -86,11 +86,11 @@ const openCoverPreview = () => {
 };
 
 /* ── 数据加载 ──────────────────────────────────── */
-const loadDiscussion = async () => {
+const loadPost = async () => {
   loading.value = true;
   loadError.value = false;
   try {
-    discussion.value = await api.getDiscussion(discussionId.value);
+    post.value = await api.getPost(postId.value);
   } catch (err) {
     if (isNotFoundError(err)) {
       showError({ statusCode: 404, message: "帖子不存在" });
@@ -107,7 +107,7 @@ const loadComments = async () => {
   if (commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
   try {
-    const page = await api.getComments(discussionId.value, commentsCursor.value);
+    const page = await api.getComments(postId.value, commentsCursor.value);
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
@@ -120,11 +120,11 @@ const loadComments = async () => {
 };
 
 const recordView = async () => {
-  if (!discussion.value?.id) return;
+  if (!post.value?.id) return;
   try {
-    const views = await api.recordArticleView(discussion.value.id);
+    const views = await api.recordArticleView(post.value.id);
     if (typeof views === "number") {
-      discussion.value.views = views;
+      post.value.views = views;
     }
   } catch {
   }
@@ -144,8 +144,8 @@ const sendComment = async () => {
     // 没有任何 mention 时等价于原 newComment.value
     const serialized = mention.serializeForSend().trim();
     const parentId = replyTarget.value?.id;
-    const res = await api.addDiscussionComment({
-      discussionId: discussionId.value,
+    const res = await api.addPostComment({
+      postId: postId.value,
       content: serialized,
       authorDocumentId: auth.user?.authorId,
       parentId,
@@ -195,8 +195,8 @@ const sendComment = async () => {
     commentInputFocused.value = false;
     replyTarget.value = null;
     syncCommentInputHeight();
-    if (discussion.value) {
-      discussion.value.commentsCount = (discussion.value.commentsCount ?? 0) + 1;
+    if (post.value) {
+      post.value.commentsCount = (post.value.commentsCount ?? 0) + 1;
     }
     message.success(isReply ? "回复发送成功" : "评论发送成功");
   } catch (err) {
@@ -257,19 +257,19 @@ const startReplyToReply = (reply: Comment["replies"][number], parentComment: Com
 };
 
 const isOwner = computed(() => {
-  if (!auth.isLogin || !discussion.value?.author?.documentId) return false;
-  return auth.user?.authorId === discussion.value.author.documentId;
+  if (!auth.isLogin || !post.value?.author?.documentId) return false;
+  return auth.user?.authorId === post.value.author.documentId;
 });
 
 const deletingArticle = ref(false);
 
 const handleDeleteArticle = async () => {
-  if (!discussion.value?.id) return;
+  if (!post.value?.id) return;
   const ok = await confirmDialog.open({ title: "删除帖子", message: "确定删除这篇帖子吗？此操作不可恢复。", confirmText: "删除", danger: true });
   if (!ok) return;
   deletingArticle.value = true;
   try {
-    const deletedId = discussion.value.id;
+    const deletedId = post.value.id;
     await api.deleteArticle(deletedId);
     message.success("帖子已删除");
     window.dispatchEvent(new CustomEvent("ik:article-deleted", { detail: deletedId }));
@@ -286,15 +286,15 @@ const showCollectComingSoon = () => {
 };
 
 const likeArticle = async () => {
-  if (!discussion.value) return;
+  if (!post.value) return;
   if (!auth.isLogin) {
     loginDialog.open();
     return;
   }
   try {
-    const result = await api.toggleLike("article", discussion.value.id);
-    discussion.value.liked = result.liked;
-    discussion.value.likesCount = result.likesCount;
+    const result = await api.toggleLike("article", post.value.id);
+    post.value.liked = result.liked;
+    post.value.likesCount = result.likesCount;
     message.success(result.liked ? "已点赞" : "已取消点赞");
   } catch (err) {
     message.error(resolveErrorMessage(err, "点赞失败"));
@@ -335,8 +335,8 @@ const handleDeleteComment = async (comment: Comment) => {
   try {
     await api.deleteComment(comment.id);
     comments.value = comments.value.filter((c) => c.id !== comment.id);
-    if (discussion.value) {
-      discussion.value.commentsCount = Math.max(0, (discussion.value.commentsCount ?? 0) - 1 - (comment.replies?.length ?? 0));
+    if (post.value) {
+      post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1 - (comment.replies?.length ?? 0));
     }
     message.success("评论已删除");
   } catch (err) {
@@ -350,8 +350,8 @@ const handleDeleteReply = async (reply: Comment["replies"][number], parentCommen
   try {
     await api.deleteComment(reply.id);
     parentComment.replies = parentComment.replies.filter((r) => r.id !== reply.id);
-    if (discussion.value) {
-      discussion.value.commentsCount = Math.max(0, (discussion.value.commentsCount ?? 0) - 1);
+    if (post.value) {
+      post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1);
     }
     message.success("回复已删除");
   } catch (err) {
@@ -360,13 +360,13 @@ const handleDeleteReply = async (reply: Comment["replies"][number], parentCommen
 };
 
 const pageTitle = computed(() =>
-  discussion.value?.title ? `${discussion.value.title} - 绳网` : "绳网",
+  post.value?.title ? `${post.value.title} - 绳网` : "绳网",
 );
 const pageDescription = computed(() => {
-  const text = discussion.value?.bodyText || discussion.value?.rawBodyText || "";
+  const text = post.value?.bodyText || post.value?.rawBodyText || "";
   return text.length > 160 ? text.slice(0, 157) + "..." : text || "绳网是一个游戏、技术交流平台";
 });
-const pageCover = computed(() => discussion.value?.cover || "/images/zzzicon_200x200.png");
+const pageCover = computed(() => post.value?.cover || "/images/zzzicon_200x200.png");
 
 useSeoMeta({
   title: pageTitle,
@@ -420,7 +420,7 @@ onMounted(async () => {
   // 让只看文字、不点图的用户不必下载这套资源。
   pageDataLoading.claim();
   try {
-    await loadDiscussion();
+    await loadPost();
     await Promise.all([recordView(), loadComments()]);
   } finally {
     pageDataLoading.finish();
@@ -520,18 +520,18 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- ── Loaded Content ────────────────────── -->
-    <template v-else-if="discussion">
+    <template v-else-if="post">
       <div class="ik-page__shell">
         <div class="ik-page__outer">
           <div class="ik-page__inner">
         <!-- ── Header Bar ────────────────────── -->
         <div class="ik-page__header">
           <div class="ik-page__header-left">
-            <UserHoverCard :author-id="discussion.author?.documentId" :clickable="!!discussion.author?.documentId">
+            <UserHoverCard :author-id="post.author?.documentId" :clickable="!!post.author?.documentId">
               <div class="ik-page__avatar-shell">
                 <img
-                  :src="discussion.author.avatar || '/images/default-avatar.webp'"
-                  :alt="discussion.author.name || ''"
+                  :src="post.author.avatar || '/images/default-avatar.webp'"
+                  :alt="post.author.name || ''"
                   class="ik-page__avatar"
                   @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
                 />
@@ -539,18 +539,18 @@ onBeforeUnmount(() => {
             </UserHoverCard>
             <div class="ik-page__author-info">
               <div class="ik-page__author-row">
-                <UserHoverCard :author-id="discussion.author?.documentId" :clickable="!!discussion.author?.documentId">
+                <UserHoverCard :author-id="post.author?.documentId" :clickable="!!post.author?.documentId">
                   <span class="ik-page__author-name">
-                    {{ discussion.author.name || "匿名用户" }}
+                    {{ post.author.name || "匿名用户" }}
                   </span>
                 </UserHoverCard>
-                <span v-if="discussion.author.level && discussion.author.documentId" class="ik-page__level">
-                  Lv.{{ discussion.author.level }}
+                <span v-if="post.author.level && post.author.documentId" class="ik-page__level">
+                  Lv.{{ post.author.level }}
                 </span>
               </div>
               <span class="ik-page__time">
-                {{ formatTime(discussion.createdAt) }}
-                <template v-if="discussion.views"> · {{ discussion.views }} 阅读</template>
+                {{ formatTime(post.createdAt) }}
+                <template v-if="post.views"> · {{ post.views }} 阅读</template>
               </span>
             </div>
           </div>
@@ -569,7 +569,7 @@ onBeforeUnmount(() => {
                 >
                   <img
                     :src="firstCover?.url || DEFAULT_COVER_IMAGE"
-                    :alt="discussion.title"
+                    :alt="post.title"
                     class="ik-page__cover"
                     @click="openCoverPreview()"
                     @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
@@ -582,16 +582,16 @@ onBeforeUnmount(() => {
 
               <!-- 正文 -->
               <div class="ik-page__detail">
-                <h1 class="ik-page__title">{{ discussion.title }}</h1>
+                <h1 class="ik-page__title">{{ post.title }}</h1>
                 <div
-                  v-if="discussion.body"
+                  v-if="post.body"
                   class="ik-page__content"
-                  v-html="sanitizeBodyHtml(discussion.body)"
+                  v-html="sanitizeBodyHtml(post.body)"
                 ></div>
                 <div
-                  v-else-if="discussion.bodyText"
+                  v-else-if="post.bodyText"
                   class="ik-page__content"
-                  v-html="formatBodyText(discussion.bodyText)"
+                  v-html="formatBodyText(post.bodyText)"
                 ></div>
                 <p v-else class="ik-page__content" style="color: #808080">
                   暂无正文内容
@@ -686,12 +686,12 @@ onBeforeUnmount(() => {
                       <button
                         type="button"
                         class="ik-engage-bar__action"
-                        :class="{ 'ik-engage-bar__action--active': discussion.liked }"
+                        :class="{ 'ik-engage-bar__action--active': post.liked }"
                         @click="likeArticle"
                       >
-                        <HandThumbUpIconSolid v-if="discussion.liked" class="ik-engage-icon" aria-hidden="true" />
+                        <HandThumbUpIconSolid v-if="post.liked" class="ik-engage-icon" aria-hidden="true" />
                         <HandThumbUpIcon v-else class="ik-engage-icon" aria-hidden="true" />
-                        <span>{{ discussionLikeCount > 0 ? discussionLikeCount : '点赞' }}</span>
+                        <span>{{ postLikeCount > 0 ? postLikeCount : '点赞' }}</span>
                       </button>
                       <button type="button" class="ik-engage-bar__action" @click="showCollectComingSoon">
                         <StarIcon class="ik-engage-icon" aria-hidden="true" />
@@ -699,7 +699,7 @@ onBeforeUnmount(() => {
                       </button>
                       <button type="button" class="ik-engage-bar__action" @click="focusCommentInput">
                         <ChatBubbleLeftIcon class="ik-engage-icon" aria-hidden="true" />
-                        <span>{{ discussionCommentCount }}</span>
+                        <span>{{ postCommentCount }}</span>
                       </button>
                       <button
                         v-if="isOwner"
@@ -782,7 +782,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* ═══════════════════════════════════════════════
-   Discussion Page – Full ZZZ Style
+   Post Page – Full ZZZ Style
    ═══════════════════════════════════════════════ */
 
 .ik-page-container {
