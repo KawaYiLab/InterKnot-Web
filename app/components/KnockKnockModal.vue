@@ -16,6 +16,7 @@ const {
   visible,
   close,
   consumePendingDmConversationId,
+  updateUrl,
 } = useKnockKnockModal();
 const auth = useAuthStore();
 const discussionModal = useDiscussionModal();
@@ -67,6 +68,7 @@ watch(visible, async (next) => {
   if (pending) {
     activeTab.value = "contacts";
     activeConversationId.value = pending;
+    updateUrl("contacts", pending);
   }
 });
 
@@ -562,10 +564,12 @@ const handleTabClick = (tab: KnockTab) => {
   activeTab.value = tab;
   // 切换 tab 时清掉右栏，避免显示其他 tab 的会话
   activeConversationId.value = null;
+  updateUrl(tab);
 };
 
 const handleConversationClick = (id: string) => {
   activeConversationId.value = id;
+  updateUrl(activeTab.value, id);
 };
 </script>
 
@@ -829,9 +833,9 @@ const handleConversationClick = (id: string) => {
                         </div>
                       </template>
                     </div>
-                    <!-- 占位 / 加载态 -->
-                    <div v-else class="ik-knock__empty-pill">
-                      {{ activeMessageLoading ? "加载中…" : "EMPTY" }}
+                    <!-- 占位：仅在非加载态时显示，避免切换会话时闪烁 -->
+                    <div v-else-if="!activeMessageLoading" class="ik-knock__empty-pill">
+                      EMPTY
                     </div>
 
                     <!-- 输入框：仅在有选中会话且非匿名/系统会话时显示 -->
@@ -1920,7 +1924,7 @@ const handleConversationClick = (id: string) => {
 /* ── Composer ──────────────────────────────── */
 .ik-knock__composer {
   flex-shrink: 0;
-  margin-top: 12px;
+  margin-top: auto;
   padding-top: 10px;
   border-top: 2px solid rgba(255, 255, 255, 0.08);
   display: flex;

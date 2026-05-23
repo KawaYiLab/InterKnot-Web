@@ -2,6 +2,7 @@
 const auth = useAuthStore();
 const router = useRouter();
 const discussionModal = useDiscussionModal();
+const knockModal = useKnockKnockModal();
 
 if (import.meta.client) {
   auth.hydrateFromStorage();
@@ -39,11 +40,15 @@ if (import.meta.client) {
 
   // 监听浏览器后退/前进：如果弹窗打开，关闭它
   window.addEventListener("popstate", discussionModal.handlePopState);
+  window.addEventListener("popstate", knockModal.handlePopState);
 
   // 当发生真实路由导航时（例如点击 Header 链接），关闭弹窗
   router.beforeEach(() => {
     if (discussionModal.isOpen.value) {
       discussionModal.teardown();
+    }
+    if (knockModal.visible.value) {
+      knockModal.teardown();
     }
   });
 }
