@@ -16,20 +16,6 @@ if (import.meta.client) {
   };
   window.addEventListener('mousemove', handleMouseMove);
 
-  // 弱网优化：空闲时预取帖子弹窗 chunk，避免用户点击后还要下载组件 JS。
-  const prefetchDiscussionOverlay = () => {
-    void import("~/components/DiscussionOverlay.vue");
-  };
-  type IdleWindow = Window & {
-    requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
-  };
-  const ric = (window as IdleWindow).requestIdleCallback;
-  if (typeof ric === "function") {
-    ric(prefetchDiscussionOverlay, { timeout: 3000 });
-  } else {
-    setTimeout(prefetchDiscussionOverlay, 1500);
-  }
-
   const url = new URL(window.location.href);
   const fallbackPath = url.searchParams.get("p");
   if (fallbackPath) {
@@ -64,6 +50,14 @@ const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
 
 <template>
   <div>
+    <!-- backdrop-filter 合成层预热：1×1 不可见元素，让 GPU 在首屏就把
+         模糊着色器编译好、合成层分配好。否则用户第一次打开弹窗再关闭时，
+         合成层首次创建/销毁会多吃 1~3 帧 paint，表现为出场动画期间弹窗
+         背后闪烁一下。常驻显存代价 ≈ 4 字节，可忽略。 -->
+    <ClientOnly>
+      <div aria-hidden="true" class="ik-backdrop-warmup"></div>
+    </ClientOnly>
+
     <AppHeader />
     <main class="ik-page">
       <NuxtPage />
@@ -85,11 +79,13 @@ const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
       <LazyKnockKnockModal />
     </ClientOnly>
 
-    <!-- 帖子详情弹窗（从首页点击卡片时弹出） -->
+    <!-- 帖子详情弹窗（从首页点击卡片时弹出）
+         注：必须用同步组件而非 LazyDiscussionOverlay。<Transition> 包异步组件时，
+         弱网下 chunk 加载延迟会让 enter 动画错过首帧 → 用户感知为闪烁。 -->
     <ClientOnly>
       <Teleport to="body">
         <Transition name="ik-overlay" appear @after-leave="discussionModal.clearAfterLeave()">
-          <LazyDiscussionOverlay
+          <DiscussionOverlay
             v-if="discussionModal.isOpen.value"
             :discussion-id="discussionModal.discussionId.value || ''"
             :cover-hint="discussionModal.coverHint.value"
@@ -101,3 +97,26 @@ const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
     </ClientOnly>
   </div>
 </template>
+
+<style scoped>
+/* backdrop-filter 合成层预热元素：
+   - 必须真的有非零尺寸，否则浏览器会跳过合成层分配
+   - 必须真的应用 backdrop-filter，触发着色器编译
+   - opacity:0 + pointer-events:none 让用户感知不到 */
+.ik-backdrop-warmup {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  opacity: 0;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  /* 永久性 will-change 让浏览器把这个层一直保留在 GPU 上，
+     与帖子弹窗共用 backdrop-filter 着色器管线 */
+  will-change: backdrop-filter;
+  contain: strict;
+  z-index: -1;
+}
+</style>
