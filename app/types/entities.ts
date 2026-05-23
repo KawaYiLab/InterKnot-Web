@@ -33,6 +33,7 @@ export interface Discussion {
   commentsCount?: number;
   isRead?: boolean;
   liked?: boolean;
+  isAnonymous?: boolean;
   createdAt?: string;
   updatedAt?: string;
   author: Author;
@@ -139,6 +140,7 @@ export interface DraftArticle {
   editorState?: unknown[];
   cover?: CoverImage[];
   hasPublishedVersion: boolean;
+  isAnonymous?: boolean;
   createdAt?: string;
   updatedAt?: string;
   author?: Author;
