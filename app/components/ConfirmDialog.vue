@@ -184,74 +184,9 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
-/* ═══════════════════════════════════════════════
-   Animations — 与项目其他弹窗一致
-   ═══════════════════════════════════════════════ */
-@keyframes stripe-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
+/* 入场/出场动画统一在 theme.css 的 .ik-overlay-* 全局规则里维护 */
 
-@keyframes stripe-fade-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-.ik-overlay-enter-active {
-  transition: background-color 80ms ease-out, backdrop-filter 80ms ease-out, -webkit-backdrop-filter 80ms ease-out;
-}
-
-.ik-overlay-enter-from {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-
-.ik-overlay-enter-active .ik-overlay__stripe {
-  animation: stripe-fade-in 250ms ease-out both;
-}
-
-.ik-overlay-enter-active .ik-dialog {
-  transition: transform 250ms cubic-bezier(0.165, 0.84, 0.44, 1),
-              opacity 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
-}
-
-.ik-overlay-enter-from .ik-overlay__stripe {
-  opacity: 0;
-}
-
-.ik-overlay-enter-from .ik-dialog {
-  opacity: 0;
-  transform: translateX(5%);
-}
-
-.ik-overlay-leave-active {
-  transition: background-color 160ms ease-out,
-              backdrop-filter 160ms ease-out,
-              -webkit-backdrop-filter 160ms ease-out;
-}
-
-.ik-overlay-leave-active .ik-overlay__stripe {
-  animation: stripe-fade-out 180ms ease-in both;
-}
-
-.ik-overlay-leave-active .ik-dialog {
-  transition: transform 200ms cubic-bezier(0.55, 0, 1, 0.45),
-              opacity 180ms ease-in;
-}
-
-.ik-overlay-leave-to {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-
-.ik-overlay-leave-to .ik-dialog {
-  opacity: 0;
-  transform: translateX(-5%);
-}
-
-/* ── Mobile ───────────────────────────────────── */
+/* ── Mobile ─────────────────────────────────────── */
 @media (max-width: 500px) {
   .ik-dialog {
     max-width: 100%;
@@ -261,17 +196,5 @@ onBeforeUnmount(() => {
      centered popup, not a fullscreen sheet. */
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ik-overlay-enter-active,
-  .ik-overlay-enter-active .ik-dialog,
-  .ik-overlay-leave-active,
-  .ik-overlay-leave-active .ik-dialog {
-    transition: none;
-  }
-
-  .ik-overlay-enter-active .ik-overlay__stripe,
-  .ik-overlay-leave-active .ik-overlay__stripe {
-    animation: none;
-  }
-}
+/* prefers-reduced-motion 由 theme.css 全局接管 */
 </style>

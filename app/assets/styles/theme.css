@@ -315,3 +315,131 @@ img:not(.ik-card__cover).ik-img-revealed {
     padding-bottom: 64px;
   }
 }
+
+/* ═══════════════════════════════════════════════
+   ZZZ Overlay Modal Transitions —— 全局共享
+   ───────────────────────────────────────────────
+   适用：所有用 <Transition name="ik-overlay"> 包裹、根类名为 .ik-overlay
+   的弹窗（DiscussionOverlay / KnockKnockModal / LoginDialog /
+   ConfirmDialog / ProfileSettingsModal / PinnedArticlesModal /
+   BusinessCardModal / AvatarModal …）
+
+   设计参考 Flutter showZZZDialog，针对 web 端调优。详见
+   DiscussionOverlay.vue 顶部注释。
+
+   - 时长统一 200ms（enter / leave 同长）
+   - 三层（背景 / stripe / dialog）共用同一条曲线同步进退：
+       enter → easeOutQuart
+       leave → easeInQuart
+     避免任一层比其它层早 1 帧到位/退场造成的视觉错位闪烁。
+   - dialog 默认 transform 仅含 translateX(±5%)（FractionalTranslation
+     等价）。如某弹窗 dialog 自身带 scale 等静态变换，需在自己的 scoped
+     style 里覆写 enter-from / leave-to 的 transform 值（更高 specificity
+     自动生效）。
+   ═══════════════════════════════════════════════ */
+
+:where(.ik-overlay-enter-active, .ik-overlay-leave-active) {
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-in-quart: cubic-bezier(0.895, 0.03, 0.685, 0.22);
+}
+
+/* ── Enter ─────────────────────────────────────── */
+.ik-overlay-enter-active {
+  transition:
+    background-color 200ms var(--ease-out-quart),
+    backdrop-filter 200ms var(--ease-out-quart),
+    -webkit-backdrop-filter 200ms var(--ease-out-quart);
+  will-change: background-color, backdrop-filter;
+}
+
+.ik-overlay-enter-active .ik-overlay__stripe {
+  transition: opacity 200ms var(--ease-out-quart);
+  will-change: opacity;
+}
+
+.ik-overlay-enter-active .ik-dialog,
+.ik-overlay-enter-active .ik-bc-dialog,
+.ik-overlay-enter-active .ik-av-dialog,
+.ik-overlay-enter-active .ik-crop-dialog {
+  transition:
+    transform 200ms var(--ease-out-quart),
+    opacity 200ms var(--ease-out-quart);
+  will-change: transform, opacity;
+}
+
+.ik-overlay-enter-from {
+  background-color: transparent !important;
+  backdrop-filter: blur(0) !important;
+  -webkit-backdrop-filter: blur(0) !important;
+}
+
+.ik-overlay-enter-from .ik-overlay__stripe {
+  opacity: 0;
+}
+
+.ik-overlay-enter-from .ik-dialog,
+.ik-overlay-enter-from .ik-bc-dialog,
+.ik-overlay-enter-from .ik-av-dialog,
+.ik-overlay-enter-from .ik-crop-dialog {
+  opacity: 0;
+  transform: translateX(5%);
+}
+
+/* ── Leave ─────────────────────────────────────── */
+.ik-overlay-leave-active {
+  transition:
+    background-color 200ms var(--ease-in-quart),
+    backdrop-filter 200ms var(--ease-in-quart),
+    -webkit-backdrop-filter 200ms var(--ease-in-quart);
+  will-change: background-color, backdrop-filter;
+}
+
+.ik-overlay-leave-active .ik-overlay__stripe {
+  transition: opacity 200ms var(--ease-in-quart);
+  will-change: opacity;
+}
+
+.ik-overlay-leave-active .ik-dialog,
+.ik-overlay-leave-active .ik-bc-dialog,
+.ik-overlay-leave-active .ik-av-dialog,
+.ik-overlay-leave-active .ik-crop-dialog {
+  transition:
+    transform 200ms var(--ease-in-quart),
+    opacity 200ms var(--ease-in-quart);
+  will-change: transform, opacity;
+}
+
+.ik-overlay-leave-to {
+  background-color: transparent !important;
+  backdrop-filter: blur(0) !important;
+  -webkit-backdrop-filter: blur(0) !important;
+}
+
+.ik-overlay-leave-to .ik-overlay__stripe {
+  opacity: 0;
+}
+
+.ik-overlay-leave-to .ik-dialog,
+.ik-overlay-leave-to .ik-bc-dialog,
+.ik-overlay-leave-to .ik-av-dialog,
+.ik-overlay-leave-to .ik-crop-dialog {
+  opacity: 0;
+  transform: translateX(-5%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-overlay-enter-active,
+  .ik-overlay-enter-active .ik-overlay__stripe,
+  .ik-overlay-enter-active .ik-dialog,
+  .ik-overlay-enter-active .ik-bc-dialog,
+  .ik-overlay-enter-active .ik-av-dialog,
+  .ik-overlay-enter-active .ik-crop-dialog,
+  .ik-overlay-leave-active,
+  .ik-overlay-leave-active .ik-overlay__stripe,
+  .ik-overlay-leave-active .ik-dialog,
+  .ik-overlay-leave-active .ik-bc-dialog,
+  .ik-overlay-leave-active .ik-av-dialog,
+  .ik-overlay-leave-active .ik-crop-dialog {
+    transition: none;
+  }
+}

@@ -796,44 +796,11 @@ onBeforeUnmount(() => {
 }
 .ik-spin { display: inline-block; animation: ik-spin 0.8s linear infinite; }
 
-/* ── Transition animations (reuse discussion overlay pattern) ── */
-@keyframes stripe-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes stripe-fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
-.ik-overlay-enter-active {
-  transition: background-color 80ms ease-out, backdrop-filter 80ms ease-out, -webkit-backdrop-filter 80ms ease-out;
-}
-.ik-overlay-enter-from {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-.ik-overlay-enter-active .ik-overlay__stripe { animation: stripe-fade-in 250ms ease-out both; }
-.ik-overlay-enter-active .ik-bc-dialog {
-  transition: transform 250ms cubic-bezier(0.165, 0.84, 0.44, 1), opacity 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
-}
-.ik-overlay-enter-from .ik-overlay__stripe { opacity: 0; }
-.ik-overlay-enter-from .ik-bc-dialog { opacity: 0; transform: scale(1.1) translateX(5%); }
-
-.ik-overlay-leave-active {
-  transition: background-color 160ms ease-out, backdrop-filter 160ms ease-out, -webkit-backdrop-filter 160ms ease-out;
-}
-.ik-overlay-leave-active .ik-overlay__stripe { animation: stripe-fade-out 180ms ease-in both; }
-.ik-overlay-leave-active .ik-bc-dialog {
-  transition: transform 200ms cubic-bezier(0.55, 0, 1, 0.45), opacity 180ms ease-in;
-}
-.ik-overlay-leave-to {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-.ik-overlay-leave-to .ik-bc-dialog { opacity: 0; transform: scale(1.1) translateX(-5%); }
+/* ── Transition animations ──
+   动画时长 / 曲线在 theme.css 全局维护；这里只负责给 .ik-bc-dialog
+   补回 scale(1.1)，避免全局默认 transform: translateX(±5%) 覆盖掉静态缩放。 */
+.ik-overlay-enter-from .ik-bc-dialog { transform: scale(1.1) translateX(5%); }
+.ik-overlay-leave-to .ik-bc-dialog { transform: scale(1.1) translateX(-5%); }
 
 /* ── Mobile ── */
 @media (max-width: 800px) {
@@ -852,12 +819,5 @@ onBeforeUnmount(() => {
   .ik-bc-frame__body { border-radius: 0; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ik-overlay-enter-active,
-  .ik-overlay-enter-active .ik-bc-dialog,
-  .ik-overlay-leave-active,
-  .ik-overlay-leave-active .ik-bc-dialog { transition: none; }
-  .ik-overlay-enter-active .ik-overlay__stripe,
-  .ik-overlay-leave-active .ik-overlay__stripe { animation: none; }
-}
+/* prefers-reduced-motion 由 theme.css 全局接管 */
 </style>

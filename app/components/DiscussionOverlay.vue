@@ -1088,6 +1088,9 @@ onBeforeUnmount(() => {
    ═══════════════════════════════════════════════ */
 
 /* ── Backdrop ──────────────────────────────────── */
+/* 与 Flutter showZZZDialog 完全一致：
+   - 黑遮罩 alpha 0.6
+   - BackdropFilter blur 10px */
 .ik-overlay {
   position: fixed;
   inset: 0;
@@ -1095,12 +1098,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-/* 45° 斜线纹理 (PatternPainter) */
+/* 斜线纹理（PatternPainter）—— web 端调优版：
+   40°、~9px 间距、3px 线宽、白 alpha 0.09。
+   不是严格复刻 Flutter（45°/5px/1.5px/0.15），而是过去针对 web 端
+   显示密度与对比度调过的更舒适版本，保留。 */
 .ik-overlay__stripe {
   position: absolute;
   inset: 0;
@@ -1976,80 +1982,20 @@ onBeforeUnmount(() => {
 }
 
 /* ═══════════════════════════════════════════════
-   Transition Animations
-   Flutter showZZZDialog:
-     background → Interval(0, 0.01) = 近乎瞬现
-     stripes   → 随 background 一起，但视觉上有扫入感
-     dialog    → easeOutQuart, slideX(5%) + fade, 200ms
+   Transition Animations —— 仅覆盖 transform 起止值
+   ───────────────────────────────────────────────
+   动画时长 / 曲线 / will-change 等在全局 theme.css 里定义（所有
+   .ik-overlay 弹窗共用）。此处仅因为本弹窗 .ik-dialog 自带
+   transform: scale(1.1) 静态变换，需在 enter-from / leave-to
+   补回 scale(1.1) 部分，避免动画过程中弹窗被缩到 1.0。
    ═══════════════════════════════════════════════ */
 
-/* ── Stripe sweep-in keyframe ──────────────────── */
-@keyframes stripe-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes stripe-fade-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-/* ── Enter ─────────────────────────────────────── */
-.ik-overlay-enter-active {
-  transition: background-color 80ms ease-out, backdrop-filter 80ms ease-out, -webkit-backdrop-filter 80ms ease-out;
-}
-
-.ik-overlay-enter-from {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-
-.ik-overlay-enter-active .ik-overlay__stripe {
-  animation: stripe-fade-in 250ms ease-out both;
-}
-
-.ik-overlay-enter-active .ik-dialog {
-  /* easeOutQuart: cubic-bezier(0.165, 0.84, 0.44, 1) */
-  transition: transform 250ms cubic-bezier(0.165, 0.84, 0.44, 1),
-              opacity 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
-}
-
-.ik-overlay-enter-from .ik-overlay__stripe {
-  opacity: 0;
-}
-
 .ik-overlay-enter-from .ik-dialog {
-  opacity: 0;
+  /* FractionalTranslation(0.05, 0)：CSS translateX(5%) 也是元素自身宽度的 5%，等价 */
   transform: scale(1.1) translateX(5%);
 }
 
-/* ── Leave ─────────────────────────────────────── */
-.ik-overlay-leave-active {
-  transition: background-color 160ms ease-out, backdrop-filter 160ms ease-out, -webkit-backdrop-filter 160ms ease-out;
-}
-
-.ik-overlay-leave-active .ik-overlay__stripe {
-  animation: stripe-fade-out 180ms ease-in both;
-}
-
-.ik-overlay-leave-active .ik-dialog {
-  transition: transform 200ms cubic-bezier(0.55, 0, 1, 0.45),
-              opacity 180ms ease-in;
-}
-
-.ik-overlay-leave-to {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-
 .ik-overlay-leave-to .ik-dialog {
-  opacity: 0;
   transform: scale(1.1) translateX(-5%);
 }
 
@@ -2138,17 +2084,5 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ik-overlay-enter-active,
-  .ik-overlay-enter-active .ik-dialog,
-  .ik-overlay-leave-active,
-  .ik-overlay-leave-active .ik-dialog {
-    transition: none;
-  }
-
-  .ik-overlay-enter-active .ik-overlay__stripe,
-  .ik-overlay-leave-active .ik-overlay__stripe {
-    animation: none;
-  }
-}
+/* prefers-reduced-motion 由 theme.css 全局接管，此处不再重复 */
 </style>

@@ -769,42 +769,13 @@ onBeforeUnmount(() => {
 }
 .ik-spin { display: inline-block; animation: ik-spin 0.8s linear infinite; }
 
-/* ── Overlay transitions ── */
-@keyframes stripe-fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes stripe-fade-out { from { opacity: 1; } to { opacity: 0; } }
-
-.ik-overlay-enter-active {
-  transition: background-color 80ms ease-out, backdrop-filter 80ms ease-out, -webkit-backdrop-filter 80ms ease-out;
-}
-.ik-overlay-enter-from {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-.ik-overlay-enter-active .ik-overlay__stripe { animation: stripe-fade-in 250ms ease-out both; }
-.ik-overlay-enter-active .ik-av-dialog,
-.ik-overlay-enter-active .ik-crop-dialog {
-  transition: transform 250ms cubic-bezier(0.165, 0.84, 0.44, 1), opacity 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
-}
-.ik-overlay-enter-from .ik-overlay__stripe { opacity: 0; }
-.ik-overlay-enter-from .ik-av-dialog { opacity: 0; transform: scale(1.1) translateX(5%); }
-.ik-overlay-enter-from .ik-crop-dialog { opacity: 0; transform: scale(1.1) translateX(5%); }
-
-.ik-overlay-leave-active {
-  transition: background-color 160ms ease-out, backdrop-filter 160ms ease-out, -webkit-backdrop-filter 160ms ease-out;
-}
-.ik-overlay-leave-active .ik-overlay__stripe { animation: stripe-fade-out 180ms ease-in both; }
-.ik-overlay-leave-active .ik-av-dialog,
-.ik-overlay-leave-active .ik-crop-dialog {
-  transition: transform 200ms cubic-bezier(0.55, 0, 1, 0.45), opacity 180ms ease-in;
-}
-.ik-overlay-leave-to {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-.ik-overlay-leave-to .ik-av-dialog { opacity: 0; transform: scale(1.1) translateX(-5%); }
-.ik-overlay-leave-to .ik-crop-dialog { opacity: 0; transform: scale(1.1) translateX(-5%); }
+/* ── Overlay transitions ──
+   动画时长 / 曲线在 theme.css 全局维护；这里只负责给 .ik-av-dialog / .ik-crop-dialog
+   补回 scale(1.1)，避免全局默认 transform: translateX(±5%) 覆盖掉静态缩放。 */
+.ik-overlay-enter-from .ik-av-dialog,
+.ik-overlay-enter-from .ik-crop-dialog { transform: scale(1.1) translateX(5%); }
+.ik-overlay-leave-to .ik-av-dialog,
+.ik-overlay-leave-to .ik-crop-dialog { transform: scale(1.1) translateX(-5%); }
 
 /* ── Mobile ──
    Avatars are only 64px circles, so we keep the column count denser than
@@ -831,16 +802,7 @@ onBeforeUnmount(() => {
   .ik-av-grid { grid-template-columns: repeat(4, 1fr); padding: 12px; gap: 4px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ik-overlay-enter-active,
-  .ik-overlay-enter-active .ik-av-dialog,
-  .ik-overlay-enter-active .ik-crop-dialog,
-  .ik-overlay-leave-active,
-  .ik-overlay-leave-active .ik-av-dialog,
-  .ik-overlay-leave-active .ik-crop-dialog { transition: none; }
-  .ik-overlay-enter-active .ik-overlay__stripe,
-  .ik-overlay-leave-active .ik-overlay__stripe { animation: none; }
-}
+/* prefers-reduced-motion 由 theme.css 全局接管 */
 
 /* ── Upload button in grid ── */
 .ik-av-grid__item--upload { border: 2px dashed #444; }

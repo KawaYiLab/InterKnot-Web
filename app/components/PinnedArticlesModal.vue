@@ -502,72 +502,7 @@ onBeforeUnmount(() => {
   padding-top: 4px;
 }
 
-/* ═══════════════════════════════════════════════
-   Animations — 与项目其他弹窗一致
-   ═══════════════════════════════════════════════ */
-@keyframes stripe-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes stripe-fade-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-.ik-overlay-enter-active {
-  transition: background-color 80ms ease-out, backdrop-filter 80ms ease-out, -webkit-backdrop-filter 80ms ease-out;
-}
-
-.ik-overlay-enter-from {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-
-.ik-overlay-enter-active .ik-overlay__stripe {
-  animation: stripe-fade-in 250ms ease-out both;
-}
-
-.ik-overlay-enter-active .ik-dialog {
-  transition: transform 250ms cubic-bezier(0.165, 0.84, 0.44, 1),
-              opacity 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
-}
-
-.ik-overlay-enter-from .ik-overlay__stripe {
-  opacity: 0;
-}
-
-.ik-overlay-enter-from .ik-dialog {
-  opacity: 0;
-  transform: translateX(5%);
-}
-
-.ik-overlay-leave-active {
-  transition: background-color 160ms ease-out,
-              backdrop-filter 160ms ease-out,
-              -webkit-backdrop-filter 160ms ease-out;
-}
-
-.ik-overlay-leave-active .ik-overlay__stripe {
-  animation: stripe-fade-out 180ms ease-in both;
-}
-
-.ik-overlay-leave-active .ik-dialog {
-  transition: transform 200ms cubic-bezier(0.55, 0, 1, 0.45),
-              opacity 180ms ease-in;
-}
-
-.ik-overlay-leave-to {
-  background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
-}
-
-.ik-overlay-leave-to .ik-dialog {
-  opacity: 0;
-  transform: translateX(-5%);
-}
+/* 入场/出场动画统一在 theme.css 的 .ik-overlay-* 全局规则里维护 */
 
 /* ── Mobile ───────────────────────────────────── */
 @media (max-width: 500px) {
