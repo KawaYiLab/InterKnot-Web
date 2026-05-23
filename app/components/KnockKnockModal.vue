@@ -7,7 +7,7 @@ import {
   ChatBubbleLeftIcon,
   PaperAirplaneIcon,
 } from "@heroicons/vue/24/solid";
-import { XCircleIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
+import { DocumentTextIcon } from "@heroicons/vue/24/outline";
 import type { DmConversationSummary, DmMessage } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -528,6 +528,9 @@ const onComposerKeyDown = (e: KeyboardEvent) => {
 /** ESC 优先关闭：上下文菜单 → 编辑模式 → 弹窗本体 */
 const onKeyDown = (e: KeyboardEvent) => {
   if (e.key !== "Escape" || !visible.value) return;
+  // 如果有更上层的弹窗（如帖子详情 overlay）处于打开状态，不关闭敲敲
+  // 敲敲自身也是 .ik-overlay，所以检查数量 > 1
+  if (document.querySelectorAll(".ik-overlay").length > 1) return;
   if (contextMenuMessageId.value) {
     hideContextMenu();
     return;
@@ -705,7 +708,7 @@ const handleConversationClick = (id: string) => {
                           class="ik-knock__avatar-img"
                           draggable="false"
                         />
-                        <XCircleIcon v-else class="ik-knock__avatar-icon" />
+                        <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__avatar-img" draggable="false" />
                       </span>
                       <span class="ik-knock__item-text">
                         <span class="ik-knock__item-title">{{ item.peer?.name || item.title || "未知会话" }}</span>
@@ -791,7 +794,7 @@ const handleConversationClick = (id: string) => {
                               class="ik-knock__msg-avatar-img"
                               draggable="false"
                             />
-                            <XCircleIcon v-else class="ik-knock__msg-avatar-icon" />
+                            <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__msg-avatar-img" draggable="false" />
                           </div>
                           <div class="ik-knock__msg-body">
                             <div
@@ -831,8 +834,8 @@ const handleConversationClick = (id: string) => {
                       {{ activeMessageLoading ? "加载中…" : "EMPTY" }}
                     </div>
 
-                    <!-- 输入框：仅在有选中会话时显示 -->
-                    <div v-if="activeConversation" class="ik-knock__composer">
+                    <!-- 输入框：仅在有选中会话且非匿名/系统会话时显示 -->
+                    <div v-if="activeConversation && !composerDisabled" class="ik-knock__composer">
                       <div
                         v-if="editingMessageId"
                         class="ik-knock__composer-edit-banner"

@@ -323,6 +323,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .ik-hovercard-trigger {
   display: inline-block;
+}
+
+.ik-hovercard-trigger--clickable {
   cursor: pointer;
 }
 

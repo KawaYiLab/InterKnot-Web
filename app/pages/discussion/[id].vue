@@ -5,7 +5,7 @@ import type { Comment, Discussion } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, EyeSlashIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 
@@ -36,6 +36,7 @@ const sendingComment = ref(false);
 const commentInputBoxRef = ref<HTMLElement | null>(null);
 const commentInputFocused = ref(false);
 const replyTarget = ref<{ id: string; authorName: string } | null>(null);
+const commentAnonymous = ref(false);
 
 /** 真实底层 textarea：z-input 是个包装，原生 keydown / overlay 都需要它 */
 const commentTextareaRef = ref<HTMLTextAreaElement | null>(null);
@@ -148,15 +149,18 @@ const sendComment = async () => {
       content: serialized,
       authorDocumentId: auth.user?.authorId,
       parentId,
+      isAnonymous: commentAnonymous.value || undefined,
     });
     const resData = (res as Record<string, unknown>).data as Record<string, unknown> | undefined;
     const localId = String(resData?.documentId || resData?.id || `local-${Date.now()}`);
-    const localAuthor: import("~/types/entities").Author = {
-      documentId: auth.user?.authorId || auth.user?.documentId,
-      name: auth.user?.name || auth.user?.username || "我",
-      avatar: auth.user?.avatar,
-      level: auth.user?.level,
-    };
+    const localAuthor: import("~/types/entities").Author = commentAnonymous.value
+      ? { name: "匿名用户" }
+      : {
+          documentId: auth.user?.authorId || auth.user?.documentId,
+          name: auth.user?.name || auth.user?.username || "我",
+          avatar: auth.user?.avatar,
+          level: auth.user?.level,
+        };
     if (isReply && parentId) {
       const parent = comments.value.find((c) => c.id === parentId);
       if (parent) {
@@ -265,8 +269,10 @@ const handleDeleteArticle = async () => {
   if (!ok) return;
   deletingArticle.value = true;
   try {
-    await api.deleteArticle(discussion.value.id);
+    const deletedId = discussion.value.id;
+    await api.deleteArticle(deletedId);
     message.success("帖子已删除");
+    window.dispatchEvent(new CustomEvent("ik:article-deleted", { detail: deletedId }));
     navigateTo("/");
   } catch (err) {
     message.error(resolveErrorMessage(err, "删除帖子失败"));
@@ -521,7 +527,7 @@ onBeforeUnmount(() => {
         <!-- ── Header Bar ────────────────────── -->
         <div class="ik-page__header">
           <div class="ik-page__header-left">
-            <UserHoverCard :author-id="discussion.author?.documentId" clickable>
+            <UserHoverCard :author-id="discussion.author?.documentId" :clickable="!!discussion.author?.documentId">
               <div class="ik-page__avatar-shell">
                 <img
                   :src="discussion.author.avatar || '/images/default-avatar.webp'"
@@ -533,12 +539,12 @@ onBeforeUnmount(() => {
             </UserHoverCard>
             <div class="ik-page__author-info">
               <div class="ik-page__author-row">
-                <UserHoverCard :author-id="discussion.author?.documentId" clickable>
+                <UserHoverCard :author-id="discussion.author?.documentId" :clickable="!!discussion.author?.documentId">
                   <span class="ik-page__author-name">
                     {{ discussion.author.name || "匿名用户" }}
                   </span>
                 </UserHoverCard>
-                <span v-if="discussion.author.level" class="ik-page__level">
+                <span v-if="discussion.author.level && discussion.author.documentId" class="ik-page__level">
                   Lv.{{ discussion.author.level }}
                 </span>
               </div>
@@ -725,6 +731,16 @@ onBeforeUnmount(() => {
                       </button>
                       <button type="button" class="ik-engage-bar__tool" aria-label="表情">
                         <FaceSmileIcon class="ik-engage-icon" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        class="ik-engage-bar__tool"
+                        :class="{ 'ik-engage-bar__tool--active': commentAnonymous }"
+                        :aria-label="commentAnonymous ? '取消匿名' : '匿名评论'"
+                        :title="commentAnonymous ? '取消匿名' : '匿名评论'"
+                        @click.stop="commentAnonymous = !commentAnonymous"
+                      >
+                        <EyeSlashIcon class="ik-engage-icon" aria-hidden="true" />
                       </button>
                     </div>
                     <div class="ik-engage-bar__right-btns">
@@ -1421,6 +1437,10 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   color: #bfbfbf;
+}
+
+.ik-engage-bar__tool--active {
+  color: var(--ik-primary);
 }
 
 .ik-engage-bar__submit,

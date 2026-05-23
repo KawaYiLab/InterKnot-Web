@@ -16,6 +16,7 @@ import {
   TrashIcon,
   ChevronRightIcon,
   RectangleStackIcon,
+  EyeSlashIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 
@@ -50,6 +51,7 @@ const isSavingDraft = ref(false);
 const isPublishing = ref(false);
 const isDeletingDraft = ref(false);
 const hasUnsavedChanges = ref(false);
+const isAnonymous = ref(false);
 
 /* ── Mobile-only UI state ─────────────────────────── */
 const isMobileDraftsOpen = ref(false);
@@ -148,6 +150,7 @@ const performSaveDraft = async (force = false) => {
       text: body.value.trim(),
       coverId: coverPayload.value,
       authorId: authorId || undefined,
+      isAnonymous: isAnonymous.value || undefined,
     };
 
     let result: DraftArticle;
@@ -307,6 +310,12 @@ async function publish() {
     }
 
     await api.publishArticleDraft(documentId.value);
+
+    // 通知首页强制刷新列表
+    if (import.meta.client) {
+      window.dispatchEvent(new Event("ik:home-refresh"));
+    }
+
     router.replace("/");
   } catch (err) {
     message.error(resolveErrorMessage(err, "发布失败"));
@@ -445,6 +454,7 @@ function applyDraftToEditor(draft: DraftArticle) {
     documentId.value = draft.documentId;
     title.value = draft.title;
     body.value = draft.text;
+    isAnonymous.value = !!draft.isAnonymous;
 
     for (const task of uploadTasks.value) {
       URL.revokeObjectURL(task.previewUrl);
@@ -482,6 +492,7 @@ function resetEditor() {
       URL.revokeObjectURL(task.previewUrl);
     }
     uploadTasks.value = [];
+    isAnonymous.value = false;
     lastSavedSnapshot.value = "";
     hasUnsavedChanges.value = false;
   } finally {
@@ -502,6 +513,7 @@ async function newDraft() {
 
 /* ── Drag & Drop ──────────────────────────────────── */
 const isDragging = ref(false);
+let dragCounter = 0;
 // 内部缩略图排序状态
 const draggingIndex = ref<number | null>(null);
 const dragOverIndex = ref<number | null>(null);
@@ -514,18 +526,28 @@ function isFileDrag(e: DragEvent): boolean {
   return Array.from(types as ArrayLike<string>).includes("Files");
 }
 
+function onDragEnter(e: DragEvent) {
+  if (!isFileDrag(e)) return;
+  e.preventDefault();
+  dragCounter++;
+  isDragging.value = true;
+}
 function onDragOver(e: DragEvent) {
   if (!isFileDrag(e)) return;
   e.preventDefault();
-  isDragging.value = true;
 }
 function onDragLeave(e: DragEvent) {
   if (!isFileDrag(e)) return;
-  isDragging.value = false;
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    isDragging.value = false;
+  }
 }
 function onDrop(e: DragEvent) {
   if (!isFileDrag(e)) return;
   e.preventDefault();
+  dragCounter = 0;
   isDragging.value = false;
   if (e.dataTransfer?.files?.length) {
     handleFileSelect(e.dataTransfer.files);
@@ -612,7 +634,7 @@ if (import.meta.client && auth.isLogin) {
 </script>
 
 <template>
-  <section class="ik-create-page" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+  <section class="ik-create-page" @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
     <!-- 45° 斜线纹理背景 -->
     <div class="ik-create-page__stripe" aria-hidden="true"></div>
 
@@ -794,6 +816,10 @@ if (import.meta.client && auth.isLogin) {
       <div class="ik-create-footer__inner">
         <div class="ik-create-footer__left"></div>
         <div class="ik-create-footer__right">
+          <label class="ik-create-anon-toggle" :title="isAnonymous ? '取消匿名发布' : '匿名发布'">
+            <span>匿名</span>
+            <z-switch v-model="isAnonymous" @change="markDirty()" />
+          </label>
           <z-button
             v-if="documentId"
             class="ik-create-delete"
@@ -954,6 +980,12 @@ if (import.meta.client && auth.isLogin) {
           {{ drafts.length }}
         </span>
       </button>
+      <label
+        class="ik-mobile-footer__anon"
+        :aria-label="isAnonymous ? '取消匿名' : '匿名发布'"
+      >
+        <z-switch v-model="isAnonymous" @change="markDirty()" />
+      </label>
       <button
         type="button"
         class="ik-mobile-footer__publish"
@@ -1121,6 +1153,7 @@ if (import.meta.client && auth.isLogin) {
   justify-content: center;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
+  pointer-events: none;
 }
 
 .ik-create-drop-overlay__inner {
@@ -1289,7 +1322,7 @@ if (import.meta.client && auth.isLogin) {
 
 /* ── Delete draft button (in footer) ─────────────────── */
 .ik-create-delete {
-  min-width: 120px;
+  min-width: 140px;
   font-size: 16px;
   font-weight: 900;
   --z-button-color: #ff4444;
@@ -1297,7 +1330,7 @@ if (import.meta.client && auth.isLogin) {
 
 .ik-create-delete :deep(.z-button__inner),
 .ik-create-delete :deep(button) {
-  padding: 14px 28px;
+  padding: 14px 32px;
   font-size: 16px;
   letter-spacing: 1px;
 }
@@ -1738,6 +1771,17 @@ if (import.meta.client && auth.isLogin) {
   font-variant-numeric: tabular-nums;
 }
 
+.ik-create-anon-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+  color: #999;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 /* ═══════════════════════════════════════════════
    Mobile (≤768px) editor – default hidden
    ═══════════════════════════════════════════════ */
@@ -2164,6 +2208,12 @@ if (import.meta.client && auth.isLogin) {
     font-weight: 900;
     line-height: 16px;
     text-align: center;
+  }
+  .ik-mobile-footer__anon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   .ik-mobile-footer__publish {
     flex: 1;

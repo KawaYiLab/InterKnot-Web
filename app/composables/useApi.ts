@@ -85,6 +85,7 @@ interface DiscussionCommentPayload {
   content: string;
   parentId?: string;
   authorDocumentId?: string;
+  isAnonymous?: boolean;
 }
 
 interface MyBusinessCardsResult {
@@ -319,6 +320,7 @@ function toDiscussion(raw: unknown, apiBaseUrl: string): Discussion {
     commentsCount: Number(data.commentsCount ?? 0),
     isRead: data.isRead === true,
     liked: data.liked === true,
+    isAnonymous: data.isAnonymous === true,
     createdAt: data.createdAt as string | undefined,
     updatedAt: data.updatedAt as string | undefined,
     author: toAuthor(data.author, apiBaseUrl),
@@ -670,6 +672,7 @@ export function useApi() {
     content,
     parentId,
     authorDocumentId,
+    isAnonymous,
   }: DiscussionCommentPayload) => {
     const res = await $api("/api/comments", {
       method: "POST",
@@ -679,6 +682,7 @@ export function useApi() {
           content,
           ...(authorDocumentId ? { author: authorDocumentId } : {}),
           ...(parentId ? { parent: parentId } : {}),
+          ...(isAnonymous ? { isAnonymous: true } : {}),
         },
       },
     });
@@ -869,6 +873,7 @@ export function useApi() {
     editorState?: unknown[];
     coverId?: string | string[];
     authorId?: string;
+    isAnonymous?: boolean;
   }): Promise<DraftArticle> => {
     const data: Record<string, unknown> = {
       title: payload.title,
@@ -880,6 +885,9 @@ export function useApi() {
     }
     if (payload.authorId) {
       data.author = { connect: [{ documentId: payload.authorId }] };
+    }
+    if (payload.isAnonymous) {
+      data.isAnonymous = true;
     }
     const response = await $api("/api/articles", {
       method: "POST",
@@ -899,6 +907,7 @@ export function useApi() {
       editorState?: unknown[];
       coverId?: string | string[] | null;
       authorId?: string;
+      isAnonymous?: boolean;
     },
   ): Promise<DraftArticle> => {
     const data: Record<string, unknown> = {};
@@ -907,6 +916,9 @@ export function useApi() {
     data.editorState = payload.editorState;
     if (payload.coverId !== undefined) {
       data.cover = payload.coverId ?? [];
+    }
+    if (payload.isAnonymous !== undefined) {
+      data.isAnonymous = payload.isAnonymous;
     }
     const response = await $api(`/api/articles/${id}`, {
       method: "PUT",

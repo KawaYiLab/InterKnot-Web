@@ -476,10 +476,19 @@ const onHomeRefreshEvent = () => {
   void handleRefresh();
 };
 
+// 乐观删除：帖子详情页/弹窗删除成功后，从首页列表中移除
+const onArticleDeleted = (e: Event) => {
+  const deletedId = (e as CustomEvent<string>).detail;
+  if (!deletedId) return;
+  list.value = list.value.filter((d) => d.id !== deletedId);
+  seenIds.delete(deletedId);
+};
+
 onMounted(async () => {
   if (import.meta.client) {
     window.addEventListener("ik:home-refresh", onHomeRefreshEvent);
     window.addEventListener("ik:tab-visible", onTabVisible);
+    window.addEventListener("ik:article-deleted", onArticleDeleted);
   }
   await initialFetchPromise;
   await nextTick();
@@ -512,6 +521,7 @@ onBeforeUnmount(() => {
   if (import.meta.client) {
     window.removeEventListener("ik:home-refresh", onHomeRefreshEvent);
     window.removeEventListener("ik:tab-visible", onTabVisible);
+    window.removeEventListener("ik:article-deleted", onArticleDeleted);
     if (scrollBridge) {
       window.removeEventListener("scroll", scrollBridge);
       scrollBridge = null;
