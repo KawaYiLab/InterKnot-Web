@@ -58,7 +58,7 @@ defineProps<{
 
 .skeleton-pulse {
   animation: skeleton-pulse 1.5s ease-in-out infinite;
-  background: var(--ik-discussion-card-placeholder-bg);
+  background: var(--ik-post-card-placeholder-bg);
   border-radius: 4px;
 }
 
@@ -70,19 +70,19 @@ defineProps<{
   }
 }
 
-/* 卡片容器 - 匹配 DiscussionCard 的圆角样式 */
+/* 卡片容器 - 匹配 PostCard 的圆角样式 */
 .ik-card-skeleton {
-  border-radius: var(--ik-discussion-card-radius);
-  background: var(--ik-discussion-card-outer-bg);
-  padding: var(--ik-discussion-card-padding);
+  border-radius: var(--ik-post-card-radius);
+  background: var(--ik-post-card-outer-bg);
+  padding: var(--ik-post-card-padding);
   overflow: hidden;
   contain: layout style paint;
 }
 
 .ik-card-skeleton__link {
   display: block;
-  border-radius: var(--ik-discussion-card-inner-radius);
-  background: var(--ik-discussion-card-inner-bg);
+  border-radius: var(--ik-post-card-inner-radius);
+  background: var(--ik-post-card-inner-bg);
   overflow: hidden;
 }
 
@@ -94,15 +94,15 @@ defineProps<{
 
 .ik-card-skeleton__cover {
   width: 100%;
-  background: var(--ik-discussion-card-placeholder-bg);
+  background: var(--ik-post-card-placeholder-bg);
 }
 
 /* 内容区域 - 内边距 0 8px 12px，元素间距 8px */
 .ik-card-skeleton__body {
   display: flex;
   flex-direction: column;
-  gap: var(--ik-discussion-card-body-gap);
-  padding: var(--ik-discussion-card-body-padding);
+  gap: var(--ik-post-card-body-gap);
+  padding: var(--ik-post-card-body-padding);
 }
 
 /* 头像和作者行 */
@@ -115,12 +115,12 @@ defineProps<{
 /* 头像占位 - 圆形，54x54 像素，负上边距 -28px */
 .ik-card-skeleton__avatar {
   position: relative;
-  margin-top: var(--ik-discussion-card-avatar-offset);
-  width: var(--ik-discussion-card-avatar-size);
-  height: var(--ik-discussion-card-avatar-size);
-  padding: var(--ik-discussion-card-avatar-padding);
+  margin-top: var(--ik-post-card-avatar-offset);
+  width: var(--ik-post-card-avatar-size);
+  height: var(--ik-post-card-avatar-size);
+  padding: var(--ik-post-card-avatar-padding);
   border-radius: 999px;
-  background: var(--ik-discussion-card-inner-bg);
+  background: var(--ik-post-card-inner-bg);
   flex-shrink: 0;
 }
 
@@ -128,31 +128,31 @@ defineProps<{
   width: 100%;
   height: 100%;
   border-radius: 999px;
-  background: var(--ik-discussion-card-placeholder-bg);
+  background: var(--ik-post-card-placeholder-bg);
 }
 
 .ik-card-skeleton__author-block {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: var(--ik-discussion-card-author-min-height);
-  padding-left: var(--ik-discussion-card-author-padding-left);
-  margin-left: var(--ik-discussion-card-author-offset);
-  width: var(--ik-discussion-card-author-block-width);
+  min-height: var(--ik-post-card-author-min-height);
+  padding-left: var(--ik-post-card-author-padding-left);
+  margin-left: var(--ik-post-card-author-offset);
+  width: var(--ik-post-card-author-block-width);
 }
 
 /* 作者名占位 */
 .ik-card-skeleton__author-name {
-  height: var(--ik-discussion-card-author-name-size);
+  height: var(--ik-post-card-author-name-size);
   margin: 4px 0;
-  background: var(--ik-discussion-card-placeholder-bg);
+  background: var(--ik-post-card-placeholder-bg);
   border-radius: 4px;
 }
 
 .ik-card-skeleton__divider {
   width: 100%;
   height: 1px;
-  background: var(--ik-discussion-card-divider-bg);
+  background: var(--ik-post-card-divider-bg);
 }
 
 /* 标题占位（单行 placeholder，与真实卡片"短标题占 1 行"的形态一致） */
@@ -162,8 +162,8 @@ defineProps<{
 }
 
 .ik-card-skeleton__title {
-  height: calc(var(--ik-discussion-card-title-size) * 1.25);
-  background: var(--ik-discussion-card-placeholder-bg);
+  height: calc(var(--ik-post-card-title-size) * 1.25);
+  background: var(--ik-post-card-placeholder-bg);
   border-radius: 4px;
 }
 </style>

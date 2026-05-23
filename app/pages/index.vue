@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDebounceFn, useWindowSize } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
-import type { Discussion } from "~/types/entities";
+import type { Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import {
   FALLBACK_COVER_ASPECT_RATIO,
@@ -15,7 +15,7 @@ import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 const api = useApi();
 const homeStateCache = useHomeStateCache();
 const route = useRoute();
-const discussionModal = useDiscussionModal();
+const postModal = usePostModal();
 const message = useMessage();
 const pageDataLoading = usePageDataLoading();
 
@@ -47,20 +47,20 @@ const LOAD_MORE_COOLDOWN_MS = 1000;
 // 固定部分（不含 title 高度）：
 //   card padding(8) + body padding-bottom(12) + author-row min-height(32)
 // + body gap(8) + title margin(8) = 68px
-// title 高度按真实行数（1 或 2）动态加，与 DiscussionCard 实际渲染严格匹配，
+// title 高度按真实行数（1 或 2）动态加，与 PostCard 实际渲染严格匹配，
 // 避免 ResizeObserver 测量后触发 layout 重排引起的滚动跳动。
-const DISCUSSION_CARD_FIXED_HEIGHT = 68;
-const DISCUSSION_CARD_TITLE_FONT_SIZE = 17;
-const DISCUSSION_CARD_TITLE_LINE_HEIGHT = 1.25;
+const POST_CARD_FIXED_HEIGHT = 68;
+const POST_CARD_TITLE_FONT_SIZE = 17;
+const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
 // 卡片 body 横向内边距 = 8 * 2 = 16px，title 可用宽度 = itemWidth - 16
-const DISCUSSION_CARD_BODY_PADDING_X = 16;
+const POST_CARD_BODY_PADDING_X = 16;
 
 const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
 const loading = ref(false);
 const loadingMore = ref(false);
 const refreshing = ref(false);
 
-const list = shallowRef<Discussion[]>([]);
+const list = shallowRef<Post[]>([]);
 const enterAnimationIds = shallowRef(new Set<string>());
 const endCursor = ref("0");
 const hasNextPage = ref(true);
@@ -84,29 +84,29 @@ const hasNewArticles = computed(() => newArticleIds.value.length > 0);
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
 
-const masonryKeyMapper = (discussion: Discussion) => discussion.id;
+const masonryKeyMapper = (post: Post) => post.id;
 const skeletonKeyMapper = (item: SkeletonItem) => item.id;
 const { width: viewportWidth } = useWindowSize({ initialWidth: 0 });
 
 
-const estimateDiscussionCardHeight = (discussion: Discussion, itemWidth: number) => {
+const estimatePostCardHeight = (post: Post, itemWidth: number) => {
   // 无封面文章使用占位图原生比例，与卡片实际渲染保持一致
-  const ratio = discussion.cover
-    ? getNormalizedCoverAspectRatio(discussion.coverWidth, discussion.coverHeight)
+  const ratio = post.cover
+    ? getNormalizedCoverAspectRatio(post.coverWidth, post.coverHeight)
     : FALLBACK_COVER_ASPECT_RATIO;
   const coverHeight = itemWidth / ratio;
 
   // 按 title 真实行数估算：避免短标题被强制占 2 行高度，又避免与实际渲染不一致引发滚动跳动
-  const titleAvailWidth = Math.max(0, itemWidth - DISCUSSION_CARD_BODY_PADDING_X);
+  const titleAvailWidth = Math.max(0, itemWidth - POST_CARD_BODY_PADDING_X);
   const titleLines = estimateTitleLineCount(
-    discussion.title,
+    post.title,
     titleAvailWidth,
-    DISCUSSION_CARD_TITLE_FONT_SIZE,
+    POST_CARD_TITLE_FONT_SIZE,
   );
   const titleHeight =
-    DISCUSSION_CARD_TITLE_FONT_SIZE * DISCUSSION_CARD_TITLE_LINE_HEIGHT * titleLines;
+    POST_CARD_TITLE_FONT_SIZE * POST_CARD_TITLE_LINE_HEIGHT * titleLines;
 
-  return Math.ceil(coverHeight + DISCUSSION_CARD_FIXED_HEIGHT + titleHeight);
+  return Math.ceil(coverHeight + POST_CARD_FIXED_HEIGHT + titleHeight);
 };
 
 // 动画时长（与 CSS .ik-masonry-card-enter 严格对应）
@@ -114,7 +114,7 @@ const CARD_ENTER_ANIMATION_MS = 240;
 // 兜底清理延迟：略大于动画时长，避免清理过早误伤还在播放的动画
 const CARD_ENTER_CLEANUP_MS = CARD_ENTER_ANIMATION_MS + 60;
 
-const addEnterAnimations = (nodes: Discussion[]) => {
+const addEnterAnimations = (nodes: Post[]) => {
   if (!nodes.length) return;
 
   const nextIds = new Set(enterAnimationIds.value);
@@ -139,16 +139,16 @@ const addEnterAnimations = (nodes: Discussion[]) => {
   }
 };
 
-const shouldAnimateDiscussion = (discussionId: string) => {
-  return enterAnimationIds.value.has(discussionId);
+const shouldAnimatePost = (postId: string) => {
+  return enterAnimationIds.value.has(postId);
 };
 
 // 一批新增卡片 240ms 内集中 animationend → 以前每次都 new Set(...) 拷贝，
 // N 条同时结束 → O(N²) 拷贝。改用微任务批量合并：同一任务队内所有 finish
 // 调用只触发一次 Set 重建 + 一次 reactive trigger。
 let pendingFinish: Set<string> | null = null;
-const finishEnterAnimation = (discussionId: string) => {
-  if (!enterAnimationIds.value.has(discussionId)) return;
+const finishEnterAnimation = (postId: string) => {
+  if (!enterAnimationIds.value.has(postId)) return;
   if (!pendingFinish) {
     pendingFinish = new Set();
     queueMicrotask(() => {
@@ -160,7 +160,7 @@ const finishEnterAnimation = (discussionId: string) => {
       enterAnimationIds.value = next;
     });
   }
-  pendingFinish.add(discussionId);
+  pendingFinish.add(postId);
 };
 
 const skeletonCount = computed(() => {
@@ -169,12 +169,12 @@ const skeletonCount = computed(() => {
 
 const skeletonItems = computed(() => generateSkeletons(skeletonCount.value));
 
-const toUniqueNodes = (nodes: Discussion[], reset: boolean): Discussion[] => {
+const toUniqueNodes = (nodes: Post[], reset: boolean): Post[] => {
   if (reset) {
     seenIds = new Set();
   }
 
-  const unique: Discussion[] = [];
+  const unique: Post[] = [];
   for (const node of nodes) {
     if (!node.id || seenIds.has(node.id)) continue;
     seenIds.add(node.id);
@@ -260,22 +260,22 @@ const fetchList = async (reset = false) => {
   }
 };
 
-const goDiscussion = (discussion: Discussion, event: MouseEvent) => {
+const goPost = (post: Post, event: MouseEvent) => {
   // 阻止 NuxtLink 默认导航，改为弹窗展示
   event.preventDefault();
-  discussionModal.open(discussion.id, {
-    coverAspectRatio: getCoverAspectRatio(discussion.coverWidth, discussion.coverHeight),
+  postModal.open(post.id, {
+    coverAspectRatio: getCoverAspectRatio(post.coverWidth, post.coverHeight),
     preview: {
-      title: discussion.title,
-      author: discussion.author,
-      createdAt: discussion.createdAt,
+      title: post.title,
+      author: post.author,
+      createdAt: post.createdAt,
     },
   });
 
   // 乐观标记已读 → 后端失败时回滚，避免“UI 已读、服务端未读”状态不一致
   // （下次 refresh 会被服务端数据覆盖，造成已读闪烁）。
-  if (discussion.isRead) return;
-  const targetId = discussion.id;
+  if (post.isRead) return;
+  const targetId = post.id;
   list.value = list.value.map((d) =>
     d.id === targetId ? { ...d, isRead: true } : d,
   );
@@ -583,7 +583,7 @@ onBeforeUnmount(() => {
             :measure-items="false"
           >
             <template #default="{ item }">
-              <DiscussionCardSkeleton :skeleton="item" />
+              <PostCardSkeleton :skeleton="item" />
             </template>
           </VirtualMasonry>
         </div>
@@ -603,18 +603,18 @@ onBeforeUnmount(() => {
             :max-columns="5"
             :buffer="1800"
             :estimated-height="300"
-            :height-mapper="estimateDiscussionCardHeight"
+            :height-mapper="estimatePostCardHeight"
             :key-mapper="masonryKeyMapper"
             :initial-heights="cachedMeasuredHeights"
           >
             <template #default="{ item, index, columnCount }">
-              <DiscussionCard
-                :class="{ 'ik-masonry-card-enter': shouldAnimateDiscussion(item.id) }"
-                :discussion="item"
+              <PostCard
+                :class="{ 'ik-masonry-card-enter': shouldAnimatePost(item.id) }"
+                :post="item"
                 :eager="index < columnCount * 2"
-                @open="goDiscussion"
+                @open="goPost"
                 @animationend="finishEnterAnimation(item.id)"
-                v-memo="[item.id, item.isRead, item.cover, shouldAnimateDiscussion(item.id)]"
+                v-memo="[item.id, item.isRead, item.cover, shouldAnimatePost(item.id)]"
               />
             </template>
           </VirtualMasonry>

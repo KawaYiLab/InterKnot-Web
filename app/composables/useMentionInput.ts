@@ -15,7 +15,7 @@
  *    时，把整段一并删除——通过监听 `keydown.Backspace` / `keydown.Delete` 调整选区实现。
  * 6. 编辑器内的覆盖层（高亮芯片）由父组件持有 `mentions` + 文本同步绘制，本 composable 不绘制。
  *
- * 暴露 API 主要给两个评论编辑器入口（pages/discussion/[id].vue 与 DiscussionOverlay.vue）共用。
+ * 暴露 API 主要给两个评论编辑器入口（pages/post/[id].vue 与 PostOverlay.vue）共用。
  */
 import { computed, nextTick, ref, type Ref } from "vue";
 import { buildMentionToken, parseMentions } from "~/utils/mention";
@@ -348,7 +348,7 @@ export function useMentionInput(opts: UseMentionInputOptions) {
         if (cand) {
           e.preventDefault();
           // stopPropagation 阻止 textarea 的 keydown.enter.exact.prevent="sendComment"
-          // （pages/discussion 与 DiscussionOverlay 都绑了这个）触发发送
+          // （pages/post 与 PostOverlay 都绑了这个）触发发送
           e.stopPropagation();
           selectCandidate(cand);
         }

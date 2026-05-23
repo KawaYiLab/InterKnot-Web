@@ -1,7 +1,7 @@
 /**
  * useKnockKnockModal —— "敲敲" 消息通知弹窗（私聊 / 群聊入口）
  *
- * 模式：仿 useDiscussionModal 的路由级弹窗单例，
+ * 模式：仿 usePostModal 的路由级弹窗单例，
  * 外壳动画复用帖子弹窗的 .ik-overlay / .ik-dialog 样式。
  *
  * open() 通过 history.pushState 改变 URL（不走 Vue Router），

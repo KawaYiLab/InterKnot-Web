@@ -6,10 +6,10 @@
  *
  * 依赖关系：measuredHeights 确保重建后布局完全一致 → scrollY 可直接定位。
  */
-import type { Discussion } from "~/types/entities";
+import type { Post } from "~/types/entities";
 
 export interface HomeStateSnapshot {
-  list: Discussion[];
+  list: Post[];
   endCursor: string;
   hasNextPage: boolean;
   query: string;
