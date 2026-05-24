@@ -193,38 +193,7 @@ useSeoMeta({
 
 const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
 
-// Lock page scroll only on large landscape viewports where the layout is
-// designed to fit in a single screen. On medium/portrait/mobile viewports
-// the layout cannot fit (large banner + grid + bottom actions + fixed
-// MobileBottomNav), so we let the page scroll naturally.
-let _prevHtmlOverflow = "";
-let _prevBodyOverflow = "";
-let _scrollLockMql: MediaQueryList | null = null;
-const applyScrollLock = (lock: boolean) => {
-  if (!import.meta.client) return;
-  if (lock) {
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-  } else {
-    document.documentElement.style.overflow = _prevHtmlOverflow;
-    document.body.style.overflow = _prevBodyOverflow;
-  }
-};
-const _onScrollLockChange = (e: MediaQueryListEvent) => {
-  applyScrollLock(e.matches);
-};
-
 onMounted(async () => {
-  if (import.meta.client) {
-    _prevHtmlOverflow = document.documentElement.style.overflow;
-    _prevBodyOverflow = document.body.style.overflow;
-    _scrollLockMql = window.matchMedia(
-      "(min-width: 1024px) and (orientation: landscape)",
-    );
-    _scrollLockMql.addEventListener("change", _onScrollLockChange);
-    applyScrollLock(_scrollLockMql.matches);
-  }
-
   loading.value = true;
   loadError.value = false;
   pageDataLoading.claim();
@@ -251,18 +220,11 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   profileTabLabel.value = null;
-  if (import.meta.client) {
-    if (_scrollLockMql) {
-      _scrollLockMql.removeEventListener("change", _onScrollLockChange);
-      _scrollLockMql = null;
-    }
-    document.documentElement.style.overflow = _prevHtmlOverflow;
-    document.body.style.overflow = _prevBodyOverflow;
-  }
 });
 </script>
 
 <template>
+  <div>
   <section class="ik-profile">
     <!-- ══════════ Skeleton ══════════ -->
     <template v-if="loading">
@@ -505,6 +467,8 @@ onBeforeUnmount(() => {
 
     </template>
   </section>
+  <AppFooter />
+  </div>
 </template>
 
 <style scoped>
