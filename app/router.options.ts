@@ -8,6 +8,9 @@ export default <RouterConfig>{
     // 后退/前进：使用浏览器保存的位置
     if (savedPosition) return savedPosition;
 
+    // 同路径仅 query 变化（如弹窗开关）：保持当前滚动位置
+    if (to.path === _from.path) return false;
+
     // 前进导航到首页：消费缓存中的 scrollY
     if (to.path === "/") {
       const y = useHomeStateCache().consumeScrollY();
