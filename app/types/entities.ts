@@ -459,6 +459,13 @@ export interface KkCallSessionSummary {
   lastPreview: string;
 }
 
+/** 工具调用记录 */
+export interface KkCallToolCall {
+  name: string;
+  arguments?: string;
+  result?: string;
+}
+
 /** 单条消息 */
 export interface KkCallMessage {
   documentId: string;
@@ -467,6 +474,14 @@ export interface KkCallMessage {
   pending: boolean;
   errorReason: string | null;
   createdAt: string;
+  /** PR4: 思考链内容（流式累积） */
+  thinkingContent?: string;
+  /** PR4: 思考链是否已结束 */
+  thinkingDone?: boolean;
+  /** PR4: 工具调用列表 */
+  toolCalls?: KkCallToolCall[];
+  /** PR4: 引用 ID 列表 */
+  refs?: string[];
 }
 
 /** SSE 事件类型（前端 → 用户视图）；不同 type 的 data 形态见对应 handler */
@@ -476,4 +491,9 @@ export type KkCallSseEventType =
   | "message.assistant.started"
   | "message.assistant.delta"
   | "message.assistant.done"
+  | "message.assistant.thinking_delta"
+  | "message.assistant.thinking_done"
+  | "message.assistant.tool_call"
+  | "message.assistant.tool_result"
+  | "message.assistant.ref"
   | "error";

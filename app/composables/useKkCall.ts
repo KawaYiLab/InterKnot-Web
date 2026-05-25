@@ -17,6 +17,7 @@ import type {
   KkCallCharacter,
   KkCallMessage,
   KkCallSessionSummary,
+  KkCallToolCall,
 } from "~/types/entities";
 
 const TOKEN_KEY = "access_token";
@@ -127,7 +128,9 @@ export function useKkCall(): UseKkCall {
     return copy;
   };
 
-  /** dedup by documentId，incoming 覆盖；按 createdAt asc 排序 */
+  /** dedup by documentId，incoming 覆盖；按 createdAt asc 排序。
+   *  合并时保留 existing 上的 SSE-only 字段（thinkingContent / toolCalls / refs），
+   *  因为这些字段只在流式推送期间存在、不会持久化到数据库。 */
   const mergeMessages = (
     existing: KkCallMessage[],
     incoming: KkCallMessage[],
@@ -138,7 +141,20 @@ export function useKkCall(): UseKkCall {
       if (it?.documentId) map.set(it.documentId, it);
     }
     for (const it of incoming) {
-      if (it?.documentId) map.set(it.documentId, it);
+      if (!it?.documentId) continue;
+      const prev = map.get(it.documentId);
+      if (prev) {
+        // 保留 SSE-only 字段
+        map.set(it.documentId, {
+          ...it,
+          thinkingContent: it.thinkingContent || prev.thinkingContent,
+          thinkingDone: it.thinkingDone ?? prev.thinkingDone,
+          toolCalls: it.toolCalls?.length ? it.toolCalls : prev.toolCalls,
+          refs: it.refs?.length ? it.refs : prev.refs,
+        });
+      } else {
+        map.set(it.documentId, it);
+      }
     }
     return Array.from(map.values()).sort((a, b) => {
       const da = new Date(a.createdAt).getTime();
@@ -165,7 +181,7 @@ export function useKkCall(): UseKkCall {
       const resp = await fetchMessagesPage(id, null);
       const incoming = toAsc(resp?.data ?? []);
       patchBucket(id, {
-        items: incoming,
+        items: mergeMessages(bucket.items, incoming),
         hasMore: !!resp?.meta?.hasMore,
         nextCursor: resp?.meta?.nextCursor ?? null,
         hydrated: true,
@@ -372,6 +388,91 @@ export function useKkCall(): UseKkCall {
             errorReason: null,
             ...(fullContent != null ? { content: fullContent } : {}),
           });
+          break;
+        }
+        // ── PR4: 思考链 / 工具调用 / 引用 ──
+        case "message.assistant.thinking_delta": {
+          const td = typeof data?.delta === "string" ? data.delta : "";
+          if (!td || !assistantMsgId) break;
+          const bucket = messagesById.value[currentBucketId];
+          if (!bucket?.items?.length) break;
+          patchBucket(currentBucketId, {
+            items: bucket.items.map((m) =>
+              m.documentId === assistantMsgId
+                ? { ...m, thinkingContent: (m.thinkingContent || "") + td, thinkingDone: false }
+                : m,
+            ),
+          });
+          break;
+        }
+        case "message.assistant.thinking_done": {
+          patchAssistant({ thinkingDone: true });
+          break;
+        }
+        case "message.assistant.tool_call": {
+          if (!assistantMsgId) break;
+          const tcName = typeof data?.name === "string" ? data.name : "tool";
+          const tcArgs = typeof data?.arguments === "string" ? data.arguments : "";
+          const tc: KkCallToolCall = { name: tcName, arguments: tcArgs };
+          const bucket2 = messagesById.value[currentBucketId];
+          if (!bucket2?.items?.length) break;
+          patchBucket(currentBucketId, {
+            items: bucket2.items.map((m) =>
+              m.documentId === assistantMsgId
+                ? { ...m, toolCalls: [...(m.toolCalls || []), tc] }
+                : m,
+            ),
+          });
+          break;
+        }
+        case "message.assistant.tool_result": {
+          if (!assistantMsgId) break;
+          const trName = typeof data?.name === "string" ? data.name : "tool";
+          const trResult = typeof data?.result === "string" ? data.result : "";
+          const bucket3 = messagesById.value[currentBucketId];
+          if (!bucket3?.items?.length) break;
+          // 匹配最后一个同名 tool_call 并填充 result
+          patchBucket(currentBucketId, {
+            items: bucket3.items.map((m) => {
+              if (m.documentId !== assistantMsgId) return m;
+              const calls: KkCallToolCall[] = [...(m.toolCalls || [])];
+              for (let i = calls.length - 1; i >= 0; i--) {
+                const c = calls[i];
+                if (c && c.name === trName && !c.result) {
+                  calls[i] = { name: c.name, arguments: c.arguments, result: trResult };
+                  break;
+                }
+              }
+              return { ...m, toolCalls: calls };
+            }),
+          });
+          break;
+        }
+        case "message.assistant.ref": {
+          if (!assistantMsgId) break;
+          const refId = typeof data?.refId === "string" ? data.refId : "";
+          if (!refId) break;
+          const bucket4 = messagesById.value[currentBucketId];
+          if (!bucket4?.items?.length) break;
+          patchBucket(currentBucketId, {
+            items: bucket4.items.map((m) =>
+              m.documentId === assistantMsgId
+                ? { ...m, refs: [...(m.refs || []), refId] }
+                : m,
+            ),
+          });
+          break;
+        }
+        case "message.assistant.removed": {
+          // 后端删除了提前创建的空占位消息（工具调用后无后续内容的边界情况）
+          const rmId = typeof data?.documentId === "string" ? data.documentId : "";
+          if (!rmId) break;
+          const bucketRm = messagesById.value[currentBucketId];
+          if (!bucketRm?.items?.length) break;
+          patchBucket(currentBucketId, {
+            items: bucketRm.items.filter((m) => m.documentId !== rmId),
+          });
+          if (assistantMsgId === rmId) assistantMsgId = null;
           break;
         }
         case "error": {
