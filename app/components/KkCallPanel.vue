@@ -16,9 +16,13 @@ import { ref, computed, watch, nextTick, onBeforeUnmount } from "vue";
 import {
   ChatBubbleLeftIcon,
   PaperAirplaneIcon,
+  LightBulbIcon,
+  WrenchIcon,
+  ChevronDownIcon,
 } from "@heroicons/vue/24/solid";
-import type { KkCallSessionSummary } from "~/types/entities";
+import type { KkCallSessionSummary, KkCallMessage } from "~/types/entities";
 import { formatTime } from "~/utils/time";
+import { formatChatMarkdown } from "~/utils/format-chat";
 
 const props = defineProps<{
   /** 真 session documentId 或 pseudo:char:X */
@@ -65,6 +69,82 @@ const messagesLoading = computed(
 const hasPendingAssistant = computed(() =>
   messages.value.some((m) => m.role === "assistant" && m.pending),
 );
+
+/** 消息是否有正在执行（尚无 result）的工具调用 */
+function hasRunningToolCall(msg: KkCallMessage): boolean {
+  return !!msg.toolCalls?.some((tc) => !tc.result);
+}
+
+/* ───────── 思考面板展开状态 ─────────
+ * 原生 <details> 既不支持过渡动画，又会被 :open 的反复 patch 覆盖用户的手动切换；
+ * 这里改为自管状态：默认跟随 hasRunningToolCall（运行中自动展开），用户一旦手动切换
+ * 就以 thinkingUserToggle 中的显式值为准，不再被流式重渲染覆盖。
+ */
+const thinkingUserToggle = ref<Record<string, boolean>>({});
+/**
+ * 默认展开规则："AI 正在思考"期间自动打开，思考一结束（不必等整条消息完成）就自动关上。
+ *
+ * "正在思考"的判定（满足任一即视为思考中）：
+ *   1) 思考链流式中：pending && thinkingContent 在累积 && thinkingDone 未到 && 正文 content 还没开始
+ *      —— 这里加 content==='' 是关键：很多 provider（含 AstrBot 的部分流式格式）不会在
+ *      chain 切换时发 thinking_done complete 帧，但只要正文 token 一开始流，思考阶段就
+ *      事实上结束了；以"content 是否出现"作为冗余信号，避免要等 pending=false 才关上。
+ *   2) 有未完成的 tool call。
+ * 用户一旦手动切换则锁定为显式值，不再被流式状态覆盖。
+ */
+function isThinkingOpen(msg: KkCallMessage): boolean {
+  const explicit = thinkingUserToggle.value[msg.documentId];
+  if (explicit !== undefined) return explicit;
+  const thinkingStreaming =
+    msg.pending
+    && !!msg.thinkingContent
+    && !msg.thinkingDone
+    && msg.content.length === 0;
+  return thinkingStreaming || hasRunningToolCall(msg);
+}
+function toggleThinking(msg: KkCallMessage, e: MouseEvent) {
+  const next = !isThinkingOpen(msg);
+  thinkingUserToggle.value = {
+    ...thinkingUserToggle.value,
+    [msg.documentId]: next,
+  };
+
+  // 收起时浏览器会自动把 scrollTop clamp 到新的 scrollHeight，无需手动处理
+  if (!next) return;
+
+  const container = messagesRef.value;
+  const button = e.currentTarget as HTMLElement | null;
+  const thinkingEl = button?.closest<HTMLElement>(".ik-kkcall__thinking");
+  if (!container || !thinkingEl) return;
+
+  // 展开期间用 rAF 跟踪 grid-rows 0fr→1fr 过渡（CSS 过渡 280ms，多给一点缓冲到 340ms），
+  // 每帧根据"用户是否贴底"做不同的滚动跟随。
+  // - 贴底：scrollTop=scrollHeight，让面板看起来"自然把页面顶上去"
+  // - 非贴底：仅在面板底部超出容器视口时按 overflow 量平移 scrollTop（相对滚动，
+  //   每帧重新测量，避免浏览器位置反转引起的振荡）
+  const wasBottom = wasNearBottom.value;
+  const ANIMATION_MS = 340;
+  const start = performance.now();
+  const tick = () => {
+    const c = messagesRef.value;
+    if (!c) return;
+    if (wasBottom) {
+      c.scrollTop = c.scrollHeight;
+    } else {
+      const cRect = c.getBoundingClientRect();
+      const tRect = thinkingEl.getBoundingClientRect();
+      const overflow = tRect.bottom - cRect.bottom;
+      if (overflow > 0) {
+        // 8px 呼吸空间，避免面板正好贴着容器下沿
+        c.scrollTop += overflow + 8;
+      }
+    }
+    if (performance.now() - start < ANIMATION_MS) {
+      requestAnimationFrame(tick);
+    }
+  };
+  requestAnimationFrame(tick);
+}
 
 /* ───────── 时间分隔（间隔 > 5 分钟） ───────── */
 const TIME_GAP_MS = 5 * 60 * 1000;
@@ -179,13 +259,26 @@ watch(
   },
 );
 
-/** 流式 delta 期间，最后一条 assistant content 长度变化也要跟随 */
+/**
+ * 流式 delta 期间，最后一条 assistant 任意"会改变高度"的字段都要触发贴底跟随：
+ *   - content：正文 token
+ *   - thinkingContent：思考链 token（之前漏掉，导致思考面板被挤出视口）
+ *   - toolCalls.length：新增的工具调用卡片
+ *   - 每个 toolCall.result.length：工具返回结果填充
+ * 任一长度变化都会让 sig 变化，watch 触发，sync 写 scrollTop。
+ */
 watch(
   () => {
     const list = messages.value;
     const last = list[list.length - 1];
-    if (!last || last.role !== "assistant") return 0;
-    return last.content.length;
+    if (!last || last.role !== "assistant") return "";
+    const tcLens = last.toolCalls?.map((tc) => tc.result?.length ?? 0) ?? [];
+    return [
+      last.content.length,
+      last.thinkingContent?.length ?? 0,
+      last.toolCalls?.length ?? 0,
+      ...tcLens,
+    ].join("/");
   },
   () => {
     if (!wasNearBottom.value) return;
@@ -195,6 +288,42 @@ watch(
       el.scrollTop = el.scrollHeight;
     }
   },
+);
+
+/**
+ * 思考链流式期间，思考面板自身有 max-height + overflow-y:auto，
+ * 当 thinkingContent 超过容器高度后会出现内部滚动条。
+ * 这里把"最近一个" .ik-kkcall__thinking-body 也贴底跟随，
+ * 让用户始终看到最新 token；如果用户主动往上翻读旧内容（已远离底部），
+ * 就尊重 ta 的位置，不强行拽回。
+ */
+const THINKING_INNER_NEAR_BOTTOM_PX = 30;
+watch(
+  () => {
+    const list = messages.value;
+    const last = list[list.length - 1];
+    if (!last || last.role !== "assistant") return 0;
+    return last.thinkingContent?.length ?? 0;
+  },
+  (next, prev) => {
+    if (next <= (prev ?? 0)) return;
+    const container = messagesRef.value;
+    if (!container) return;
+    // 流式中只可能存在一个"未结束"的思考面板（最后一条 assistant）；
+    // 直接取最后一个 DOM 节点即可，省去额外的 ref map。
+    const bodies = container.querySelectorAll<HTMLElement>(".ik-kkcall__thinking-body");
+    const lastBody = bodies[bodies.length - 1];
+    if (!lastBody) return;
+    const innerNearBottom =
+      lastBody.scrollHeight - lastBody.scrollTop - lastBody.clientHeight
+      <= THINKING_INNER_NEAR_BOTTOM_PX;
+    if (innerNearBottom) {
+      lastBody.scrollTop = lastBody.scrollHeight;
+    }
+  },
+  // flush:'post' 确保在 DOM 完成新 token 渲染后再读 scrollHeight，
+  // 否则默认 pre 时机读到的是旧高度，scrollTop 会少一帧的差额。
+  { flush: "post" },
 );
 
 /* ───────── 发送 ───────── */
@@ -274,14 +403,9 @@ const retryLastUser = () => {
 };
 
 onBeforeUnmount(() => {
-  if (currentSendAbort) {
-    try {
-      currentSendAbort();
-    } catch {
-      /* noop */
-    }
-    currentSendAbort = null;
-  }
+  // 不中断 SSE：useState 全局状态在组件卸载后仍有效，让流在后台跑完，
+  // 用户重新打开弹窗时直接看到最新结果。避免 abort 导致的 "生成失败" 误报。
+  currentSendAbort = null;
 });
 
 // 首次挂载拉一次列表（避免父级未先 refresh 时 sessions 为空）
@@ -376,7 +500,7 @@ if (import.meta.client && props.sessions.length === 0) {
                   <!-- 等待 token 中（content 仍为空）：复用私聊 typing-dot 的跳动动画，
                        避免静态"…"或闪烁光标在白底气泡上观感生硬 -->
                   <span
-                    v-if="entry.msg.pending && !entry.msg.content"
+                    v-if="entry.msg.pending && !entry.msg.content && !entry.msg.thinkingContent && !entry.msg.toolCalls?.length"
                     class="ik-kkcall__msg-dots"
                     aria-label="正在输入"
                   >
@@ -385,15 +509,93 @@ if (import.meta.client && props.sessions.length === 0) {
                     <span class="ik-kkcall__msg-dot" />
                   </span>
                   <template v-else>
-                    <span class="ik-kkcall__msg-content">{{ entry.msg.content }}</span>
+                    <!-- assistant：把 markdown 渲染成结构化 HTML，对齐 ChatUI 观感。
+                         流式期间每个 token 到达都重渲染一次，markdown-it parse 单次 <5ms 不会成为瓶颈。
+                         user：保持纯文本，避免用户输入被意外解析（也防止用户输入端的 markdown 注入）。 -->
+                    <div
+                      v-if="entry.msg.role === 'assistant'"
+                      class="ik-kkcall__msg-md"
+                      v-html="formatChatMarkdown(entry.msg.content)"
+                    />
+                    <span
+                      v-else
+                      class="ik-kkcall__msg-content"
+                    >{{ entry.msg.content }}</span>
                     <!-- 流式有内容后保留尾部闪烁光标，提示仍在生成 -->
                     <span
                       v-if="entry.msg.pending"
                       class="ik-kkcall__msg-cursor"
                       aria-hidden="true"
                     >▋</span>
+                    <!-- PR4: 引用角标 -->
+                    <div
+                      v-if="entry.msg.role === 'assistant' && entry.msg.refs?.length"
+                      class="ik-kkcall__refs"
+                    >
+                      <span
+                        v-for="(rid, rIdx) in entry.msg.refs"
+                        :key="rIdx"
+                        class="ik-kkcall__ref-badge"
+                        :title="rid"
+                      >{{ rIdx + 1 }}</span>
+                    </div>
                   </template>
                 </template>
+              </div>
+              <!-- PR4: 思考过程 pill（气泡外部，与私聊 .ik-knock__msg-quote 同层级） -->
+              <div
+                v-if="entry.msg.role === 'assistant' && (entry.msg.thinkingContent || entry.msg.toolCalls?.length)"
+                class="ik-kkcall__thinking"
+                :class="{ 'is-open': isThinkingOpen(entry.msg) }"
+              >
+                <button
+                  type="button"
+                  class="ik-kkcall__thinking-summary"
+                  :aria-expanded="isThinkingOpen(entry.msg)"
+                  @click="toggleThinking(entry.msg, $event)"
+                >
+                  <LightBulbIcon class="ik-kkcall__thinking-icon" aria-hidden="true" />
+                  <span class="ik-kkcall__thinking-label">{{ hasRunningToolCall(entry.msg) ? '思考中…' : '思考过程' }}</span>
+                  <span
+                    v-if="hasRunningToolCall(entry.msg)"
+                    class="ik-kkcall__thinking-spinner"
+                  />
+                  <ChevronDownIcon class="ik-kkcall__thinking-chevron" aria-hidden="true" />
+                </button>
+                <!-- grid-template-rows 0fr → 1fr 实现任意高度的平滑过渡。
+                     外 wrap 负责裁剪（overflow:hidden + min-height:0），
+                     内 body 才有 padding/max-height/scroll，避免裁剪与滚动条互相干扰。 -->
+                <div class="ik-kkcall__thinking-body-wrap">
+                  <div class="ik-kkcall__thinking-body-clip">
+                    <div class="ik-kkcall__thinking-body">
+                      <div v-if="entry.msg.thinkingContent" class="ik-kkcall__thinking-text">
+                        {{ entry.msg.thinkingContent }}
+                      </div>
+                      <div
+                        v-for="(tc, tcIdx) in entry.msg.toolCalls"
+                        :key="tcIdx"
+                        class="ik-kkcall__tool-card"
+                      >
+                        <div class="ik-kkcall__tool-header">
+                          <WrenchIcon class="ik-kkcall__tool-icon" aria-hidden="true" />
+                          <span class="ik-kkcall__tool-name">{{ tc.name }}</span>
+                          <span
+                            v-if="tc.result"
+                            class="ik-kkcall__tool-badge is-done"
+                          >完成</span>
+                          <span
+                            v-else
+                            class="ik-kkcall__tool-badge is-running"
+                          >执行中…</span>
+                        </div>
+                        <div v-if="tc.result" class="ik-kkcall__tool-result">
+                          <span class="ik-kkcall__tool-result-label">返回：</span>
+                          <code>{{ tc.result.length > 200 ? tc.result.slice(0, 200) + '…' : tc.result }}</code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -793,9 +995,194 @@ if (import.meta.client && props.sessions.length === 0) {
   word-break: break-word;
 }
 
+/* ── assistant markdown 容器 ──
+ * 气泡（.ik-knock__msg-bubble）默认 white-space: pre-wrap + font-weight: 600
+ * 是为 user 纯文本气泡定的；markdown 渲染后内容已是结构化 HTML，必须复位
+ * 这两项，否则会出现重复空行 + 整段过粗。
+ *
+ * v-html 注入的元素穿不过 scoped 选择器，所以下面统一用 :deep()。
+ */
+.ik-kkcall__msg-md {
+  white-space: normal;
+  word-break: break-word;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* 首尾块级元素去掉 margin，避免气泡内部出现额外空隙。
+ * `>` 必须在 :deep() 之外——它是相对 .ik-kkcall__msg-md 自身的子选择器，
+ * 而 :deep 的作用是让选择器穿透 v-html 注入的无 hash 属性子元素。 */
+.ik-kkcall__msg-md > :deep(*:first-child) {
+  margin-top: 0;
+}
+.ik-kkcall__msg-md > :deep(*:last-child) {
+  margin-bottom: 0;
+}
+
+.ik-kkcall__msg-md :deep(p) {
+  margin: 0.5em 0;
+}
+
+.ik-kkcall__msg-md :deep(strong),
+.ik-kkcall__msg-md :deep(b) {
+  font-weight: 700;
+}
+
+.ik-kkcall__msg-md :deep(em),
+.ik-kkcall__msg-md :deep(i) {
+  font-style: italic;
+}
+
+.ik-kkcall__msg-md :deep(del),
+.ik-kkcall__msg-md :deep(s) {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* 标题：略大于正文，不要太抢眼 */
+.ik-kkcall__msg-md :deep(h1),
+.ik-kkcall__msg-md :deep(h2),
+.ik-kkcall__msg-md :deep(h3),
+.ik-kkcall__msg-md :deep(h4),
+.ik-kkcall__msg-md :deep(h5),
+.ik-kkcall__msg-md :deep(h6) {
+  margin: 0.8em 0 0.4em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.ik-kkcall__msg-md :deep(h1) { font-size: 1.4em; }
+.ik-kkcall__msg-md :deep(h2) { font-size: 1.25em; }
+.ik-kkcall__msg-md :deep(h3) { font-size: 1.12em; }
+.ik-kkcall__msg-md :deep(h4),
+.ik-kkcall__msg-md :deep(h5),
+.ik-kkcall__msg-md :deep(h6) { font-size: 1em; }
+
+/* 列表：紧凑间距 + 适度缩进 */
+.ik-kkcall__msg-md :deep(ul),
+.ik-kkcall__msg-md :deep(ol) {
+  margin: 0.4em 0;
+  padding-left: 1.4em;
+}
+.ik-kkcall__msg-md :deep(li) {
+  margin: 0.2em 0;
+}
+.ik-kkcall__msg-md :deep(li > p) {
+  margin: 0.2em 0;
+}
+
+/* 引用：左色条 + 弱化文本 */
+.ik-kkcall__msg-md :deep(blockquote) {
+  margin: 0.6em 0;
+  padding: 0.2em 0.9em;
+  border-left: 3px solid rgba(44, 88, 226, 0.45);
+  background: rgba(44, 88, 226, 0.06);
+  color: rgba(77, 77, 77, 0.85);
+  border-radius: 4px;
+}
+.ik-kkcall__msg-md :deep(blockquote > *:first-child) {
+  margin-top: 0;
+}
+.ik-kkcall__msg-md :deep(blockquote > *:last-child) {
+  margin-bottom: 0;
+}
+
+/* 行内代码：浅灰 chip */
+.ik-kkcall__msg-md :deep(code) {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.92em;
+  padding: 1px 6px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+/* 代码块：暗底 + 横向滚动 + 顶角语言徽标 */
+.ik-kkcall__msg-md :deep(pre) {
+  position: relative;
+  margin: 0.6em 0;
+  padding: 12px 14px;
+  background: #1e1e1e;
+  color: #e4e4e4;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.88em;
+  line-height: 1.5;
+}
+.ik-kkcall__msg-md :deep(pre code) {
+  display: block;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 0;
+  word-break: normal;
+  white-space: pre;
+}
+/* 语言徽标：来自 markdown-it fence 钩子写入的 data-lang */
+.ik-kkcall__msg-md :deep(pre[data-lang])::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
+/* 链接：和气泡撞色 + 下划线，hover 加深 */
+.ik-kkcall__msg-md :deep(a) {
+  color: #2c58e2;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+.ik-kkcall__msg-md :deep(a:hover) {
+  color: #1a3fb8;
+}
+
+/* 图片：自适应气泡宽度 */
+.ik-kkcall__msg-md :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+  margin: 0.4em 0;
+}
+
+/* 表格：紧凑边框 */
+.ik-kkcall__msg-md :deep(table) {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  font-size: 0.92em;
+  display: block;
+  overflow-x: auto;
+}
+.ik-kkcall__msg-md :deep(th),
+.ik-kkcall__msg-md :deep(td) {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 4px 10px;
+  text-align: left;
+}
+.ik-kkcall__msg-md :deep(thead th) {
+  background: rgba(0, 0, 0, 0.04);
+  font-weight: 700;
+}
+
+/* 分隔线 */
+.ik-kkcall__msg-md :deep(hr) {
+  margin: 0.8em 0;
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+
 .ik-kkcall__msg-cursor {
   display: inline-block;
-  margin-left: 2px;
+  margin-left: 1px;
+  font-size: 0.75em;
+  vertical-align: baseline;
   animation: ik-kkcall-blink 0.9s steps(2, start) infinite;
   opacity: 0.6;
 }
@@ -891,5 +1278,259 @@ if (import.meta.client && props.sessions.length === 0) {
 .ik-kkcall__msg-retry:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── PR4: 思考过程面板 ──
+ * 该面板挂在白色气泡外、主栏暗色渐变上，所以整体走 dark glass 风格：
+ *   - summary：黑底 pill，hover 微亮，展开时底圆角拉直与下方面板拼接
+ *   - body：grid-template-rows 0fr ↔ 1fr 平滑过渡（兼容任意内容高度）
+ *   - 文字均为浅色，避免在暗色背景上"看不清"
+ */
+.ik-kkcall__thinking {
+  margin-top: 8px;
+  font-size: 13px;
+  align-self: flex-start;
+  /* 限制宽度避免长 thinkingContent 把面板撑过气泡宽度 */
+  max-width: 100%;
+}
+
+.ik-knock__msg.is-mine .ik-kkcall__thinking {
+  align-self: flex-end;
+}
+
+/* summary 完全对齐私聊 .ik-knock__msg-quote：保持 pill 形态，圆角不变；
+ * 展开/收起的视觉指示通过下方 body 面板和 chevron 图标的旋转传达，避免 pill 自身变形。 */
+.ik-kkcall__thinking-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  margin: 0;
+  padding: 7px 15px;
+  border: 0;
+  border-radius: 999px;
+  background: #000;
+  color: #c8c8c8;
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  text-align: left;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+/* hover：与 .ik-knock__msg-quote 完全一致的浅白底 + 黑/白双层 inset ring */
+.ik-kkcall__thinking-summary:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 0 0 5px rgba(255, 255, 255, 0.35);
+}
+
+.ik-kkcall__thinking-summary:focus-visible {
+  outline: 2px solid rgba(251, 254, 0, 0.6);
+  outline-offset: 2px;
+}
+
+.ik-kkcall__thinking-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: rgba(251, 254, 0, 0.85);
+}
+
+.ik-kkcall__thinking-label {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.ik-kkcall__thinking-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: rgba(251, 254, 0, 0.7);
+  border-radius: 50%;
+  animation: ik-kkcall-spin 0.8s linear infinite;
+}
+
+@keyframes ik-kkcall-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* chevron 作为次要指示器：尺寸压低到 12px，颜色 dim 到 0.45，不与 16px 的 LightBulb 主图标抢权重 */
+.ik-kkcall__thinking-chevron {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  transition: transform 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ik-kkcall__thinking.is-open .ik-kkcall__thinking-chevron {
+  transform: rotate(180deg);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* 展开动画：grid-template-rows 0fr ↔ 1fr 是目前兼容性最好的"未知高度"过渡方案。
+ * 浏览器把 1fr 解析为内容自然高度后再插值，无需 JS 量取 scrollHeight。 */
+.ik-kkcall__thinking-body-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ik-kkcall__thinking.is-open .ik-kkcall__thinking-body-wrap {
+  grid-template-rows: 1fr;
+}
+
+/* 裁剪层：必须 overflow:hidden + min-height:0，否则 0fr 时子元素仍会撑出来 */
+.ik-kkcall__thinking-body-clip {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.ik-kkcall__thinking-body {
+  margin-top: 4px;
+  padding: 10px 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12.5px;
+  line-height: 1.55;
+  /* 面板自身高度上限：之前 260px 偏紧，长 thinkingContent 太挤，
+   * 提到 400px 给思考链 / 工具卡片更多展示空间；超出仍触发内部滚动。 */
+  max-height: 400px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.ik-kkcall__thinking-body::-webkit-scrollbar {
+  width: 4px;
+}
+.ik-kkcall__thinking-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+}
+
+/* ── PR4: 工具调用卡片（dark theme 适配） ── */
+.ik-kkcall__thinking-text {
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.ik-kkcall__tool-card {
+  margin-top: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.ik-kkcall__tool-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ik-kkcall__tool-icon {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.ik-kkcall__tool-name {
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ik-kkcall__tool-badge {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.ik-kkcall__tool-badge.is-done {
+  background: rgba(76, 175, 80, 0.18);
+  color: #8be78f;
+}
+
+.ik-kkcall__tool-badge.is-running {
+  background: rgba(255, 193, 7, 0.18);
+  color: #ffd66b;
+  animation: ik-kkcall-blink 1.2s steps(2, start) infinite;
+}
+
+.ik-kkcall__tool-args,
+.ik-kkcall__tool-result {
+  padding: 6px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ik-kkcall__tool-args code,
+.ik-kkcall__tool-result code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.7);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.ik-kkcall__tool-result-label {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  margin-right: 4px;
+}
+
+/* ── PR4: 引用角标 ── */
+.ik-kkcall__refs {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.ik-kkcall__ref-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2c58e2;
+  background: rgba(44, 88, 226, 0.08);
+  border: 1px solid rgba(44, 88, 226, 0.2);
+  border-radius: 9px;
+  cursor: default;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-kkcall__thinking-spinner {
+    animation: none;
+  }
+  .ik-kkcall__thinking-chevron,
+  .ik-kkcall__thinking-body-wrap,
+  .ik-kkcall__thinking-summary {
+    transition: none;
+  }
 }
 </style>
