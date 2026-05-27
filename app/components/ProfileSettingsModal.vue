@@ -254,12 +254,18 @@ watch(
   { immediate: true },
 );
 
+// 锁住 body 滚动，避免弹窗打开时滚轮事件穿透到下方页面
+const { acquire, release } = useBodyScrollLock();
+const SCROLL_LOCK_TOKEN = Symbol("profile-settings-modal");
+
 onMounted(() => {
   window.addEventListener("keydown", handleKeydown);
+  acquire(SCROLL_LOCK_TOKEN);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown);
+  release(SCROLL_LOCK_TOKEN);
 });
 </script>
 
