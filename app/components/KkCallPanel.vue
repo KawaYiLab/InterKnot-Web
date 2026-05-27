@@ -72,7 +72,7 @@ const hasPendingAssistant = computed(() =>
 
 /** 消息是否有正在执行（尚无 result）的工具调用 */
 function hasRunningToolCall(msg: KkCallMessage): boolean {
-  return !!msg.toolCalls?.some((tc) => !tc.result);
+  return msg.pending && !!msg.toolCalls?.some((tc) => tc.result == null);
 }
 
 /* ───────── 思考面板展开状态 ─────────
@@ -94,12 +94,16 @@ const thinkingUserToggle = ref<Record<string, boolean>>({});
  */
 function isThinkingOpen(msg: KkCallMessage): boolean {
   const explicit = thinkingUserToggle.value[msg.documentId];
-  if (explicit !== undefined) return explicit;
+  const active = isThinkingActive(msg);
+  if (active) return explicit !== false;
+  return explicit === true;
+}
+function isThinkingActive(msg: KkCallMessage): boolean {
   const thinkingStreaming =
     msg.pending
     && !!msg.thinkingContent
     && !msg.thinkingDone
-    && msg.content.length === 0;
+    && msg.content.trim().length === 0;
   return thinkingStreaming || hasRunningToolCall(msg);
 }
 function toggleThinking(msg: KkCallMessage, e: MouseEvent) {
@@ -122,29 +126,37 @@ function toggleThinking(msg: KkCallMessage, e: MouseEvent) {
   // - 贴底：scrollTop=scrollHeight，让面板看起来"自然把页面顶上去"
   // - 非贴底：仅在面板底部超出容器视口时按 overflow 量平移 scrollTop（相对滚动，
   //   每帧重新测量，避免浏览器位置反转引起的振荡）
-  const wasBottom = wasNearBottom.value;
-  const ANIMATION_MS = 340;
-  const start = performance.now();
-  const tick = () => {
-    const c = messagesRef.value;
-    if (!c) return;
-    if (wasBottom) {
-      c.scrollTop = c.scrollHeight;
-    } else {
-      const cRect = c.getBoundingClientRect();
-      const tRect = thinkingEl.getBoundingClientRect();
-      const overflow = tRect.bottom - cRect.bottom;
-      if (overflow > 0) {
-        // 8px 呼吸空间，避免面板正好贴着容器下沿
-        c.scrollTop += overflow + 8;
-      }
-    }
-    if (performance.now() - start < ANIMATION_MS) {
-      requestAnimationFrame(tick);
-    }
-  };
-  requestAnimationFrame(tick);
+  followThinkingPanel(thinkingEl, wasNearBottom.value);
 }
+
+let previousThinkingActiveIds = new Set<string>();
+watch(
+  () =>
+    messages.value
+      .map((msg) => `${msg.documentId}:${msg.role === "assistant" && isThinkingActive(msg) ? 1 : 0}`)
+      .join("|"),
+  () => {
+    const nextActiveIds = new Set(
+      messages.value
+        .filter((msg) => msg.role === "assistant" && isThinkingActive(msg))
+        .map((msg) => msg.documentId),
+    );
+    const endedIds = [...previousThinkingActiveIds].filter((id) => !nextActiveIds.has(id));
+    if (endedIds.length) {
+      const nextToggle = { ...thinkingUserToggle.value };
+      let changed = false;
+      for (const id of endedIds) {
+        if (id in nextToggle) {
+          delete nextToggle[id];
+          changed = true;
+        }
+      }
+      if (changed) thinkingUserToggle.value = nextToggle;
+    }
+    previousThinkingActiveIds = nextActiveIds;
+  },
+  { immediate: true },
+);
 
 /* ───────── 时间分隔（间隔 > 5 分钟） ───────── */
 const TIME_GAP_MS = 5 * 60 * 1000;
@@ -192,17 +204,67 @@ const messagesRef = ref<HTMLElement | null>(null);
 const messagesSettling = ref(false);
 const NEAR_BOTTOM_THRESHOLD_PX = 80;
 const wasNearBottom = ref(true);
+const THINKING_ANIMATION_MS = 340;
+let thinkingFollowRaf = 0;
+let thinkingFollowUntil = 0;
+let thinkingFollowWasBottom = false;
+let thinkingFollowTarget: HTMLElement | null = null;
 
 const isNearBottom = (el: HTMLElement): boolean =>
   el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_THRESHOLD_PX;
 
+const setMessagesScrollBottom = (el: HTMLElement) => {
+  el.scrollTop = el.scrollHeight;
+  wasNearBottom.value = true;
+};
+
 const scrollToBottom = (el: HTMLElement) => {
   const doScroll = () => {
-    el.scrollTop = el.scrollHeight;
+    setMessagesScrollBottom(el);
   };
   doScroll();
   requestAnimationFrame(doScroll);
   setTimeout(doScroll, 200);
+};
+
+const followThinkingPanel = (thinkingEl: HTMLElement, wasBottom: boolean) => {
+  if (!import.meta.client) return;
+  thinkingFollowTarget = thinkingEl;
+  thinkingFollowWasBottom = thinkingFollowWasBottom || wasBottom;
+  thinkingFollowUntil = Math.max(thinkingFollowUntil, performance.now() + THINKING_ANIMATION_MS);
+  if (thinkingFollowRaf) return;
+
+  const tick = () => {
+    const c = messagesRef.value;
+    if (!c) {
+      thinkingFollowRaf = 0;
+      thinkingFollowTarget = null;
+      thinkingFollowWasBottom = false;
+      return;
+    }
+
+    if (thinkingFollowWasBottom) {
+      setMessagesScrollBottom(c);
+    } else if (thinkingFollowTarget) {
+      const cRect = c.getBoundingClientRect();
+      const tRect = thinkingFollowTarget.getBoundingClientRect();
+      const overflow = tRect.bottom - cRect.bottom;
+      if (overflow > 0) {
+        c.scrollTop += overflow + 8;
+      }
+    }
+
+    if (performance.now() < thinkingFollowUntil) {
+      thinkingFollowRaf = requestAnimationFrame(tick);
+      return;
+    }
+
+    thinkingFollowRaf = 0;
+    thinkingFollowTarget = null;
+    thinkingFollowWasBottom = false;
+  };
+
+  thinkingFollowRaf = requestAnimationFrame(tick);
 };
 
 const onMessagesScroll = () => {
@@ -285,9 +347,35 @@ watch(
     const el = messagesRef.value;
     if (el) {
       // 流式过程中只 sync set，不再 rAF/setTimeout 兜底以减少重排开销
-      el.scrollTop = el.scrollHeight;
+      setMessagesScrollBottom(el);
     }
   },
+  { flush: "post" },
+);
+
+watch(
+  () =>
+    messages.value
+      .map((msg) => {
+        if (msg.role !== "assistant") return `${msg.documentId}:0`;
+        if (!msg.thinkingContent && !msg.toolCalls?.length) return `${msg.documentId}:0`;
+        return `${msg.documentId}:${isThinkingOpen(msg) ? 1 : 0}`;
+      })
+      .join("|"),
+  () => {
+    nextTick(() => {
+      const container = messagesRef.value;
+      if (!container || !wasNearBottom.value) return;
+      const openPanels = container.querySelectorAll<HTMLElement>(".ik-kkcall__thinking.is-open");
+      const latestOpenPanel = openPanels[openPanels.length - 1];
+      if (latestOpenPanel) {
+        followThinkingPanel(latestOpenPanel, true);
+      } else {
+        setMessagesScrollBottom(container);
+      }
+    });
+  },
+  { flush: "post" },
 );
 
 /**
@@ -405,6 +493,7 @@ const retryLastUser = () => {
 onBeforeUnmount(() => {
   // 不中断 SSE：useState 全局状态在组件卸载后仍有效，让流在后台跑完，
   // 用户重新打开弹窗时直接看到最新结果。避免 abort 导致的 "生成失败" 误报。
+  if (thinkingFollowRaf) cancelAnimationFrame(thinkingFollowRaf);
   currentSendAbort = null;
 });
 
@@ -555,9 +644,9 @@ if (import.meta.client && props.sessions.length === 0) {
                   @click="toggleThinking(entry.msg, $event)"
                 >
                   <LightBulbIcon class="ik-kkcall__thinking-icon" aria-hidden="true" />
-                  <span class="ik-kkcall__thinking-label">{{ hasRunningToolCall(entry.msg) ? '思考中…' : '思考过程' }}</span>
+                  <span class="ik-kkcall__thinking-label">{{ isThinkingActive(entry.msg) ? '思考中…' : '思考过程' }}</span>
                   <span
-                    v-if="hasRunningToolCall(entry.msg)"
+                    v-if="isThinkingActive(entry.msg)"
                     class="ik-kkcall__thinking-spinner"
                   />
                   <ChevronDownIcon class="ik-kkcall__thinking-chevron" aria-hidden="true" />
@@ -580,7 +669,7 @@ if (import.meta.client && props.sessions.length === 0) {
                           <WrenchIcon class="ik-kkcall__tool-icon" aria-hidden="true" />
                           <span class="ik-kkcall__tool-name">{{ tc.name }}</span>
                           <span
-                            v-if="tc.result"
+                            v-if="tc.result != null"
                             class="ik-kkcall__tool-badge is-done"
                           >完成</span>
                           <span
@@ -588,7 +677,7 @@ if (import.meta.client && props.sessions.length === 0) {
                             class="ik-kkcall__tool-badge is-running"
                           >执行中…</span>
                         </div>
-                        <div v-if="tc.result" class="ik-kkcall__tool-result">
+                        <div v-if="tc.result != null" class="ik-kkcall__tool-result">
                           <span class="ik-kkcall__tool-result-label">返回：</span>
                           <code>{{ tc.result.length > 200 ? tc.result.slice(0, 200) + '…' : tc.result }}</code>
                         </div>

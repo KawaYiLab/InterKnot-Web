@@ -163,13 +163,19 @@ const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === "Escape") handleClose();
 };
 
+// 锁住 body 滚动，避免弹窗打开时滚轮事件穿透到下方页面
+const { acquire, release } = useBodyScrollLock();
+const SCROLL_LOCK_TOKEN = Symbol("business-card-modal");
+
 onMounted(async () => {
   window.addEventListener("keydown", handleKeydown);
+  acquire(SCROLL_LOCK_TOKEN);
   await loadCardsForTab(activeTab.value);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown);
+  release(SCROLL_LOCK_TOKEN);
 });
 </script>
 

@@ -168,8 +168,13 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 };
 
+// 锁住 body 滚动，避免弹窗打开时滚轮事件穿透到下方页面
+const { acquire, release } = useBodyScrollLock();
+const SCROLL_LOCK_TOKEN = Symbol("avatar-modal");
+
 onMounted(async () => {
   window.addEventListener("keydown", handleKeydown);
+  acquire(SCROLL_LOCK_TOKEN);
   loading.value = true;
   try {
     const result = await api.getMyAvatars();
@@ -184,6 +189,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown);
+  release(SCROLL_LOCK_TOKEN);
 });
 </script>
 
