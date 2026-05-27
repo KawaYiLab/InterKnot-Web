@@ -14,6 +14,7 @@ import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 
 const api = useApi();
 const homeStateCache = useHomeStateCache();
+const pendingPost = usePendingPost();
 const route = useRoute();
 const postModal = usePostModal();
 const message = useMessage();
@@ -33,6 +34,7 @@ const scrollTarget = ref<HTMLElement>();
 // 记住函数引用 + 使用 passive，使浏览器可以乐观滚动；onBeforeUnmount 里清理
 // 避免路由切走后仍在全局 dispatch 事件。
 let scrollBridge: (() => void) | null = null;
+let stopPendingWatch: (() => void) | null = null;
 onMounted(() => {
   const el = document.documentElement;
   scrollBridge = () => {
@@ -454,6 +456,26 @@ watch(
 const cached = homeStateCache.restore();
 let initialFetchPromise: Promise<void>;
 
+// 乐观插入：消费 /create 发布后塞入的 pending 队列，把刚发布的帖子
+// unshift 到 list 头部并加入 seenIds，避免后续 fetch 返回相同 id 时被去重逻辑过滤掉。
+// 搜索流下不插入，避免污染搜索结果。drain 仅在真正会写入 list 时调用，
+// 不能在冷启动 fetchList 之前就 drain——fetchList 会重置 seenIds 和 list。
+const consumePendingPosts = () => {
+  if (query.value.trim()) return;
+  if (!pendingPost.peek().length) return;
+  const pending = pendingPost.drain();
+  // 反转后再 unshift：保证 push 顺序最晚的帖子排在最顶部
+  const fresh: Post[] = [];
+  for (const post of pending) {
+    if (!post.id || seenIds.has(post.id)) continue;
+    seenIds.add(post.id);
+    fresh.push(post);
+  }
+  if (!fresh.length) return;
+  fresh.reverse();
+  list.value = [...fresh, ...list.value];
+};
+
 if (cached && cached.query === query.value) {
   // 从缓存恢复：跳过网络请求，直接填充列表状态
   list.value = cached.list;
@@ -464,10 +486,14 @@ if (cached && cached.query === query.value) {
   // scrollY 由 router.options.ts 的 scrollBehavior 通过 consumeScrollY() 独立消费
   homeStateCache.clear();
   initialFetchPromise = Promise.resolve();
+  // 缓存命中：list 已就绪，立即消费 pending 队列，首帧渲染即可看到刚发的帖子
+  consumePendingPosts();
 } else {
   homeStateCache.clear();
   // 在 setup 阶段提前发起首屏数据请求，不等 onMounted
   initialFetchPromise = fetchList(true);
+  // 冷启动路径下，consumePendingPosts 推迟到 fetchList resolve 之后（onMounted 中），
+  // 因为 fetchList 会重置 seenIds 和 list，提前 drain 会丢失数据。
 }
 
 // Triggered by MobileBottomNav when the user double-taps the active
@@ -491,6 +517,16 @@ onMounted(async () => {
     window.addEventListener("ik:article-deleted", onArticleDeleted);
   }
   await initialFetchPromise;
+  // 注册 pending 队列 watch（immediate=true）：
+  //   - 冷启动：fetchList 刚填好 list，immediate 触发立即消费当前 pending；
+  //   - 迟到 push：/create 的 fire-and-forget getPost 可能晚于此点解析，
+  //     watch 会在 push 时再次触发消费，避免乐观帖子被丢；
+  //   - 缓存命中路径下队列已在 setup 中 drain，immediate 触发是 no-op。
+  stopPendingWatch = watch(
+    pendingPost.queue,
+    () => consumePendingPosts(),
+    { immediate: true },
+  );
   await nextTick();
   observeLoadMoreSentinel();
 
@@ -526,6 +562,10 @@ onBeforeUnmount(() => {
       window.removeEventListener("scroll", scrollBridge);
       scrollBridge = null;
     }
+  }
+  if (stopPendingWatch) {
+    stopPendingWatch();
+    stopPendingWatch = null;
   }
   stopPolling();
   loadMoreObserverRef.value?.disconnect();

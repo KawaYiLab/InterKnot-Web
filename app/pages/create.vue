@@ -31,6 +31,7 @@ const router = useRouter();
 const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const message = useMessage();
+const pendingPost = usePendingPost();
 
 useSeoMeta({
   title: "发帖 - 绳网",
@@ -311,10 +312,14 @@ async function publish() {
 
     await api.publishArticleDraft(documentId.value);
 
-    // 通知首页强制刷新列表
-    if (import.meta.client) {
-      window.dispatchEvent(new Event("ik:home-refresh"));
-    }
+    // 乐观插入：fire-and-forget 拉取刚发布的帖子详情塞进 pending 队列，
+    // 不阻塞跳转——usePendingPost 是响应式 ref，首页 watch 队列即可消费
+    // 迟到的 push（可能晚于 onMounted 才到达）。拉取失败时首页正常列表加载兜底。
+    const draftId = documentId.value;
+    api.getPost(draftId).then(
+      (post) => pendingPost.push(post),
+      () => undefined,
+    );
 
     router.replace("/");
   } catch (err) {
