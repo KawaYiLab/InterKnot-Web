@@ -161,9 +161,13 @@ export interface SignedUploadResult {
 export interface UploadedFile {
   id: number;
   documentId: string;
+  name?: string;
   url: string;
+  mime?: string;
+  size?: number;
   width?: number;
   height?: number;
+  createdAt?: string;
 }
 
 // ── Knock Knock（私信弹窗）相关 ──────────────────────────
