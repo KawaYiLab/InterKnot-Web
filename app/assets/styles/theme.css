@@ -360,6 +360,7 @@ img:not(.ik-card__cover).ik-img-revealed {
 .ik-overlay-enter-active .ik-dialog,
 .ik-overlay-enter-active .ik-bc-dialog,
 .ik-overlay-enter-active .ik-av-dialog,
+.ik-overlay-enter-active .ik-img-dialog,
 .ik-overlay-enter-active .ik-crop-dialog {
   transition:
     transform 200ms var(--ease-out-quart),
@@ -380,6 +381,7 @@ img:not(.ik-card__cover).ik-img-revealed {
 .ik-overlay-enter-from .ik-dialog,
 .ik-overlay-enter-from .ik-bc-dialog,
 .ik-overlay-enter-from .ik-av-dialog,
+.ik-overlay-enter-from .ik-img-dialog,
 .ik-overlay-enter-from .ik-crop-dialog {
   opacity: 0;
   transform: translateX(5%);
@@ -402,6 +404,7 @@ img:not(.ik-card__cover).ik-img-revealed {
 .ik-overlay-leave-active .ik-dialog,
 .ik-overlay-leave-active .ik-bc-dialog,
 .ik-overlay-leave-active .ik-av-dialog,
+.ik-overlay-leave-active .ik-img-dialog,
 .ik-overlay-leave-active .ik-crop-dialog {
   transition:
     transform 200ms var(--ease-in-quart),
@@ -422,6 +425,7 @@ img:not(.ik-card__cover).ik-img-revealed {
 .ik-overlay-leave-to .ik-dialog,
 .ik-overlay-leave-to .ik-bc-dialog,
 .ik-overlay-leave-to .ik-av-dialog,
+.ik-overlay-leave-to .ik-img-dialog,
 .ik-overlay-leave-to .ik-crop-dialog {
   opacity: 0;
   transform: translateX(-5%);
@@ -433,12 +437,14 @@ img:not(.ik-card__cover).ik-img-revealed {
   .ik-overlay-enter-active .ik-dialog,
   .ik-overlay-enter-active .ik-bc-dialog,
   .ik-overlay-enter-active .ik-av-dialog,
+  .ik-overlay-enter-active .ik-img-dialog,
   .ik-overlay-enter-active .ik-crop-dialog,
   .ik-overlay-leave-active,
   .ik-overlay-leave-active .ik-overlay__stripe,
   .ik-overlay-leave-active .ik-dialog,
   .ik-overlay-leave-active .ik-bc-dialog,
   .ik-overlay-leave-active .ik-av-dialog,
+  .ik-overlay-leave-active .ik-img-dialog,
   .ik-overlay-leave-active .ik-crop-dialog {
     transition: none;
   }

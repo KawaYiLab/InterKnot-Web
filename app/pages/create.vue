@@ -3,6 +3,7 @@ import { useDebounceFn } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type {
   DraftArticle,
+  UploadedFile,
   UploadTask,
   UploadStatus,
 } from "~/types/entities";
@@ -11,7 +12,6 @@ import {
   ArrowUpTrayIcon,
   PhotoIcon,
   XMarkIcon,
-  PlusIcon,
   Cog6ToothIcon,
   TrashIcon,
   ChevronRightIcon,
@@ -53,11 +53,11 @@ const isPublishing = ref(false);
 const isDeletingDraft = ref(false);
 const hasUnsavedChanges = ref(false);
 const isAnonymous = ref(false);
+const showImagePickerModal = ref(false);
 
 /* ── Mobile-only UI state ─────────────────────────── */
 const isMobileDraftsOpen = ref(false);
 const isMobileSettingsOpen = ref(false);
-const mobileCoverInputRef = ref<HTMLInputElement | null>(null);
 
 const suppressTracking = ref(false);
 const lastSavedSnapshot = ref("");
@@ -80,6 +80,16 @@ const isCoverUploading = computed(() =>
   uploadTasks.value.some(
     (t) => t.status === "uploading" || t.status === "pending",
   ),
+);
+
+const remainingCoverSlots = computed(() =>
+  Math.max(0, MAX_COVER_IMAGES - uploadTasks.value.length),
+);
+
+const existingUploadIds = computed(() =>
+  uploadTasks.value
+    .map((task) => task.serverId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0),
 );
 
 const hasAnyContent = computed(
@@ -208,6 +218,54 @@ function createUploadTask(file: File): UploadTask {
     progress: 0,
     previewUrl: URL.createObjectURL(file),
   };
+}
+
+function createReferencedUploadTask(upload: UploadedFile): UploadTask {
+  const filename = upload.name || upload.url.split("/").pop() || "image";
+  return {
+    localId: `referenced_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    filename,
+    file: new File([], filename),
+    status: "done" as UploadStatus,
+    progress: 100,
+    previewUrl: upload.url,
+    serverId: upload.documentId,
+    serverUrl: upload.url,
+  };
+}
+
+function openImagePicker() {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (remainingCoverSlots.value <= 0) {
+    message.error(`最多上传 ${MAX_COVER_IMAGES} 张图片`);
+    return;
+  }
+  showImagePickerModal.value = true;
+}
+
+function handleImagePickerUpload(files: File[]) {
+  handleFileSelect(files);
+}
+
+function handleImagePickerSelect(uploads: UploadedFile[]) {
+  const existing = new Set(existingUploadIds.value);
+  const remaining = remainingCoverSlots.value;
+  const available = uploads
+    .filter((upload) => upload.documentId && upload.url && !existing.has(upload.documentId))
+    .slice(0, remaining);
+
+  if (!available.length) {
+    message.warning("没有可添加的图片");
+    return;
+  }
+
+  for (const upload of available) {
+    uploadTasks.value.push(createReferencedUploadTask(upload));
+  }
+  markDirty();
 }
 
 async function executeUploadTask(task: UploadTask) {
@@ -368,7 +426,7 @@ const activeMenuKey = computed<string>(
 
 /* ── Mobile sheet handlers ────────────────────────── */
 function openMobileCoverPicker() {
-  mobileCoverInputRef.value?.click();
+  openImagePicker();
 }
 
 function onMobileNewDraft() {
@@ -738,10 +796,10 @@ if (import.meta.client && auth.isLogin) {
             <div class="ik-create-section__head">
               <span class="ik-create-section__label">
                 <PhotoIcon style="width:14px;height:14px" />
-                封面图片
+                图片
                 <span class="ik-create-section__count-pill">{{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
               </span>
-              <span class="ik-create-section__hint">第一张图片将作为封面展示</span>
+              <span class="ik-create-section__hint">第一张图片为封面</span>
             </div>
             <div class="ik-cover-grid">
               <div
@@ -794,21 +852,11 @@ if (import.meta.client && auth.isLogin) {
                   <XMarkIcon style="width:14px;height:14px" />
                 </button>
               </div>
-              <label
+              <CoverImageAddButton
                 v-if="uploadTasks.length < MAX_COVER_IMAGES"
-                class="ik-cover-add"
-                :class="{ 'ik-cover-add--dragging': isDragging }"
-              >
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  multiple
-                  hidden
-                  @change="onCoverFileInput"
-                />
-                <component :is="isDragging ? ArrowUpTrayIcon : PlusIcon" class="ik-cover-add__icon" />
-                <span class="ik-cover-add__text">{{ isDragging ? '释放以上传' : '添加图片' }}</span>
-              </label>
+                :is-dragging="isDragging"
+                @click="openImagePicker"
+              />
             </div>
           </div>
 
@@ -854,7 +902,6 @@ if (import.meta.client && auth.isLogin) {
     <div class="ik-create-mobile" aria-hidden="true">
       <!-- Hidden file input for "封面" setting row -->
       <input
-        ref="mobileCoverInputRef"
         type="file"
         accept="image/jpeg,image/png,image/gif,image/webp"
         multiple
@@ -864,20 +911,15 @@ if (import.meta.client && auth.isLogin) {
 
       <!-- Cover strip (horizontal scroll) -->
       <div class="ik-mobile-cover-strip">
-        <label
+        <button
           v-if="uploadTasks.length < MAX_COVER_IMAGES"
+          type="button"
           class="ik-mobile-cover-add"
           aria-label="添加图片"
+          @click="openImagePicker"
         >
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp"
-            multiple
-            hidden
-            @change="onCoverFileInput"
-          />
-          <PlusIcon class="ik-mobile-cover-add__icon" />
-        </label>
+          <PhotoIcon class="ik-mobile-cover-add__icon" />
+        </button>
         <div
           v-for="(task, idx) in uploadTasks"
           :key="task.localId"
@@ -1105,6 +1147,21 @@ if (import.meta.client && auth.isLogin) {
         </div>
       </Transition>
     </Teleport>
+
+    <ClientOnly>
+      <Teleport to="body">
+        <Transition name="ik-overlay" appear>
+          <PostImagePickerModal
+            v-if="showImagePickerModal"
+            :existing-ids="existingUploadIds"
+            :remaining="remainingCoverSlots"
+            @close="showImagePickerModal = false"
+            @upload="handleImagePickerUpload"
+            @select="handleImagePickerSelect"
+          />
+        </Transition>
+      </Teleport>
+    </ClientOnly>
   </section>
 </template>
 
@@ -1526,13 +1583,14 @@ if (import.meta.client && auth.isLogin) {
   width: 100%;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #2a2a2a;
+  border: 2px solid transparent;
   background: #1e1e1e;
-  transition: border-color 200ms, transform 200ms;
+  transition: border-color 200ms, background 200ms, transform 200ms;
 }
 
 .ik-cover-thumb:hover {
-  border-color: #d7ff00;
+  border-color: #fbfe00;
+  background: #1a1a0a;
   transform: translateY(-2px);
 }
 
@@ -1550,7 +1608,7 @@ if (import.meta.client && auth.isLogin) {
 }
 
 .ik-cover-thumb--drag-over {
-  border-color: #d7ff00;
+  border-color: #fbfe00;
   box-shadow: 0 0 0 2px rgba(215, 255, 0, 0.45);
   transform: translateY(-2px);
 }
@@ -1673,48 +1731,6 @@ if (import.meta.client && auth.isLogin) {
 
 .ik-cover-thumb__remove:hover {
   background: rgba(255, 80, 80, 0.85);
-}
-
-/* ── Cover Add Button ────────────────────────────── */
-.ik-cover-add {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  aspect-ratio: 1 / 1;
-  width: 100%;
-  border-radius: 8px;
-  border: 2px dashed #313132;
-  background: #1e1e1e;
-  cursor: pointer;
-  transition: border-color 200ms, background 200ms, transform 200ms, color 200ms;
-  color: #909090;
-}
-
-.ik-cover-add:hover {
-  border-color: #d7ff00;
-  background: rgba(215, 255, 0, 0.06);
-  color: #d7ff00;
-  transform: translateY(-2px);
-}
-
-.ik-cover-add--dragging {
-  border-color: #fbc02d;
-  background: rgba(251, 192, 45, 0.1);
-  color: #fbc02d;
-}
-
-.ik-cover-add__icon {
-  width: 28px;
-  height: 28px;
-  stroke-width: 2;
-}
-
-.ik-cover-add__text {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
 }
 
 /* ═════════ Bottom Footer (mirrors AppHeader) ═════════ */
@@ -1904,10 +1920,6 @@ if (import.meta.client && auth.isLogin) {
     border-radius: 8px;
   }
 
-  .ik-cover-add {
-    border-radius: 8px;
-  }
-
   .ik-cover-thumb__remove {
     opacity: 1;
   }
@@ -1974,9 +1986,12 @@ if (import.meta.client && auth.isLogin) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
+    appearance: none;
     border-radius: 10px;
     border: 1px dashed #2a2a2a;
     background: #1a1a1a;
+    font-family: inherit;
     cursor: pointer;
     transition: border-color 160ms ease, background 160ms ease;
   }

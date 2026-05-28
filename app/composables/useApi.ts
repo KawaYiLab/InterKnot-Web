@@ -32,6 +32,7 @@ const qk = {
     businessCards: (type?: BusinessCardType) =>
       type ? (["me", "business-cards", type] as QueryKey) : (["me", "business-cards"] as QueryKey),
     avatars: ["me", "avatars"] as QueryKey,
+    uploads: (page: number, pageSize: number) => ["me", "uploads", page, pageSize] as QueryKey,
     pinnedArticles: ["me", "pinned-articles"] as QueryKey,
   },
   articles: {
@@ -92,6 +93,16 @@ interface MyBusinessCardsResult {
   cards: BusinessCard[];
   equippedCardDocumentId: string | null;
   equippedCard: BusinessCard | null;
+}
+
+interface MyUploadsResult {
+  uploads: UploadedFile[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    pageCount: number;
+  };
 }
 
 interface MediaMeta {
@@ -993,10 +1004,50 @@ export function useApi() {
   const toUploadedFile = (raw: Record<string, unknown>): UploadedFile => ({
     id: Number(raw.id || 0),
     documentId: String(raw.documentId || ""),
-    url: String(raw.url || ""),
+    name: typeof raw.name === "string" ? raw.name : undefined,
+    url: normalizeMediaUrl(raw.url, apiBaseUrl),
+    mime: typeof raw.mime === "string" ? raw.mime : undefined,
+    size: parsePositiveNumber(raw.size),
     width: parsePositiveNumber(raw.width),
     height: parsePositiveNumber(raw.height),
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : undefined,
   });
+
+  const getMyUploads = async (page = 1, pageSize = 24): Promise<MyUploadsResult> => {
+    const safePage = Math.max(1, Math.floor(page));
+    const safePageSize = Math.max(1, Math.floor(pageSize));
+    return cachedRead(
+      qk.me.uploads(safePage, safePageSize),
+      async () => {
+        const response = await $api("/api/me/uploads", {
+          query: {
+            page: String(safePage),
+            pageSize: String(safePageSize),
+          },
+        });
+        const data = response as Record<string, unknown>;
+        const rawUploads = Array.isArray(data.data) ? data.data : [];
+        const meta = data.meta && typeof data.meta === "object" ? data.meta as Record<string, unknown> : {};
+        const pagination = meta.pagination && typeof meta.pagination === "object"
+          ? meta.pagination as Record<string, unknown>
+          : {};
+        const uploads = rawUploads
+          .map((item) => toUploadedFile(item as Record<string, unknown>))
+          .filter((upload) => upload.documentId && upload.url && (!upload.mime || upload.mime.startsWith("image/")));
+
+        return {
+          uploads,
+          pagination: {
+            page: parsePositiveNumber(pagination.page) ?? safePage,
+            pageSize: parsePositiveNumber(pagination.pageSize) ?? safePageSize,
+            total: parsePositiveNumber(pagination.total) ?? uploads.length,
+            pageCount: parsePositiveNumber(pagination.pageCount) ?? 1,
+          },
+        };
+      },
+      STALE_ME,
+    );
+  };
 
   const signUpload = async (payload: {
     filename: string;
@@ -1322,6 +1373,7 @@ export function useApi() {
     signUpload,
     completeUpload,
     uploadImage,
+    getMyUploads,
     getMyBusinessCards,
     equipBusinessCard,
     getMyAvatars,
