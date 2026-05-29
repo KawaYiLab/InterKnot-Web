@@ -258,6 +258,8 @@ const handleOpen = (e: MouseEvent) => {
 .ik-card__views-icon {
   width: var(--ik-post-card-views-icon-size);
   height: var(--ik-post-card-views-icon-size);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6))
+          drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7));
 }
 
 .ik-card__body {

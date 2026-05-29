@@ -76,6 +76,52 @@ const loginDialog = useLoginDialog();
 const knockKnockModal = useKnockKnockModal();
 const dm = useDmConversations();
 
+// ── 签到功能 ──────────────────────────────
+const checkInStatus = ref({
+  canCheckIn: false,
+  totalDays: 0,
+  consecutiveDays: 0,
+  nextEligibleAt: null as string | null,
+});
+const checkInLoading = ref(false);
+
+const loadCheckInStatus = async () => {
+  if (!profile.value?.isSelf) return;
+  try {
+    const status = await api.getCheckInStatus();
+    checkInStatus.value = {
+      canCheckIn: status.canCheckIn || false,
+      totalDays: status.totalDays || 0,
+      consecutiveDays: status.consecutiveDays || 0,
+      nextEligibleAt: status.nextEligibleAt || null,
+    };
+  } catch (err) {
+    // 静默处理
+  }
+};
+
+const doCheckIn = async () => {
+  if (!checkInStatus.value.canCheckIn || checkInLoading.value) return;
+
+  checkInLoading.value = true;
+  try {
+    const result = await api.checkIn();
+    checkInStatus.value.canCheckIn = false;
+    checkInStatus.value.totalDays = result.totalDays;
+    checkInStatus.value.consecutiveDays = result.consecutiveDays || checkInStatus.value.consecutiveDays;
+    message.success(`签到成功！获得10丁尼，累计${checkInStatus.value.totalDays}天`);
+  } catch (err: any) {
+    if (err?.data?.error?.code === 'CHECK_IN_ALREADY_TODAY') {
+      message.warning("今日已签到");
+      checkInStatus.value.canCheckIn = false;
+    } else {
+      message.error(err?.data?.error?.message || "签到失败");
+    }
+  } finally {
+    checkInLoading.value = false;
+  }
+};
+
 /** 是否能给当前 profile 用户发私聊：非自己、未隐藏、有 uid */
 const canSendDm = computed<boolean>(() => {
   const p = profile.value;
@@ -216,6 +262,8 @@ onMounted(async () => {
   if (profile.value && !profile.value.isHidden) {
     void loadProfileArticles();
   }
+  // 加载签到状态
+  void loadCheckInStatus();
 });
 
 onBeforeUnmount(() => {
@@ -410,6 +458,15 @@ onBeforeUnmount(() => {
 
       <!-- ── Bottom Actions ──────────────────────── -->
       <div v-if="profile.isSelf" class="ik-bottom-actions">
+        <z-button
+          highlight
+          :disabled="!checkInStatus.canCheckIn"
+          :loading="checkInLoading"
+          @click="doCheckIn"
+        >
+          {{ checkInStatus.canCheckIn ? '签到' : '已签到' }}
+          <span v-if="checkInStatus.totalDays > 0" class="ik-checkin-days">({{ checkInStatus.totalDays }}天)</span>
+        </z-button>
         <z-button @click="openModal('avatar')">修改头像</z-button>
         <z-button disabled>修改称号</z-button>
         <z-button disabled>修改勋章</z-button>
@@ -835,6 +892,11 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
+}
+.ik-checkin-days {
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.9;
 }
 
 /* ── Responsive ─────────────────────────────── */
