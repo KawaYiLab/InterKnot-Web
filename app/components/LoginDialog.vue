@@ -411,6 +411,7 @@ onUnmounted(() => {
   position: relative;
   width: 440px;
   max-width: 90%;
+  will-change: transform;
 }
 
 .ik-dialog__outer {
