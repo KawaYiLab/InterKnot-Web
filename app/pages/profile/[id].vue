@@ -10,6 +10,7 @@ const api = useApi();
 const postModal = usePostModal();
 const pageDataLoading = usePageDataLoading();
 const message = useMessage();
+const auth = useAuthStore();
 
 const profile = ref<Profile | null>(null);
 const loadError = ref(false);
@@ -81,9 +82,16 @@ const checkInStatus = ref({
   canCheckIn: false,
   totalDays: 0,
   consecutiveDays: 0,
+  rank: 0,
   nextEligibleAt: null as string | null,
 });
 const checkInLoading = ref(false);
+const showCheckInHelpModal = ref(false);
+
+const openCheckInHelpModal = () => {
+  showCheckInHelpModal.value = true;
+  void loadCheckInStatus();
+};
 
 const loadCheckInStatus = async () => {
   if (!profile.value?.isSelf) return;
@@ -93,6 +101,7 @@ const loadCheckInStatus = async () => {
       canCheckIn: status.canCheckIn || false,
       totalDays: status.totalDays || 0,
       consecutiveDays: status.consecutiveDays || 0,
+      rank: status.rank ?? 0,
       nextEligibleAt: status.nextEligibleAt || null,
     };
   } catch (err) {
@@ -107,13 +116,32 @@ const doCheckIn = async () => {
   try {
     const result = await api.checkIn();
     checkInStatus.value.canCheckIn = false;
-    checkInStatus.value.totalDays = result.totalDays;
+    checkInStatus.value.totalDays = result.totalDays || checkInStatus.value.totalDays;
     checkInStatus.value.consecutiveDays = result.consecutiveDays || checkInStatus.value.consecutiveDays;
-    message.success(`签到成功！获得10丁尼，累计${checkInStatus.value.totalDays}天`);
+    checkInStatus.value.rank = result.rank > 0 ? result.rank : checkInStatus.value.rank;
+
+    // 乐观更新用户数据（经验、等级）
+    if (result.currentExp !== undefined || result.currentLevel !== undefined) {
+      auth.updateUserPartial({
+        exp: result.currentExp,
+        level: result.currentLevel,
+      });
+    }
+
+    const dennyAdded = result.dennyAdded > 0 ? result.dennyAdded : 10;
+    const rewardParts = [`丁尼+${dennyAdded}`];
+    if (result.reward > 0) rewardParts.push(`经验+${result.reward}`);
+    const rankText = result.rank > 0 ? `，今日第${result.rank}名` : "";
+    const daysText =
+      checkInStatus.value.totalDays > 0
+        ? `，累计${checkInStatus.value.totalDays}天`
+        : "";
+    message.success(`签到成功！${rewardParts.join("，")}${daysText}${rankText}`);
   } catch (err: any) {
     if (err?.data?.error?.code === 'CHECK_IN_ALREADY_TODAY') {
       message.warning("今日已签到");
       checkInStatus.value.canCheckIn = false;
+      void loadCheckInStatus();
     } else {
       message.error(err?.data?.error?.message || "签到失败");
     }
@@ -458,15 +486,22 @@ onBeforeUnmount(() => {
 
       <!-- ── Bottom Actions ──────────────────────── -->
       <div v-if="profile.isSelf" class="ik-bottom-actions">
-        <z-button
-          highlight
-          :disabled="!checkInStatus.canCheckIn"
-          :loading="checkInLoading"
-          @click="doCheckIn"
-        >
-          {{ checkInStatus.canCheckIn ? '签到' : '已签到' }}
-          <span v-if="checkInStatus.totalDays > 0" class="ik-checkin-days">({{ checkInStatus.totalDays }}天)</span>
-        </z-button>
+        <div class="ik-checkin-group">
+          <button
+            type="button"
+            class="ik-checkin-help"
+            aria-label="签到说明"
+            @click="openCheckInHelpModal"
+          >?</button>
+          <z-button
+            highlight
+            :disabled="!checkInStatus.canCheckIn || checkInLoading"
+            @click="doCheckIn"
+          >
+            {{ checkInStatus.canCheckIn && !checkInLoading ? '今日签到' : '已签到' }}
+            <span v-if="checkInStatus.totalDays > 0 && !checkInLoading" class="ik-checkin-days">({{ checkInStatus.totalDays }}天)</span>
+          </z-button>
+        </div>
         <z-button @click="openModal('avatar')">修改头像</z-button>
         <z-button disabled>修改称号</z-button>
         <z-button disabled>修改勋章</z-button>
@@ -517,6 +552,22 @@ onBeforeUnmount(() => {
               :profile="profile"
               @close="closeModal"
               @equipped="onCardEquipped"
+            />
+          </Transition>
+        </Teleport>
+      </ClientOnly>
+
+      <!-- 签到说明弹窗 -->
+      <ClientOnly>
+        <Teleport to="body">
+          <Transition name="ik-overlay" appear>
+            <CheckInHelpModal
+              v-if="showCheckInHelpModal"
+              :total-days="checkInStatus.totalDays"
+              :consecutive-days="checkInStatus.consecutiveDays"
+              :rank="checkInStatus.rank"
+              :can-check-in="checkInStatus.canCheckIn"
+              @close="showCheckInHelpModal = false"
             />
           </Transition>
         </Teleport>
@@ -892,6 +943,25 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
+}
+.ik-checkin-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ik-checkin-help {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+.ik-checkin-help:hover {
+  color: #fff;
 }
 .ik-checkin-days {
   margin-left: 4px;
