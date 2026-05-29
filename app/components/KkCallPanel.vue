@@ -205,10 +205,33 @@ const messagesSettling = ref(false);
 const NEAR_BOTTOM_THRESHOLD_PX = 80;
 const wasNearBottom = ref(true);
 const THINKING_ANIMATION_MS = 340;
+const PROMPT_TOP_OFFSET_PX = 12;
+const PROMPT_SPACER_SYNC_THRESHOLD_PX = 1;
 let thinkingFollowRaf = 0;
 let thinkingFollowUntil = 0;
 let thinkingFollowWasBottom = false;
 let thinkingFollowTarget: HTMLElement | null = null;
+let promptAnchorRaf = 0;
+let promptSpacerRaf = 0;
+
+interface PendingPromptAnchor {
+  id: number;
+  content: string;
+  knownIds: Set<string>;
+  allowedSessionIds: Set<string>;
+}
+
+interface ActivePromptAnchor {
+  id: number;
+  messageId: string;
+  allowedSessionIds: Set<string>;
+}
+
+const pendingPromptAnchor = ref<PendingPromptAnchor | null>(null);
+const activePromptAnchor = ref<ActivePromptAnchor | null>(null);
+const promptSpacerHeight = ref(0);
+const messagesPaddingBottom = computed(() => `${10 + promptSpacerHeight.value}px`);
+let promptAnchorSeq = 0;
 
 const isNearBottom = (el: HTMLElement): boolean =>
   el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_THRESHOLD_PX;
@@ -225,6 +248,146 @@ const scrollToBottom = (el: HTMLElement) => {
   doScroll();
   requestAnimationFrame(doScroll);
   setTimeout(doScroll, 200);
+};
+
+const findPromptMessageElement = (container: HTMLElement, messageId: string): HTMLElement | null => {
+  const nodes = container.querySelectorAll<HTMLElement>("[data-kk-call-message-id]");
+  for (const node of nodes) {
+    if (node.dataset.kkCallMessageId === messageId) return node;
+  }
+  return null;
+};
+
+const clearPromptAnchorState = () => {
+  pendingPromptAnchor.value = null;
+  activePromptAnchor.value = null;
+  promptSpacerHeight.value = 0;
+};
+
+const calculatePromptSpacerHeight = (container: HTMLElement, target: HTMLElement): number => {
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const targetTopInContent = container.scrollTop + targetRect.top - containerRect.top;
+  const contentAfterTargetTop =
+    container.scrollHeight - promptSpacerHeight.value - targetTopInContent;
+  return Math.ceil(
+    Math.max(0, container.clientHeight - PROMPT_TOP_OFFSET_PX - contentAfterTargetTop),
+  );
+};
+
+const syncPromptSpacerForTarget = (container: HTMLElement, target: HTMLElement): boolean => {
+  const nextHeight = calculatePromptSpacerHeight(container, target);
+  if (Math.abs(promptSpacerHeight.value - nextHeight) <= PROMPT_SPACER_SYNC_THRESHOLD_PX) {
+    return false;
+  }
+  promptSpacerHeight.value = nextHeight;
+  return true;
+};
+
+const scheduleMessageScrollRetry = (messageId: string) => {
+  if (!import.meta.client || promptAnchorRaf) return;
+  promptAnchorRaf = requestAnimationFrame(() => {
+    promptAnchorRaf = 0;
+    scrollMessageToTop(messageId);
+  });
+};
+
+const scrollMessageToTop = (messageId: string): boolean => {
+  if (!import.meta.client) return false;
+  const container = messagesRef.value;
+  if (!container) return false;
+  const target = findPromptMessageElement(container, messageId);
+  if (!target) return false;
+  if (syncPromptSpacerForTarget(container, target)) {
+    scheduleMessageScrollRetry(messageId);
+    return false;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+  const nextTop = Math.min(
+    Math.max(0, container.scrollTop + targetRect.top - containerRect.top - PROMPT_TOP_OFFSET_PX),
+    maxTop,
+  );
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  container.scrollTo({
+    top: nextTop,
+    behavior: reduceMotion ? "auto" : "smooth",
+  });
+  const pending = pendingPromptAnchor.value;
+  const currentActive = activePromptAnchor.value;
+  activePromptAnchor.value = {
+    id: pending?.id ?? currentActive?.id ?? promptAnchorSeq,
+    messageId,
+    allowedSessionIds: new Set(
+      pending?.allowedSessionIds
+      ?? currentActive?.allowedSessionIds
+      ?? (props.sessionId ? [props.sessionId] : []),
+    ),
+  };
+  pendingPromptAnchor.value = null;
+  wasNearBottom.value = false;
+  return true;
+};
+
+const resolvePendingPromptMessage = (): KkCallMessage | null => {
+  const pending = pendingPromptAnchor.value;
+  const sid = props.sessionId;
+  if (!pending || !sid || !pending.allowedSessionIds.has(sid)) return null;
+  return messages.value.find(
+    (msg) =>
+      msg.role === "user"
+      && msg.content === pending.content
+      && !pending.knownIds.has(msg.documentId),
+  ) ?? null;
+};
+
+const schedulePromptAnchorScroll = () => {
+  if (!import.meta.client || promptAnchorRaf) return;
+  promptAnchorRaf = requestAnimationFrame(() => {
+    promptAnchorRaf = 0;
+    const target = resolvePendingPromptMessage();
+    if (!target) return;
+    if (scrollMessageToTop(target.documentId)) {
+      pendingPromptAnchor.value = null;
+    }
+  });
+};
+
+const syncActivePromptSpacer = (): boolean => {
+  const active = activePromptAnchor.value;
+  const container = messagesRef.value;
+  if (!active || !container) return false;
+  const target = findPromptMessageElement(container, active.messageId);
+  if (!target) return false;
+  return syncPromptSpacerForTarget(container, target);
+};
+
+const scheduleActivePromptSpacerSync = () => {
+  if (!import.meta.client || promptSpacerRaf || !activePromptAnchor.value) return;
+  promptSpacerRaf = requestAnimationFrame(() => {
+    promptSpacerRaf = 0;
+    syncActivePromptSpacer();
+  });
+};
+
+const addSessionIdToPromptAnchors = (id: number, realId: string) => {
+  const pending = pendingPromptAnchor.value;
+  if (pending?.id === id && !pending.allowedSessionIds.has(realId)) {
+    pendingPromptAnchor.value = {
+      ...pending,
+      allowedSessionIds: new Set([...pending.allowedSessionIds, realId]),
+    };
+  }
+  const active = activePromptAnchor.value;
+  if (active?.id === id && !active.allowedSessionIds.has(realId)) {
+    activePromptAnchor.value = {
+      ...active,
+      allowedSessionIds: new Set([...active.allowedSessionIds, realId]),
+    };
+  }
 };
 
 const followThinkingPanel = (thinkingEl: HTMLElement, wasBottom: boolean) => {
@@ -277,8 +440,19 @@ const onMessagesScroll = () => {
 watch(
   () => props.sessionId,
   async (id) => {
-    if (!id) return;
-    wasNearBottom.value = true;
+    if (!id) {
+      clearPromptAnchorState();
+      return;
+    }
+    const pending = pendingPromptAnchor.value;
+    const active = activePromptAnchor.value;
+    const keepPromptAnchor =
+      (!!pending && pending.allowedSessionIds.has(id))
+      || (!!active && active.allowedSessionIds.has(id));
+    if (!keepPromptAnchor) {
+      clearPromptAnchorState();
+    }
+    wasNearBottom.value = !keepPromptAnchor;
     messagesSettling.value = true;
     try {
       await ensureMessages(id);
@@ -290,16 +464,27 @@ watch(
       messagesSettling.value = false;
       return;
     }
-    // 切会话首屏的所有消息记为"已知"，避免一次性整屏闪动；
-    // 之后发出的 user / assistant 消息都会被识别为新到达并播入场动画
-    knownMessageIds.value = new Set(messages.value.map((m) => m.documentId));
+    if (!keepPromptAnchor) {
+      // 切会话首屏的所有消息记为"已知"，避免一次性整屏闪动；
+      // 之后发出的 user / assistant 消息都会被识别为新到达并播入场动画
+      knownMessageIds.value = new Set(messages.value.map((m) => m.documentId));
+    }
     nextTick(() => {
       const el = messagesRef.value;
       if (!el) {
         messagesSettling.value = false;
         return;
       }
-      scrollToBottom(el);
+      if (keepPromptAnchor) {
+        const currentActive = activePromptAnchor.value;
+        if (currentActive?.allowedSessionIds.has(id)) {
+          scrollMessageToTop(currentActive.messageId);
+        } else {
+          schedulePromptAnchorScroll();
+        }
+      } else {
+        scrollToBottom(el);
+      }
       requestAnimationFrame(() => {
         messagesSettling.value = false;
       });
@@ -313,12 +498,24 @@ watch(
   () => messages.value.length,
   (next, prev) => {
     if (next <= (prev ?? 0)) return;
+    if (activePromptAnchor.value) {
+      scheduleActivePromptSpacerSync();
+    }
     if (!wasNearBottom.value) return;
     nextTick(() => {
       const el = messagesRef.value;
       if (el) scrollToBottom(el);
     });
   },
+);
+
+watch(
+  () => messages.value.map((msg) => `${msg.documentId}:${msg.role}`).join("|"),
+  () => {
+    if (!pendingPromptAnchor.value) return;
+    schedulePromptAnchorScroll();
+  },
+  { flush: "post" },
 );
 
 /**
@@ -343,6 +540,9 @@ watch(
     ].join("/");
   },
   () => {
+    if (activePromptAnchor.value) {
+      scheduleActivePromptSpacerSync();
+    }
     if (!wasNearBottom.value) return;
     const el = messagesRef.value;
     if (el) {
@@ -365,6 +565,9 @@ watch(
   () => {
     nextTick(() => {
       const container = messagesRef.value;
+      if (activePromptAnchor.value) {
+        scheduleActivePromptSpacerSync();
+      }
       if (!container || !wasNearBottom.value) return;
       const openPanels = container.querySelectorAll<HTMLElement>(".ik-kkcall__thinking.is-open");
       const latestOpenPanel = openPanels[openPanels.length - 1];
@@ -448,8 +651,17 @@ const doSend = async () => {
   sendError.value = null;
   sending.value = true;
   draft.value = "";
-  // 让用户输入后立即看到自己的消息进入"靠底"态
-  wasNearBottom.value = true;
+  // 让用户输入后立即看到自己的消息进入"置顶锚定"态
+  wasNearBottom.value = false;
+  activePromptAnchor.value = null;
+  promptSpacerHeight.value = 0;
+  const promptAnchorId = ++promptAnchorSeq;
+  pendingPromptAnchor.value = {
+    id: promptAnchorId,
+    content: text,
+    knownIds: new Set(messages.value.map((m) => m.documentId)),
+    allowedSessionIds: new Set([sid]),
+  };
 
   const handle = sendMessage(sid, text);
   currentSendAbort = handle.abort;
@@ -457,6 +669,7 @@ const doSend = async () => {
   // pseudo → real：第一时间通知父级切换 activeId
   handle.realId
     .then((realId) => {
+      addSessionIdToPromptAnchors(promptAnchorId, realId);
       if (sid !== realId) emit("session-materialized", realId);
     })
     .catch(() => {
@@ -494,6 +707,9 @@ onBeforeUnmount(() => {
   // 不中断 SSE：useState 全局状态在组件卸载后仍有效，让流在后台跑完，
   // 用户重新打开弹窗时直接看到最新结果。避免 abort 导致的 "生成失败" 误报。
   if (thinkingFollowRaf) cancelAnimationFrame(thinkingFollowRaf);
+  if (promptAnchorRaf) cancelAnimationFrame(promptAnchorRaf);
+  if (promptSpacerRaf) cancelAnimationFrame(promptSpacerRaf);
+  clearPromptAnchorState();
   currentSendAbort = null;
 });
 
@@ -526,6 +742,7 @@ if (import.meta.client && props.sessions.length === 0) {
         ref="messagesRef"
         class="ik-knock__messages"
         :class="{ 'is-settling': messagesSettling }"
+        :style="{ paddingBottom: messagesPaddingBottom }"
         @scroll.passive="onMessagesScroll"
       >
         <template v-for="entry in enriched" :key="entry.msg.documentId">
@@ -539,6 +756,7 @@ if (import.meta.client && props.sessions.length === 0) {
           <div
             class="ik-knock__msg"
             :class="{ 'is-new': entry.isNew, 'is-mine': entry.isMine }"
+            :data-kk-call-message-id="entry.msg.documentId"
           >
             <div class="ik-knock__msg-avatar" aria-hidden="true">
               <!-- 自己消息用当前登录用户头像；对方消息用角色头像 -->

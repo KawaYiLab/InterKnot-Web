@@ -188,7 +188,7 @@ onBeforeUnmount(() => {
                       <span v-else-if="existingIdSet.has(upload.documentId)" class="ik-img-card__used">已添加</span>
                     </button>
                   </div>
-                  <div v-if="!uploads.length" class="ik-img-empty">暂无历史图片，可以先自定义上传。</div>
+                  <div v-if="!uploads.length" class="ik-img-empty">暂无图片，请上传一张图片试试吧(✿◡‿◡)</div>
                 </z-scrollbar>
               </div>
 
