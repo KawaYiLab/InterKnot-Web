@@ -311,11 +311,13 @@
       right: -1px;
       bottom: -1px;
       border-radius: inherit;
+      will-change: transform, background-color;
       animation: $button-active-animate;
       &.is-fadeout {
         opacity: 1;
-        $button-active-animate: append($button-active-animate, z_ani_btn_inactive_bg $--animate-flash-duration $--animate-flash-bezier $--animate-flash-count alternate);
-        animation: $button-active-animate;
+        $fadeout-animate: z_ani_background $--animate-color-duration $--animate-color-bezier infinite alternate,
+                          z_ani_btn_inactive_bg $--animate-flash-duration $--animate-flash-bezier $--animate-flash-count alternate;
+        animation: $fadeout-animate;
         @keyframes z_ani_btn_inactive_bg {
           to { opacity: 0; }
         }

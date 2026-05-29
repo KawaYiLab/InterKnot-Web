@@ -43,6 +43,7 @@
   &__vertical {
     flex-direction: column;
     top: $--scrollbar-margin;
+    right: 1px;
     >[class*=z-icon] {
       margin: 0 -2px;
     }

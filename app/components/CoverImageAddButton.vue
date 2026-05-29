@@ -47,6 +47,11 @@ const emit = defineEmits<{
   color: #909090;
 }
 
+.ik-cover-add:focus,
+.ik-cover-add:focus-visible {
+  outline: none;
+}
+
 .ik-cover-add:hover:not(:disabled) {
   border-color: #d7ff00;
   background: rgba(215, 255, 0, 0.06);

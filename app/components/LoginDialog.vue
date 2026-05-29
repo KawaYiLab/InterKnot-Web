@@ -249,7 +249,7 @@ onUnmounted(() => {
                   aria-label="关闭"
                   @click="handleClose"
                 >
-                  <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                  <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
                 </button>
               </div>
 
@@ -475,6 +475,9 @@ onUnmounted(() => {
   height: 32px;
   width: auto;
   display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 /* ── Body ──────────────────────────────────────── */

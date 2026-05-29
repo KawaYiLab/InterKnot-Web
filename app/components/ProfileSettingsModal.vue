@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
           <div class="ik-dialog__header">
             <span class="ik-dialog__title">更多操作</span>
             <button class="ik-dialog__close" aria-label="关闭" @click="handleClose">
-              <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+              <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
             </button>
           </div>
 
@@ -316,7 +316,7 @@ onBeforeUnmount(() => {
                 <div class="ik-dialog__header">
                   <span class="ik-dialog__title">修改用户名</span>
                   <button class="ik-dialog__close" aria-label="关闭" @click="closeEditName">
-                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
                   </button>
                 </div>
                 <div class="ik-dialog__body">
@@ -361,7 +361,7 @@ onBeforeUnmount(() => {
                 <div class="ik-dialog__header">
                   <span class="ik-dialog__title">修改签名</span>
                   <button class="ik-dialog__close" aria-label="关闭" @click="closeEditBio">
-                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
                   </button>
                 </div>
                 <div class="ik-dialog__body">
@@ -405,7 +405,7 @@ onBeforeUnmount(() => {
                 <div class="ik-dialog__header">
                   <span class="ik-dialog__title">社交设置</span>
                   <button class="ik-dialog__close" aria-label="关闭" @click="closeSocial">
-                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
                   </button>
                 </div>
                 <div class="ik-dialog__body">
@@ -453,7 +453,7 @@ onBeforeUnmount(() => {
                 <div class="ik-dialog__header">
                   <span class="ik-dialog__title">退出登录</span>
                   <button class="ik-dialog__close" aria-label="关闭" @click="closeLogout">
-                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
                   </button>
                 </div>
                 <div class="ik-dialog__body">
@@ -581,6 +581,9 @@ onBeforeUnmount(() => {
   height: 32px;
   width: auto;
   display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 /* ── Body ──────────────────────────────────────── */
