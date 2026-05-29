@@ -112,9 +112,11 @@ const estimatePostCardHeight = (post: Post, itemWidth: number) => {
 };
 
 // 动画时长（与 CSS .ik-masonry-card-enter 严格对应）
-const CARD_ENTER_ANIMATION_MS = 240;
+const CARD_ENTER_ANIMATION_MS = 360;
 // 兜底清理延迟：略大于动画时长，避免清理过早误伤还在播放的动画
 const CARD_ENTER_CLEANUP_MS = CARD_ENTER_ANIMATION_MS + 60;
+// 错开入场最大延迟（ms），按列数分摊
+const CARD_STAGGER_MAX_DELAY_MS = 120;
 
 const addEnterAnimations = (nodes: Post[]) => {
   if (!nodes.length) return;
@@ -143,6 +145,16 @@ const addEnterAnimations = (nodes: Post[]) => {
 
 const shouldAnimatePost = (postId: string) => {
   return enterAnimationIds.value.has(postId);
+};
+
+// 根据索引计算错开入场延迟，让卡片按列依次出现，减轻渲染压力
+const getStaggerDelayStyle = (index: number, columnCount: number): Record<string, string> => {
+  // 按列位置分配延迟：同一列的卡片依次出现，不同列之间错开
+  const colIndex = index % Math.max(1, columnCount);
+  const rowIndex = Math.floor(index / Math.max(1, columnCount));
+  // 列间错开 + 行内微小错开
+  const delay = (colIndex * 40 + rowIndex * 20) % CARD_STAGGER_MAX_DELAY_MS;
+  return { animationDelay: `${delay}ms` };
 };
 
 // 一批新增卡片 240ms 内集中 animationend → 以前每次都 new Set(...) 拷贝，
@@ -650,6 +662,7 @@ onBeforeUnmount(() => {
             <template #default="{ item, index, columnCount }">
               <PostCard
                 :class="{ 'ik-masonry-card-enter': shouldAnimatePost(item.id) }"
+                :style="shouldAnimatePost(item.id) ? getStaggerDelayStyle(index, columnCount) : undefined"
                 :post="item"
                 :eager="index < columnCount * 2"
                 @open="goPost"
@@ -694,18 +707,20 @@ onBeforeUnmount(() => {
 }
 
 .ik-masonry-card-enter {
-  animation: ik-masonry-card-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ik-masonry-card-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
 }
 
 @keyframes ik-masonry-card-enter {
   from {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(20px) scale(0.96);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -799,7 +814,8 @@ onBeforeUnmount(() => {
 }
 
 .ik-refresh-spin {
-  animation: ik-spin 0.8s linear infinite;
+  animation: ik-spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
 }
 
 @keyframes ik-spin {
@@ -851,6 +867,11 @@ onBeforeUnmount(() => {
 @keyframes ik-fab-spin {
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* 刷新按钮加载状态优化 */
+.ik-refresh-fab :deep(.z-button__icon.is-loading) {
+  will-change: transform;
 }
 
 /* Avoid overlap with the fixed MobileBottomNav (58px) — shown on screens ≤1100px */
