@@ -1428,7 +1428,7 @@ if (import.meta.client && auth.isLogin) {
 }
 
 .ik-create-section--title:focus-within {
-  border-bottom-color: rgba(215, 255, 0, 0.55);
+  border-bottom-color: #fbfe00;
 }
 
 .ik-create-section__head {
@@ -1529,8 +1529,8 @@ if (import.meta.client && auth.isLogin) {
 }
 
 .ik-create-editor-frame:focus-within {
-  border-color: rgba(215, 255, 0, 0.4);
-  box-shadow: 0 0 0 2px rgba(215, 255, 0, 0.06);
+  border-color: #fbfe00;
+  box-shadow: 0 0 0 1px #fbfe00;
 }
 
 /* ── Body Textarea (within editor frame) ────────── */
@@ -2104,6 +2104,9 @@ if (import.meta.client && auth.isLogin) {
     color: #505050;
     font-weight: 700;
   }
+  .ik-mobile-title-input:focus {
+    background: #1a1a0a;
+  }
 
   /* ── Divider (1px hairline) ───────────────────── */
   .ik-mobile-divider {
@@ -2128,6 +2131,9 @@ if (import.meta.client && auth.isLogin) {
   }
   .ik-mobile-body-input::placeholder {
     color: #505050;
+  }
+  .ik-mobile-body-input:focus {
+    background: #1a1a0a;
   }
 
   /* ── Setting row ──────────────────────────────── */

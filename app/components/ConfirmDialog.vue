@@ -98,6 +98,7 @@ onBeforeUnmount(() => {
   position: relative;
   width: 400px;
   max-width: 90%;
+  will-change: transform;
 }
 
 .ik-dialog__outer {

@@ -231,7 +231,9 @@ const handleKeydown = (e: KeyboardEvent) => {
       // PinnedArticlesModal 内部已自行处理 Escape；此处避免冒泡到顶层
       return;
     }
-    if (showSocial.value) {
+    if (showLogout.value) {
+      closeLogout();
+    } else if (showSocial.value) {
       closeSocial();
     } else if (showEditBio.value) {
       closeEditBio();
@@ -515,6 +517,7 @@ onBeforeUnmount(() => {
   max-width: 90%;
   height: 300px;
   max-height: 90%;
+  will-change: transform;
 }
 
 .ik-dialog__outer {
@@ -655,8 +658,22 @@ onBeforeUnmount(() => {
 
 /* ── Larger dialog variant (for settings pages) ── */
 .ik-dialog--large {
-  width: 720px;
-  height: 520px;
+  width: 50%;
+  height: 60%;
+}
+
+@media (max-width: 800px) {
+  .ik-dialog--large {
+    width: 92%;
+    height: 85%;
+  }
+}
+
+@media (max-width: 500px) {
+  .ik-dialog--large {
+    width: 100%;
+    height: 95%;
+  }
 }
 /* body 改为顶部对齐，方便未来放多项设置 */
 .ik-dialog--large .ik-dialog__body {

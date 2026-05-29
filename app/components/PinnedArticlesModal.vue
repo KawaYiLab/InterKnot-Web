@@ -244,10 +244,27 @@ onBeforeUnmount(() => {
 /* ── Dialog Shell ──────────────────────────────── */
 .ik-dialog {
   position: relative;
-  width: 880px;
+  width: 70%;
   max-width: 90%;
-  height: 640px;
+  height: 75%;
   max-height: 90%;
+  will-change: transform;
+}
+
+@media (max-width: 800px) {
+  .ik-dialog {
+    width: 90%;
+    height: 90%;
+  }
+}
+
+@media (max-width: 500px) {
+  .ik-dialog {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+  }
 }
 
 .ik-dialog__outer {
@@ -509,13 +526,6 @@ onBeforeUnmount(() => {
 
 /* ── Mobile ───────────────────────────────────── */
 @media (max-width: 500px) {
-  .ik-dialog {
-    width: 100%;
-    height: 100%;
-    max-width: 100%;
-    max-height: 100%;
-  }
-
   .ik-dialog__outer {
     border-radius: 0;
   }
