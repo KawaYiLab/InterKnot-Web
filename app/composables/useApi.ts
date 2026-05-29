@@ -1342,6 +1342,108 @@ export function useApi() {
     };
   };
 
+  // ── 丁尼(Denny)货币系统 ───────────────────────────────
+
+  /**
+   * 获取当前用户的丁尼余额和最近记录
+   */
+  const getMyDenny = async (): Promise<{
+    denny: number;
+    dennyGiven: number;
+    recentLogs: Array<{
+      action: string;
+      amount: number;
+      balance: number;
+      description: string;
+      createdAt: string;
+    }>;
+  }> => {
+    const response = await $api("/api/user-denny", {
+      method: "GET",
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      denny: Number(data.denny) || 0,
+      dennyGiven: Number(data.dennyGiven) || 0,
+      recentLogs: Array.isArray(data.recentLogs)
+        ? data.recentLogs.map((log: any) => ({
+            action: String(log.action || ""),
+            amount: Number(log.amount) || 0,
+            balance: Number(log.balance) || 0,
+            description: String(log.description || ""),
+            createdAt: String(log.createdAt || ""),
+          }))
+        : [],
+    };
+  };
+
+  /**
+   * 给帖子投币
+   */
+  const giveDennyToArticle = async (
+    articleId: string,
+    message?: string,
+  ): Promise<{
+    success: boolean;
+    newBalance: number;
+    articleDennyCount: number;
+  }> => {
+    const response = await $api("/api/user-denny/give", {
+      method: "POST",
+      body: { articleId, message },
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      success: Boolean(data.success),
+      newBalance: Number(data.newBalance) || 0,
+      articleDennyCount: Number(data.articleDennyCount) || 0,
+    };
+  };
+
+  // ── 签到系统 ──────────────────────────────────────────
+
+  /**
+   * 获取签到状态
+   */
+  const getCheckInStatus = async (): Promise<{
+    canCheckIn: boolean;
+    totalDays: number;
+    consecutiveDays: number;
+    nextEligibleAt: string | null;
+  }> => {
+    const response = await $api("/api/check-in/status", {
+      method: "GET",
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      canCheckIn: Boolean(data.canCheckIn),
+      totalDays: Number(data.totalDays) || 0,
+      consecutiveDays: Number(data.consecutiveDays) || 0,
+      nextEligibleAt: typeof data.nextEligibleAt === "string" ? data.nextEligibleAt : null,
+    };
+  };
+
+  /**
+   * 执行签到
+   */
+  const checkIn = async (): Promise<{
+    currentDenny: number;
+    dennyAdded: number;
+    consecutiveDays: number;
+    totalDays: number;
+  }> => {
+    const response = await $api("/api/check-in", {
+      method: "POST",
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      currentDenny: Number(data.currentDenny) || 0,
+      dennyAdded: Number(data.dennyAdded) || 0,
+      consecutiveDays: Number(data.consecutiveDays) || 0,
+      totalDays: Number(data.totalDays) || 0,
+    };
+  };
+
   return {
     clearAllCache,
     invalidateQueries,
@@ -1386,6 +1488,12 @@ export function useApi() {
     getPinnedArticles,
     updatePinnedArticles,
     searchAuthors,
+    // 丁尼系统
+    getMyDenny,
+    giveDennyToArticle,
+    // 签到系统
+    getCheckInStatus,
+    checkIn,
   };
 }
 
