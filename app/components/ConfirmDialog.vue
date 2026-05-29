@@ -38,7 +38,7 @@ onBeforeUnmount(() => {
               <div class="ik-dialog__header">
                 <span class="ik-dialog__title">{{ state.title }}</span>
                 <button class="ik-dialog__close" aria-label="关闭" @click="cancel">
-                  <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" />
+                  <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
                 </button>
               </div>
 
@@ -162,6 +162,9 @@ onBeforeUnmount(() => {
   height: 32px;
   width: auto;
   display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 /* ── Body ──────────────────────────────────────── */

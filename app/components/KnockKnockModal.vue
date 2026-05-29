@@ -1152,7 +1152,7 @@ const handleKkSessionMaterialized = (realId: string) => {
 }
 
 .ik-dialog__close-img {
-  height: 40px;
+  height: 32px;
   width: auto;
   display: block;
   user-select: none;
@@ -1786,9 +1786,6 @@ const handleKkSessionMaterialized = (realId: string) => {
     font-size: 20px;
   }
 
-  .ik-dialog__close-img {
-    height: 32px;
-  }
 
   .ik-knock__tab {
     height: 32px;
