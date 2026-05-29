@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { useEventListener } from "@vueuse/core";
+import { LEVEL_THRESHOLDS, MAX_LEVEL } from "~/utils/level";
 
 const route = useRoute();
 const router = useRouter();
@@ -76,13 +77,11 @@ const userName = computed(() => auth.user?.name || "用户");
 const userAvatar = computed(() => auth.user?.avatar || "/images/default-avatar.webp");
 
 // 等级阈值表 - 与后端 server/src/utils/level.ts 保持一致
-const LEVEL_THRESHOLDS = [0, 500, 2000, 6000, 15000, 35000, 80000];
 
 // 计算下一级所需的总经验值
 const expForNextLevel = computed(() => {
   const level = userLevel.value;
-  // 最高7级封顶
-  if (level >= 7) return LEVEL_THRESHOLDS[6];
+  if (level >= MAX_LEVEL) return LEVEL_THRESHOLDS[MAX_LEVEL - 1];
   return LEVEL_THRESHOLDS[level] || 0;
 });
 
@@ -96,7 +95,7 @@ const currentLevelExp = computed(() => {
 // 计算当前等级升到下一级还需要的经验
 const expNeededToNext = computed(() => {
   const level = userLevel.value;
-  if (level >= 7) return 0;
+  if (level >= MAX_LEVEL) return 0;
   const nextThreshold = LEVEL_THRESHOLDS[level] || 0;
   const currentThreshold = LEVEL_THRESHOLDS[level - 1] || 0;
   return nextThreshold - currentThreshold;
@@ -105,7 +104,7 @@ const expNeededToNext = computed(() => {
 // 进度条百分比
 const expProgressPercent = computed(() => {
   const level = userLevel.value;
-  if (level >= 7) return 100;
+  if (level >= MAX_LEVEL) return 100;
   const current = Math.max(0, currentLevelExp.value);
   const needed = expNeededToNext.value;
   if (needed <= 0) return 100;

@@ -77,5 +77,13 @@ export const useAuthStore = defineStore("auth", {
         }
       }
     },
+    /**
+     * 乐观更新用户部分字段（如签到后的经验/等级/丁尼）
+     */
+    updateUserPartial(updates: Partial<Author>) {
+      if (this.user) {
+        this.user = { ...this.user, ...updates };
+      }
+    },
   },
 });

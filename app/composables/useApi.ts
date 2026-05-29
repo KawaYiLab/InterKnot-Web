@@ -1409,6 +1409,7 @@ export function useApi() {
     canCheckIn: boolean;
     totalDays: number;
     consecutiveDays: number;
+    rank: number;
     nextEligibleAt: string | null;
   }> => {
     const response = await $api("/api/check-in/status", {
@@ -1419,6 +1420,7 @@ export function useApi() {
       canCheckIn: Boolean(data.canCheckIn),
       totalDays: Number(data.totalDays) || 0,
       consecutiveDays: Number(data.consecutiveDays) || 0,
+      rank: Number(data.rank) || 0,
       nextEligibleAt: typeof data.nextEligibleAt === "string" ? data.nextEligibleAt : null,
     };
   };
@@ -1427,20 +1429,33 @@ export function useApi() {
    * 执行签到
    */
   const checkIn = async (): Promise<{
-    currentDenny: number;
+    message: string;
+    reward: number;
     dennyAdded: number;
+    currentDenny: number;
     consecutiveDays: number;
     totalDays: number;
+    rank: number;
+    currentExp?: number;
+    currentLevel?: number;
+    nextEligibleAt?: string;
   }> => {
     const response = await $api("/api/check-in", {
       method: "POST",
     });
     const data = response as Record<string, unknown>;
     return {
-      currentDenny: Number(data.currentDenny) || 0,
+      message: typeof data.message === "string" ? data.message : "签到成功",
+      reward: Number(data.reward) || 0,
       dennyAdded: Number(data.dennyAdded) || 0,
+      currentDenny: Number(data.currentDenny) || 0,
       consecutiveDays: Number(data.consecutiveDays) || 0,
       totalDays: Number(data.totalDays) || 0,
+      rank: Number(data.rank) || 0,
+      currentExp: typeof data.currentExp === "number" ? data.currentExp : undefined,
+      currentLevel: typeof data.currentLevel === "number" ? data.currentLevel : undefined,
+      nextEligibleAt:
+        typeof data.nextEligibleAt === "string" ? data.nextEligibleAt : undefined,
     };
   };
 
