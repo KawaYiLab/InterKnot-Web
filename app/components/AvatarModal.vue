@@ -37,6 +37,15 @@ const filteredAvatars = computed(() =>
   activeTab.value === "all" ? avatars.value : avatars.value.filter((a) => a.type === activeTab.value),
 );
 
+// 网格缩略图：拼接七牛云 -small.webp，避免列表里加载原图。
+// 预览区保留原 URL。
+const toThumbUrl = (url: string | undefined): string => {
+  if (!url) return "";
+  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
+  if (url.endsWith("-small.webp")) return url;
+  return `${url}-small.webp`;
+};
+
 const previewAvatar = computed(
   () => selectedAvatar.value ?? avatars.value.find((a) => a.documentId === equippedId.value) ?? null,
 );
@@ -302,7 +311,7 @@ onBeforeUnmount(() => {
                         <div class="ik-av-grid__thumb">
                           <img
                             v-if="avatar.image"
-                            :src="avatar.image"
+                            :src="toThumbUrl(avatar.image)"
                             :alt="avatar.name"
                             class="ik-av-grid__img"
                           />
