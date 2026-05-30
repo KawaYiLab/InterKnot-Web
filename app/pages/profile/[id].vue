@@ -949,6 +949,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
 }
+/* 与 z-button + z-button 的 margin-left 对齐，避免签到组与后续按钮间距偏小 */
+.ik-checkin-group + :deep(.z-button) {
+  margin-left: 10px;
+}
 .ik-checkin-help {
   padding: 0;
   border: none;
