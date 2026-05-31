@@ -261,6 +261,12 @@ img:not(.ik-card__cover) {
   transition: opacity 280ms ease;
 }
 
+/* SPA 首屏 loading（spa-loading-template.html）须始终可见，勿受上方规则影响 */
+#spa-loading-screen img {
+  opacity: 1;
+  transition: none;
+}
+
 img:not(.ik-card__cover).ik-img-revealed {
   opacity: 1;
 }
