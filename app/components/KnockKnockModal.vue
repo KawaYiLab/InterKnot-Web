@@ -701,6 +701,7 @@ const handleKkSessionMaterialized = (realId: string) => {
 
               <!-- Body：双栏布局 -->
               <div class="ik-dialog__body ik-knock__body">
+                <IkZzzMarquee />
                 <!-- 左栏：tab + 会话列表 + 活动信息 -->
                 <aside class="ik-knock__sidebar">
                   <div class="ik-knock__tabs" role="tablist" aria-label="敲敲分类">
@@ -1175,24 +1176,6 @@ const handleKkSessionMaterialized = (realId: string) => {
   position: relative;
 }
 
-/* 右栏背景的 INTER KNOT 水印（淡色装饰） */
-.ik-knock__body::before {
-  content: "INTER KNOT INTER KNOT";
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: clamp(100px, 13vw, 200px);
-  font-weight: 900;
-  font-style: italic;
-  color: rgba(255, 255, 255, 0.03);
-  letter-spacing: -4px;
-  white-space: nowrap;
-  pointer-events: none;
-  user-select: none;
-  overflow: hidden;
-}
 
 /* ── 侧栏 / 主栏 共享面板装饰 ────────────────── */
 .ik-knock__sidebar,
@@ -1203,8 +1186,8 @@ const handleKkSessionMaterialized = (realId: string) => {
   flex-direction: column;
   background: linear-gradient(
     180deg,
-    rgba(0, 0, 0, 0.85) 0%,
-    rgba(0, 0, 0, 0) 100%
+    rgba(0, 0, 0, 0.92) 0%,
+    rgba(26, 26, 26, 0.82) 100%
   );
   border-radius: 12px;
   box-shadow: 0 5px 8px rgba(0, 0, 0, 0.85);
@@ -1984,7 +1967,7 @@ const handleKkSessionMaterialized = (realId: string) => {
 }
 
 .ik-knock__composer-row:focus-within {
-  border-color: rgba(251, 254, 0, 0.5);
+  border-color: #fbfe00;
 }
 
 /* pseudo:anonymous / pseudo:system 会话：输入框整体禁用态 */

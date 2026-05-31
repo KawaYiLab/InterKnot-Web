@@ -138,6 +138,7 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="ik-img-main">
+              <IkZzzMarquee />
               <div class="ik-img-grid-wrap">
                 <div v-if="loading" class="ik-img-state">
                   <span class="ik-img-spinner" aria-hidden="true"></span>
@@ -322,6 +323,7 @@ onBeforeUnmount(() => {
 }
 
 .ik-img-main {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -332,12 +334,18 @@ onBeforeUnmount(() => {
 }
 
 .ik-img-grid-wrap {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   border-radius: 16px;
-  background: #00000065;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.92) 0%,
+    rgba(26, 26, 26, 0.82) 100%
+  );
   overflow: hidden;
 }
 
@@ -507,7 +515,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   margin-top: -24px;
   position: relative;
-  z-index: 2;
+  z-index: 1;
   flex-shrink: 0;
 }
 
