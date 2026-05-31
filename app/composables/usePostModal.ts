@@ -53,8 +53,8 @@ export function usePostModal() {
     );
 
     // 预热帖子详情与首屏评论，减少 PostOverlay 挂载后的等待与布局抖动
-    void api.getPost(id);
-    void api.getComments(id, "");
+    void api.getPost(id).catch(() => {});
+    void api.getComments(id, "").catch(() => {});
   }
 
   /**
