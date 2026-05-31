@@ -96,7 +96,6 @@ const onAvatarError = () => {
 const handleOpen = (e: MouseEvent) => {
   emit("open", props.post, e);
 };
-
 </script>
 
 <template>

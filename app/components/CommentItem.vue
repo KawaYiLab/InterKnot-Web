@@ -167,7 +167,7 @@ const floorLabel = computed(() =>
 }
 
 .ik-comment + .ik-comment {
-  border-top: 1px solid #1e1e1e;
+  border-top: 3px solid #1e1e1e;
 }
 
 /* ── Avatar column ────────────────────────────── */
