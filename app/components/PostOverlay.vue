@@ -323,6 +323,21 @@ const loadComments = async () => {
   }
 };
 
+/** 正文渲染后再拉评论，避免与入场动画、骨架屏切换抢主线程 */
+const scheduleLoadComments = () => {
+  if (!import.meta.client) return;
+  const run = () => {
+    void loadComments();
+  };
+  requestAnimationFrame(() => {
+    if (typeof requestIdleCallback !== "undefined") {
+      requestIdleCallback(run, { timeout: 500 });
+    } else {
+      setTimeout(run, 16);
+    }
+  });
+};
+
 const recordView = async () => {
   if (!post.value?.id) return;
   try {
@@ -602,7 +617,7 @@ const resetAndLoad = async () => {
   // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
   void recordView();
-  void loadComments();
+  scheduleLoadComments();
 };
 
 watch(
@@ -664,7 +679,8 @@ onMounted(async () => {
   // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
   void recordView();
-  void loadComments();
+  await nextTick();
+  scheduleLoadComments();
   await nextTick();
   attachMentionToTextarea();
 });
@@ -738,6 +754,9 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- ── Content Area ───────────────────── -->
+            <div class="ik-dialog__main">
+              <IkZzzMarquee />
+
             <div v-if="loading" class="ik-dialog__body">
               <!-- 骨架屏：左栏 -->
               <div class="ik-dialog__left">
@@ -1063,6 +1082,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </template>
+            </div><!-- /.ik-dialog__main -->
           </div>
         </div>
       </div>
@@ -1156,6 +1176,7 @@ onBeforeUnmount(() => {
 /* ── Header Bar ────────────────────────────────── */
 .ik-dialog__header {
   position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   padding: 8px 16px;
@@ -1165,6 +1186,15 @@ onBeforeUnmount(() => {
   background:
     url("/images/tab-bg-point.webp") repeat,
     linear-gradient(180deg, #161616 0%, #080808 100%);
+}
+
+/* ── Content shell（header 下方，承载跑马灯 + body） ─ */
+.ik-dialog__main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .ik-dialog__gallery-progress {
@@ -1341,6 +1371,8 @@ onBeforeUnmount(() => {
 
 /* ── Error ─────────────────────────────────────── */
 .ik-dialog__error {
+  position: relative;
+  z-index: 1;
   flex: 1;
   display: flex;
   align-items: center;
@@ -1353,10 +1385,12 @@ onBeforeUnmount(() => {
 
 /* ── Body (两栏 / 单栏) ───────────────────────── */
 .ik-dialog__body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   display: flex;
   min-height: 0;
-  background: #121212;
+  background: transparent;
   border-radius: 0 0 18px 18px;
 }
 
@@ -1372,7 +1406,7 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow-y: auto;
   margin: 16px 8px 16px 16px;
-  background: #070707;
+  background: rgba(0, 0, 0, 0.85);
   border-radius: 16px;
   /* 隐藏滚动条 */
   -ms-overflow-style: none;
@@ -1629,7 +1663,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   margin: 16px 16px 16px 8px;
-  background: #070707;
+  background: rgba(0, 0, 0, 0.85);
   border-radius: 16px;
   overflow: hidden;
 }
@@ -1673,7 +1707,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(7, 7, 7, 0.98);
+  background: transparent;
   border-top: 1px solid #202020;
 }
 
@@ -2084,5 +2118,4 @@ onBeforeUnmount(() => {
   }
 }
 
-/* prefers-reduced-motion 由 theme.css 全局接管，此处不再重复 */
 </style>
