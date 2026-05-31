@@ -17,6 +17,8 @@
     width: 300px;
     max-width: 100%;
     height: auto;
+    /* 生产环境 entry.css 会对全局 img 设 opacity:0，须在此兜底 */
+    opacity: 1 !important;
   }
   @media (max-width: 768px) {
     #spa-loading-screen {
