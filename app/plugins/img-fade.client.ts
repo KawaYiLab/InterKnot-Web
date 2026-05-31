@@ -6,7 +6,11 @@
  * once they finish loading.
  */
 export default defineNuxtPlugin(() => {
+  const isSpaLoadingImg = (img: HTMLImageElement) =>
+    Boolean(img.closest("#spa-loading-screen"));
+
   const reveal = (img: HTMLImageElement) => {
+    if (isSpaLoadingImg(img)) return;
     img.classList.add("ik-img-revealed");
   };
 
