@@ -22,6 +22,7 @@ export interface PostPreview {
 }
 
 export function usePostModal() {
+  const api = useApi();
   const isOpen = useState("pm:open", () => false);
   const postId = useState<string | null>("pm:id", () => null);
   const coverHint = useState<number | null>("pm:coverHint", () => null);
@@ -50,6 +51,10 @@ export function usePostModal() {
       "",
       `/post/${id}`,
     );
+
+    // 预热帖子详情与首屏评论，减少 PostOverlay 挂载后的等待与布局抖动
+    void api.getPost(id);
+    void api.getComments(id, "");
   }
 
   /**

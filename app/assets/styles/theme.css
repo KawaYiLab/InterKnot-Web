@@ -345,11 +345,8 @@ img:not(.ik-card__cover).ik-img-revealed {
 
 /* ── Enter ─────────────────────────────────────── */
 .ik-overlay-enter-active {
-  transition:
-    background-color 200ms var(--ease-out-quart),
-    backdrop-filter 200ms var(--ease-out-quart),
-    -webkit-backdrop-filter 200ms var(--ease-out-quart);
-  will-change: background-color, backdrop-filter;
+  transition: background-color 200ms var(--ease-out-quart);
+  will-change: background-color;
 }
 
 .ik-overlay-enter-active .ik-overlay__stripe {
@@ -370,8 +367,6 @@ img:not(.ik-card__cover).ik-img-revealed {
 
 .ik-overlay-enter-from {
   background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
 }
 
 .ik-overlay-enter-from .ik-overlay__stripe {
@@ -389,11 +384,8 @@ img:not(.ik-card__cover).ik-img-revealed {
 
 /* ── Leave ─────────────────────────────────────── */
 .ik-overlay-leave-active {
-  transition:
-    background-color 200ms var(--ease-in-quart),
-    backdrop-filter 200ms var(--ease-in-quart),
-    -webkit-backdrop-filter 200ms var(--ease-in-quart);
-  will-change: background-color, backdrop-filter;
+  transition: background-color 200ms var(--ease-in-quart);
+  will-change: background-color;
 }
 
 .ik-overlay-leave-active .ik-overlay__stripe {
@@ -414,8 +406,6 @@ img:not(.ik-card__cover).ik-img-revealed {
 
 .ik-overlay-leave-to {
   background-color: transparent !important;
-  backdrop-filter: blur(0) !important;
-  -webkit-backdrop-filter: blur(0) !important;
 }
 
 .ik-overlay-leave-to .ik-overlay__stripe {

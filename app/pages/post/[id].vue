@@ -466,6 +466,8 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+          <div class="ik-page__main">
+            <IkZzzMarquee />
           <div class="ik-page__body">
             <div class="ik-page__left">
               <div class="ik-page__left-scroll">
@@ -504,6 +506,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+          </div><!-- /.ik-page__main -->
         </div>
       </div>
     </div>
@@ -512,9 +515,12 @@ onBeforeUnmount(() => {
     <div v-else-if="loadError" class="ik-page__shell">
       <div class="ik-page__outer">
         <div class="ik-page__inner">
+          <div class="ik-page__main">
+            <IkZzzMarquee />
           <div class="ik-page__error">
             加载失败，请刷新重试
           </div>
+          </div><!-- /.ik-page__main -->
         </div>
       </div>
     </div>
@@ -556,6 +562,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <div class="ik-page__main">
+          <IkZzzMarquee />
         <!-- ── Body (双栏) ───────────────────── -->
         <div class="ik-page__body">
           <!-- 左栏：封面 + 正文 -->
@@ -762,6 +770,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+        </div><!-- /.ik-page__main -->
           </div>
         </div>
       </div>
@@ -881,6 +890,7 @@ onBeforeUnmount(() => {
 /* ── Header Bar ─────────────────────────────── */
 .ik-page__header {
   position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   padding: 8px 16px;
@@ -890,6 +900,15 @@ onBeforeUnmount(() => {
   background:
     url("/images/tab-bg-point.webp") repeat,
     linear-gradient(180deg, #161616 0%, #080808 100%);
+}
+
+/* ── Content shell（header 下方，承载跑马灯 + body） ─ */
+.ik-page__main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .ik-page__header-left {
@@ -957,6 +976,8 @@ onBeforeUnmount(() => {
 
 /* ── Error ────────────────────────────────────── */
 .ik-page__error {
+  position: relative;
+  z-index: 1;
   flex: 1;
   display: flex;
   align-items: center;
@@ -969,10 +990,12 @@ onBeforeUnmount(() => {
 
 /* ── Body (双栏) ──────────────────────────────── */
 .ik-page__body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   display: flex;
   min-height: 0;
-  background: #121212;
+  background: transparent;
   border-radius: 0 0 18px 18px;
 }
 
@@ -989,7 +1012,7 @@ onBeforeUnmount(() => {
 .ik-page__left-scroll {
   flex: 1;
   overflow-y: auto;
-  background: #070707;
+  background: rgba(0, 0, 0, 0.85);
   margin: 16px 8px 16px 16px;
   border-radius: 16px;
   -ms-overflow-style: none;
@@ -1133,7 +1156,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   margin: 16px 16px 16px 8px;
-  background: #070707;
+  background: rgba(0, 0, 0, 0.85);
   border-radius: 16px;
   overflow: hidden;
 }
@@ -1174,7 +1197,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(7, 7, 7, 0.98);
+  background: transparent;
   border-top: 1px solid #202020;
 }
 
