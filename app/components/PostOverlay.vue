@@ -617,7 +617,9 @@ const resetAndLoad = async () => {
   // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
   void recordView();
-  scheduleLoadComments();
+  if (!loadError.value) {
+    scheduleLoadComments();
+  }
 };
 
 watch(
@@ -680,7 +682,9 @@ onMounted(async () => {
   loading.value = false;
   void recordView();
   await nextTick();
-  scheduleLoadComments();
+  if (!loadError.value) {
+    scheduleLoadComments();
+  }
   await nextTick();
   attachMentionToTextarea();
 });

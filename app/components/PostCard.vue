@@ -8,6 +8,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 
+const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
+
 const props = defineProps<{
   post: Post;
   eager?: boolean;
@@ -99,7 +101,15 @@ const handleOpen = (e: MouseEvent) => {
 </script>
 
 <template>
-  <article ref="cardRef" class="ik-card" @click.capture="handleOpen">
+  <article
+    ref="cardRef"
+    class="ik-card"
+    @click.capture="handleOpen"
+    @mouseenter="schedulePrefetch(post.id)"
+    @mouseleave="cancelPrefetch"
+    @focusin="schedulePrefetch(post.id)"
+    @focusout="cancelPrefetch"
+  >
     <NuxtLink
       :to="`/post/${post.id}`"
       class="ik-card__link"
