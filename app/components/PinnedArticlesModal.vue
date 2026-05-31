@@ -138,6 +138,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="ik-dialog__body">
+            <IkZzzMarquee />
             <div v-if="loading" class="ik-pin__state">加载中...</div>
 
             <div v-else class="ik-pin">
@@ -338,6 +339,7 @@ onBeforeUnmount(() => {
 
 /* ── Body ──────────────────────────────────────── */
 .ik-dialog__body {
+  position: relative;
   flex: 1;
   min-height: 0;
   padding: 20px;
@@ -350,6 +352,8 @@ onBeforeUnmount(() => {
 
 /* ── Pinned Articles Content ───────────────────── */
 .ik-pin {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -365,12 +369,14 @@ onBeforeUnmount(() => {
 }
 
 .ik-pin__head {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 14px 18px;
-  background: #00000065;
+  background: rgba(0, 0, 0, 0.8);
   border-radius: 14px;
   flex-shrink: 0;
 }
@@ -412,6 +418,8 @@ onBeforeUnmount(() => {
 
 /* ── Card Grid ──────────────────────────────────── */
 .ik-pin__grid-wrap {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -514,6 +522,8 @@ onBeforeUnmount(() => {
 }
 
 .ik-pin__footer {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: flex-end;
   align-items: center;
