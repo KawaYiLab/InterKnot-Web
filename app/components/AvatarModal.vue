@@ -248,6 +248,7 @@ onBeforeUnmount(() => {
 
             <!-- Main content area -->
             <div class="ik-av-main">
+              <IkZzzMarquee />
 
               <!-- Banner preview (top) -->
               <div class="ik-av-preview">
@@ -576,6 +577,7 @@ onBeforeUnmount(() => {
 
 /* ── Main content ── */
 .ik-av-main {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -585,6 +587,8 @@ onBeforeUnmount(() => {
 
 /* ── Banner preview ── */
 .ik-av-preview {
+  position: relative;
+  z-index: 1;
   flex-shrink: 0;
   padding: 12px 16px 0;
 }
@@ -651,6 +655,8 @@ onBeforeUnmount(() => {
 
 /* ── Avatar grid ── (8 列 / ~3.5 行可见) */
 .ik-av-grid-wrap {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -666,7 +672,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 .ik-av-grid-scroll :deep(.z-scrollbar__wrap) {
-  background: #00000065;
+  background: rgba(0, 0, 0, 0.8);
 }
 .ik-av-grid-scroll :deep(.z-scrollbar__view) {
   min-height: auto;
@@ -743,7 +749,7 @@ onBeforeUnmount(() => {
 /* ── Submit button (与修改用户名/签名一致) ── */
 .ik-av-submit-wrap {
   position: relative;
-  z-index: 2;
+  z-index: 1;
   flex-shrink: 0;
   display: flex;
   justify-content: center;

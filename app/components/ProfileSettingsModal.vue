@@ -288,6 +288,7 @@ onBeforeUnmount(() => {
 
           <!-- Menu Body -->
           <div class="ik-dialog__body">
+            <IkZzzMarquee />
             <div class="ik-settings__list">
               <!-- Mobile-only: appearance actions normally living in the
                    bottom action bar on desktop. -->
@@ -322,6 +323,7 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
                 <div class="ik-dialog__body">
+                  <IkZzzMarquee />
                   <div class="ik-edit-name__wrapper">
                     <div class="ik-edit-name">
                       <div class="ik-edit-name__field">
@@ -367,6 +369,7 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
                 <div class="ik-dialog__body">
+                  <IkZzzMarquee />
                   <div class="ik-edit-name__wrapper">
                     <div class="ik-edit-name">
                       <div class="ik-edit-name__field">
@@ -411,6 +414,7 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
                 <div class="ik-dialog__body">
+                  <IkZzzMarquee />
                   <div class="ik-social">
                     <div class="ik-social__row">
                       <div class="ik-social__text">
@@ -459,6 +463,7 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
                 <div class="ik-dialog__body">
+                  <IkZzzMarquee />
                   <div class="ik-logout__wrapper">
                     <div class="ik-logout__inner">
                       <div class="ik-logout__options">
@@ -591,6 +596,7 @@ onBeforeUnmount(() => {
 
 /* ── Body ──────────────────────────────────────── */
 .ik-dialog__body {
+  position: relative;
   flex: 1;
   min-height: 0;
   padding: 24px;
@@ -602,13 +608,15 @@ onBeforeUnmount(() => {
 }
 
 .ik-settings__list {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   max-width: 336px;
   margin: 0 auto;
   padding: 20px;
-  background: #00000065;
+  background: rgba(0, 0, 0, 0.8);
   border-radius: 16px;
 }
 
@@ -633,11 +641,12 @@ onBeforeUnmount(() => {
 }
 .ik-logout__inner {
   position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
   padding: 120px 24px 45px;
-  background: #00000065;
+  background: rgba(0, 0, 0, 0.8);
   border-radius: 16px;
 }
 .ik-logout__options {
@@ -685,13 +694,15 @@ onBeforeUnmount(() => {
 
 /* ── Social Settings ─────────────────────────── */
 .ik-social {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 10px;
   width: 100%;
   margin: 0 auto;
   padding: 16px 20px;
-  background: #00000065;
+  background: rgba(0, 0, 0, 0.8);
   border-radius: 16px;
 }
 
@@ -729,6 +740,8 @@ onBeforeUnmount(() => {
 
 /* ── Edit Name Form ───────────────────────────── */
 .ik-edit-name {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -736,7 +749,7 @@ onBeforeUnmount(() => {
   max-width: 360px;
   margin: 0 auto;
   padding: 32px 20px 45px;
-  background: #00000065;
+  background: rgba(0, 0, 0, 0.8);
   border-radius: 16px;
 }
 
