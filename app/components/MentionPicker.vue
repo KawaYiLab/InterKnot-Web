@@ -113,6 +113,31 @@ watch(
 
 onBeforeUnmount(teardownObserver);
 
+// 监听键盘选中索引的变化，自动将超出可见范围的选中项滚动入场，保证键盘导航时可见
+watch(
+  () => props.activeIndex,
+  async (idx) => {
+    await nextTick();
+    const el = pickerRootRef.value;
+    if (!el) return;
+    const items = el.querySelectorAll(".ik-mention-picker__item");
+    const activeItem = items[idx] as HTMLElement | null;
+    const container = el.querySelector(".ik-mention-picker__inner") as HTMLElement | null;
+    if (!activeItem || !container) return;
+
+    const containerTop = container.scrollTop;
+    const containerBottom = containerTop + container.clientHeight;
+    const elemTop = activeItem.offsetTop;
+    const elemBottom = elemTop + activeItem.offsetHeight;
+
+    if (elemTop < containerTop) {
+      container.scrollTop = elemTop;
+    } else if (elemBottom > containerBottom) {
+      container.scrollTop = elemBottom - container.clientHeight;
+    }
+  }
+);
+
 /**
  * mousedown 而不是 click：避免 textarea 在芯片被点击的瞬间因失焦关闭 picker。
  * preventDefault 阻止 textarea 失焦，焦点继续留在输入框里。
@@ -202,6 +227,7 @@ const onItemMouseDown = (e: MouseEvent, candidate: MentionCandidate) => {
 
 /* 内层：黑底 + 项目通用的小点纹理（与 .ik-knock__list 一致），形成"黑框灰框"双层观感 */
 .ik-mention-picker__inner {
+  position: relative;
   background: #050505 url("/images/tab-bg-point.webp") repeat;
   border-radius: 10px;
   padding: 4px;

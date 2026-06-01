@@ -250,7 +250,11 @@ const fetchList = async (reset = false) => {
     const uniqueNodes = toUniqueNodes(page.nodes, reset);
 
     if (reset) {
-      enterAnimationIds.value = new Set();
+      if (refreshing.value) {
+        addEnterAnimations(uniqueNodes);
+      } else {
+        enterAnimationIds.value = new Set();
+      }
       list.value = uniqueNodes;
     } else {
       addEnterAnimations(uniqueNodes);
@@ -696,6 +700,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .ik-home-container {
+  position: relative;
   width: min(1600px, calc(100% - 40px));
   margin: 0 auto;
   padding-top: 24px;
@@ -804,13 +809,20 @@ onBeforeUnmount(() => {
 }
 /* ── Refresh indicator (pull-to-refresh style) ── */
 .ik-refresh-indicator {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: 10;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 56px;
+  height: 44px;
+  background: transparent;
+  border: none;
   color: #d7ff00;
   font-size: 24px;
-  overflow: hidden;
+  pointer-events: none;
 }
 
 .ik-refresh-spin {
@@ -824,16 +836,16 @@ onBeforeUnmount(() => {
 }
 
 .ik-refresh-indicator-enter-active {
-  transition: height 300ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
 }
 
 .ik-refresh-indicator-leave-active {
-  transition: height 250ms cubic-bezier(0.55, 0, 1, 0.45), opacity 200ms ease;
+  transition: transform 250ms cubic-bezier(0.55, 0, 1, 0.45), opacity 200ms ease;
 }
 
 .ik-refresh-indicator-enter-from,
 .ik-refresh-indicator-leave-to {
-  height: 0;
+  transform: translate(-50%, -15px);
   opacity: 0;
 }
 

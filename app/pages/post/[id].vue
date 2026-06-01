@@ -207,10 +207,23 @@ const sendComment = async () => {
 };
 
 const focusCommentInput = () => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
   commentInputFocused.value = true;
   const input = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLElement | null;
   input?.focus();
   syncCommentInputHeight();
+};
+
+const handleCommentInputFocus = (e: FocusEvent) => {
+  if (!auth.isLogin) {
+    (e.target as HTMLElement)?.blur();
+    loginDialog.open();
+    return;
+  }
+  commentInputFocused.value = true;
 };
 
 const cancelComment = () => {
@@ -400,7 +413,7 @@ const attachMentionToTextarea = () => {
   // 这样 picker 打开时 Enter / Tab / Esc 能被正确拦截，不会落到 sendComment。
   const onKeyDown = (e: KeyboardEvent) => mention.onKeyDown(e);
   // selection 变化（点击 / 方向键移动光标）也要刷新一次 picker
-  const onSelect = () => mention.refresh();
+  const onSelect = (e: Event) => mention.refresh(e);
 
   ta.addEventListener("input", onInput);
   ta.addEventListener("keydown", onKeyDown);
@@ -663,7 +676,7 @@ onBeforeUnmount(() => {
                       type="textarea"
                       class="ik-engage-bar__textarea"
                       placeholder=""
-                      @focus="commentInputFocused = true"
+                      @focus="handleCommentInputFocus"
                       @input="syncCommentInputHeight"
                       @keydown.enter.exact.prevent="sendComment"
                     />
