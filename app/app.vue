@@ -7,15 +7,6 @@ const knockModal = useKnockKnockModal();
 if (import.meta.client) {
   auth.hydrateFromStorage();
 
-  // 背景图跟随鼠标轻微晃动
-  const handleMouseMove = (e: MouseEvent) => {
-    const x = (e.clientX / window.innerWidth - 0.5) * 30;
-    const y = (e.clientY / window.innerHeight - 0.5) * 30;
-    document.documentElement.style.setProperty('--bg-x', `${x}px`);
-    document.documentElement.style.setProperty('--bg-y', `${y}px`);
-  };
-  window.addEventListener('mousemove', handleMouseMove);
-
   const url = new URL(window.location.href);
   const fallbackPath = url.searchParams.get("p");
   if (fallbackPath) {
@@ -39,6 +30,38 @@ if (import.meta.client) {
   });
 }
 
+// 页面可见性及窗口失焦检测，通过生命周期钩子管理以确保健壮性，防止 HMR 热更新导致内存泄漏
+let handleVisibilityAndFocus: (() => void) | null = null;
+
+onMounted(() => {
+  if (import.meta.client) {
+    handleVisibilityAndFocus = () => {
+      const isFocused = document.visibilityState === "visible" && document.hasFocus();
+      if (isFocused) {
+        document.body.classList.remove("is-page-blurred");
+      } else {
+        document.body.classList.add("is-page-blurred");
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityAndFocus);
+    window.addEventListener("focus", handleVisibilityAndFocus);
+    window.addEventListener("blur", handleVisibilityAndFocus);
+
+    // 页面挂载时初始化状态
+    handleVisibilityAndFocus();
+  }
+});
+
+onBeforeUnmount(() => {
+  if (import.meta.client && handleVisibilityAndFocus) {
+    document.removeEventListener("visibilitychange", handleVisibilityAndFocus);
+    window.removeEventListener("focus", handleVisibilityAndFocus);
+    window.removeEventListener("blur", handleVisibilityAndFocus);
+    document.body.classList.remove("is-page-blurred");
+  }
+});
+
 const handleOverlayClose = () => {
   postModal.close();
 };
@@ -50,6 +73,7 @@ const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
 
 <template>
   <div>
+    <IkZzzMarquee class="ik-global-marquee" />
     <!-- backdrop-filter 合成层预热：1×1 不可见元素，让 GPU 在首屏就把
          模糊着色器编译好、合成层分配好。否则用户第一次打开弹窗再关闭时，
          合成层首次创建/销毁会多吃 1~3 帧 paint，表现为出场动画期间弹窗
@@ -118,5 +142,21 @@ const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
   will-change: backdrop-filter;
   contain: strict;
   z-index: -1;
+}
+
+/* 全局背景跑马灯：固定定位覆盖整个视口 */
+.ik-global-marquee {
+  position: fixed !important;
+  inset: 0;
+  z-index: -9999;
+}
+
+/* 仅放大作为全屏背景的这一实例，弹窗内的保持默认尺寸 */
+.ik-global-marquee :deep(.ik-zzz-marquee__band) {
+  width: 260%;
+  height: 260%;
+  left: -80%;
+  top: -80%;
+  font-size: clamp(360px, 48vw, 640px);
 }
 </style>
