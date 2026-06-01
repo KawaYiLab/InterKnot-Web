@@ -275,13 +275,24 @@ export function useMentionInput(opts: UseMentionInputOptions) {
   // ────────────────────────────── 事件钩子（由父组件接到 textarea 上）
 
   /** 文本变化（input / paste / model 更新）后调用 */
-  function refresh() {
+  function refresh(e?: Event) {
+    // 过滤 Escape 的 keyup 事件，防止 Esc 键在释放时重新激活已经关闭的 picker
+    if (e && e instanceof KeyboardEvent && e.key === "Escape") {
+      return;
+    }
+
     // 文本任意改动后都重新校准 mention range：丢弃在串里找不到对应 `@<name>` 前缀的项
     syncMentionsFromText();
 
     const detected = detectActive();
     if (!detected) {
       resetPicker();
+      return;
+    }
+
+    // 如果查询词没变且 picker 已经可见（例如用户仅仅在按方向键/移动光标），直接更新锚点坐标并退出，绝不重新触发防抖网络搜索
+    if (pickerVisible.value && detected.query === activeQuery.value) {
+      pickerAnchor.value = measureCaretAnchor();
       return;
     }
 
