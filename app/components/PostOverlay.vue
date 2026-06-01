@@ -513,7 +513,7 @@ const deletingArticle = ref(false);
 
 const handleDeleteArticle = async () => {
   if (!post.value?.id) return;
-  const ok = await confirmDialog.open({ title: "删除帖子", message: "确定删除这篇帖子吗？此操作不可恢复。", confirmText: "删除", danger: true });
+  const ok = await confirmDialog.open({ title: "删除帖子", message: "确定删除这篇帖子吗？此操作不可恢复。（100丁尼）", confirmText: "删除", danger: true });
   if (!ok) return;
   deletingArticle.value = true;
   try {

@@ -111,6 +111,58 @@ const expProgressPercent = computed(() => {
   return Math.min(100, (current / needed) * 100);
 });
 
+// 丁尼货币系统 (自定义 Z-Button 按钮风格)
+const api = useApi();
+const dennyBalance = ref(0);
+
+const fetchDennyBalance = async () => {
+  if (!auth.isLogin) return;
+  try {
+    const data = await api.getMyDenny();
+    dennyBalance.value = data.denny;
+  } catch {
+    // 忽略异常
+  }
+};
+
+const dennySlots = computed(() => {
+  const balanceStr = String(dennyBalance.value);
+  const totalLength = Math.max(8, balanceStr.length);
+  const activeLength = balanceStr.length;
+  const fullStr = balanceStr.padEnd(totalLength, "0");
+  
+  return Array.from(fullStr).map((char, i) => {
+    const digit = parseInt(char, 10);
+    return {
+      digit: isNaN(digit) ? 0 : digit,
+      isActive: i < activeLength,
+    };
+  });
+});
+
+if (import.meta.client) {
+  watch(
+    () => auth.isLogin,
+    (isLogin) => {
+      if (isLogin) {
+        void fetchDennyBalance();
+      } else {
+        dennyBalance.value = 0;
+      }
+    },
+    { immediate: true },
+  );
+
+  useEventListener(window, "ik:home-refresh", fetchDennyBalance);
+  useEventListener(window, "ik:denny-updated", (e: any) => {
+    if (typeof e?.detail === "number") {
+      dennyBalance.value = e.detail;
+    } else {
+      void fetchDennyBalance();
+    }
+  });
+}
+
 const searchKeyword = ref("");
 const applyingSearch = ref(false);
 const searchInputRef = ref<InstanceType<any>>();
@@ -241,6 +293,29 @@ watch(
             <span class="ik-level-label">LEVEL</span>
           </div>
         </div>
+
+        <!-- 丁尼显示（自定义 Z-Button 风格，登录后显示） -->
+        <div v-if="auth.isLogin" class="ik-header-denny" @click="navigateTo(auth.profilePath || '/profile')" title="丁尼余额">
+          <img alt="Dennies" src="/images/materials/dennies_v2.webp" class="ik-header-denny__img" draggable="false" />
+          <div class="ik-header-denny__content">
+            <div
+              v-for="(slot, i) in dennySlots"
+              :key="i"
+              class="ik-header-denny__digit-slot"
+              :class="{ 'is-active': slot.isActive }"
+            >
+              <div
+                class="ik-header-denny__digit-strip"
+                :style="{ transform: `translateY(-${slot.digit * 10}%)` }"
+              >
+                <span v-for="num in 10" :key="num - 1" class="ik-header-denny__digit">
+                  {{ num - 1 }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 品牌Logo（未登录时显示） -->
         <NuxtLink v-else to="/" class="ik-brand" aria-label="Inter Knot 首页">
           <img src="/images/zzzicon.png" alt="Inter Knot" class="ik-brand__icon" draggable="false" />
@@ -855,9 +930,107 @@ watch(
   line-height: 1;
 }
 
-/* 平板及以下屏幕隐藏等级显示 */
+/* 丁尼显示组件：复刻 z-button--default round 样式 */
+.ik-header-denny {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px 0 8px; /* 左右对调：左侧由于硬币左溢出改收窄至 8px，右侧文字收边放宽至 12px */
+  background-color: #000;
+  
+  /* chessboard 棋盘格纹理背景 */
+  background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25% 75%, rgba(255, 255, 255, 0.06) 75%),
+                    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25% 75%, rgba(255, 255, 255, 0.06) 75%);
+  background-position: 0 0, 3px 3px;
+  background-size: 6px 6px;
+  background-repeat: repeat;
+
+  border: 1px solid #000;
+  border-radius: 9999px; /* round 药丸圆角 */
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  margin-left: 12px;
+  transition: transform 0.1s ease;
+}
+
+/* 三层内阴影叠边实现 3D 浮雕质感 */
+.ik-header-denny::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.2), inset 0 0 0 3px #333, inset 0 0 0 4px #000;
+  transition: box-shadow 0.15s ease;
+}
+
+.ik-header-denny:hover::after {
+  /* Hover 态亮起内框：使用项目标准荧光黄绿品牌色 */
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4), inset 0 0 0 3px var(--ik-primary), inset 0 0 0 4px #000;
+}
+
+.ik-header-denny:active {
+  transform: scale(0.96); /* 点击反馈 */
+}
+
+.ik-header-denny__content {
+  font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-feature-settings: "tnum"; /* 开启 OpenType Tabular Numbers 特征，使非等宽字体强制以等宽数字排列，防止宽度抖动 */
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 14px;
+  display: flex;
+  align-items: center;
+  z-index: 1; /* 置于边框阴影之上 */
+}
+
+.ik-header-denny__digit-slot {
+  position: relative;
+  height: 14px;
+  line-height: 14px;
+  width: 1ch; /* 强制等宽，使各字符水平无缝拼接且对齐 */
+  overflow: hidden;
+  display: inline-block;
+  color: rgba(255, 255, 255, 0.22); /* 默认未激活灰色 */
+  transition: color 0.15s ease;
+}
+
+.ik-header-denny__digit-slot.is-active {
+  color: #fff; /* 激活数值高亮白色 */
+}
+
+.ik-header-denny__digit-strip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); /* 机械滚轮弹性缓动 */
+}
+
+.ik-header-denny__digit {
+  height: 14px;
+  line-height: 14px;
+  display: block;
+  text-align: center;
+  color: inherit;
+}
+
+.ik-header-denny__img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  display: block;
+  z-index: 1; /* 置于边框阴影之上 */
+  margin-left: -4px; /* 向左打破边界，在左侧营造 3D 越界感 */
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45)); /* 溢出落影 */
+}
+
+/* 响应式断点隐藏 */
 @media (max-width: 1100px) {
-  .ik-level-display {
+  .ik-level-display,
+  .ik-header-denny {
     display: none;
   }
 }

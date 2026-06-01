@@ -128,6 +128,10 @@ const doCheckIn = async () => {
       });
     }
 
+    if (result.currentDenny !== undefined) {
+      window.dispatchEvent(new CustomEvent("ik:denny-updated", { detail: result.currentDenny }));
+    }
+
     const dennyAdded = result.dennyAdded > 0 ? result.dennyAdded : 10;
     const rewardParts = [`丁尼+${dennyAdded}`];
     if (result.reward > 0) rewardParts.push(`经验+${result.reward}`);
@@ -406,6 +410,7 @@ onBeforeUnmount(() => {
               </div>
               <span class="ik-banner__level">{{ profile.level || 1 }}</span>
             </div>
+
             <div class="ik-banner__info">
               <h1 class="ik-banner__name">{{ profile.name || profile.login || "匿名用户" }}</h1>
               <span class="ik-banner__title-tag ik-banner__title-tag--empty">暂无称号</span>
