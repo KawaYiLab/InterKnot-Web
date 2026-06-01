@@ -1415,6 +1415,10 @@ onBeforeUnmount(() => {
   /* 隐藏滚动条 */
   -ms-overflow-style: none;
   scrollbar-width: none;
+  /* GPU 硬件加速层提升：使该滚动区域在独立的合成层中渲染，避免与父级 backdrop-filter 冲突导致滚动重绘掉帧 */
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .ik-dialog__left-scroll::-webkit-scrollbar {
@@ -1679,6 +1683,10 @@ onBeforeUnmount(() => {
   overflow-x: hidden;
   -ms-overflow-style: none;
   scrollbar-width: none;
+  /* GPU 硬件加速层提升：避免列表滚动时引起父层级的重绘，保障评论滑动流畅 */
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .ik-dialog__comments-scroll::-webkit-scrollbar {

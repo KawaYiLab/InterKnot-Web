@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
-const MARQUEE_LINE = "ZENLESS ZONE ZERO ".repeat(12);
+const MARQUEE_LINE = "ZENLESS ZONE ZERO ".repeat(3);
 
 /** 等弹窗入场动画结束后再启动，避免与 blur/transform 争抢 GPU */
 const MARQUEE_START_DELAY_MS = 250;
@@ -51,13 +51,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 @keyframes ik-zzz-marquee-ltr {
-  from { transform: translateX(-50%); }
-  to { transform: translateX(0); }
+  from { transform: translate3d(-50%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
 }
 
 @keyframes ik-zzz-marquee-rtl {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
 }
 
 .ik-zzz-marquee {
@@ -66,6 +66,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
+  contain: strict;
 }
 
 .ik-zzz-marquee__band {
@@ -95,18 +96,20 @@ onBeforeUnmount(() => {
   display: inline-flex;
   flex-shrink: 0;
   animation-play-state: paused;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .ik-zzz-marquee__row--ltr .ik-zzz-marquee__track {
-  animation: ik-zzz-marquee-ltr 1600s linear infinite;
+  animation: ik-zzz-marquee-ltr 400s linear infinite;
 }
 
 .ik-zzz-marquee__row--rtl .ik-zzz-marquee__track {
-  animation: ik-zzz-marquee-rtl 1920s linear infinite;
+  animation: ik-zzz-marquee-rtl 480s linear infinite;
 }
 
 .ik-zzz-marquee__row--offset .ik-zzz-marquee__track {
-  animation-delay: -560s;
+  animation-delay: -140s;
 }
 
 .ik-zzz-marquee.is-running .ik-zzz-marquee__track {
@@ -124,6 +127,9 @@ onBeforeUnmount(() => {
   color: rgba(255, 255, 255, 0.07);
   white-space: nowrap;
   user-select: none;
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @media (prefers-reduced-motion: reduce) {

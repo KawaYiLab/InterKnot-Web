@@ -96,21 +96,6 @@ body,
   isolation: isolate;
 }
 
-#__nuxt::before {
-  content: '';
-  position: fixed;
-  top: -5%;
-  left: -5%;
-  width: 115%;
-  height: 115%;
-  background: url("/images/main.avif") center top / cover no-repeat;
-  filter: brightness(0.5);
-  z-index: -1;
-  pointer-events: none;
-  transform: translate(var(--bg-x, 0), var(--bg-y, 0));
-  transition: transform 0.1s ease-out;
-}
-
 html::-webkit-scrollbar,
 body::-webkit-scrollbar,
 #__nuxt::-webkit-scrollbar {
@@ -444,4 +429,20 @@ img:not(.ik-card__cover).ik-img-revealed {
   .ik-overlay-leave-active .ik-crop-dialog {
     transition: none;
   }
+}
+
+/* 当页面上有任何包含 .ik-overlay 类名的弹窗（包括帖子详情、敲敲私聊、名片修改、头像修改、更多操作、签到帮助等）处于激活/显示状态时，暂停全局背景跑马灯动画以最大化释放 GPU 渲染开销 */
+body:has(.ik-overlay) .ik-global-marquee .ik-zzz-marquee__track {
+  animation-play-state: paused !important;
+}
+
+/* 当任意弹窗处于激活状态时，暂停顶部导航栏（AppHeader）激活标签背后的呼吸动画（ik-tab-highlight），彻底消除遮罩下的多余重绘/重排开销 */
+body:has(.ik-overlay) .ik-header-tab.is-active .ik-tab-highlight {
+  animation-play-state: paused !important;
+}
+
+/* 当页面失去焦点、最小化或用户切到其他浏览器标签页（is-page-blurred）时，暂停全局背景跑马灯和顶部导航标签背后的呼吸动画，极大减少非活动状态下的设备能耗与 CPU/GPU 占用 */
+body.is-page-blurred .ik-global-marquee .ik-zzz-marquee__track,
+body.is-page-blurred .ik-header-tab.is-active .ik-tab-highlight {
+  animation-play-state: paused !important;
 }
