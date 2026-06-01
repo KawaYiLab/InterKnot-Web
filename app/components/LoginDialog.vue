@@ -255,6 +255,7 @@ onUnmounted(() => {
 
               <!-- Content -->
               <div class="ik-dialog__body">
+                <IkZzzMarquee />
                 <div class="ik-login-form">
                   <!-- 邮箱：始终可见 -->
                   <z-input
@@ -483,6 +484,7 @@ onUnmounted(() => {
 
 /* ── Body ──────────────────────────────────────── */
 .ik-dialog__body {
+  position: relative;
   padding: 24px;
   background: #121212;
   border-radius: 0 0 18px 18px;
@@ -501,6 +503,8 @@ onUnmounted(() => {
 
 /* ── Form ──────────────────────────────────────── */
 .ik-login-form {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -514,6 +518,8 @@ onUnmounted(() => {
 
 /* ── Footer ────────────────────────────────────── */
 .ik-login-footer {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: flex-end;
   gap: 12px;
