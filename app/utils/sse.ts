@@ -4,7 +4,7 @@
  * 为什么不用 EventSource：
  *  - EventSource 不能加 Authorization header
  *  - EventSource 只支持 GET
- *  - 我们的 SSE 接口（如 KKCall chat）是 POST + 需要 Bearer token
+ *  - 我们的 SSE 接口是 POST + 需要 Bearer token
  *
  * 用法：
  * ```ts

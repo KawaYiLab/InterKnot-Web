@@ -14,9 +14,6 @@
 const knockKnockVisible = ref(false);
 /** 弹窗一开就要定位到的目标 DM 会话；contacts tab 监听这个值后清空 */
 const pendingDmConversationId = ref<string | null>(null);
-/** 弹窗一开就要定位到的目标 KKCall 通话会话；calls tab 监听这个值后清空。
- *  支持真 documentId 与 pseudo:char:<characterDocumentId> 两种形态。 */
-const pendingKkCallSessionId = ref<string | null>(null);
 /** 唯一 token：所有 useKnockKnockModal 实例共享，确保 open/close 配对 */
 const SCROLL_LOCK_TOKEN = Symbol("knock-knock-modal");
 
@@ -28,8 +25,6 @@ const DEFAULT_TITLE = "绳网";
 interface OpenOptions {
   /** 打开后切到「私聊」tab 并定位到该会话 documentId */
   dmConversationId?: string;
-  /** 打开后切到「通话」tab 并定位到该 KKCall session（真 id 或 pseudo:char:X） */
-  kkCallSessionId?: string;
 }
 
 export function useKnockKnockModal() {
@@ -37,13 +32,8 @@ export function useKnockKnockModal() {
 
   const open = (options?: OpenOptions) => {
     if (!import.meta.client) return;
-    // 互斥：同一次 open 只 honor 一种定位需求；calls 优先（更明确）
-    if (options?.kkCallSessionId) {
-      pendingKkCallSessionId.value = options.kkCallSessionId;
-      pendingDmConversationId.value = null;
-    } else if (options?.dmConversationId) {
+    if (options?.dmConversationId) {
       pendingDmConversationId.value = options.dmConversationId;
-      pendingKkCallSessionId.value = null;
     }
     knockKnockVisible.value = true;
     _historyPushed = true;
@@ -76,7 +66,6 @@ export function useKnockKnockModal() {
     knockKnockVisible.value = false;
     release(SCROLL_LOCK_TOKEN);
     pendingDmConversationId.value = null;
-    pendingKkCallSessionId.value = null;
     if (import.meta.client) {
       document.title = _savedTitle || DEFAULT_TITLE;
     }
@@ -120,13 +109,6 @@ export function useKnockKnockModal() {
     return next;
   };
 
-  /** calls tab 消费 pending 目标后调用一次清空 */
-  const consumePendingKkCallSessionId = (): string | null => {
-    const next = pendingKkCallSessionId.value;
-    pendingKkCallSessionId.value = null;
-    return next;
-  };
-
   return {
     visible: knockKnockVisible,
     pendingDmConversationId,
@@ -139,6 +121,5 @@ export function useKnockKnockModal() {
     /** 更新 URL 以反映当前 tab / 会话状态 */
     updateUrl,
     consumePendingDmConversationId,
-    consumePendingKkCallSessionId,
   };
 }

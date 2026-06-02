@@ -1,7 +1,7 @@
 import DOMPurify from "isomorphic-dompurify";
 import MarkdownIt from "markdown-it";
 
-// KkCall 聊天消息（assistant 角色）的 markdown 渲染。
+// AI 聊天消息（assistant 角色）的 markdown 渲染。
 //
 // 与 utils/format-body.ts 的区别：
 // - html: false        AI 模型可能在 prompt injection 下被诱导输出原生 HTML，
