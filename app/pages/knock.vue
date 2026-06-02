@@ -17,17 +17,11 @@ const knockModal = useKnockKnockModal();
 
 if (import.meta.client) {
   // 支持的 query：
-  //   ?c=<conversationId>             → 默认走 contacts tab（DM 会话）
-  //   ?tab=contacts&c=<id>            → 同上
-  //   ?tab=calls&c=<sessionDocId>     → 切到 calls tab 并定位到 KKCall 会话
-  //   ?tab=calls&c=pseudo:char:<id>   → 切到 calls tab 并定位到该角色的 pseudo session
-  const tab = (route.query.tab as string) || "contacts";
+  //   ?c=<conversationId>   → 定位到该 DM 会话
   const c = (route.query.c as string) || null;
 
   router.replace("/").then(() => {
-    if (tab === "calls" && c) {
-      knockModal.open({ kkCallSessionId: c });
-    } else if (c) {
+    if (c) {
       knockModal.open({ dmConversationId: c });
     } else {
       knockModal.open();
