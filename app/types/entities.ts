@@ -33,6 +33,8 @@ export interface Post {
   commentsCount?: number;
   isRead?: boolean;
   liked?: boolean;
+  dennyCount?: number;
+  hasGivenDenny?: boolean;
   isAnonymous?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -282,7 +284,8 @@ export type DmNotificationKind =
   | "comment"
   | "reply"
   | "mention"
-  | "system";
+  | "system"
+  | "denny";
 
 /**
  * pseudo conversation id 类型标记。真 DM 的 documentId 是 strapi 给的 hash；
