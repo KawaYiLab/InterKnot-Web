@@ -7,6 +7,7 @@ const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
 import { computed, onMounted, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
+import UserHoverCard from "./UserHoverCard.vue";
 
 const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
 
@@ -225,11 +226,11 @@ const handleOpen = (e: MouseEvent) => {
   transition:
     transform 1.2s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 400ms ease;
+  will-change: transform;
 }
 
 .ik-card:hover .ik-card__cover {
   --ik-cover-scale: 1.06;
-  will-change: transform;
 }
 
 .ik-card__cover--loading {

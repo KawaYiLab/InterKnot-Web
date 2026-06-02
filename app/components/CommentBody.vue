@@ -8,6 +8,7 @@
  */
 import { computed } from "vue";
 import { splitContentWithMentions } from "~/utils/mention";
+import MentionChip from "./MentionChip.vue";
 
 const props = defineProps<{
   content?: string | null;

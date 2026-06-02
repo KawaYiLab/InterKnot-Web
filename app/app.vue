@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PostOverlay from "~/components/PostOverlay.vue";
+
 const auth = useAuthStore();
 const router = useRouter();
 const postModal = usePostModal();

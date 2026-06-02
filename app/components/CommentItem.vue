@@ -4,6 +4,9 @@ import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, ChatBubbleLeftIcon, TrashIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
 
+import UserHoverCard from "./UserHoverCard.vue";
+import CommentBody from "./CommentBody.vue";
+
 const props = defineProps<{
   comment: Comment;
   index?: number;
