@@ -5,6 +5,8 @@
  * - 显示名走 token 内的 name 快照（即写入时的名字），与 CommentItem 一致
  * - 显示 `@<name>`，黄底黑字，紧凑到能在评论行内自然流式排版
  */
+import UserHoverCard from "./UserHoverCard.vue";
+
 defineProps<{
   name: string;
   authorDocumentId: string;
