@@ -12,6 +12,11 @@ import {
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 
+// 静态导入核心瀑布流组件，防止下滑加载或冷启动时动态请求分包导致滚动卡顿
+import VirtualMasonry from "~/components/VirtualMasonry.vue";
+import PostCard from "~/components/PostCard.vue";
+import PostCardSkeleton from "~/components/PostCardSkeleton.vue";
+
 const api = useApi();
 const homeStateCache = useHomeStateCache();
 const pendingPost = usePendingPost();

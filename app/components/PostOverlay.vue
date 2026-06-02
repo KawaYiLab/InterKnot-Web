@@ -10,6 +10,13 @@ import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileI
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 
+// 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
+import UserHoverCard from "./UserHoverCard.vue";
+import IkZzzMarquee from "./IkZzzMarquee.vue";
+import CommentItem from "./CommentItem.vue";
+import MentionHighlightOverlay from "./MentionHighlightOverlay.vue";
+import MentionPicker from "./MentionPicker.vue";
+
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
 const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useLightGallery();
