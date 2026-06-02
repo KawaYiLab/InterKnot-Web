@@ -441,8 +441,8 @@ body:has(.ik-overlay) .ik-header-tab.is-active .ik-tab-highlight {
   animation-play-state: paused !important;
 }
 
-/* 当页面失去焦点、最小化或用户切到其他浏览器标签页（is-page-blurred）时，暂停全局背景跑马灯和顶部导航标签背后的呼吸动画，极大减少非活动状态下的设备能耗与 CPU/GPU 占用 */
-body.is-page-blurred .ik-global-marquee .ik-zzz-marquee__track,
+/* 当页面失去焦点、最小化或用户切到其他浏览器标签页（is-page-blurred）时，暂停所有跑马灯和顶部导航标签背后的呼吸动画，极大减少非活动状态下的设备能耗与 CPU/GPU 占用 */
+body.is-page-blurred .ik-zzz-marquee__track,
 body.is-page-blurred .ik-header-tab.is-active .ik-tab-highlight {
   animation-play-state: paused !important;
 }

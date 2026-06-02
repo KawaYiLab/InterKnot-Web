@@ -308,9 +308,64 @@ const likeArticle = async () => {
     const result = await api.toggleLike("article", post.value.id);
     post.value.liked = result.liked;
     post.value.likesCount = result.likesCount;
-    message.success(result.liked ? "已点赞" : "已取消点赞");
+    message.success(result.liked ? "已点赞（￣︶￣）↗　" : "已取消点赞(；′⌒`)");
   } catch (err) {
     message.error(resolveErrorMessage(err, "点赞失败"));
+  }
+};
+
+const givingDenny = ref(false);
+
+const giveDenny = async () => {
+  if (!post.value) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (isOwner.value) {
+    message.warning("不能给自己的帖子投币");
+    return;
+  }
+  if (post.value.isAnonymous) {
+    message.warning("匿名帖不能投币");
+    return;
+  }
+  if (post.value.hasGivenDenny) {
+    message.warning("已经投过币了");
+    return;
+  }
+
+  const prevHasGiven = post.value.hasGivenDenny;
+  const prevDennyCount = post.value.dennyCount ?? 0;
+
+  post.value.hasGivenDenny = true;
+  post.value.dennyCount = prevDennyCount + 1;
+  givingDenny.value = true;
+
+  window.dispatchEvent(new CustomEvent("ik:denny-decrement"));
+
+  try {
+    const result = await api.giveDennyToArticle(post.value.id);
+    if (result?.success) {
+      message.success("投币成功");
+      if (typeof result.articleDennyCount === "number") {
+        post.value.dennyCount = result.articleDennyCount;
+      }
+      if (typeof result.newBalance === "number") {
+        window.dispatchEvent(new CustomEvent("ik:denny-updated", { detail: result.newBalance }));
+      } else {
+        window.dispatchEvent(new CustomEvent("ik:denny-updated"));
+      }
+    } else {
+      throw new Error("投币失败");
+    }
+  } catch (err) {
+    post.value.hasGivenDenny = prevHasGiven;
+    post.value.dennyCount = prevDennyCount;
+    window.dispatchEvent(new CustomEvent("ik:denny-updated"));
+    message.error(resolveErrorMessage(err, "投币失败"));
+  } finally {
+    givingDenny.value = false;
   }
 };
 
@@ -700,6 +755,14 @@ onBeforeUnmount(() => {
                       />
                       <span>说点什么...</span>
                     </div>
+                    <!-- 移动到输入框内部右居中的评论数小标 -->
+                    <div
+                      v-if="!isCommentEditorActive"
+                      class="ik-engage-bar__comment-badge"
+                    >
+                      <ChatBubbleLeftIcon class="ik-engage-comment-icon" aria-hidden="true" />
+                      <span>{{ postCommentCount }}</span>
+                    </div>
                   </div>
 
                   <div class="ik-engage-bar__interact-container">
@@ -714,13 +777,20 @@ onBeforeUnmount(() => {
                         <HandThumbUpIcon v-else class="ik-engage-icon" aria-hidden="true" />
                         <span>{{ postLikeCount > 0 ? postLikeCount : '点赞' }}</span>
                       </button>
+                      <button
+                        type="button"
+                        class="ik-engage-bar__action"
+                        :class="{ 'ik-engage-bar__action--active': post.hasGivenDenny }"
+                        :disabled="isOwner || post.isAnonymous || givingDenny"
+                        :title="isOwner ? '不能给自己的帖子投币' : post.isAnonymous ? '匿名帖子无法投币' : '给作者投喂丁尼'"
+                        @click="giveDenny"
+                      >
+                        <img src="/images/materials/dennies_v2.webp" class="ik-engage-icon ik-engage-icon--denny" alt="投币" />
+                        <span>{{ post.dennyCount && post.dennyCount > 0 ? post.dennyCount : '投币' }}</span>
+                      </button>
                       <button type="button" class="ik-engage-bar__action" @click="showCollectComingSoon">
                         <StarIcon class="ik-engage-icon" aria-hidden="true" />
                         <span>收藏</span>
-                      </button>
-                      <button type="button" class="ik-engage-bar__action" @click="focusCommentInput">
-                        <ChatBubbleLeftIcon class="ik-engage-icon" aria-hidden="true" />
-                        <span>{{ postCommentCount }}</span>
                       </button>
                       <button
                         v-if="isOwner"
@@ -1410,6 +1480,49 @@ onBeforeUnmount(() => {
 .ik-engage-icon {
   width: 24px;
   height: 24px;
+  flex-shrink: 0;
+}
+
+.ik-engage-icon--denny {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  object-fit: contain;
+  opacity: 0.65;
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ik-engage-bar__action:hover:not(:disabled) .ik-engage-icon--denny {
+  transform: scale(1.1) rotate(15deg);
+  opacity: 0.9;
+}
+
+.ik-engage-bar__action--active .ik-engage-icon--denny {
+  opacity: 1 !important;
+}
+
+.ik-engage-bar__action:disabled .ik-engage-icon--denny {
+  opacity: 0.3;
+}
+
+.ik-engage-bar__comment-badge {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #9a9a9a;
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none; /* 让点击穿透，原生触发输入框聚焦 */
+  z-index: 2;
+}
+
+.ik-engage-comment-icon {
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 

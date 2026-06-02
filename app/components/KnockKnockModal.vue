@@ -231,7 +231,7 @@ const isLikeOnComment = (msg: DmMessage): boolean =>
 /** quote 卡左侧 label */
 const quoteLabel = (msg: DmMessage): string => {
   if (isLikeOnComment(msg)) return "评论";
-  if (msg.notificationKind === "like" || msg.notificationKind === "favorite") return "帖子";
+  if (msg.notificationKind === "like" || msg.notificationKind === "favorite" || msg.notificationKind === "denny") return "帖子";
   return "评论帖子"; // comment / reply / mention：引用所在帖子
 };
 

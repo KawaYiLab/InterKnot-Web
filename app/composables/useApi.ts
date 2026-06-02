@@ -331,6 +331,8 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     commentsCount: Number(data.commentsCount ?? 0),
     isRead: data.isRead === true,
     liked: data.liked === true,
+    dennyCount: Number(data.dennyCount ?? 0),
+    hasGivenDenny: data.hasGivenDenny === true,
     isAnonymous: data.isAnonymous === true,
     createdAt: data.createdAt as string | undefined,
     updatedAt: data.updatedAt as string | undefined,

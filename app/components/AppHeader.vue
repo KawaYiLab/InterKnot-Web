@@ -154,6 +154,11 @@ if (import.meta.client) {
   );
 
   useEventListener(window, "ik:home-refresh", fetchDennyBalance);
+  useEventListener(window, "ik:denny-decrement", () => {
+    if (dennyBalance.value > 0) {
+      dennyBalance.value -= 1;
+    }
+  });
   useEventListener(window, "ik:denny-updated", (e: any) => {
     if (typeof e?.detail === "number") {
       dennyBalance.value = e.detail;

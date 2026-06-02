@@ -840,7 +840,9 @@ onBeforeUnmount(() => {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  text-shadow: 
+    0 1px 4px rgba(0, 0, 0, 0.6),
+    0 0 2px rgba(0, 0, 0, 0.3);
 }
 .ik-stat {
   display: inline-flex;
