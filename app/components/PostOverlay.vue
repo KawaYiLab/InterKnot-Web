@@ -1000,7 +1000,7 @@ onBeforeUnmount(() => {
                         v-html="formatBodyText(post.bodyText)"
                       ></div>
                       <p v-else class="ik-dialog__content" style="color: #808080">
-                        暂无正文内容
+                        啥都木有¯\(°_o)/¯
                       </p>
                     </div>
                   </div>
@@ -1020,7 +1020,7 @@ onBeforeUnmount(() => {
                           </div>
                         </div>
                       </div>
-                      <div v-else-if="!comments.length" class="ik-empty" style="padding: 40px 0">暂时还没有评论</div>
+                      <div v-else-if="!comments.length" class="ik-empty" style="padding: 40px 0">啥都木有¯\(°_o)/¯</div>
                       <CommentItem
                         v-for="(comment, idx) in comments"
                         :key="comment.id"
@@ -1097,7 +1097,7 @@ onBeforeUnmount(() => {
                             >
                               <HandThumbUpIconSolid v-if="post.liked" class="ik-engage-icon" aria-hidden="true" />
                               <HandThumbUpIcon v-else class="ik-engage-icon" aria-hidden="true" />
-                              <span>{{ postLikeCount > 0 ? postLikeCount : '点赞' }}</span>
+                              <IkRollingDigit :value="postLikeCount" fallback="点赞" />
                             </button>
                             <button
                               type="button"
@@ -1108,7 +1108,7 @@ onBeforeUnmount(() => {
                               @click="giveDenny"
                             >
                               <img src="/images/materials/dennies_v2.webp" class="ik-engage-icon ik-engage-icon--denny" alt="投币" />
-                              <span>{{ post.dennyCount && post.dennyCount > 0 ? post.dennyCount : '投币' }}</span>
+                              <IkRollingDigit :value="post.dennyCount ?? 0" fallback="投币" />
                             </button>
                             <button type="button" class="ik-engage-bar__action" @click="showCollectComingSoon">
                               <StarIcon class="ik-engage-icon" aria-hidden="true" />

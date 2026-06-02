@@ -125,21 +125,6 @@ const fetchDennyBalance = async () => {
   }
 };
 
-const dennySlots = computed(() => {
-  const balanceStr = String(dennyBalance.value);
-  const totalLength = Math.max(8, balanceStr.length);
-  const activeLength = balanceStr.length;
-  const fullStr = balanceStr.padEnd(totalLength, "0");
-  
-  return Array.from(fullStr).map((char, i) => {
-    const digit = parseInt(char, 10);
-    return {
-      digit: isNaN(digit) ? 0 : digit,
-      isActive: i < activeLength,
-    };
-  });
-});
-
 if (import.meta.client) {
   watch(
     () => auth.isLogin,
@@ -303,21 +288,7 @@ watch(
         <div v-if="auth.isLogin" class="ik-header-denny" @click="navigateTo(auth.profilePath || '/profile')" title="丁尼余额">
           <img alt="Dennies" src="/images/materials/dennies_v2.webp" class="ik-header-denny__img" draggable="false" />
           <div class="ik-header-denny__content">
-            <div
-              v-for="(slot, i) in dennySlots"
-              :key="i"
-              class="ik-header-denny__digit-slot"
-              :class="{ 'is-active': slot.isActive }"
-            >
-              <div
-                class="ik-header-denny__digit-strip"
-                :style="{ transform: `translateY(-${slot.digit * 10}%)` }"
-              >
-                <span v-for="num in 10" :key="num - 1" class="ik-header-denny__digit">
-                  {{ num - 1 }}
-                </span>
-              </div>
-            </div>
+            <IkRollingDigit :value="dennyBalance" :min-digits="8" :duration="800" pad-end />
           </div>
         </div>
 
@@ -991,35 +962,6 @@ watch(
   display: flex;
   align-items: center;
   z-index: 1; /* 置于边框阴影之上 */
-}
-
-.ik-header-denny__digit-slot {
-  position: relative;
-  height: 14px;
-  line-height: 14px;
-  width: 1ch; /* 强制等宽，使各字符水平无缝拼接且对齐 */
-  overflow: hidden;
-  display: inline-block;
-  color: rgba(255, 255, 255, 0.22); /* 默认未激活灰色 */
-  transition: color 0.15s ease;
-}
-
-.ik-header-denny__digit-slot.is-active {
-  color: #fff; /* 激活数值高亮白色 */
-}
-
-.ik-header-denny__digit-strip {
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); /* 机械滚轮弹性缓动 */
-}
-
-.ik-header-denny__digit {
-  height: 14px;
-  line-height: 14px;
-  display: block;
-  text-align: center;
-  color: inherit;
 }
 
 .ik-header-denny__img {

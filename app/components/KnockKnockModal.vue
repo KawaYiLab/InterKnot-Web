@@ -219,7 +219,7 @@ const bubbleText = (msg: DmMessage): BubbleRender => {
     if ((k === "comment" || k === "reply" || k === "mention") && msg.comment?.content) {
       return { mode: "rich", content: msg.comment.content };
     }
-    // 互动类（like / favorite / system）→ 走后端预渲染的 plain content
+    // 互动类（like / favorite / denny / system）→ 走后端预渲染的 plain content
   }
   return msg.content ?? "";
 };
