@@ -8,7 +8,7 @@ import {
   PaperAirplaneIcon,
 } from "@heroicons/vue/24/solid";
 import { DocumentTextIcon } from "@heroicons/vue/24/outline";
-import type { DmConversationSummary, DmMessage } from "~/types/entities";
+import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import { resolveErrorMessage } from "~/utils/api-error";
 
@@ -16,10 +16,25 @@ const {
   visible,
   close,
   consumePendingDmConversationId,
+  consumePendingKnockTab,
   updateUrl,
 } = useKnockKnockModal();
 const auth = useAuthStore();
 const postModal = usePostModal();
+const loginDialog = useLoginDialog();
+const { characters: aiCharacters, loading: aiCharactersLoading, error: aiCharactersError, refresh: refreshAiCharacters } = useAiCharacters();
+const {
+  displayText: aiDisplayText,
+  startReveal: startAiReveal,
+  primeCompleted: primeAiRevealCompleted,
+  resetSession: resetAiRevealSession,
+  revealTick: aiRevealTick,
+  isComplete: isAiRevealComplete,
+} = useAiDmTypewriter();
+
+/** 打开会话时已有的消息 id；不在此集合内的 AI 新消息才打字机 */
+const historyBaselineIds = ref(new Set<string>());
+const aiRevealSessionReady = ref(false);
 
 /** 顶部 tab：通话 / 私聊 / 群聊（未来占位） */
 type KnockTab = "calls" | "contacts" | "groups";
@@ -43,7 +58,19 @@ const {
   sendTyping,
   startStream,
   stopStream,
+  openDirectConversation,
 } = useDmConversations();
+
+const AI_SLUG_STORAGE_KEY = "ik-knock-ai-slug";
+const activeAiSlug = ref<string | null>(null);
+/** 弹窗打开后 DM 列表 + AI 角色列表均就绪，再渲染私聊 Tab（避免 fairy 闪一下） */
+const knockBootstrapDone = ref(false);
+
+const isOfficialAiPeer = (conv: DmConversationSummary): boolean => {
+  if (conv.peer?.isAiAgent === true) return true;
+  const uid = conv.peer?.userId;
+  return typeof uid === "number" && aiPeerUserIds.value.has(uid);
+};
 
 /** 当前登录用户的 user.id；用于区分消息气泡是「我发的」还是「对方发的」 */
 const selfUserId = computed<number | null>(() => {
@@ -56,35 +83,138 @@ const selfUserId = computed<number | null>(() => {
 /** 弹窗打开：拉会话列表 + 开 WS；关闭：清空选中 + 关 WS */
 watch(visible, async (next) => {
   if (!next) {
+    const closingId = activeConversationId.value;
+    if (closingId) {
+      void markConversationAsRead(closingId, { force: true });
+    }
+    activeTab.value = "contacts";
+    activeAiSlug.value = null;
     activeConversationId.value = null;
+    knockBootstrapDone.value = false;
+    aiRevealSessionReady.value = false;
+    historyBaselineIds.value = new Set();
     stopStream();
     return;
   }
+  activeTab.value = "contacts";
+  activeAiSlug.value = null;
+  activeConversationId.value = null;
+  knockBootstrapDone.value = false;
+  aiRevealSessionReady.value = false;
+  historyBaselineIds.value = new Set();
   // 拉列表 + 起 WS（startStream 内部对 SSR / 未登录都做了护栏）
   startStream();
-  await refresh();
+  await Promise.all([refresh(), refreshAiCharacters()]);
+  knockBootstrapDone.value = true;
   // 若是由 UserHoverCard「私信」打开，定位到指定会话
   const pendingDm = consumePendingDmConversationId();
   if (pendingDm) {
+    const conv = allConversations.value.find((c) => c.documentId === pendingDm);
+    const peerUid = conv?.peer?.userId;
+    const aiCard =
+      typeof peerUid === "number"
+        ? aiCharacters.value.find((c) => c.boundUser?.id === peerUid)
+        : undefined;
+    if (conv && (conv.peer?.isAiAgent || aiCard)) {
+      activeTab.value = "calls";
+      activeAiSlug.value = aiCard?.slug ?? null;
+      activeConversationId.value = pendingDm;
+      updateUrl("calls", pendingDm);
+      return;
+    }
     activeTab.value = "contacts";
     activeConversationId.value = pendingDm;
     updateUrl("contacts", pendingDm);
+    return;
+  }
+  const pendingTab = consumePendingKnockTab();
+  if (pendingTab === "calls") {
+    activeTab.value = "calls";
+    await openCallsTab();
   }
 });
 
+/** 官方 AI 绑定的 userId（私聊 Tab 中隐藏，仅在「通话」展示） */
+const aiPeerUserIds = computed(() => {
+  const ids = new Set<number>();
+  for (const card of aiCharacters.value) {
+    const uid = card.boundUser?.id;
+    if (typeof uid === "number") ids.add(uid);
+  }
+  return ids;
+});
+
+/** 私聊 Tab 列表是否仍在首屏加载（未就绪时不渲染会话项，防闪烁） */
+const contactsListLoading = computed(
+  () => !knockBootstrapDone.value || isLoading.value || aiCharactersLoading.value,
+);
+
 /**
- * 当前 tab 应展示的会话列表。
- * "私聊" tab 展示所有 DM 会话；其他两个 tab 暂留空。
+ * 私聊 Tab：排除与官方 AI 角色的 direct 会话（避免与「通话」重复）。
  */
 const conversations = computed<DmConversationSummary[]>(() => {
-  if (activeTab.value !== "contacts") return [];
-  return allConversations.value;
+  if (activeTab.value !== "contacts" || contactsListLoading.value) return [];
+  return allConversations.value.filter((c) => !isOfficialAiPeer(c));
 });
 
 const activeConversation = computed<DmConversationSummary | null>(() => {
   if (!activeConversationId.value) return null;
-  return conversations.value.find((c) => c.documentId === activeConversationId.value) ?? null;
+  return allConversations.value.find((c) => c.documentId === activeConversationId.value) ?? null;
 });
+
+/** 通话 Tab：按 AI boundUserId 索引未读，避免模板里重复 find */
+const aiUnreadByUserId = computed(() => {
+  const map = new Map<number, number>();
+  for (const c of allConversations.value) {
+    const uid = c.peer?.userId;
+    if (typeof uid === "number") map.set(uid, c.unreadCount ?? 0);
+  }
+  return map;
+});
+
+const aiCharacterRows = computed(() =>
+  aiCharacters.value.map((card) => {
+    const uid = card.boundUser?.id;
+    const unread =
+      typeof uid === "number" ? (aiUnreadByUserId.value.get(uid) ?? 0) : 0;
+    return { card, unread };
+  }),
+);
+
+const cardAvatarUrl = (card: AiRoleCard): string | null => {
+  const raw = card.avatar || card.boundUser?.avatar;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+};
+
+const openAiCharacterChat = async (card: AiRoleCard) => {
+  const uid = card.boundUser?.id;
+  if (!uid) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  activeAiSlug.value = card.slug;
+  if (import.meta.client) {
+    localStorage.setItem(AI_SLUG_STORAGE_KEY, card.slug);
+  }
+  const { summary } = await openDirectConversation(uid);
+  activeConversationId.value = summary.documentId;
+  updateUrl("calls", summary.documentId);
+  // 消息加载由 watch(activeConversationId) 统一触发，避免重复请求
+};
+
+const openCallsTab = async () => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (!aiCharacters.value.length && !aiCharactersLoading.value) {
+    await refreshAiCharacters();
+  }
+  activeConversationId.value = null;
+  activeAiSlug.value = null;
+  updateUrl("calls");
+};
 
 /**
  * 当前激活会话是否禁止发送消息：
@@ -197,6 +327,43 @@ const bubbleText = (msg: DmMessage): BubbleRender => {
   return msg.content ?? "";
 };
 
+/** 与官方 AI 私聊（通话 Tab 绑定的 fairy 等） */
+const isAiPeerConversation = computed(() => {
+  const conv = activeConversation.value;
+  if (!conv) return false;
+  if (conv.peer?.isAiAgent === true) return true;
+  const uid = conv.peer?.userId;
+  return typeof uid === "number" && aiPeerUserIds.value.has(uid);
+});
+
+const shouldAnimateAiMessage = (msg: DmMessage): boolean => {
+  if (!aiRevealSessionReady.value || !isAiPeerConversation.value) return false;
+  if (isMine(msg) || msg.kind !== "text" || msg.deletedAt) return false;
+  return !historyBaselineIds.value.has(msg.documentId);
+};
+
+const tryRevealNewAiMessages = () => {
+  if (!aiRevealSessionReady.value || !isAiPeerConversation.value) return;
+  // 基线未建立时勿扫描（消息已加载但 baseline 尚未写入会误伤历史）
+  if (historyBaselineIds.value.size === 0) return;
+  for (const msg of activeMessages.value) {
+    if (historyBaselineIds.value.has(msg.documentId)) continue;
+    if (isMine(msg) || msg.kind !== "text" || msg.deletedAt) continue;
+    if (isAiRevealComplete(msg.documentId)) continue;
+    const text = msg.content?.trim();
+    if (!text) continue;
+    startAiReveal(msg.documentId, text);
+  }
+};
+
+const bubbleTextForDisplay = (msg: DmMessage): BubbleRender => {
+  const base = bubbleText(msg);
+  if (typeof base !== "string") return base;
+  // 打开会话时的历史消息：永远全文（不受打字机 state 影响）
+  if (historyBaselineIds.value.has(msg.documentId)) return base;
+  return aiDisplayText(msg.documentId, base, shouldAnimateAiMessage(msg));
+};
+
 /** like-on-comment：通知关联帖子+评论时，quote 卡引用「评论原文」而不是帖子标题 */
 const isLikeOnComment = (msg: DmMessage): boolean =>
   msg.notificationKind === "like" && !!msg.comment;
@@ -294,12 +461,13 @@ interface EnrichedMessage {
 const enrichedMessages = computed<EnrichedMessage[]>(() => {
   const list = activeMessages.value;
   const known = knownMessageIds.value;
+  void aiRevealTick.value;
   return list.map((msg, idx) => ({
     msg,
     isMine: isMine(msg),
     isNew: !known.has(msg.documentId),
     showTime: shouldShowTime(idx),
-    rendered: bubbleText(msg),
+    rendered: bubbleTextForDisplay(msg),
     quote: shouldShowQuote(msg) && msg.article
       ? {
           label: quoteLabel(msg),
@@ -353,6 +521,9 @@ const scrollToBottom = (el: HTMLElement) => {
 
 /** 选中会话时：懒加载消息 → 批量 mark-read → 滚到最新消息 */
 watch(activeConversationId, async (id) => {
+  aiRevealSessionReady.value = false;
+  historyBaselineIds.value = new Set();
+  resetAiRevealSession();
   // 切换会话时关闭编辑态
   editingMessageId.value = null;
   editingDraft.value = "";
@@ -371,9 +542,18 @@ watch(activeConversationId, async (id) => {
     messagesSettling.value = false;
     return;
   }
-  // 快照当前消息 ID，后续增量到达的消息才播放入场动画
-  knownMessageIds.value = new Set(activeMessages.value.map((m) => m.documentId));
-  markConversationAsRead(id);
+  await nextTick();
+  const historyIds = activeMessages.value
+    .map((m) => m.documentId)
+    .filter((docId): docId is string => typeof docId === "string" && docId.length > 0);
+  historyBaselineIds.value = new Set(historyIds);
+  knownMessageIds.value = new Set(historyIds);
+  if (isAiPeerConversation.value) {
+    primeAiRevealCompleted(historyIds);
+  }
+  await nextTick();
+  aiRevealSessionReady.value = true;
+  void markConversationAsRead(id, { force: true });
   nextTick(() => {
     const el = messagesRef.value;
     if (!el) {
@@ -414,6 +594,43 @@ watch(
     });
   },
 );
+
+/** 补建历史基线：会话 watch 结束时若消息尚未写入缓存，会导致 baseline 为空 + 全员白框 */
+const ensureHistoryBaselineIfNeeded = () => {
+  if (!aiRevealSessionReady.value || historyBaselineIds.value.size > 0) return;
+  const ids = activeMessages.value
+    .map((m) => m.documentId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  if (ids.length === 0) return;
+  historyBaselineIds.value = new Set(ids);
+  knownMessageIds.value = new Set(ids);
+  if (isAiPeerConversation.value) {
+    primeAiRevealCompleted(ids);
+  }
+};
+
+/** 消息条数变化：补基线 / 新 AI 消息打字机 */
+watch(
+  () => activeMessages.value.length,
+  (nextLen, prevLen) => {
+    if (!aiRevealSessionReady.value) return;
+    ensureHistoryBaselineIfNeeded();
+    if (nextLen <= (prevLen ?? 0)) return;
+    tryRevealNewAiMessages();
+  },
+);
+
+let aiRevealScrollRaf: number | null = null;
+/** 打字机输出时跟随滚底（rAF 合并，避免每 tick 触发 layout） */
+watch(aiRevealTick, () => {
+  if (!wasNearBottom.value || !isAiPeerConversation.value) return;
+  if (aiRevealScrollRaf != null) return;
+  aiRevealScrollRaf = requestAnimationFrame(() => {
+    aiRevealScrollRaf = null;
+    const el = messagesRef.value;
+    if (el) el.scrollTop = el.scrollHeight;
+  });
+});
 
 // （bubbleBody 已被 bubbleText 取代——见上方，支持富文本 mention 渲染）
 
@@ -560,10 +777,14 @@ const handleBackdropMouseDown = (e: MouseEvent) => {
   if (e.target === e.currentTarget) handleClose();
 };
 
-const handleTabClick = (tab: KnockTab) => {
+const handleTabClick = async (tab: KnockTab) => {
   activeTab.value = tab;
-  // 切换 tab 时清掉右栏 activeId
+  if (tab === "calls") {
+    await openCallsTab();
+    return;
+  }
   activeConversationId.value = null;
+  activeAiSlug.value = null;
   updateUrl(tab);
 };
 
@@ -663,7 +884,7 @@ const handleConversationClick = (id: string) => {
                       class="ik-knock__tab"
                       :class="{ 'is-active': activeTab === 'calls' }"
                       :aria-selected="activeTab === 'calls'"
-                      aria-label="通话记录"
+                      aria-label="AI 助手"
                       @click="handleTabClick('calls')"
                     >
                       <PhoneIcon class="ik-knock__tab-icon" aria-hidden="true" />
@@ -739,20 +960,61 @@ const handleConversationClick = (id: string) => {
                       v-if="!conversations.length"
                       class="ik-knock__list-empty"
                     >
-                      <span v-if="isLoading">加载中…</span>
+                      <span v-if="contactsListLoading">加载中…</span>
                       <span v-else-if="loadError">{{ loadError }}</span>
                       <span v-else>暂无消息</span>
                     </div>
                   </div>
 
-                  <!-- 通话（占位） -->
+                  <!-- AI 角色（通话 Tab） -->
                   <div
                     v-else-if="activeTab === 'calls'"
                     class="ik-knock__list"
                     role="listbox"
                   >
-                    <div class="ik-knock__list-empty">
-                      <span>暂未开放</span>
+                    <button
+                      v-for="{ card, unread } in aiCharacterRows"
+                      :key="card.slug"
+                      type="button"
+                      role="option"
+                      class="ik-knock__list-item"
+                      :class="{
+                        'is-active': activeAiSlug === card.slug,
+                      }"
+                      :aria-selected="activeAiSlug === card.slug"
+                      @click="openAiCharacterChat(card)"
+                    >
+                      <span class="ik-knock__avatar" aria-hidden="true">
+                        <img
+                          v-if="cardAvatarUrl(card)"
+                          :src="cardAvatarUrl(card)!"
+                          :alt="card.displayName"
+                          class="ik-knock__avatar-img"
+                          draggable="false"
+                        />
+                        <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__avatar-img" draggable="false" />
+                      </span>
+                      <span class="ik-knock__item-text">
+                        <span class="ik-knock__item-title">{{ card.displayName }}</span>
+                        <span class="ik-knock__item-subtitle">
+                          {{ card.bio || "AI 助手" }}
+                        </span>
+                      </span>
+                      <span
+                        v-if="unread > 0"
+                        class="ik-knock__item-badge"
+                        aria-label="未读"
+                      >
+                        {{ unread > 99 ? "99+" : unread }}
+                      </span>
+                    </button>
+                    <div
+                      v-if="!aiCharacters.length"
+                      class="ik-knock__list-empty"
+                    >
+                      <span v-if="aiCharactersLoading">加载中…</span>
+                      <span v-else-if="aiCharactersError">{{ aiCharactersError }}</span>
+                      <span v-else>暂无 AI 角色</span>
                     </div>
                   </div>
 
@@ -1161,6 +1423,7 @@ const handleConversationClick = (id: string) => {
 }
 
 .ik-knock__tab {
+  position: relative;
   flex: 1 1 0;
   display: inline-flex;
   align-items: center;
@@ -1188,6 +1451,26 @@ const handleConversationClick = (id: string) => {
 .ik-knock__tab-icon {
   width: 22px;
   height: 22px;
+}
+
+.ik-knock__tab-badge {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  border: 1px solid #000;
+  pointer-events: none;
 }
 
 /* 列表 */
