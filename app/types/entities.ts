@@ -9,6 +9,24 @@ export interface Author {
   avatar?: string;
   exp?: number;
   level?: number;
+  isAiAgent?: boolean;
+}
+
+/** 平台 AI 角色卡（GET /api/agent/characters） */
+export interface AiRoleCard {
+  slug: string;
+  displayName: string;
+  bio?: string | null;
+  avatar?: string | null;
+  sortOrder?: number;
+  boundUser?: {
+    id: number;
+    login?: string;
+    isAiAgent?: boolean;
+    authorDocumentId?: string | null;
+    name?: string;
+    avatar?: string | null;
+  } | null;
 }
 
 export interface CoverImage {
@@ -109,6 +127,7 @@ export interface Profile {
   stats?: ProfileStats;
   equippedCard?: BusinessCard;
   equippedAvatar?: Avatar;
+  isAiAgent?: boolean;
 }
 
 export interface LikeToggleResult {
@@ -311,6 +330,8 @@ export interface DmPeer {
   name: string;
   avatar: string | null;
   level: number | null;
+  /** 对端为平台 AI 用户（如 fairy）时为 true，私聊 Tab 不展示 */
+  isAiAgent?: boolean;
 }
 
 /** 自己在该会话上的偏好与状态（mute/pin/lastRead） */
@@ -362,6 +383,7 @@ export interface DmMessageSender {
   name: string;
   avatar: string | null;
   level: number | null;
+  isAiAgent?: boolean;
 }
 
 /** 引用消息的简化视图（被撤回时 content 为 null） */

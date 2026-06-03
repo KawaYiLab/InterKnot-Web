@@ -287,6 +287,7 @@ function toAuthor(raw: unknown, apiBaseUrl: string): Author {
     avatar,
     exp: (data.exp as number | undefined) || 0,
     level: (data.level as number | undefined) || 1,
+    isAiAgent: data.isAiAgent === true,
   };
 }
 

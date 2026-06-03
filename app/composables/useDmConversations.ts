@@ -106,7 +106,7 @@ interface UseDmConversations {
     messageId: string,
   ) => Promise<void>;
 
-  markConversationAsRead: (id: string) => Promise<void>;
+  markConversationAsRead: (id: string, opts?: { force?: boolean }) => Promise<void>;
   /** 设置 muted/pinned；title 仅群聊可用 */
   updateConversation: (
     id: string,
@@ -503,13 +503,19 @@ export function useDmConversations(): UseDmConversations {
     }
   }
 
-  async function markConversationAsRead(id: string): Promise<void> {
+  async function markConversationAsRead(
+    id: string,
+    opts?: { force?: boolean },
+  ): Promise<void> {
     const conv = conversations.value.find((c) => c.documentId === id);
-    // 没找到会话 / 已经全部已读 → 不发请求
-    if (!conv || conv.unreadCount === 0) return;
+    if (!conv) return;
+    // 本地已是 0 且非强制：跳过（避免无意义请求）
+    // 强制：用户正在看该会话时仍须推进服务端 lastReadAt（例如 WS 新消息到达时本地未读未 +1）
+    if (!opts?.force && conv.unreadCount === 0) return;
 
-    // 乐观：本地置 unread=0
-    patchConversation(id, { unreadCount: 0 });
+    if (conv.unreadCount !== 0) {
+      patchConversation(id, { unreadCount: 0 });
+    }
 
     try {
       await $api(`/api/dm/conversations/${encodeURIComponent(id)}/read`, {
@@ -646,9 +652,9 @@ export function useDmConversations(): UseDmConversations {
       void refresh();
     }
 
-    // 如果是当前激活会话且来自他人，顺手把已读推进到现在（多端同步）
+    // 当前激活会话收到他人消息：本地未读可能已是 0，仍须推进服务端已读水位
     if (isActive && !isMine) {
-      void markConversationAsRead(cid);
+      void markConversationAsRead(cid, { force: true });
     }
   };
 

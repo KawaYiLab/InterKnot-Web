@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import PostOverlay from "~/components/PostOverlay.vue";
+import { OVERLAY_KNOCK_KEY, OVERLAY_POST_KEY } from "~/utils/overlay-history";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -21,12 +22,24 @@ if (import.meta.client) {
   window.addEventListener("popstate", postModal.handlePopState);
   window.addEventListener("popstate", knockModal.handlePopState);
 
-  // 当发生真实路由导航时（例如点击 Header 链接），关闭弹窗
-  router.beforeEach(() => {
-    if (postModal.isOpen.value) {
+  // 路由变化时收起弹窗。同 path 仅 query 变化（history.back 去掉 ik_post）时
+  // 只关帖子弹窗，勿误关仍带 ik_knock 的敲敲。
+  router.beforeEach((to, from) => {
+    if (to.path !== from.path) {
+      if (postModal.isOpen.value) postModal.teardown();
+      if (knockModal.visible.value) knockModal.teardown();
+      return;
+    }
+
+    const hadPost = Boolean(from.query[OVERLAY_POST_KEY]);
+    const hasPost = Boolean(to.query[OVERLAY_POST_KEY]);
+    if (postModal.isOpen.value && hadPost && !hasPost) {
       postModal.teardown();
     }
-    if (knockModal.visible.value) {
+
+    const hadKnock = Boolean(from.query[OVERLAY_KNOCK_KEY]);
+    const hasKnock = Boolean(to.query[OVERLAY_KNOCK_KEY]);
+    if (knockModal.visible.value && hadKnock && !hasKnock) {
       knockModal.teardown();
     }
   });

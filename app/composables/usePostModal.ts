@@ -3,9 +3,11 @@
  *
  * 从首页点击帖子时，通过 history.pushState 改变 URL（不走 Vue Router），
  * 帖子内容以全屏弹窗渲染，首页保持 mounted。
+ * URL 使用当前页 query（ik_post=）而非 /post/:id，避免关闭时触发路由切页。
  * 直接访问 /post/:id 时走正常的页面路由（post/[id].vue）。
  */
 import type { Author } from "~/types/entities";
+import { postHistoryUrl } from "~/utils/overlay-history";
 
 // 模块级单例，确保所有 usePostModal() 实例共享同一份标记
 let _historyPushed = false;
@@ -49,7 +51,7 @@ export function usePostModal() {
     window.history.pushState(
       { __postModal: true, postId: id },
       "",
-      `/post/${id}`,
+      postHistoryUrl(id),
     );
 
     // 预热帖子详情与首屏评论，减少 PostOverlay 挂载后的等待与布局抖动

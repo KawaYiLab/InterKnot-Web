@@ -58,6 +58,7 @@ const floorLabel = computed(() =>
         <span v-if="comment.author?.level && comment.author?.documentId" class="ik-comment__level">
           Lv.{{ comment.author.level }}
         </span>
+        <span v-if="comment.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
         <span v-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
       </div>
 
@@ -121,6 +122,7 @@ const floorLabel = computed(() =>
               <span v-if="reply.author?.level && reply.author?.documentId" class="ik-comment__level">
                 Lv.{{ reply.author.level }}
               </span>
+              <span v-if="reply.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
             </div>
             <div class="ik-comment__body ik-comment__body--reply">
               <CommentBody :content="reply.content" />
@@ -219,6 +221,18 @@ const floorLabel = computed(() =>
   font-style: italic;
   color: #d7ff00;
   flex-shrink: 0;
+}
+
+.ik-comment__ai-badge {
+  flex-shrink: 0;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: #111;
+  background: #d7ff00;
+  border: 1px solid #111;
+  border-radius: 4px;
 }
 
 .ik-comment__floor {
