@@ -76,7 +76,7 @@ interface UseDmConversations {
   /** WS typing：来自对端 userId 集合 → 简化用 conversationId → userId 数组 */
   typingByConversation: ComputedRef<Record<string, number[]>>;
 
-  refresh: () => Promise<void>;
+  refresh: (opts?: { silent?: boolean }) => Promise<void>;
   /** 取/建私聊会话，返回 summary 与 isNew */
   openDirectConversation: (
     targetUserId: number,
@@ -252,20 +252,27 @@ export function useDmConversations(): UseDmConversations {
   };
 
   // ── REST 调用 ────────────────────────────────────────
-  async function refresh(): Promise<void> {
+  async function refresh(opts?: { silent?: boolean }): Promise<void> {
+    const silent = opts?.silent === true;
     if (isLoading.value) return;
-    isLoading.value = true;
-    error.value = null;
+    if (!silent) {
+      isLoading.value = true;
+      error.value = null;
+    }
     try {
       const resp = await $api<ConversationListResponse>("/api/dm/conversations");
       conversations.value = resp?.data ?? [];
     } catch (err) {
-      const e = err as ApiClientError;
-      error.value = e?.message || "加载失败";
+      if (!silent) {
+        const e = err as ApiClientError;
+        error.value = e?.message || "加载失败";
+      }
       // 不清空 conversations：网络抖动 / 短暂 5xx 时保留旧列表，避免用户看到的
       // 私聊列表瞬间消失；error 已暴露给上层 UI 提示用户重试
     } finally {
-      isLoading.value = false;
+      if (!silent) {
+        isLoading.value = false;
+      }
     }
   }
 

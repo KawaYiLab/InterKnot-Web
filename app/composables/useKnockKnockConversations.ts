@@ -276,17 +276,19 @@ export function useKnockKnockConversations(): UseKnockKnockConversations {
   }
 
   // ── SSE 实时推送 ─────────────────────────────────────
+  /** 通知变更后刷新列表（legacy knock API + DM 融合列表，后者供 Header 未读角标） */
   function scheduleRefresh() {
     if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
     refreshDebounceTimer = setTimeout(() => {
       refreshDebounceTimer = null;
       void refresh();
+      void useDmConversations().refresh({ silent: true });
     }, REFRESH_DEBOUNCE_MS);
   }
 
   function handleSseEvent(event: KnockSseEvent) {
     if (event.type === "notification.created") {
-      // 红点 / 列表
+      // 红点 / 列表（含 AppHeader totalUnread）
       scheduleRefresh();
 
       // 只刷当前用户正在看的那个会话，避免 N 倍放大：

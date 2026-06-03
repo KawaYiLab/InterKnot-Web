@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import PostOverlay from "~/components/PostOverlay.vue";
-import { OVERLAY_KNOCK_KEY, OVERLAY_POST_KEY } from "~/utils/overlay-history";
+import { OVERLAY_KNOCK_KEY } from "~/utils/overlay-history";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -22,19 +22,17 @@ if (import.meta.client) {
   window.addEventListener("popstate", postModal.handlePopState);
   window.addEventListener("popstate", knockModal.handlePopState);
 
-  // 路由变化时收起弹窗。同 path 仅 query 变化（history.back 去掉 ik_post）时
-  // 只关帖子弹窗，勿误关仍带 ik_knock 的敲敲。
+  // 路由变化时收起弹窗。同 path 仅 query 变化（history.back 去掉 ik_knock）时
+  // 只关敲敲；帖子弹窗用 /post/:id，path 变化时关闭。
   router.beforeEach((to, from) => {
     if (to.path !== from.path) {
       if (postModal.isOpen.value) postModal.teardown();
-      if (knockModal.visible.value) knockModal.teardown();
+      // 从帖子弹窗 back 回带 ik_knock 的页面时，敲敲仍应保留
+      const knockStillInUrl = Boolean(to.query[OVERLAY_KNOCK_KEY]);
+      if (knockModal.visible.value && !knockStillInUrl) {
+        knockModal.teardown();
+      }
       return;
-    }
-
-    const hadPost = Boolean(from.query[OVERLAY_POST_KEY]);
-    const hasPost = Boolean(to.query[OVERLAY_POST_KEY]);
-    if (postModal.isOpen.value && hadPost && !hasPost) {
-      postModal.teardown();
     }
 
     const hadKnock = Boolean(from.query[OVERLAY_KNOCK_KEY]);
