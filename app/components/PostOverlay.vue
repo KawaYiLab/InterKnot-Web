@@ -2196,20 +2196,36 @@ onBeforeUnmount(() => {
     transform: scale(1) translateX(-5%);
   }
 
+  /* 移动端整体变为一条整页滚动的单栏：封面 + 正文 + 评论一起滚 */
   .ik-dialog__body {
     flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    border-radius: 0;
+    background: #000;
+  }
+
+  .ik-dialog__body::-webkit-scrollbar {
+    display: none;
   }
 
   .ik-dialog__left {
     flex: none;
   }
 
+  /* 左栏不再独立滚动，内容自然撑开成为整页滚动的一部分 */
   .ik-dialog__left-scroll {
     flex: none;
     max-height: none;
-    overflow-y: visible;
+    overflow: visible;
     margin: 0;
     border-radius: 0;
+    will-change: auto;
+    transform: none;
   }
 
   .ik-dialog__cover-wrap {
@@ -2225,33 +2241,41 @@ onBeforeUnmount(() => {
     padding: 16px;
   }
 
+  /* 右栏不再独立滚动；overflow 必须 visible 才能让底部互动栏 sticky 生效 */
   .ik-dialog__right {
-    flex: 1;
+    flex: 1 0 auto;
     margin: 0;
     border-radius: 0;
+    overflow: visible;
     border-top: 1px solid #313132;
+    background: transparent;
   }
 
-  /* 移动端整体变为可滚动单栏 */
-  .ik-dialog__body {
-    overflow-y: auto;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  .ik-dialog__comments-scroll {
+    flex: 1 0 auto;
+    min-height: 0;
+    overflow: visible;
+    will-change: auto;
+    transform: none;
   }
 
-  .ik-dialog__body::-webkit-scrollbar {
-    display: none;
-  }
-
-  .ik-dialog__right {
-    min-height: 300px;
+  /* 底部互动栏固定在屏幕底部，不随内容滚走 */
+  .ik-dialog__actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    background: #0a0a0a;
+    border-top: 1px solid #202020;
   }
 }
 
 @media (max-width: 500px) {
+  /* 手机端：真·全屏，去掉弹窗边距与圆角，消除"放大弹窗"的观感 */
   .ik-dialog {
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
   }
 
   .ik-dialog__outer {
@@ -2260,6 +2284,17 @@ onBeforeUnmount(() => {
 
   .ik-dialog__inner {
     border-radius: 0;
+  }
+
+  /* 顶部 header 适配刘海/状态栏安全区 */
+  .ik-dialog__header {
+    padding-top: calc(8px + env(safe-area-inset-top));
+    border-radius: 0;
+  }
+
+  /* 底部互动栏适配 Home 指示条安全区 */
+  .ik-dialog__actions {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
   }
 }
 
