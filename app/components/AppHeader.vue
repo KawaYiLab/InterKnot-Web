@@ -264,7 +264,7 @@ watch(
 </script>
 
 <template>
-  <header class="ik-header" :class="{ 'is-hidden': isHeaderHidden }">
+  <header class="ik-header" :class="{ 'is-hidden': isHeaderHidden, 'is-login': auth.isLogin }">
     <div class="ik-header__inner">
       <div class="ik-header__left">
         <!-- 等级进度条（登录后显示） -->
@@ -293,8 +293,8 @@ watch(
           </div>
         </div>
 
-        <!-- 品牌Logo（未登录时显示） -->
-        <NuxtLink v-else to="/" class="ik-brand" aria-label="Inter Knot 首页">
+        <!-- 品牌 Logo：桌面端仅未登录显示（登录时换成等级/丁尼）；移动端始终显示 -->
+        <NuxtLink to="/" class="ik-brand" aria-label="Inter Knot 首页">
           <img src="/images/zzzicon.png" alt="Inter Knot" class="ik-brand__icon" draggable="false" />
           <strong class="ik-brand__title">INTER-KNOT</strong>
         </NuxtLink>
@@ -490,6 +490,11 @@ watch(
   align-items: center;
   gap: 10px;
   flex: 0 0 auto;
+}
+
+/* 桌面端登录后左侧改用等级条+丁尼，隐藏品牌 Logo（移动端会再覆盖回显示） */
+.ik-header.is-login .ik-brand {
+  display: none;
 }
 
 .ik-brand__icon {
@@ -919,6 +924,11 @@ watch(
   /* 移动端隐藏等级显示 */
   .ik-level-display {
     display: none;
+  }
+
+  /* 移动端无论登录与否都显示品牌 Logo */
+  .ik-header.is-login .ik-brand {
+    display: inline-flex;
   }
 }
 
