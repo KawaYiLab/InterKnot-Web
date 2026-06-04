@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { useEventListener } from "@vueuse/core";
+import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/vue/24/solid";
 import { LEVEL_THRESHOLDS, MAX_LEVEL } from "~/utils/level";
 
 const route = useRoute();
@@ -322,6 +323,21 @@ watch(
       </div>
 
       <div class="ik-header__right">
+        <!-- 移动端：tabs 隐藏后，把「敲敲」入口放到搜索框右侧 -->
+        <button
+          type="button"
+          class="ik-header__knock"
+          :aria-label="knockUnread > 0 ? `敲敲，${knockUnread} 条未读` : '敲敲'"
+          @click="handleTabChange('notification')"
+        >
+          <ChatBubbleOvalLeftEllipsisIcon class="ik-header__knock-icon" aria-hidden="true" />
+          <span
+            v-if="knockUnreadLabel"
+            class="ik-header__knock-badge"
+            aria-hidden="true"
+          >{{ knockUnreadLabel }}</span>
+        </button>
+
         <div class="ik-header-tabs" role="tablist" aria-label="顶部导航">
           <button
             type="button"
@@ -515,6 +531,50 @@ watch(
   display: inline-flex;
   justify-content: flex-end;
   align-items: center;
+}
+
+/* 移动端「敲敲」入口：桌面端用 tabs，不显示此按钮 */
+.ik-header__knock {
+  display: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fbfe00;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ik-header__knock-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.ik-header__knock-badge {
+  position: absolute;
+  top: -2px;
+  left: 100%;
+  margin-left: -14px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #ff3838;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 2px #000;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .ik-search-input {
@@ -773,6 +833,15 @@ watch(
 
   .ik-header-tabs {
     display: none;
+  }
+
+  /* tabs 隐藏后显示「敲敲」按钮，置于搜索框右侧 */
+  .ik-header__right {
+    gap: 8px;
+  }
+
+  .ik-header__knock {
+    display: inline-flex;
   }
 }
 
