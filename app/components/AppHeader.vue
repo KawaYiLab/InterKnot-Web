@@ -792,9 +792,59 @@ watch(
     display: none;
   }
 
+  /* 左右列收缩为内容宽度：左侧只剩 logo，右侧 tabs 已隐藏，
+     让中部搜索框吃满整行，消除居中后右侧的大片留白 */
+  .ik-header__left {
+    flex: 0 0 auto;
+  }
+
+  .ik-header__right {
+    flex: 0 0 auto;
+  }
+
+  .ik-header__middle {
+    flex: 1 1 auto;
+    justify-content: stretch;
+  }
+
   .ik-search-shell {
+    width: 100%;
     max-width: 100%;
     min-width: 0;
+  }
+
+  /* 更圆润紧凑的移动端搜索框 */
+  .ik-search-input :deep(.z-input) {
+    border-radius: 999px;
+    background: #161616;
+  }
+
+  .ik-search-input :deep(.z-input__inner) {
+    height: 42px;
+    padding: 0 6px 0 18px;
+    font-size: 15px;
+  }
+
+  .ik-search-input :deep(.z-input__suffix) {
+    padding-right: 5px;
+  }
+
+  /* 去掉分隔线，搜索按钮做成醒目的圆形主色按钮 */
+  .ik-search-divider {
+    display: none;
+  }
+
+  .ik-search-action {
+    width: 34px;
+    height: 34px;
+    background: rgba(215, 255, 0, 0.14);
+    color: #fbfe00;
+    font-size: 17px;
+  }
+
+  .ik-search-clear {
+    width: 26px;
+    height: 26px;
   }
 
   /* 移动端隐藏等级显示 */
