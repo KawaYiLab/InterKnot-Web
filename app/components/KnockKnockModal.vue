@@ -2060,45 +2060,52 @@ const handleMobileBack = () => {
     font-size: 20px;
   }
 
-  /* body 变单栏容器：两个面板绝对定位铺满，按状态显示其一 */
+  /* 单栏导航：会话列表常驻底层，聊天页绝对定位覆盖整屏，靠 transform 滑入/滑出 */
+  .ik-dialog--knock .ik-dialog__inner {
+    position: relative;
+  }
+
   .ik-dialog__body.ik-knock__body {
     display: block;
-    position: relative;
+    position: static;
     padding: 0;
     gap: 0;
     border-radius: 0;
   }
 
-  .ik-knock__sidebar,
-  .ik-knock__main {
-    position: absolute;
-    inset: 0;
+  /* 列表视图：会话列表在正常流中铺满 body（位于品牌栏下方） */
+  .ik-knock__sidebar {
+    position: relative;
     width: 100%;
     height: 100%;
     flex: none;
+    padding: 12px 12px 0;
+    gap: 12px;
     border-radius: 0;
     box-shadow: none;
     background: #121212;
   }
 
-  /* 默认（列表视图）：显示会话列表，隐藏聊天 */
-  .ik-knock__sidebar {
-    padding: 12px 12px 0;
-    gap: 12px;
-  }
-
+  /* 聊天页：绝对定位覆盖整个弹窗（含品牌栏），默认滑出到屏幕右侧外 */
   .ik-knock__main {
-    display: none;
-  }
-
-  /* 聊天视图：隐藏品牌栏 + 会话列表，聊天页全屏 */
-  .ik-dialog--knock.is-mobile-chat .ik-dialog__header,
-  .ik-dialog--knock.is-mobile-chat .ik-knock__sidebar {
-    display: none;
-  }
-
-  .ik-dialog--knock.is-mobile-chat .ik-knock__main {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    width: 100%;
+    height: 100%;
+    flex: none;
     display: flex;
+    border-radius: 0;
+    box-shadow: none;
+    background: #121212;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+  }
+
+  /* 选中会话：聊天页滑入到位 */
+  .ik-dialog--knock.is-mobile-chat .ik-knock__main {
+    transform: translateX(0);
   }
 
   /* tabs：加大触控高度 */
