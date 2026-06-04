@@ -69,6 +69,13 @@
 
 * {
   box-sizing: border-box;
+  /* 去掉移动端点按按钮/图片/链接时出现的蓝灰色高亮方块 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 触摸/鼠标点击后不残留焦点描边；仅键盘 Tab 导航时显示可见焦点（保留无障碍） */
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 html,
