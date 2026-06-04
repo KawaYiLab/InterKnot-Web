@@ -535,6 +535,15 @@ onBeforeUnmount(() => {
 /* 入场/出场动画统一在 theme.css 的 .ik-overlay-* 全局规则里维护 */
 
 /* ── Mobile ───────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Fewer columns so covers are large enough and titles are legible
+     (the desktop 5-column grid shrank each card to ~64px on phones,
+     clipping titles down to a single character). */
+  .ik-pin__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width: 500px) {
   .ik-dialog__outer {
     border-radius: 0;
@@ -550,6 +559,20 @@ onBeforeUnmount(() => {
 
   .ik-dialog__body {
     border-radius: 0;
+    padding: 14px;
+  }
+
+  .ik-pin__grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .ik-pin__card-title {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.3;
   }
 }
 </style>

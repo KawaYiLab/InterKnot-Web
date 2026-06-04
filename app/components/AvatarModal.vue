@@ -821,6 +821,14 @@ onBeforeUnmount(() => {
   .ik-av-frame__inner { border-radius: 0; }
   .ik-av-frame__body { border-radius: 0; }
   .ik-av-grid { grid-template-columns: repeat(4, 1fr); padding: 12px; gap: 4px; }
+  /* Shrink the type tabs so all tabs + close button fit on narrow phones
+     (fixed 90px tabs previously overflowed and pushed the close off-screen). */
+  .ik-av-tab-bar { padding: 10px 12px; }
+  .ik-av-tab { width: 66px; font-size: 14px; }
+  .ik-av-tab__highlight--first { width: 73px; }
+  .ik-av-tab__highlight--middle { width: 80px; left: -7px; }
+  .ik-av-tab__highlight--last { width: 73px; }
+  .ik-av-close__img { height: 28px; }
 }
 
 /* prefers-reduced-motion 由 theme.css 全局接管 */
