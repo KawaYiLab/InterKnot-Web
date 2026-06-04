@@ -823,6 +823,14 @@ onBeforeUnmount(() => {
   .ik-bc-frame { border-radius: 0; }
   .ik-bc-frame__inner { border-radius: 0; }
   .ik-bc-frame__body { border-radius: 0; }
+  /* Shrink the type tabs so all tabs + close button fit on narrow phones
+     (fixed 90px tabs previously overflowed and clipped the last tab). */
+  .ik-bc-tab-bar { padding: 10px 12px; }
+  .ik-bc-tab { width: 66px; font-size: 14px; }
+  .ik-bc-tab__highlight--first { width: 73px; }
+  .ik-bc-tab__highlight--middle { width: 80px; left: -7px; }
+  .ik-bc-tab__highlight--last { width: 73px; }
+  .ik-bc-close__img { height: 28px; }
 }
 
 /* prefers-reduced-motion 由 theme.css 全局接管 */

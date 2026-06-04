@@ -144,13 +144,30 @@ const year = new Date().getFullYear();
 @media (max-width: 640px) {
   .app-footer__inner {
     flex-direction: column;
-    gap: 32px;
-    padding: 32px 0 24px;
+    align-items: center;
+    text-align: center;
+    gap: 24px;
+    padding: 28px 0 calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .app-footer__brand {
+    align-items: center;
+    gap: 6px;
   }
 
   .app-footer__links {
-    gap: 32px;
+    width: 100%;
+    justify-content: center;
+    gap: 56px;
     flex-wrap: wrap;
+  }
+
+  .app-footer__group {
+    align-items: center;
+  }
+
+  .app-footer__list {
+    align-items: center;
   }
 }
 </style>
