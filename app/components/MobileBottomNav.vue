@@ -3,10 +3,12 @@ import { useMessage } from "zenless-ui";
 import {
   HomeIcon as HomeOutlineIcon,
   UserIcon as UserOutlineIcon,
+  ChatBubbleOvalLeftEllipsisIcon as KnockOutlineIcon,
 } from "@heroicons/vue/24/outline";
 import {
   HomeIcon as HomeSolidIcon,
   UserIcon as UserSolidIcon,
+  ChatBubbleOvalLeftEllipsisIcon as KnockSolidIcon,
   PlusIcon,
 } from "@heroicons/vue/24/solid";
 
@@ -14,11 +16,22 @@ const route = useRoute();
 const auth = useAuthStore();
 const loginDialog = useLoginDialog();
 const message = useMessage();
+const knockKnockModal = useKnockKnockModal();
+
+// 敲敲未读：登录后由 knock-auth-bridge 插件自动启动 stream + refresh，
+// 这里只订阅 totalUnread；未登录恒为 0，不显示 badge。
+const { totalUnread: knockUnread } = useDmConversations();
+const knockUnreadLabel = computed(() => {
+  const n = knockUnread.value;
+  if (n <= 0) return "";
+  return n > 99 ? "99+" : String(n);
+});
 
 const isHome = computed(() => route.path === "/");
 const isMine = computed(
   () => !!auth.profilePath && route.path === auth.profilePath,
 );
+const isKnock = computed(() => knockKnockModal.visible.value);
 
 // Double-tap on the active "推送" entry refreshes the home feed,
 // matching the Flutter app's behaviour.
@@ -57,27 +70,61 @@ const handleCreatePost = () => {
   }
   navigateTo("/create");
 };
+
+const handleKnock = () => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  knockKnockModal.open();
+};
 </script>
 
 <template>
   <nav class="ik-mobile-nav" role="navigation" aria-label="主导航">
-    <button
-      type="button"
-      class="ik-mobile-nav__item"
-      :class="{ 'is-active': isHome }"
-      :aria-current="isHome ? 'page' : undefined"
-      aria-label="推送"
-      @click="handleHomeTap"
-    >
-      <span class="ik-mobile-nav__inner">
-        <component
-          :is="isHome ? HomeSolidIcon : HomeOutlineIcon"
-          class="ik-mobile-nav__icon"
-          aria-hidden="true"
-        />
-        <span class="ik-mobile-nav__label">推送</span>
-      </span>
-    </button>
+    <div class="ik-mobile-nav__side">
+      <button
+        type="button"
+        class="ik-mobile-nav__item"
+        :class="{ 'is-active': isHome }"
+        :aria-current="isHome ? 'page' : undefined"
+        aria-label="推送"
+        @click="handleHomeTap"
+      >
+        <span class="ik-mobile-nav__inner">
+          <component
+            :is="isHome ? HomeSolidIcon : HomeOutlineIcon"
+            class="ik-mobile-nav__icon"
+            aria-hidden="true"
+          />
+          <span class="ik-mobile-nav__label">推送</span>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="ik-mobile-nav__item"
+        :class="{ 'is-active': isKnock }"
+        :aria-label="knockUnread > 0 ? `敲敲，${knockUnread} 条未读` : '敲敲'"
+        @click="handleKnock"
+      >
+        <span class="ik-mobile-nav__inner">
+          <span class="ik-mobile-nav__icon-wrap">
+            <component
+              :is="isKnock ? KnockSolidIcon : KnockOutlineIcon"
+              class="ik-mobile-nav__icon"
+              aria-hidden="true"
+            />
+            <span
+              v-if="knockUnreadLabel"
+              class="ik-mobile-nav__badge"
+              aria-hidden="true"
+            >{{ knockUnreadLabel }}</span>
+          </span>
+          <span class="ik-mobile-nav__label">敲敲</span>
+        </span>
+      </button>
+    </div>
 
     <div class="ik-mobile-nav__create-wrap">
       <button
@@ -90,23 +137,25 @@ const handleCreatePost = () => {
       </button>
     </div>
 
-    <button
-      type="button"
-      class="ik-mobile-nav__item"
-      :class="{ 'is-active': isMine }"
-      :aria-current="isMine ? 'page' : undefined"
-      aria-label="我的"
-      @click="handleAccountClick"
-    >
-      <span class="ik-mobile-nav__inner">
-        <component
-          :is="isMine ? UserSolidIcon : UserOutlineIcon"
-          class="ik-mobile-nav__icon"
-          aria-hidden="true"
-        />
-        <span class="ik-mobile-nav__label">我的</span>
-      </span>
-    </button>
+    <div class="ik-mobile-nav__side">
+      <button
+        type="button"
+        class="ik-mobile-nav__item"
+        :class="{ 'is-active': isMine }"
+        :aria-current="isMine ? 'page' : undefined"
+        aria-label="我的"
+        @click="handleAccountClick"
+      >
+        <span class="ik-mobile-nav__inner">
+          <component
+            :is="isMine ? UserSolidIcon : UserOutlineIcon"
+            class="ik-mobile-nav__icon"
+            aria-hidden="true"
+          />
+          <span class="ik-mobile-nav__label">我的</span>
+        </span>
+      </button>
+    </div>
   </nav>
 </template>
 
@@ -137,7 +186,16 @@ const handleCreatePost = () => {
   }
 }
 
-/* ── Side items (推送 / 我的) ──────────────────── */
+/* ── Side groups (left: 推送/敲敲, right: 我的) ──
+   Equal-width halves keep the center 发帖 button horizontally centered. */
+.ik-mobile-nav__side {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+}
+
+/* ── Side items (推送 / 敲敲 / 我的) ─────────────── */
 .ik-mobile-nav__item {
   flex: 1;
   display: flex;
@@ -151,6 +209,34 @@ const handleCreatePost = () => {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+}
+
+/* ── Knock unread badge ─────────────────────────── */
+.ik-mobile-nav__icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.ik-mobile-nav__badge {
+  position: absolute;
+  top: -5px;
+  left: 100%;
+  margin-left: -9px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #ff3838;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 2px #1a1a1a;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .ik-mobile-nav__inner {
