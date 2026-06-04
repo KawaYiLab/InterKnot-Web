@@ -7,7 +7,7 @@ import {
   ChatBubbleLeftIcon,
   PaperAirplaneIcon,
 } from "@heroicons/vue/24/solid";
-import { DocumentTextIcon } from "@heroicons/vue/24/outline";
+import { DocumentTextIcon, ChevronLeftIcon } from "@heroicons/vue/24/outline";
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -793,6 +793,18 @@ const handleConversationClick = (id: string) => {
   updateUrl(activeTab.value, id);
 };
 
+/** 移动端是否处于「聊天」视图（选中了会话）；用于全屏单栏切换 list ↔ chat */
+const mobileChatOpen = computed(() => !!activeConversationId.value);
+
+/** 移动端聊天页返回：清空选中回到会话列表（不关闭弹窗） */
+const handleMobileBack = () => {
+  const id = activeConversationId.value;
+  if (id) void markConversationAsRead(id, { force: true });
+  activeConversationId.value = null;
+  activeAiSlug.value = null;
+  updateUrl(activeTab.value);
+};
+
 </script>
 
 <template>
@@ -806,7 +818,11 @@ const handleConversationClick = (id: string) => {
         <!-- 斜线纹理背景（与帖子弹窗一致） -->
         <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
-        <div class="ik-dialog ik-dialog--knock" @click.stop>
+        <div
+          class="ik-dialog ik-dialog--knock"
+          :class="{ 'is-mobile-chat': mobileChatOpen }"
+          @click.stop
+        >
           <!-- 外边框（半透明白色，三圆角） -->
           <div class="ik-dialog__outer">
             <!-- 内边框（纯黑，三圆角） -->
@@ -1034,6 +1050,18 @@ const handleConversationClick = (id: string) => {
                 <!-- 右栏：会话标题 + 内容 -->
                 <section class="ik-knock__main">
                   <header class="ik-knock__main-header">
+                    <!-- 移动端返回箭头：回到会话列表（仅手机端显示） -->
+                    <button
+                      type="button"
+                      class="ik-knock__back"
+                      aria-label="返回"
+                      @click="handleMobileBack"
+                    >
+                      <ChevronLeftIcon
+                        class="ik-knock__back-icon"
+                        aria-hidden="true"
+                      />
+                    </button>
                     <ChatBubbleLeftIcon
                       class="ik-knock__main-icon"
                       aria-hidden="true"
@@ -1668,6 +1696,28 @@ const handleConversationClick = (id: string) => {
   flex-shrink: 0;
 }
 
+/* 移动端返回箭头：桌面端为双栏布局，无需返回，故默认隐藏 */
+.ik-knock__back {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-left: -8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ik-knock__back-icon {
+  width: 26px;
+  height: 26px;
+}
+
 .ik-knock__main-title-wrap {
   display: flex;
   flex-direction: column;
@@ -1970,106 +2020,170 @@ const handleConversationClick = (id: string) => {
 
 /* 入场/出场动画统一在 theme.css 的 .ik-overlay-* 全局规则里维护 */
 
-/* ── Mobile ────────────────────────────────────── */
+/* ── Mobile：QQ / TG 风格全屏单栏（会话列表 ↔ 聊天，二选一） ──
+   桌面端是左右双栏；手机端屏幕窄，双栏会挤成「列表 + 空聊天框」割裂体验。
+   这里改成原生 IM 模式：默认全屏会话列表，点开某会话后整页切到聊天，
+   聊天页顶部用返回箭头回到列表。 */
 @media (max-width: 768px) {
+  /* 全屏铺满，去掉浮层弹窗外观（圆角 / 边框留白） */
   .ik-dialog--knock {
-    width: 94vw;
-    height: 80vh;
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
   }
 
-  .ik-knock__body {
-    padding: 14px 16px 16px;
-    gap: 12px;
+  .ik-dialog--knock .ik-dialog__outer {
+    padding: 0;
+    border-radius: 0;
+    background: #000;
   }
 
-  .ik-knock__sidebar {
-    flex: 0 0 236px;
-    padding: 12px 10px;
-    gap: 10px;
+  .ik-dialog--knock .ik-dialog__inner {
+    padding: 0;
+    border-radius: 0;
+  }
+
+  /* 顶部品牌栏（仅列表视图显示）：贴顶 + 顶部安全区 */
+  .ik-dialog--knock .ik-dialog__header {
+    border-radius: 0;
+    padding: 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top));
   }
 
   .ik-knock__brand-icon {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
   }
 
   .ik-knock__brand-text {
     font-size: 20px;
   }
 
+  /* 单栏导航：会话列表常驻底层，聊天页绝对定位覆盖整屏，靠 transform 滑入/滑出 */
+  .ik-dialog--knock .ik-dialog__inner {
+    position: relative;
+  }
 
+  .ik-dialog__body.ik-knock__body {
+    display: block;
+    position: static;
+    padding: 0;
+    gap: 0;
+    border-radius: 0;
+  }
+
+  /* 列表视图：会话列表在正常流中铺满 body（位于品牌栏下方） */
+  .ik-knock__sidebar {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    flex: none;
+    padding: 12px 12px 0;
+    gap: 12px;
+    border-radius: 0;
+    box-shadow: none;
+    background: #121212;
+  }
+
+  /* 聊天页：绝对定位覆盖整个弹窗（含品牌栏），默认滑出到屏幕右侧外 */
+  .ik-knock__main {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    width: 100%;
+    height: 100%;
+    flex: none;
+    display: flex;
+    border-radius: 0;
+    box-shadow: none;
+    background: #121212;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+  }
+
+  /* 选中会话：聊天页滑入到位 */
+  .ik-dialog--knock.is-mobile-chat .ik-knock__main {
+    transform: translateX(0);
+  }
+
+  /* tabs：加大触控高度 */
   .ik-knock__tab {
-    height: 32px;
+    height: 40px;
   }
 
   .ik-knock__tab-icon {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
+  }
+
+  /* 会话列表项：放大头像与字号，贴近原生 IM 列表 */
+  .ik-knock__list {
+    gap: 8px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
 
   .ik-knock__list-item {
-    padding: 10px 12px;
-    gap: 12px;
+    padding: 12px 16px;
+    gap: 14px;
   }
 
   .ik-knock__avatar {
-    width: 36px;
-    height: 36px;
+    width: 50px;
+    height: 50px;
   }
 
   .ik-knock__avatar-icon {
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
   }
 
   .ik-knock__item-title {
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .ik-knock__item-subtitle {
-    font-size: 12px;
+    font-size: 13px;
+  }
+
+  /* 聊天头部：返回箭头 + 对方昵称，贴顶 + 顶部安全区 */
+  .ik-knock__back {
+    display: inline-flex;
+  }
+
+  .ik-knock__main-icon {
+    display: none;
   }
 
   .ik-knock__main-header {
-    height: 50px;
-    padding: 0 14px;
+    height: auto;
+    min-height: 54px;
+    padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    gap: 6px;
+    background: linear-gradient(180deg, #161616 0%, #0c0c0c 100%);
+    border-bottom: 2px solid #202020;
   }
 
+  .ik-knock__main-title {
+    font-size: 17px;
+  }
+
+  /* 消息区 + 输入框：底部安全区留白，避免被 Home 条遮挡 */
   .ik-knock__main-body {
     padding: 14px;
   }
 
-  .ik-knock__main-title {
-    font-size: 16px;
+  .ik-knock__composer {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .ik-knock__empty-pill {
-    padding: 12px 64px;
-    min-width: 280px;
+    padding: 12px 48px;
+    min-width: 240px;
     font-size: 16px;
     letter-spacing: 4px;
-  }
-}
-
-@media (max-width: 560px) {
-  .ik-dialog--knock {
-    width: 96vw;
-    height: 86vh;
-  }
-
-  .ik-knock__body {
-    flex-direction: column;
-    padding: 12px;
-    gap: 12px;
-  }
-
-  .ik-knock__sidebar {
-    flex: 0 0 auto;
-    height: 50%;
-  }
-
-  .ik-knock__main {
-    flex: 1;
   }
 }
 
