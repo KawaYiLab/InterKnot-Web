@@ -542,8 +542,7 @@ watch(
   height: 42px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: rgba(215, 255, 0, 0.14);
+  background: transparent;
   color: #fbfe00;
   cursor: pointer;
   align-items: center;
@@ -552,8 +551,8 @@ watch(
 }
 
 .ik-header__knock-icon {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
 }
 
 .ik-header__knock-badge {
