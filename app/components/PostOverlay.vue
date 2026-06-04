@@ -2206,7 +2206,8 @@ onBeforeUnmount(() => {
     -ms-overflow-style: none;
     scrollbar-width: none;
     border-radius: 0;
-    background: #000;
+    /* 保持透明，让 .ik-dialog__main 里的跑马灯水印透出来（与桌面端一致） */
+    background: transparent;
   }
 
   .ik-dialog__body::-webkit-scrollbar {
