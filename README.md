@@ -23,12 +23,12 @@
 
 ## ✨ 功能亮点
 
-- **帖子详情** — 还原弹窗式浏览，支持评论与回复
-- **发帖** — 富文本编辑器，图片上传
-- **用户体系** — 登录注册、个人主页、经验等级
+- **帖子弹窗** — 还原弹窗式浏览，支持评论与回复
+- **发帖** — 支持草稿保存，图片上传
+- **用户体系** — 还原个人主页、绳网经验等级
 - **图片画廊** — 集成 lightGallery，支持缩放与幻灯片
-- **绝区零UI风格** — 使用 [zenless-ui](https://github.com/ChrisChan13/zenless-ui) 组件库，搭配自定义主题光标
-- **响应式** — 桌面端 + 移动端自适应，移动端底部导航栏
+- **UI还原** — 使用 [zenless-ui](https://github.com/ChrisChan13/zenless-ui) 组件库
+- **响应式** — 桌面端 + 移动端自适应
 - **SPA + 静态生成** — 纯客户端渲染，可部署至任意静态托管
 
 ---
@@ -37,7 +37,7 @@
 
 | 层级 | 技术 |
 |------|------|
-| **框架** | [Nuxt 4](https://nuxt.com/)（Vue 3，SPA 模式） |
+| **框架** | [Nuxt 4](https://nuxt.com/) |
 | **语言** | [TypeScript 5](https://www.typescriptlang.org/) |
 | **状态管理** | [Pinia](https://pinia.vuejs.org/) |
 | **数据请求** | [TanStack Vue Query](https://tanstack.com/query/latest/docs/vue/overview) + [ofetch](https://github.com/unjs/ofetch) |
@@ -45,7 +45,6 @@
 | **组件库** | [zenless-ui](https://github.com/ChrisChan13/zenless-ui)|
 | **图标** | [Heroicons](https://heroicons.com/) |
 | **图片画廊** | [lightGallery](https://www.lightgalleryjs.com/) |
-| **样式** | SCSS + CSS 变量主题系统 |
 | **后端** | [Strapi v5](https://strapi.io/)（RESTful API） |
 
 ---
@@ -78,11 +77,6 @@ npm install
 cp .env.example .env
 ```
 
-```env
-NUXT_PUBLIC_API_BASE_URL=https://your-strapi-server.com
-NUXT_PUBLIC_SITE_DOMAIN=your-domain.com
-```
-
 ### 5. 启动开发服务器
 
 ```bash
@@ -100,68 +94,29 @@ npm run preview      # 预览生产构建
 
 ---
 
-## 📂 目录结构
-
-```
-InterKnot-web/
-├── app/                    # Nuxt 应用源码（srcDir）
-│   ├── assets/styles/      # 全局样式 & 主题变量
-│   ├── components/         # 可复用 UI 组件
-│   ├── composables/        # 组合式函数（API、弹窗、画廊等）
-│   ├── pages/              # 路由页面
-│   │   ├── index.vue       #   首页（帖子广场）
-│   │   ├── create.vue      #   发帖页
-│   │   ├── login.vue       #   登录页
-│   │   ├── discussion/     #   帖子详情页
-│   │   └── profile/        #   个人主页
-│   ├── plugins/            # Nuxt 插件（API、Vue Query、zenless-ui 等）
-│   ├── stores/             # Pinia 状态（认证）
-│   ├── types/              # TypeScript 类型定义
-│   ├── utils/              # 工具函数
-│   └── app.vue             # 根组件
-├── public/                 # 静态资源（字体、图片、光标等）
-├── zzzui/                  # zenless-ui 组件库（子模块）
-├── nuxt.config.ts          # Nuxt 配置
-└── package.json
-```
-
----
-
-## ✅ 路线图
-
-- [x] 帖子推荐（瀑布流 + 虚拟滚动 + 骨架屏）
-- [x] 帖子弹窗式详情浏览（路由级弹窗 + 双栏布局）
-- [x] 评论 & 回复系统（乐观更新 + 分页加载）
-- [x] 用户登录 & 注册（验证码 + JWT 自动续期）
-- [x] 个人主页（帖子 / 评论 / 经验等级 / 名片）
-- [x] 发帖 & 草稿自动保存
-- [x] 图片上传（S3 直传 + 内容去重）
-- [x] 点赞系统（文章 & 评论）
-- [x] 已读状态同步
-- [x] 搜索功能（全站搜索 + 防抖）
-- [x] 自定义光标
-- [x] 响应式布局（桌面 + 平板 + 移动端）
-- [x] 图片画廊（lightGallery 惰性加载）
-- [x] 消息通知（敲敲）
-- [ ] 收藏功能
-
----
-
 ## 🤝 贡献指南
 
 欢迎提交 Issue 或 Pull Request，一起完善绳网。
 
-> ⚠️ **注意**：本项目使用Claude Opus 4.6/Claude Opus 4.7辅助开发，使用前请自行评估。
-
 ---
 
-## 📄 许可证
 
-本项目基于 MIT License 开源。
+## ❤️ 致谢
 
-```
-Copyright (c) 2024 share121
-Copyright (c) 2026 KawaYi
-```
+本项目从零开始开发，在实现过程中参考了许多优秀的开源项目与社区资源。
 
-[zenless-ui](https://github.com/ChrisChan13/zenless-ui) 组件库由 ChrisChan13 开发，基于 MIT License。
+特别感谢：
+
+* share121 开源的 Inter-Knot 项目
+  https://github.com/share121/inter-knot
+
+* ChrisChan13 开发的 zenless-ui 组件库
+  https://github.com/ChrisChan13/zenless-ui
+
+* Alver 提供的部分 UI 设计参考与图片资源
+  https://zenless.tools/
+
+* 所有提交 Issue、Pull Request、反馈问题或提供建议的开发者与用户
+
+同时感谢开源社区以及 AI 工具在开发过程中提供的帮助与支持。
+
