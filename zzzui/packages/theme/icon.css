@@ -28,9 +28,6 @@
   content: '\e8b6';
 }
 .z-icon-loading::before {
-  content: '\e627';
-}
-.z-icon-loading::before {
   content: '\e2e7';
 }
 .z-icon-error::before {
@@ -92,18 +89,6 @@
 }
 .z-icon-italic::before {
   content: '\e23f';
-}
-.z-icon-close::before {
-  content: '\e5cd';
-}
-.z-icon-check::before {
-  content: '\e5ca';
-}
-.z-icon-plus::before {
-  content: '\e145';
-}
-.z-icon-minus::before {
-  content: '\e15b';
 }
 .z-icon-visible::before {
   content:'\e8f4';
