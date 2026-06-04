@@ -95,6 +95,9 @@ const masonryKeyMapper = (post: Post) => post.id;
 const skeletonKeyMapper = (item: SkeletonItem) => item.id;
 const { width: viewportWidth } = useWindowSize({ initialWidth: 0 });
 
+// 瀑布流列间距：移动端收窄，避免两列离得过远（与 .ik-home-container 的左右边距协调）
+const feedGap = computed(() => (viewportWidth.value && viewportWidth.value <= 768 ? 14 : 32));
+
 
 const estimatePostCardHeight = (post: Post, itemWidth: number) => {
   // 无封面文章使用占位图原生比例，与卡片实际渲染保持一致
@@ -636,7 +639,7 @@ onBeforeUnmount(() => {
             class="ik-masonry"
             :items="skeletonItems"
             :column-width="240"
-            :gap="32"
+            :gap="feedGap"
             :min-columns="2"
             :max-columns="5"
             :key-mapper="skeletonKeyMapper"
@@ -659,7 +662,7 @@ onBeforeUnmount(() => {
             class="ik-masonry"
             :items="list"
             :column-width="240"
-            :gap="32"
+            :gap="feedGap"
             :min-columns="2"
             :max-columns="5"
             :buffer="1800"
@@ -803,7 +806,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 768px) {
   .ik-home-container {
-    width: calc(100% - 20px);
+    width: calc(100% - 28px);
     padding-top: 16px;
     padding-bottom: 16px;
   }
