@@ -51,6 +51,11 @@ const comments = ref<Comment[]>([]);
 const commentsCursor = ref("");
 const commentsHasNext = ref(true);
 const commentsLoading = ref(false);
+// 首次评论加载是否已结束。评论加载被刻意延后（scheduleLoadComments 用
+// rAF + requestIdleCallback），在它真正开始前 commentsLoading 仍是 false，
+// 若此时就按「无评论」显示空提示，会出现「空提示 → 骨架 → 评论」的闪烁。
+// 用此标记把「尚未加载」与「加载完确实为空」区分开：未加载完一律显示骨架。
+const commentsLoaded = ref(false);
 
 const newComment = ref("");
 const sendingComment = ref(false);
@@ -327,6 +332,7 @@ const loadComments = async () => {
     message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
     commentsLoading.value = false;
+    commentsLoaded.value = true;
   }
 };
 
@@ -680,6 +686,7 @@ const resetAndLoad = async () => {
   comments.value = [];
   commentsCursor.value = "";
   commentsHasNext.value = true;
+  commentsLoaded.value = false;
   loadError.value = false;
   newComment.value = "";
   commentInputFocused.value = false;
@@ -1010,7 +1017,7 @@ onBeforeUnmount(() => {
                 <div class="ik-dialog__right">
                   <div class="ik-dialog__comments-scroll">
                     <div class="ik-dialog__comments-inner">
-                      <div v-if="commentsLoading && !comments.length">
+                      <div v-if="!comments.length && (!commentsLoaded || commentsLoading)">
                         <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
                           <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
                           <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
