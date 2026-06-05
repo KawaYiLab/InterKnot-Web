@@ -1,5 +1,17 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+
+const props = withDefaults(
+  defineProps<{
+    /**
+     * 暂停动画。用于全屏弹窗打开时暂停「被遮住的」全局跑马灯：它此刻完全
+     * 不可见，却仍在动，且位于弹窗 backdrop-filter 模糊之后 —— 动画会迫使
+     * 模糊每帧重算，纯属浪费。暂停后弹窗自己的那份跑马灯照常显示。
+     */
+    paused?: boolean;
+  }>(),
+  { paused: false },
+);
 
 const MARQUEE_LINE = "ZENLESS ZONE ZERO ".repeat(3);
 
@@ -8,6 +20,8 @@ const MARQUEE_START_DELAY_MS = 250;
 
 const running = ref(false);
 let startTimer: ReturnType<typeof setTimeout> | null = null;
+
+const isRunning = computed(() => running.value && !props.paused);
 
 onMounted(() => {
   startTimer = setTimeout(() => {
@@ -25,7 +39,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="ik-zzz-marquee" :class="{ 'is-running': running }" aria-hidden="true">
+  <div class="ik-zzz-marquee" :class="{ 'is-running': isRunning }" aria-hidden="true">
     <div class="ik-zzz-marquee__band">
       <div class="ik-zzz-marquee__row ik-zzz-marquee__row--ltr">
         <div class="ik-zzz-marquee__track">
