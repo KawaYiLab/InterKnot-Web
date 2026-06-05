@@ -564,10 +564,11 @@ export function useApi() {
     );
   };
 
-  const mergeReadStatus = async (posts: Post[]) => {
-    if (!import.meta.client || !posts.length) return;
+  const mergeReadStatus = async (posts: Post[]): Promise<Set<string>> => {
+    const readSet = new Set<string>();
+    if (!import.meta.client || !posts.length) return readSet;
     const userId = localStorage.getItem("user_id");
-    if (!userId) return;
+    if (!userId) return readSet;
     const ids = posts.map((d) => d.id);
     try {
       const res = await $api("/api/article-reads/batch", {
@@ -575,19 +576,20 @@ export function useApi() {
         body: { articleDocumentIds: ids },
       });
       const list = unwrapData<Array<{ articleDocumentId?: string; isRead?: boolean }>>(res);
-      if (!Array.isArray(list)) return;
-      const readSet = new Set<string>();
+      if (!Array.isArray(list)) return readSet;
       for (const item of list) {
         if (item.isRead && item.articleDocumentId) {
           readSet.add(item.articleDocumentId);
         }
       }
+      // 原地回填，保证缓存命中（peekArticles）拿到的对象也带已读态
       for (const d of posts) {
         if (readSet.has(d.id)) d.isRead = true;
       }
     } catch {
       // ignore read status failures
     }
+    return readSet;
   };
 
   const searchArticles = async (
@@ -609,7 +611,10 @@ export function useApi() {
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
         const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
-        await mergeReadStatus(page.nodes);
+        // 不阻塞页面返回：先让卡片立即渲染，已读态通过 readStatusReady 异步回填。
+        // （登录态下每页都要打 /article-reads/batch，串行 await 会让下拉加载
+        //  多等一个往返，新卡片延迟出现 → 滚动「掉帧/掉帖」感。）
+        page.readStatusReady = mergeReadStatus(page.nodes);
         return page;
       },
       STALE_LIST,

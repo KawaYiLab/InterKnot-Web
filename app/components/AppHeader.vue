@@ -29,23 +29,35 @@ const isHeaderHidden = ref(false);
 let lastScrollY = import.meta.client ? window.scrollY : 0;
 
 if (import.meta.client) {
+  // scroll 事件每秒可触发几十次，直接在回调里翻转响应式 class 会让 header
+  // 子树每次都重算样式（登录态 header 含等级条/丁尼/滚轮数字，子树更大更贵）。
+  // 用 rAF 节流：一帧内只处理一次，把 isHeaderHidden 的更新对齐到渲染节奏。
+  let scrollRAF: number | null = null;
+  const updateHeaderVisibility = () => {
+    scrollRAF = null;
+    const currentY = window.scrollY;
+    const delta = currentY - lastScrollY;
+    if (currentY <= SCROLL_TOP_BUFFER) {
+      isHeaderHidden.value = false;
+    } else if (delta > SCROLL_DELTA_THRESHOLD) {
+      isHeaderHidden.value = true;
+    } else if (delta < -SCROLL_DELTA_THRESHOLD) {
+      isHeaderHidden.value = false;
+    }
+    lastScrollY = currentY;
+  };
   useEventListener(
     window,
     "scroll",
     () => {
-      const currentY = window.scrollY;
-      const delta = currentY - lastScrollY;
-      if (currentY <= SCROLL_TOP_BUFFER) {
-        isHeaderHidden.value = false;
-      } else if (delta > SCROLL_DELTA_THRESHOLD) {
-        isHeaderHidden.value = true;
-      } else if (delta < -SCROLL_DELTA_THRESHOLD) {
-        isHeaderHidden.value = false;
-      }
-      lastScrollY = currentY;
+      if (scrollRAF !== null) return;
+      scrollRAF = requestAnimationFrame(updateHeaderVisibility);
     },
     { passive: true },
   );
+  onBeforeUnmount(() => {
+    if (scrollRAF !== null) cancelAnimationFrame(scrollRAF);
+  });
 }
 
 let _autoFinishTimer: ReturnType<typeof setTimeout> | null = null;

@@ -82,11 +82,18 @@ const handleOverlayClose = () => {
 // create 页有自带的移动端底部操作栏（发布 / 草稿），全局 MobileBottomNav 在此隐藏避免堆叠
 const route = useRoute();
 const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
+
+// 全屏弹窗（帖子 / 敲敲）打开时，全局背景跑马灯被完全遮住但仍在动，且处于
+// 弹窗 backdrop-filter 模糊之后 → 迫使模糊每帧重算。此时暂停它（弹窗自带的
+// 那份跑马灯照常显示），缓解「点开弹窗卡顿」。
+const overlayOpen = computed(
+  () => postModal.isOpen.value || knockModal.visible.value,
+);
 </script>
 
 <template>
   <div>
-    <IkZzzMarquee class="ik-global-marquee" />
+    <IkZzzMarquee class="ik-global-marquee" :paused="overlayOpen" />
     <!-- backdrop-filter 合成层预热：1×1 不可见元素，让 GPU 在首屏就把
          模糊着色器编译好、合成层分配好。否则用户第一次打开弹窗再关闭时，
          合成层首次创建/销毁会多吃 1~3 帧 paint，表现为出场动画期间弹窗

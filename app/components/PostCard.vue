@@ -22,6 +22,10 @@ const emit = defineEmits<{
 
 const authorName = computed(() => props.post.author?.name || "未知作者");
 
+// 悬浮卡仅在支持悬停的设备（桌面鼠标）才有意义；触屏上它本就不弹，却仍会
+// 为每张卡片实例化多个 composable。用此开关在移动端彻底不挂载，省掉浪费。
+const canHover = useHoverCapable();
+
 const coverSrc = ref(DEFAULT_COVER_IMAGE);
 const coverImageLoaded = ref(false);
 const coverIsFallback = ref(false);
@@ -155,7 +159,7 @@ const handleOpen = (e: MouseEvent) => {
 
       <div class="ik-card__body">
         <div class="ik-card__author-row">
-          <UserHoverCard :author-id="post.author?.documentId">
+          <UserHoverCard v-if="canHover" :author-id="post.author?.documentId">
             <div class="ik-card__avatar-shell">
               <img
                 :src="avatarSrc"
@@ -167,10 +171,21 @@ const handleOpen = (e: MouseEvent) => {
               />
             </div>
           </UserHoverCard>
+          <div v-else class="ik-card__avatar-shell">
+            <img
+              :src="avatarSrc"
+              :alt="authorName"
+              class="ik-card__avatar-image"
+              loading="lazy"
+              decoding="async"
+              @error="onAvatarError"
+            />
+          </div>
           <div class="ik-card__author-block">
-            <UserHoverCard :author-id="post.author?.documentId">
+            <UserHoverCard v-if="canHover" :author-id="post.author?.documentId">
               <p class="ik-card__author-name">{{ authorName }}</p>
             </UserHoverCard>
+            <p v-else class="ik-card__author-name">{{ authorName }}</p>
             <div class="ik-card__author-divider" />
           </div>
         </div>
