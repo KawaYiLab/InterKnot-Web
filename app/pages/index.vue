@@ -212,6 +212,25 @@ const scrollToTopAfterReset = async (reset: boolean) => {
   }
 };
 
+// 已读态异步回填：searchArticles 现在不再 await /article-reads/batch，
+// 卡片先渲染，已读 id 集合 resolve 后再以响应式方式（重建数组）合并进 list，
+// v-memo 据此重算受影响卡片。仅在确有变化时重建，避免无谓的瀑布流重算。
+const applyReadStatusReady = (ready?: Promise<Set<string>>) => {
+  if (!ready) return;
+  void ready.then((readIds) => {
+    if (!readIds || readIds.size === 0) return;
+    let changed = false;
+    const next = list.value.map((d) => {
+      if (readIds.has(d.id) && !d.isRead) {
+        changed = true;
+        return { ...d, isRead: true };
+      }
+      return d;
+    });
+    if (changed) list.value = next;
+  });
+};
+
 const fetchList = async (reset = false) => {
   if (loading.value || loadingMore.value) return;
   if (!hasNextPage.value && !reset) return;
@@ -272,6 +291,9 @@ const fetchList = async (reset = false) => {
     endCursor.value = page.endCursor;
     hasNextPage.value = page.hasNextPage;
 
+    // 已读态在卡片渲染后异步回填（不阻塞本次加载）
+    applyReadStatusReady(page.readStatusReady);
+
     // 缓存命中路径下，scrollToTopAfterReset 不再需要（避免破坏用户期望的滚动位置）
     if (!cacheHit) await scrollToTopAfterReset(reset);
   } catch (err) {
@@ -302,16 +324,28 @@ const goPost = (post: Post, event: MouseEvent) => {
   // （下次 refresh 会被服务端数据覆盖，造成已读闪烁）。
   if (post.isRead) return;
   const targetId = post.id;
-  list.value = list.value.map((d) =>
-    d.id === targetId ? { ...d, isRead: true } : d,
-  );
-  api.markAsReadBatch([targetId]).catch(() => {
-    // 回滚仅限本地中依然是已读的那一条。用户可能中间又点过别的卡片，
-    // 或者 refresh 后列表被替换；都不需要动。
+
+  // 重建整个 list 数组（瀑布流据此重算）成本不低，而被点开的卡片此刻正被
+  // 弹窗完全遮住，用户看不到它的已读变化——把这步推迟到弹窗开场动画之后，
+  // 避免和 PostOverlay 挂载抢同一帧主线程，缓解「点开弹窗卡顿」。
+  const markRead = () => {
     list.value = list.value.map((d) =>
-      d.id === targetId && d.isRead ? { ...d, isRead: false } : d,
+      d.id === targetId ? { ...d, isRead: true } : d,
     );
-  });
+    api.markAsReadBatch([targetId]).catch(() => {
+      // 回滚仅限本地中依然是已读的那一条。用户可能中间又点过别的卡片，
+      // 或者 refresh 后列表被替换；都不需要动。
+      list.value = list.value.map((d) =>
+        d.id === targetId && d.isRead ? { ...d, isRead: false } : d,
+      );
+    });
+  };
+  if (import.meta.client) {
+    // 略大于 ik-overlay 入场过渡（~200ms），确保让位给挂载与开场动画
+    window.setTimeout(markRead, 280);
+  } else {
+    markRead();
+  }
 };
 
 const handleRefresh = async () => {
