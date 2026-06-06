@@ -425,8 +425,8 @@ const parseBubbleSegments = (text: string): BubbleSegment[] => {
       // markdown link: [text](url)
       segments.push({ type: "link", text: match[1], href: match[2] });
     } else if (match[3]) {
-      // bare /post/id path
-      segments.push({ type: "link", text: match[0], href: `/post/${match[3]}` });
+      // bare /post/id path → 显示为"查看帖子"标签
+      segments.push({ type: "link", text: "查看帖子", href: `/post/${match[3]}` });
     }
     lastIndex = regex.lastIndex;
   }
