@@ -106,6 +106,9 @@ interface UseDmConversations {
     messageId: string,
   ) => Promise<void>;
 
+  /** 该消息是否正在流式接收中（3.2.3），用于跳过打字机、直接展示累计文本 */
+  isStreamingMessage: (documentId: string) => boolean;
+
   markConversationAsRead: (id: string, opts?: { force?: boolean }) => Promise<void>;
   /** 设置 muted/pinned；title 仅群聊可用 */
   updateConversation: (
@@ -156,6 +159,13 @@ export function useDmConversations(): UseDmConversations {
   const typing = useState<Record<string, number[]>>(
     "dm:typing",
     () => ({}),
+  );
+
+  // 流式回复（3.2.3）：正在增量接收中的消息 documentId 集合。
+  // 这些消息走「直接展示累计文本」而非打字机动画。
+  const streamingMessageIds = useState<Set<string>>(
+    "dm:streamingMessageIds",
+    () => new Set(),
   );
 
   const { $api } = useNuxtApp();
@@ -670,11 +680,37 @@ export function useDmConversations(): UseDmConversations {
     const mid = event.messageId;
     const data = event.data;
     if (!cid || !mid || !data) return;
+    // 流式定稿：移出 streaming 集合，content 用最终（清洗后）文本
+    if (mid && streamingMessageIds.value.has(mid)) {
+      const next = new Set(streamingMessageIds.value);
+      next.delete(mid);
+      streamingMessageIds.value = next;
+    }
     const bucket = messagesById.value[cid];
     if (!bucket?.items?.length) return;
     patchMessageState(cid, {
       items: bucket.items.map((m) =>
         m.documentId === mid ? { ...m, content: data.content, editedAt: data.editedAt } : m,
+      ),
+    });
+  };
+
+  // 流式回复增量（message.delta）：实时把累计文本写进对应消息。
+  const onMessageDelta = (event: DmWsEvent<{ content: string }>) => {
+    const cid = event.conversationId;
+    const mid = event.messageId;
+    const content = event.data?.content;
+    if (!cid || !mid || typeof content !== "string") return;
+    if (!streamingMessageIds.value.has(mid)) {
+      const next = new Set(streamingMessageIds.value);
+      next.add(mid);
+      streamingMessageIds.value = next;
+    }
+    const bucket = messagesById.value[cid];
+    if (!bucket?.items?.length) return;
+    patchMessageState(cid, {
+      items: bucket.items.map((m) =>
+        m.documentId === mid ? { ...m, content } : m,
       ),
     });
   };
@@ -768,6 +804,7 @@ export function useDmConversations(): UseDmConversations {
 
     unsubscribeAll.push(stream.on<MessageCreatedData>("message.created", onMessageCreated));
     unsubscribeAll.push(stream.on<MessageEditedData>("message.edited", onMessageEdited));
+    unsubscribeAll.push(stream.on<{ content: string }>("message.delta", onMessageDelta));
     unsubscribeAll.push(stream.on<MessageDeletedData>("message.deleted", onMessageDeleted));
     unsubscribeAll.push(stream.on<ConversationReadData>("conversation.read", onConversationRead));
     unsubscribeAll.push(stream.on<ConversationUpdatedData>("conversation.updated", onConversationUpdated));
@@ -797,7 +834,11 @@ export function useDmConversations(): UseDmConversations {
     messagesById.value = {};
     activeConversationId.value = null;
     typing.value = {};
+    streamingMessageIds.value = new Set();
   };
+
+  const isStreamingMessage = (documentId: string): boolean =>
+    streamingMessageIds.value.has(documentId);
 
   const totalUnread = computed(() =>
     conversations.value.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
@@ -810,6 +851,7 @@ export function useDmConversations(): UseDmConversations {
     totalUnread,
     activeConversationId,
     typingByConversation: computed(() => typing.value),
+    isStreamingMessage,
 
     refresh,
     openDirectConversation,

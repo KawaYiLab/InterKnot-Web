@@ -59,6 +59,7 @@ const {
   startStream,
   stopStream,
   openDirectConversation,
+  isStreamingMessage,
 } = useDmConversations();
 
 const AI_SLUG_STORAGE_KEY = "ik-knock-ai-slug";
@@ -339,6 +340,8 @@ const isAiPeerConversation = computed(() => {
 const shouldAnimateAiMessage = (msg: DmMessage): boolean => {
   if (!aiRevealSessionReady.value || !isAiPeerConversation.value) return false;
   if (isMine(msg) || msg.kind !== "text" || msg.deletedAt) return false;
+  // 流式消息（3.2.3）：增量本身就是逐段到达，直接展示累计文本，不再叠加打字机
+  if (isStreamingMessage(msg.documentId)) return false;
   return !historyBaselineIds.value.has(msg.documentId);
 };
 
@@ -350,6 +353,8 @@ const tryRevealNewAiMessages = () => {
     if (historyBaselineIds.value.has(msg.documentId)) continue;
     if (isMine(msg) || msg.kind !== "text" || msg.deletedAt) continue;
     if (isAiRevealComplete(msg.documentId)) continue;
+    // 流式消息由 message.delta 实时填充，跳过打字机扫描
+    if (isStreamingMessage(msg.documentId)) continue;
     const text = msg.content?.trim();
     if (!text) continue;
     startAiReveal(msg.documentId, text);
@@ -359,6 +364,8 @@ const tryRevealNewAiMessages = () => {
 const bubbleTextForDisplay = (msg: DmMessage): BubbleRender => {
   const base = bubbleText(msg);
   if (typeof base !== "string") return base;
+  // 流式接收中：直接展示当前累计文本
+  if (isStreamingMessage(msg.documentId)) return base;
   // 打开会话时的历史消息：永远全文（不受打字机 state 影响）
   if (historyBaselineIds.value.has(msg.documentId)) return base;
   return aiDisplayText(msg.documentId, base, shouldAnimateAiMessage(msg));

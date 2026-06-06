@@ -59,6 +59,14 @@ const mention = useMentionInput({
 });
 
 const postId = computed(() => String(route.params.id || ""));
+
+// 评论场景「AI 正在回复…」状态 (3.2.4)
+const agentReplyStatus = useAgentReplyStatus();
+const aiReplying = computed(() => agentReplyStatus.isReplying(postId.value));
+const aiReplyingRoleName = computed(() =>
+  agentReplyStatus.replyingRoleName(postId.value),
+);
+
 const covers = computed(() => post.value?.covers ?? []);
 const hasCovers = computed(() => covers.value.length > 0);
 const isCommentEditorActive = computed(() => commentInputFocused.value);
@@ -118,6 +126,20 @@ const loadComments = async () => {
     commentsInitialLoading.value = false;
   }
 };
+
+/** 重新拉取首页评论（AI 回复落库后刷新出新评论） */
+const reloadComments = async () => {
+  commentsCursor.value = "";
+  commentsHasNext.value = true;
+  commentsLoading.value = false;
+  comments.value = [];
+  await loadComments();
+};
+
+// AI 回复完成（replying → done 状态被清除）后刷新评论列表
+watch(aiReplying, (now, prev) => {
+  if (prev && !now) void reloadComments();
+});
 
 const recordView = async () => {
   if (!post.value?.id) return;
@@ -680,6 +702,11 @@ onBeforeUnmount(() => {
           <div class="ik-page__right">
             <div class="ik-page__comments-scroll">
               <div class="ik-page__comments-inner">
+                <!-- AI 正在回复状态 (3.2.4) -->
+                <div v-if="aiReplying" class="ik-ai-replying">
+                  <span class="ik-ai-replying__dots"><i></i><i></i><i></i></span>
+                  <span>{{ aiReplyingRoleName || "敲敲AI" }} 正在回复…</span>
+                </div>
                 <!-- 评论骨架屏 -->
                 <template v-if="commentsInitialLoading">
                   <div v-for="n in 4" :key="'cskel-'+n" class="ik-comment-skel">
@@ -1265,6 +1292,51 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+.ik-ai-replying {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ik-text-secondary, #9aa0a6);
+  font-size: 13px;
+}
+
+.ik-ai-replying__dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.ik-ai-replying__dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.4;
+  animation: ik-ai-replying-bounce 1.2s infinite ease-in-out;
+}
+
+.ik-ai-replying__dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.ik-ai-replying__dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes ik-ai-replying-bounce {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
 }
 
 .ik-page__load-more {
