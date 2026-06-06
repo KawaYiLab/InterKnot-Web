@@ -397,6 +397,10 @@ const bubbleTextForDisplay = (msg: DmMessage): BubbleRender => {
   return aiDisplayText(msg.documentId, base, shouldAnimateAiMessage(msg));
 };
 
+/** 流式占位气泡：消息仍在流式中且内容尚为空（首个 delta 未到）→ 显示"正在输入"加载点 */
+const isPendingStreamBubble = (msg: DmMessage): boolean =>
+  isStreamingMessage(msg.documentId) && !(msg.content && msg.content.trim().length > 0);
+
 /** like-on-comment：通知关联帖子+评论时，quote 卡引用「评论原文」而不是帖子标题 */
 const isLikeOnComment = (msg: DmMessage): boolean =>
   msg.notificationKind === "like" && !!msg.comment;
@@ -651,6 +655,24 @@ watch(
     if (nextLen <= (prevLen ?? 0)) return;
     tryRevealNewAiMessages();
   },
+);
+
+/**
+ * 流式消息不走打字机：增量已经逐字到达，bubbleTextForDisplay 直接展示累计文本。
+ * 这里在它进入流式集合时立即标记 typewriter「已完成」，使其定稿后保持静态全文，
+ * 避免后续新消息到来（activeMessages.length 增长）时被 tryRevealNewAiMessages 重放一遍动画。
+ */
+watch(
+  () =>
+    activeMessages.value
+      .filter((m) => isStreamingMessage(m.documentId))
+      .map((m) => m.documentId)
+      .join(","),
+  (joined) => {
+    if (!joined) return;
+    primeAiRevealCompleted(joined.split(","));
+  },
+  { immediate: true },
 );
 
 let aiRevealScrollRaf: number | null = null;
@@ -1180,6 +1202,15 @@ const handleMobileBack = () => {
                               <template v-if="typeof entry.rendered === 'object'">
                                 <CommentBody :content="entry.rendered.content" />
                               </template>
+                              <span
+                                v-else-if="isPendingStreamBubble(entry.msg)"
+                                class="ik-knock__msg-typing"
+                                aria-label="正在输入"
+                              >
+                                <span class="ik-knock__typing-dot" />
+                                <span class="ik-knock__typing-dot" />
+                                <span class="ik-knock__typing-dot" />
+                              </span>
                               <template v-else>{{ entry.rendered }}</template>
                               <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
                             </div>
@@ -1840,6 +1871,15 @@ const handleMobileBack = () => {
   align-items: center;
   gap: 3px;
   height: 14px;
+}
+
+/* 流式占位气泡内的加载点（首个 delta 未到达前） */
+.ik-knock__msg-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 1.2em;
+  vertical-align: middle;
 }
 
 .ik-knock__typing-label {
