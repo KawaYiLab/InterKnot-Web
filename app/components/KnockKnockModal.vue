@@ -401,6 +401,85 @@ const bubbleTextForDisplay = (msg: DmMessage): BubbleRender => {
 const isPendingStreamBubble = (msg: DmMessage): boolean =>
   isStreamingMessage(msg.documentId) && !(msg.content && msg.content.trim().length > 0);
 
+// ── 帖子卡片内嵌渲染（AI Tool Use 3.3.3）──────────────────────────
+type BubbleSegment =
+  | { type: "text"; content: string }
+  | { type: "post"; documentId: string };
+
+const hasPostMarkers = (text: string): boolean => /\[post:[a-zA-Z0-9_-]+\]/.test(text);
+
+const parseBubbleSegments = (text: string): BubbleSegment[] => {
+  const regex = /\[post:([a-zA-Z0-9_-]+)\]/g;
+  const segments: BubbleSegment[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", content: text.slice(lastIndex, match.index) });
+    }
+    segments.push({ type: "post", documentId: match[1]! });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", content: text.slice(lastIndex) });
+  }
+  return segments;
+};
+
+/** 已获取的帖子信息缓存（title + 基础统计） */
+interface PostCardInfo {
+  title: string;
+  likesCount: number;
+  commentsCount: number;
+  views: number;
+  loading: boolean;
+}
+const postCardCache = ref<Map<string, PostCardInfo>>(new Map());
+
+const { getPost } = useApi();
+
+const fetchPostCardInfo = async (documentId: string) => {
+  if (postCardCache.value.has(documentId)) return;
+  postCardCache.value.set(documentId, {
+    title: "加载中…",
+    likesCount: 0,
+    commentsCount: 0,
+    views: 0,
+    loading: true,
+  });
+  try {
+    const post = await getPost(documentId);
+    postCardCache.value.set(documentId, {
+      title: post.title || "(无标题)",
+      likesCount: post.likesCount ?? 0,
+      commentsCount: post.commentsCount ?? 0,
+      views: post.views ?? 0,
+      loading: false,
+    });
+  } catch {
+    postCardCache.value.set(documentId, {
+      title: "(帖子不存在)",
+      likesCount: 0,
+      commentsCount: 0,
+      views: 0,
+      loading: false,
+    });
+  }
+};
+
+const getPostCard = (documentId: string): PostCardInfo => {
+  const cached = postCardCache.value.get(documentId);
+  if (!cached) {
+    fetchPostCardInfo(documentId);
+    return { title: "加载中…", likesCount: 0, commentsCount: 0, views: 0, loading: true };
+  }
+  return cached;
+};
+
+const openPostCard = (documentId: string) => {
+  postModal.open(documentId);
+};
+
 /** like-on-comment：通知关联帖子+评论时，quote 卡引用「评论原文」而不是帖子标题 */
 const isLikeOnComment = (msg: DmMessage): boolean =>
   msg.notificationKind === "like" && !!msg.comment;
@@ -1211,6 +1290,25 @@ const handleMobileBack = () => {
                                 <span class="ik-knock__typing-dot" />
                                 <span class="ik-knock__typing-dot" />
                               </span>
+                              <template v-else-if="typeof entry.rendered === 'string' && hasPostMarkers(entry.rendered)">
+                                <template v-for="(seg, si) in parseBubbleSegments(entry.rendered)" :key="si">
+                                  <span v-if="seg.type === 'text'" class="ik-knock__msg-text-seg">{{ seg.content }}</span>
+                                  <button
+                                    v-else
+                                    type="button"
+                                    class="ik-knock__post-card"
+                                    @click="openPostCard(seg.documentId)"
+                                  >
+                                    <DocumentTextIcon class="ik-knock__post-card-icon" aria-hidden="true" />
+                                    <span class="ik-knock__post-card-body">
+                                      <span class="ik-knock__post-card-title">{{ getPostCard(seg.documentId).title }}</span>
+                                      <span v-if="!getPostCard(seg.documentId).loading" class="ik-knock__post-card-stats">
+                                        赞{{ getPostCard(seg.documentId).likesCount }}·评{{ getPostCard(seg.documentId).commentsCount }}·阅{{ getPostCard(seg.documentId).views }}
+                                      </span>
+                                    </span>
+                                  </button>
+                                </template>
+                              </template>
                               <template v-else>{{ entry.rendered }}</template>
                               <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
                             </div>
@@ -2164,6 +2262,59 @@ const handleMobileBack = () => {
   max-width: 100%;
 }
 
+/* ── AI 内嵌帖子卡片（Tool Use 返回的 [post:id] 渲染为可点击卡片） ── */
+.ik-knock__msg-text-seg {
+  white-space: pre-wrap;
+}
+
+.ik-knock__post-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 6px 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #e0e0e0;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.ik-knock__post-card:hover {
+  background: rgba(0, 0, 0, 0.65);
+  border-color: rgba(251, 254, 0, 0.4);
+}
+
+.ik-knock__post-card-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: rgba(251, 254, 0, 0.85);
+}
+
+.ik-knock__post-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ik-knock__post-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ik-knock__post-card-stats {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
 
 /* 入场/出场动画统一在 theme.css 的 .ik-overlay-* 全局规则里维护 */
 
