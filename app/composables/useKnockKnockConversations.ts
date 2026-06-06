@@ -320,10 +320,7 @@ export function useKnockKnockConversations(): UseKnockKnockConversations {
       return;
     }
 
-    if (event.type === "agent.replying" || event.type === "agent.reply.done") {
-      // 评论场景「AI 正在回复…」状态，转交给独立 store
-      useAgentReplyStatus().handleEvent(event);
-    }
+
   }
 
   function startStream() {
@@ -359,8 +356,7 @@ export function useKnockKnockConversations(): UseKnockKnockConversations {
     sse.addEventListener("notification.created", onAnyEvent);
     sse.addEventListener("notification.read", onAnyEvent);
     sse.addEventListener("notification.read.bulk", onAnyEvent);
-    sse.addEventListener("agent.replying", onAnyEvent);
-    sse.addEventListener("agent.reply.done", onAnyEvent);
+
     // 服务端的 hello / bye 心跳事件也算「连接活着」
     sse.addEventListener("hello", () => {
       sseFailureStreak = 0;
