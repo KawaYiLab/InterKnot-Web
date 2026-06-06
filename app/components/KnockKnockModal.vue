@@ -1882,6 +1882,11 @@ const handleMobileBack = () => {
   vertical-align: middle;
 }
 
+/* 气泡内的加载点需要用深色（默认白色点在白底气泡上不可见） */
+.ik-knock__msg-typing .ik-knock__typing-dot {
+  background: rgba(0, 0, 0, 0.35);
+}
+
 .ik-knock__typing-label {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.45);
