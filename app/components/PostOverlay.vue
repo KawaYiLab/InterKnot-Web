@@ -995,6 +995,13 @@ onBeforeUnmount(() => {
 
                     <!-- 正文 -->
                     <div class="ik-dialog__detail">
+                      <span
+                        v-if="post.category"
+                        class="ik-dialog__category"
+                        :style="post.category.color ? { '--cat-color': post.category.color } : undefined"
+                      >
+                        {{ post.category.name }}
+                      </span>
                       <h1 class="ik-dialog__title">{{ post.title }}</h1>
                       <div
                         v-if="post.body"
@@ -1675,6 +1682,19 @@ onBeforeUnmount(() => {
 /* 正文 */
 .ik-dialog__detail {
   padding: 0 16px 32px;
+}
+
+.ik-dialog__category {
+  --cat-color: #d7ff00;
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--cat-color);
+  color: #111;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
 }
 
 .ik-dialog__title {

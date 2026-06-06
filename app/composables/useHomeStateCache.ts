@@ -13,6 +13,7 @@ export interface HomeStateSnapshot {
   endCursor: string;
   hasNextPage: boolean;
   query: string;
+  category: string;
   seenIds: Set<string>;
   measuredHeights: Map<string | number, number>;
   /** 路由离开瞬间的 window.scrollY（DOM 完好时采集，值精确） */

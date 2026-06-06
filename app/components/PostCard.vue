@@ -155,6 +155,13 @@ const handleOpen = (e: MouseEvent) => {
           </svg>
           <span>{{ post.views || 0 }}</span>
         </div>
+        <span
+          v-if="post.category"
+          class="ik-card__category"
+          :style="post.category.color ? { '--cat-color': post.category.color } : undefined"
+        >
+          {{ post.category.name }}
+        </span>
       </div>
 
       <div class="ik-card__body">
@@ -228,6 +235,23 @@ const handleOpen = (e: MouseEvent) => {
 .ik-card__cover-frame {
   width: 100%;
   background: var(--ik-post-card-cover-bg);
+}
+
+.ik-card__category {
+  --cat-color: #d7ff00;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--cat-color);
+  color: #111;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+  pointer-events: none;
 }
 
 .ik-card__cover {

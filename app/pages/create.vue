@@ -2,6 +2,7 @@
 import { useDebounceFn } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type {
+  Category,
   DraftArticle,
   UploadedFile,
   UploadTask,
@@ -54,6 +55,11 @@ const isDeletingDraft = ref(false);
 const hasUnsavedChanges = ref(false);
 const isAnonymous = ref(false);
 const showImagePickerModal = ref(false);
+
+/* ── 帖子分类（频道）：发帖必选，默认兜底「综合」 ── */
+const DEFAULT_CATEGORY_SLUG = "general";
+const categories = ref<Category[]>([]);
+const selectedCategory = ref<string>(DEFAULT_CATEGORY_SLUG);
 
 /* ── Mobile-only UI state ─────────────────────────── */
 const isMobileDraftsOpen = ref(false);
@@ -122,6 +128,7 @@ function buildSnapshot(): string {
     title: title.value.trim(),
     text: body.value.trim(),
     cover: coverPayload.value,
+    category: selectedCategory.value,
   });
 }
 
@@ -162,6 +169,7 @@ const performSaveDraft = async (force = false) => {
       coverId: coverPayload.value,
       authorId: authorId || undefined,
       isAnonymous: isAnonymous.value || undefined,
+      category: selectedCategory.value || DEFAULT_CATEGORY_SLUG,
     };
 
     let result: DraftArticle;
@@ -518,6 +526,7 @@ function applyDraftToEditor(draft: DraftArticle) {
     title.value = draft.title;
     body.value = draft.text;
     isAnonymous.value = !!draft.isAnonymous;
+    selectedCategory.value = draft.category?.slug || DEFAULT_CATEGORY_SLUG;
 
     for (const task of uploadTasks.value) {
       URL.revokeObjectURL(task.previewUrl);
@@ -556,6 +565,7 @@ function resetEditor() {
     }
     uploadTasks.value = [];
     isAnonymous.value = false;
+    selectedCategory.value = DEFAULT_CATEGORY_SLUG;
     lastSavedSnapshot.value = "";
     hasUnsavedChanges.value = false;
   } finally {
@@ -691,8 +701,32 @@ onBeforeUnmount(() => {
 watch(title, () => markDirty());
 watch(body, () => markDirty());
 
+function selectCategory(slug: string) {
+  if (!slug || slug === selectedCategory.value) return;
+  selectedCategory.value = slug;
+  markDirty();
+}
+
+async function loadCategories() {
+  try {
+    const list = await api.getCategories();
+    if (list.length) {
+      categories.value = list;
+      // 默认选中无效（如默认分类被下架）时回落到列表首项，保证发帖必选。
+      if (!list.some((c) => c.slug === selectedCategory.value)) {
+        selectedCategory.value = list[0]!.slug;
+      }
+    }
+  } catch {
+    // 拉取失败不阻塞发帖：仍以默认分类兜底（后端同样会兜底「综合」）。
+  }
+}
+
 if (import.meta.client && auth.isLogin) {
   ensureDraftsLoaded();
+}
+if (import.meta.client) {
+  loadCategories();
 }
 </script>
 
@@ -774,6 +808,27 @@ if (import.meta.client && auth.isLogin) {
               maxlength="200"
             />
             <span class="ik-create-section__count">{{ editorTitleCount }}/200</span>
+          </div>
+
+          <!-- Category section（发帖必选频道） -->
+          <div v-if="categories.length" class="ik-create-section">
+            <div class="ik-create-section__head">
+              <span class="ik-create-section__label">分类</span>
+              <span class="ik-create-section__hint">选择帖子所属频道</span>
+            </div>
+            <div class="ik-create-category-chips">
+              <button
+                v-for="cat in categories"
+                :key="cat.slug"
+                type="button"
+                class="ik-create-category-chip"
+                :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
+                :style="selectedCategory === cat.slug && cat.color ? { '--chip-color': cat.color } : undefined"
+                @click="selectCategory(cat.slug)"
+              >
+                {{ cat.name }}
+              </button>
+            </div>
           </div>
 
           <!-- Body section -->
@@ -1458,6 +1513,39 @@ if (import.meta.client && auth.isLogin) {
   font-weight: 700;
   color: #777;
   letter-spacing: 0.2px;
+}
+
+.ik-create-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ik-create-category-chip {
+  --chip-color: #d7ff00;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid #333;
+  background: #1a1a1a;
+  color: #aaa;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.ik-create-category-chip:hover {
+  color: #fff;
+  border-color: #555;
+}
+
+.ik-create-category-chip--active {
+  color: #111;
+  background: var(--chip-color);
+  border-color: var(--chip-color);
 }
 
 .ik-create-section__count {
