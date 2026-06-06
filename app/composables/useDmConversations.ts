@@ -597,8 +597,10 @@ export function useDmConversations(): UseDmConversations {
   }
 
   // ── WS 事件处理 ───────────────────────────────────────
-  interface MessageCreatedData { message: DmMessage }
-  interface MessageEditedData { content: string; editedAt: string }
+  interface MessageCreatedData { message: DmMessage; streaming?: boolean }
+  // streamingDone=true 表示这是流式回复「定稿」事件（占位消息补全），
+  // 而非用户真正的编辑——此时不应写入 editedAt，否则气泡会误显示「(已编辑)」。
+  interface MessageEditedData { content: string; editedAt?: string | null; streamingDone?: boolean }
   interface MessageDeletedData { deletedAt: string }
   interface ConversationReadData { lastReadAt: string }
   interface ConversationUpdatedData { title?: string }
@@ -640,6 +642,14 @@ export function useDmConversations(): UseDmConversations {
         if (pseudoIsActive) activeConversationId.value = cid;
         removeConversation(pseudoId);
       }
+    }
+
+    // 流式占位消息：服务端 message.created 携带 streaming=true 时
+    // 立即加入 streamingMessageIds，使 isPendingStreamBubble 在首个 delta 之前即生效
+    if (event.data?.streaming === true) {
+      const next = new Set(streamingMessageIds.value);
+      next.add(msg.documentId);
+      streamingMessageIds.value = next;
     }
 
     // 写入消息缓存（dedup by documentId）
@@ -701,9 +711,17 @@ export function useDmConversations(): UseDmConversations {
     }
     const bucket = messagesById.value[cid];
     if (!bucket?.items?.length) return;
+    // 流式定稿不是真编辑：保留原 editedAt（占位消息为 null），避免误显示「(已编辑)」。
+    const isStreamingFinalize = data.streamingDone === true;
     patchMessageState(cid, {
       items: bucket.items.map((m) =>
-        m.documentId === mid ? { ...m, content: data.content, editedAt: data.editedAt } : m,
+        m.documentId === mid
+          ? {
+              ...m,
+              content: data.content,
+              ...(isStreamingFinalize ? {} : { editedAt: data.editedAt ?? null }),
+            }
+          : m,
       ),
     });
   };
