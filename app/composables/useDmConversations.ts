@@ -117,6 +117,9 @@ interface UseDmConversations {
   ) => Promise<void>;
   leaveConversation: (id: string) => Promise<void>;
 
+  /** 重置 AI 对话上下文（3.3.4）：写入 system 分界消息，等效清空记忆开新话题 */
+  resetContext: (id: string) => Promise<void>;
+
   /** 发送 typing 状态（节流由调用方控制） */
   sendTyping: (conversationId: string) => void;
 
@@ -583,6 +586,16 @@ export function useDmConversations(): UseDmConversations {
     }
   }
 
+  /**
+   * 重置 AI 对话上下文（3.3.4）：写入一条 system 分界消息，后续 AI 回复只读分界之后。
+   * 服务端会通过 WS 广播 message.created，本地无需手动插入。
+   */
+  async function resetContext(id: string): Promise<void> {
+    await $api(`/api/dm/conversations/${encodeURIComponent(id)}/reset-context`, {
+      method: "POST",
+    });
+  }
+
   // ── WS 事件处理 ───────────────────────────────────────
   interface MessageCreatedData { message: DmMessage }
   interface MessageEditedData { content: string; editedAt: string }
@@ -865,6 +878,7 @@ export function useDmConversations(): UseDmConversations {
     markConversationAsRead,
     updateConversation,
     leaveConversation,
+    resetContext,
     sendTyping: stream.sendTyping,
     startStream,
     stopStream,

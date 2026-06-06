@@ -7,7 +7,7 @@ import {
   ChatBubbleLeftIcon,
   PaperAirplaneIcon,
 } from "@heroicons/vue/24/solid";
-import { DocumentTextIcon, ChevronLeftIcon } from "@heroicons/vue/24/outline";
+import { DocumentTextIcon, ChevronLeftIcon, ArrowPathIcon } from "@heroicons/vue/24/outline";
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -60,6 +60,7 @@ const {
   stopStream,
   openDirectConversation,
   isStreamingMessage,
+  resetContext,
 } = useDmConversations();
 
 const AI_SLUG_STORAGE_KEY = "ik-knock-ai-slug";
@@ -162,6 +163,31 @@ const activeConversation = computed<DmConversationSummary | null>(() => {
   if (!activeConversationId.value) return null;
   return allConversations.value.find((c) => c.documentId === activeConversationId.value) ?? null;
 });
+
+/** 当前会话是否为官方 AI 角色（决定是否显示「重置对话」按钮，3.3.4） */
+const isActiveAiConversation = computed<boolean>(() => {
+  const conv = activeConversation.value;
+  if (!conv) return false;
+  const uid = conv.peer?.userId;
+  return conv.peer?.isAiAgent === true || (typeof uid === "number" && aiPeerUserIds.value.has(uid));
+});
+
+const resettingContext = ref(false);
+
+/** 重置 AI 对话上下文（3.3.4）：清空记忆开新话题；服务端会广播 system 分界消息。 */
+async function handleResetContext() {
+  const id = activeConversationId.value;
+  if (!id || resettingContext.value || !isActiveAiConversation.value) return;
+  resettingContext.value = true;
+  try {
+    await resetContext(id);
+    await ensureMessages(id, true);
+  } catch {
+    // 静默失败：用户可重试
+  } finally {
+    resettingContext.value = false;
+  }
+}
 
 /** 通话 Tab：按 AI boundUserId 索引未读，避免模板里重复 find */
 const aiUnreadByUserId = computed(() => {
@@ -1086,6 +1112,18 @@ const handleMobileBack = () => {
                         </span>
                       </Transition>
                     </div>
+                    <!-- 重置 AI 对话上下文（3.3.4）：仅 AI 会话显示 -->
+                    <button
+                      v-if="isActiveAiConversation"
+                      type="button"
+                      class="ik-knock__reset"
+                      :disabled="resettingContext"
+                      aria-label="重置对话"
+                      title="清空记忆，开始新话题"
+                      @click="handleResetContext"
+                    >
+                      <ArrowPathIcon class="ik-knock__reset-icon" aria-hidden="true" />
+                    </button>
                   </header>
                   <div class="ik-knock__main-body">
                     <!-- 会话消息流 -->
@@ -1108,7 +1146,15 @@ const handleMobileBack = () => {
                         >
                           {{ formatTime(entry.msg.createdAt) }}
                         </div>
+                        <!-- system 分界（如「对话已重置」3.3.4）：居中提示，不渲染气泡 -->
                         <div
+                          v-if="entry.msg.kind === 'system'"
+                          class="ik-knock__sys-divider"
+                        >
+                          <span>{{ entry.msg.content }}</span>
+                        </div>
+                        <div
+                          v-else
                           class="ik-knock__msg"
                           :class="{
                             'is-new': entry.isNew,
@@ -1731,6 +1777,55 @@ const handleMobileBack = () => {
   justify-content: center;
   gap: 2px;
   min-width: 0;
+}
+
+/* 重置对话按钮（3.3.4）：靠右对齐 */
+.ik-knock__reset {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #777;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ik-knock__reset:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-knock__reset:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ik-knock__reset-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* system 分界提示（如「对话已重置」3.3.4） */
+.ik-knock__sys-divider {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.ik-knock__sys-divider span {
+  font-size: 12px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px 12px;
+  border-radius: 10px;
 }
 
 .ik-knock__main-title {
