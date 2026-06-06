@@ -270,13 +270,21 @@ export interface KnockConversation {
 export type KnockSseEventType =
   | "notification.created"
   | "notification.read"
-  | "notification.read.bulk";
+  | "notification.read.bulk"
+  | "agent.replying"
+  | "agent.reply.done";
 
 export interface KnockSseEvent {
   type: KnockSseEventType;
   conversationId?: string;
   notificationId?: string;
   count?: number;
+  /** agent.* 事件：触发评论所在文章 documentId */
+  articleId?: string;
+  /** agent.* 事件：触发的评论 documentId */
+  commentId?: string;
+  /** agent.* 事件：正在回复的 AI 角色展示名 */
+  roleName?: string;
   at: string;
 }
 
