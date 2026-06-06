@@ -2208,9 +2208,9 @@ const handleMobileBack = () => {
   max-width: 100%;
 }
 
-/* ── AI 回复内 markdown 链接样式 ── */
+/* ── AI 回复内 markdown 链接样式（白底气泡上需要深色链接） ── */
 .ik-knock__msg-link {
-  color: rgba(251, 254, 0, 0.9);
+  color: #2c58e2;
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
@@ -2218,7 +2218,7 @@ const handleMobileBack = () => {
 }
 
 .ik-knock__msg-link:hover {
-  color: #fbfe00;
+  color: #1a3fad;
 }
 
 /* 入场/出场动画统一在 theme.css 的 .ik-overlay-* 全局规则里维护 */
