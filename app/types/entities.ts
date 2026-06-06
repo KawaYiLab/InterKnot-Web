@@ -455,6 +455,7 @@ export type DmWsEventType =
   | "pong"
   | "message.created"
   | "message.edited"
+  | "message.delta"
   | "message.deleted"
   | "conversation.read"
   | "conversation.updated"
