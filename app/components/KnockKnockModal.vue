@@ -401,15 +401,19 @@ const bubbleTextForDisplay = (msg: DmMessage): BubbleRender => {
 const isPendingStreamBubble = (msg: DmMessage): boolean =>
   isStreamingMessage(msg.documentId) && !(msg.content && msg.content.trim().length > 0);
 
-// ── AI 回复内 markdown 链接渲染（Tool Use 返回的 [标题](/post/id) 可点击）──
+// ── AI 回复内链接渲染（markdown 链接 + 裸 /post/xxx 路径均可点击）──
 type BubbleSegment =
   | { type: "text"; content: string }
   | { type: "link"; text: string; href: string };
 
-const hasMarkdownLinks = (text: string): boolean => /\[([^\]]+)\]\(([^)]+)\)/.test(text);
+// 匹配 markdown 链接 [text](url) 或裸路径 /post/documentId
+const BUBBLE_LINK_RE = /\[([^\]]+)\]\(([^)]+)\)|\/post\/([a-zA-Z0-9_-]+)/g;
+
+const hasBubbleLinks = (text: string): boolean =>
+  /\[([^\]]+)\]\(([^)]+)\)|\/post\/[a-zA-Z0-9_-]+/.test(text);
 
 const parseBubbleSegments = (text: string): BubbleSegment[] => {
-  const regex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const regex = new RegExp(BUBBLE_LINK_RE.source, 'g');
   const segments: BubbleSegment[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -417,7 +421,13 @@ const parseBubbleSegments = (text: string): BubbleSegment[] => {
     if (match.index > lastIndex) {
       segments.push({ type: "text", content: text.slice(lastIndex, match.index) });
     }
-    segments.push({ type: "link", text: match[1]!, href: match[2]! });
+    if (match[1] && match[2]) {
+      // markdown link: [text](url)
+      segments.push({ type: "link", text: match[1], href: match[2] });
+    } else if (match[3]) {
+      // bare /post/id path
+      segments.push({ type: "link", text: match[0], href: `/post/${match[3]}` });
+    }
     lastIndex = regex.lastIndex;
   }
   if (lastIndex < text.length) {
@@ -1244,7 +1254,7 @@ const handleMobileBack = () => {
                                 <span class="ik-knock__typing-dot" />
                                 <span class="ik-knock__typing-dot" />
                               </span>
-                              <template v-else-if="typeof entry.rendered === 'string' && hasMarkdownLinks(entry.rendered)">
+                              <template v-else-if="typeof entry.rendered === 'string' && hasBubbleLinks(entry.rendered)">
                                 <template v-for="(seg, si) in parseBubbleSegments(entry.rendered)" :key="si">
                                   <span v-if="seg.type === 'text'">{{ seg.content }}</span>
                                   <a
