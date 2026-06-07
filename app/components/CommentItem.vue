@@ -219,7 +219,7 @@ const floorLabel = computed(() =>
   font-size: 11px;
   font-weight: 700;
   font-style: italic;
-  color: #d7ff00;
+  color: #BFFF09;
   flex-shrink: 0;
 }
 
@@ -230,7 +230,7 @@ const floorLabel = computed(() =>
   font-weight: 800;
   line-height: 1.4;
   color: #111;
-  background: #d7ff00;
+  background: #BFFF09;
   border: 1px solid #111;
   border-radius: 4px;
 }
@@ -310,11 +310,11 @@ const floorLabel = computed(() =>
 }
 
 .ik-comment__action-btn--active {
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-comment__action-btn--active:hover {
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-comment__action-btn--delete:hover {

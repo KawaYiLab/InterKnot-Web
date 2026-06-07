@@ -36,6 +36,20 @@ export interface CoverImage {
   height?: number;
 }
 
+/** 帖子分类（频道）。GET /api/categories/list 返回完整列表。 */
+export interface Category {
+  documentId?: string;
+  name: string;
+  slug: string;
+  order?: number;
+}
+
+/** 帖子上附带的精简分类信息（接口随文章一并返回）。 */
+export interface PostCategory {
+  name: string;
+  slug: string;
+}
+
 export interface Post {
   id: string;
   title: string;
@@ -54,6 +68,7 @@ export interface Post {
   dennyCount?: number;
   hasGivenDenny?: boolean;
   isAnonymous?: boolean;
+  category?: PostCategory | null;
   createdAt?: string;
   updatedAt?: string;
   author: Author;
@@ -162,6 +177,7 @@ export interface DraftArticle {
   cover?: CoverImage[];
   hasPublishedVersion: boolean;
   isAnonymous?: boolean;
+  category?: PostCategory | null;
   createdAt?: string;
   updatedAt?: string;
   author?: Author;

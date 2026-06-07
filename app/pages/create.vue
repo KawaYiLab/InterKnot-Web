@@ -2,6 +2,7 @@
 import { useDebounceFn } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type {
+  Category,
   DraftArticle,
   UploadedFile,
   UploadTask,
@@ -54,6 +55,11 @@ const isDeletingDraft = ref(false);
 const hasUnsavedChanges = ref(false);
 const isAnonymous = ref(false);
 const showImagePickerModal = ref(false);
+
+/* ── 帖子分类（频道）：发帖必选，默认兜底「综合」 ── */
+const DEFAULT_CATEGORY_SLUG = "general";
+const categories = ref<Category[]>([]);
+const selectedCategory = ref<string>(DEFAULT_CATEGORY_SLUG);
 
 /* ── Mobile-only UI state ─────────────────────────── */
 const isMobileDraftsOpen = ref(false);
@@ -122,6 +128,7 @@ function buildSnapshot(): string {
     title: title.value.trim(),
     text: body.value.trim(),
     cover: coverPayload.value,
+    category: selectedCategory.value,
   });
 }
 
@@ -162,6 +169,7 @@ const performSaveDraft = async (force = false) => {
       coverId: coverPayload.value,
       authorId: authorId || undefined,
       isAnonymous: isAnonymous.value || undefined,
+      category: selectedCategory.value || DEFAULT_CATEGORY_SLUG,
     };
 
     let result: DraftArticle;
@@ -518,6 +526,7 @@ function applyDraftToEditor(draft: DraftArticle) {
     title.value = draft.title;
     body.value = draft.text;
     isAnonymous.value = !!draft.isAnonymous;
+    selectedCategory.value = draft.category?.slug || DEFAULT_CATEGORY_SLUG;
 
     for (const task of uploadTasks.value) {
       URL.revokeObjectURL(task.previewUrl);
@@ -556,6 +565,7 @@ function resetEditor() {
     }
     uploadTasks.value = [];
     isAnonymous.value = false;
+    selectedCategory.value = DEFAULT_CATEGORY_SLUG;
     lastSavedSnapshot.value = "";
     hasUnsavedChanges.value = false;
   } finally {
@@ -691,8 +701,32 @@ onBeforeUnmount(() => {
 watch(title, () => markDirty());
 watch(body, () => markDirty());
 
+function selectCategory(slug: string) {
+  if (!slug || slug === selectedCategory.value) return;
+  selectedCategory.value = slug;
+  markDirty();
+}
+
+async function loadCategories() {
+  try {
+    const list = await api.getCategories();
+    if (list.length) {
+      categories.value = list;
+      // 默认选中无效（如默认分类被下架）时回落到列表首项，保证发帖必选。
+      if (!list.some((c) => c.slug === selectedCategory.value)) {
+        selectedCategory.value = list[0]!.slug;
+      }
+    }
+  } catch {
+    // 拉取失败不阻塞发帖：仍以默认分类兜底（后端同样会兜底「综合」）。
+  }
+}
+
 if (import.meta.client && auth.isLogin) {
   ensureDraftsLoaded();
+}
+if (import.meta.client) {
+  loadCategories();
 }
 </script>
 
@@ -705,7 +739,7 @@ if (import.meta.client && auth.isLogin) {
     <Transition name="ik-fade">
       <div v-if="isDragging" class="ik-create-drop-overlay">
         <div class="ik-create-drop-overlay__inner">
-          <ArrowUpTrayIcon style="width:48px;height:48px;color:#d7ff00" />
+          <ArrowUpTrayIcon style="width:48px;height:48px;color:#BFFF09" />
           <span class="ik-create-drop-overlay__text">释放以上传图片</span>
         </div>
       </div>
@@ -774,6 +808,26 @@ if (import.meta.client && auth.isLogin) {
               maxlength="200"
             />
             <span class="ik-create-section__count">{{ editorTitleCount }}/200</span>
+          </div>
+
+          <!-- Category section（发帖必选频道） -->
+          <div v-if="categories.length" class="ik-create-section">
+            <div class="ik-create-section__head">
+              <span class="ik-create-section__label">分类</span>
+              <span class="ik-create-section__hint">选择帖子所属频道</span>
+            </div>
+            <div class="ik-create-category-chips">
+              <button
+                v-for="cat in categories"
+                :key="cat.slug"
+                type="button"
+                class="ik-create-category-chip"
+                :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
+                @click="selectCategory(cat.slug)"
+              >
+                {{ cat.name }}
+              </button>
+            </div>
           </div>
 
           <!-- Body section -->
@@ -1224,7 +1278,7 @@ if (import.meta.client && auth.isLogin) {
   align-items: center;
   gap: 16px;
   padding: 48px 64px;
-  border: 2px dashed #d7ff00;
+  border: 2px dashed #BFFF09;
   border-radius: 24px;
   background: rgba(215, 255, 0, 0.04);
 }
@@ -1232,7 +1286,7 @@ if (import.meta.client && auth.isLogin) {
 .ik-create-drop-overlay__text {
   font-size: 18px;
   font-weight: 700;
-  color: #d7ff00;
+  color: #BFFF09;
   letter-spacing: 0.5px;
 }
 
@@ -1318,7 +1372,7 @@ if (import.meta.client && auth.isLogin) {
 
 .ik-nav-item__editing-arrow {
   font-size: 10px;
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-create-menu :deep(.z-menu__item.is-active) .ik-nav-item__editing-arrow {
@@ -1340,8 +1394,8 @@ if (import.meta.client && auth.isLogin) {
 }
 
 .ik-nav-loadmore:hover:not(:disabled) {
-  border-color: #d7ff00;
-  color: #d7ff00;
+  border-color: #BFFF09;
+  color: #BFFF09;
 }
 
 .ik-nav-loadmore:disabled {
@@ -1450,7 +1504,7 @@ if (import.meta.client && auth.isLogin) {
 }
 
 .ik-create-section__label svg {
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-create-section__hint {
@@ -1458,6 +1512,39 @@ if (import.meta.client && auth.isLogin) {
   font-weight: 700;
   color: #777;
   letter-spacing: 0.2px;
+}
+
+.ik-create-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
+.ik-create-category-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  border: 2px solid #222;
+  background: #222222;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.ik-create-category-chip--active {
+  color: #222;
+  background: var(--ik-primary, #BFFF09);
+  border-color: var(--ik-primary, #BFFF09);
+  font-weight: 700;
 }
 
 .ik-create-section__count {
@@ -1474,7 +1561,7 @@ if (import.meta.client && auth.isLogin) {
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(215, 255, 0, 0.12);
-  color: #d7ff00;
+  color: #BFFF09;
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.3px;
@@ -1649,7 +1736,7 @@ if (import.meta.client && auth.isLogin) {
 .ik-cover-thumb__retry {
   padding: 3px 12px;
   border-radius: 999px;
-  background: #d7ff00;
+  background: #BFFF09;
   color: #000;
   font-size: 11px;
   font-weight: 900;
@@ -1674,7 +1761,7 @@ if (import.meta.client && auth.isLogin) {
 
 .ik-cover-thumb__progress {
   height: 100%;
-  background: #d7ff00;
+  background: #BFFF09;
   border-radius: 2px;
   transition: width 200ms;
 }
@@ -1684,7 +1771,7 @@ if (import.meta.client && auth.isLogin) {
   height: 22px;
   border-radius: 50%;
   border: 2.5px solid rgba(215, 255, 0, 0.25);
-  border-top-color: #d7ff00;
+  border-top-color: #BFFF09;
   animation: ik-cover-spin 800ms linear infinite;
 }
 
@@ -1698,7 +1785,7 @@ if (import.meta.client && auth.isLogin) {
   top: 6px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #d7ff00;
+  background: #BFFF09;
   color: #000;
   font-size: 10px;
   font-weight: 900;
@@ -1781,7 +1868,7 @@ if (import.meta.client && auth.isLogin) {
   font-size: 11px;
   font-weight: 700;
   font-style: italic;
-  color: #d7ff00;
+  color: #BFFF09;
   letter-spacing: 0.5px;
 }
 
@@ -2039,7 +2126,7 @@ if (import.meta.client && auth.isLogin) {
     width: 22px;
     height: 22px;
     border: 2.5px solid rgba(215, 255, 0, 0.25);
-    border-top-color: #d7ff00;
+    border-top-color: #BFFF09;
     border-radius: 50%;
     animation: ik-mobile-spin 800ms linear infinite;
   }
@@ -2048,7 +2135,7 @@ if (import.meta.client && auth.isLogin) {
     border: 0;
     padding: 3px 10px;
     border-radius: 10px;
-    background: #d7ff00;
+    background: #BFFF09;
     color: #000;
     font-size: 11px;
     font-weight: 900;
@@ -2247,7 +2334,7 @@ if (import.meta.client && auth.isLogin) {
     border: 0;
     height: 42px;
     border-radius: 21px;
-    background: #d7ff00;
+    background: #BFFF09;
     color: #000;
     font-family: inherit;
     font-size: 15px;
@@ -2387,7 +2474,7 @@ if (import.meta.client && auth.isLogin) {
   background: #262626;
 }
 .ik-mobile-draft-row.is-active {
-  border-color: #d7ff00;
+  border-color: #BFFF09;
   background: rgba(215, 255, 0, 0.06);
 }
 .ik-mobile-draft-row__title {
@@ -2406,7 +2493,7 @@ if (import.meta.client && auth.isLogin) {
   text-overflow: ellipsis;
 }
 .ik-mobile-draft-row--new .ik-mobile-draft-row__title {
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-mobile-draft-empty {
