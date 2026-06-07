@@ -1159,8 +1159,6 @@ onBeforeUnmount(() => {
 
 .ik-page__title-cat {
   margin-right: 6px;
-  color: #BFFF09;
-  font-weight: 900;
 }
 
 .ik-page__title {

@@ -1529,7 +1529,7 @@ if (import.meta.client) {
   padding: 0 16px;
   border-radius: 9999px;
   border: 2px solid #222;
-  background: #1c1c1c;
+  background: #222222;
   color: #fff;
   font-size: 14px;
   line-height: 1;
@@ -1538,10 +1538,6 @@ if (import.meta.client) {
     color 0.15s ease,
     border-color 0.15s ease,
     background 0.15s ease;
-}
-
-.ik-create-category-chip:hover {
-  border-color: #3a3a3a;
 }
 
 .ik-create-category-chip--active {

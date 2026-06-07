@@ -1681,8 +1681,6 @@ onBeforeUnmount(() => {
 
 .ik-dialog__title-cat {
   margin-right: 6px;
-  color: #BFFF09;
-  font-weight: 900;
 }
 
 .ik-dialog__title {

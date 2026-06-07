@@ -305,7 +305,6 @@ function toPostCategory(raw: unknown): PostCategory | null {
   return {
     name,
     slug,
-    color: typeof c.color === "string" ? c.color : null,
   };
 }
 
@@ -680,7 +679,6 @@ export function useApi() {
               documentId: typeof c.documentId === "string" ? c.documentId : undefined,
               name,
               slug,
-              color: typeof c.color === "string" ? c.color : null,
               order: typeof c.order === "number" ? c.order : undefined,
             };
           })

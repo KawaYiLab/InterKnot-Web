@@ -41,7 +41,6 @@ export interface Category {
   documentId?: string;
   name: string;
   slug: string;
-  color?: string | null;
   order?: number;
 }
 
@@ -49,7 +48,6 @@ export interface Category {
 export interface PostCategory {
   name: string;
   slug: string;
-  color?: string | null;
 }
 
 export interface Post {

@@ -232,8 +232,6 @@ const handleOpen = (e: MouseEvent) => {
 
 .ik-card__title-cat {
   margin-right: 4px;
-  color: #BFFF09;
-  font-weight: 700;
 }
 
 .ik-card__cover {
