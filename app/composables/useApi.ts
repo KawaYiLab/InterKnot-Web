@@ -802,13 +802,63 @@ export function useApi() {
     return (unwrapData(response) as Record<string, boolean>) || {};
   };
 
+  /**
+   * 把「已读」写回 query 缓存：遍历所有文章列表/详情/个人页文章缓存，
+   * 命中 id 的节点置 isRead=true。否则乐观已读只活在当前页面的 list 里，
+   * 缓存（peekArticles 预填 / staleTime 内复用）仍是 isRead=false，
+   * 切走再回来就又显示未读。仅在确有变化时返回新引用，避免无谓重渲染。
+   */
+  const markReadInQueryCache = (articleDocumentIds: string[]) => {
+    const qc = $queryClient as QueryClient | undefined;
+    if (!qc || !articleDocumentIds.length) return;
+    const ids = new Set(articleDocumentIds);
+
+    const markPost = (post: Post): Post =>
+      post && ids.has(post.id) && !post.isRead ? { ...post, isRead: true } : post;
+
+    qc.setQueriesData<unknown>(
+      {
+        predicate: (query) => {
+          const key = query.queryKey as readonly unknown[];
+          if (key[0] === "articles" && (key[1] === "search" || key[1] === "detail")) {
+            return true;
+          }
+          // ["profile", documentId, "articles", ...]
+          return key[0] === "profile" && key[2] === "articles";
+        },
+      },
+      (data: unknown) => {
+        if (!data || typeof data !== "object") return data;
+        // 列表页：Pagination<Post>（含 nodes 数组）
+        if (Array.isArray((data as Pagination<Post>).nodes)) {
+          const page = data as Pagination<Post>;
+          let changed = false;
+          const nodes = page.nodes.map((node) => {
+            const next = markPost(node);
+            if (next !== node) changed = true;
+            return next;
+          });
+          return changed ? { ...page, nodes } : page;
+        }
+        // 详情页：单个 Post
+        if (typeof (data as Post).id === "string") {
+          return markPost(data as Post);
+        }
+        return data;
+      },
+    );
+  };
+
   const markAsReadBatch = async (articleDocumentIds: string[]) => {
     if (!articleDocumentIds.length) return;
     await $api("/api/article-reads/batch", {
       method: "POST",
       body: { articleDocumentIds, markAsRead: true },
     });
-    // 已读状态变化不一定需要立刻失效（页面通常已本地同步），但下次重拉时保持正确
+    // 持久化成功后写回缓存：保证切走再回来（peekArticles 预填 / staleTime 复用）
+    // 拿到的也是已读态，而非旧的未读快照（否则已读 API 成功了，列表却仍显示未读）。
+    // 失败则不写缓存，与服务端「未读」保持一致，由调用方回滚本地 list。
+    markReadInQueryCache(articleDocumentIds);
   };
 
   const getProfile = async (documentId: string): Promise<Profile> => {
