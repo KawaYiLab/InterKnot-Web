@@ -665,14 +665,9 @@ onBeforeUnmount(() => {
 
               <!-- 正文 -->
               <div class="ik-page__detail">
-                <span
-                  v-if="post.category"
-                  class="ik-page__category"
-                  :style="post.category.color ? { '--cat-color': post.category.color } : undefined"
-                >
-                  {{ post.category.name }}
-                </span>
-                <h1 class="ik-page__title">{{ post.title }}</h1>
+                <h1 class="ik-page__title">
+                  <span v-if="post.category" class="ik-page__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
+                </h1>
                 <div
                   v-if="post.body"
                   class="ik-page__content"
@@ -1162,17 +1157,10 @@ onBeforeUnmount(() => {
   padding: 0 16px 32px;
 }
 
-.ik-page__category {
-  --cat-color: #d7ff00;
-  display: inline-block;
-  margin: 0 0 12px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: var(--cat-color);
-  color: #111;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.3px;
+.ik-page__title-cat {
+  margin-right: 6px;
+  color: #d7ff00;
+  font-weight: 900;
 }
 
 .ik-page__title {

@@ -511,11 +511,16 @@ const selectCategory = (slug: string) => {
   selectedCategory.value = slug;
 };
 
-// 切换频道：清空"新帖提示"并以新频道键重新拉取首屏。
+// 切换频道：清空"新帖提示"、重置分页并强制失效缓存后重拉首屏，
+// 确保即使命中旧缓存也会真正打到后端、列表随频道刷新。
 watch(
   () => selectedCategory.value,
   () => {
     newArticleIds.value = [];
+    endCursor.value = "0";
+    hasNextPage.value = true;
+    requestVersion.value++;
+    api.invalidateQueries(["articles", "search"]);
     void fetchList(true);
   },
 );
@@ -685,7 +690,6 @@ onBeforeUnmount(() => {
         type="button"
         class="ik-category-tab"
         :class="{ 'ik-category-tab--active': selectedCategory === cat.slug }"
-        :style="selectedCategory === cat.slug && cat.color ? { '--tab-color': cat.color } : undefined"
         @click="selectCategory(cat.slug)"
       >
         {{ cat.name }}
@@ -807,6 +811,7 @@ onBeforeUnmount(() => {
 .ik-category-tabs {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
   margin-bottom: 16px;
 }
