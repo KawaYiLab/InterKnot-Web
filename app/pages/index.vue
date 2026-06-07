@@ -811,7 +811,7 @@ onBeforeUnmount(() => {
 .ik-category-tabs {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 10px;
   margin-bottom: 16px;
 }
