@@ -232,7 +232,7 @@ const handleOpen = (e: MouseEvent) => {
 
 .ik-card__title-cat {
   margin-right: 4px;
-  color: #d7ff00;
+  color: #BFFF09;
   font-weight: 700;
 }
 

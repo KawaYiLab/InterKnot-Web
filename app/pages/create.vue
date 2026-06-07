@@ -739,7 +739,7 @@ if (import.meta.client) {
     <Transition name="ik-fade">
       <div v-if="isDragging" class="ik-create-drop-overlay">
         <div class="ik-create-drop-overlay__inner">
-          <ArrowUpTrayIcon style="width:48px;height:48px;color:#d7ff00" />
+          <ArrowUpTrayIcon style="width:48px;height:48px;color:#BFFF09" />
           <span class="ik-create-drop-overlay__text">释放以上传图片</span>
         </div>
       </div>
@@ -823,7 +823,6 @@ if (import.meta.client) {
                 type="button"
                 class="ik-create-category-chip"
                 :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
-                :style="selectedCategory === cat.slug && cat.color ? { '--chip-color': cat.color } : undefined"
                 @click="selectCategory(cat.slug)"
               >
                 {{ cat.name }}
@@ -1279,7 +1278,7 @@ if (import.meta.client) {
   align-items: center;
   gap: 16px;
   padding: 48px 64px;
-  border: 2px dashed #d7ff00;
+  border: 2px dashed #BFFF09;
   border-radius: 24px;
   background: rgba(215, 255, 0, 0.04);
 }
@@ -1287,7 +1286,7 @@ if (import.meta.client) {
 .ik-create-drop-overlay__text {
   font-size: 18px;
   font-weight: 700;
-  color: #d7ff00;
+  color: #BFFF09;
   letter-spacing: 0.5px;
 }
 
@@ -1373,7 +1372,7 @@ if (import.meta.client) {
 
 .ik-nav-item__editing-arrow {
   font-size: 10px;
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-create-menu :deep(.z-menu__item.is-active) .ik-nav-item__editing-arrow {
@@ -1395,8 +1394,8 @@ if (import.meta.client) {
 }
 
 .ik-nav-loadmore:hover:not(:disabled) {
-  border-color: #d7ff00;
-  color: #d7ff00;
+  border-color: #BFFF09;
+  color: #BFFF09;
 }
 
 .ik-nav-loadmore:disabled {
@@ -1505,7 +1504,7 @@ if (import.meta.client) {
 }
 
 .ik-create-section__label svg {
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-create-section__hint {
@@ -1521,15 +1520,19 @@ if (import.meta.client) {
   gap: 8px;
 }
 
+/* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
 .ik-create-category-chip {
-  --chip-color: #d7ff00;
-  padding: 6px 16px;
-  border-radius: 999px;
-  border: 1px solid #333;
-  background: #1a1a1a;
-  color: #aaa;
-  font-size: 13px;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  border: 2px solid #222;
+  background: #1c1c1c;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
   cursor: pointer;
   transition:
     color 0.15s ease,
@@ -1538,14 +1541,14 @@ if (import.meta.client) {
 }
 
 .ik-create-category-chip:hover {
-  color: #fff;
-  border-color: #555;
+  border-color: #3a3a3a;
 }
 
 .ik-create-category-chip--active {
-  color: #111;
-  background: var(--chip-color);
-  border-color: var(--chip-color);
+  color: #222;
+  background: var(--ik-primary, #BFFF09);
+  border-color: var(--ik-primary, #BFFF09);
+  font-weight: 700;
 }
 
 .ik-create-section__count {
@@ -1562,7 +1565,7 @@ if (import.meta.client) {
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(215, 255, 0, 0.12);
-  color: #d7ff00;
+  color: #BFFF09;
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.3px;
@@ -1737,7 +1740,7 @@ if (import.meta.client) {
 .ik-cover-thumb__retry {
   padding: 3px 12px;
   border-radius: 999px;
-  background: #d7ff00;
+  background: #BFFF09;
   color: #000;
   font-size: 11px;
   font-weight: 900;
@@ -1762,7 +1765,7 @@ if (import.meta.client) {
 
 .ik-cover-thumb__progress {
   height: 100%;
-  background: #d7ff00;
+  background: #BFFF09;
   border-radius: 2px;
   transition: width 200ms;
 }
@@ -1772,7 +1775,7 @@ if (import.meta.client) {
   height: 22px;
   border-radius: 50%;
   border: 2.5px solid rgba(215, 255, 0, 0.25);
-  border-top-color: #d7ff00;
+  border-top-color: #BFFF09;
   animation: ik-cover-spin 800ms linear infinite;
 }
 
@@ -1786,7 +1789,7 @@ if (import.meta.client) {
   top: 6px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #d7ff00;
+  background: #BFFF09;
   color: #000;
   font-size: 10px;
   font-weight: 900;
@@ -1869,7 +1872,7 @@ if (import.meta.client) {
   font-size: 11px;
   font-weight: 700;
   font-style: italic;
-  color: #d7ff00;
+  color: #BFFF09;
   letter-spacing: 0.5px;
 }
 
@@ -2127,7 +2130,7 @@ if (import.meta.client) {
     width: 22px;
     height: 22px;
     border: 2.5px solid rgba(215, 255, 0, 0.25);
-    border-top-color: #d7ff00;
+    border-top-color: #BFFF09;
     border-radius: 50%;
     animation: ik-mobile-spin 800ms linear infinite;
   }
@@ -2136,7 +2139,7 @@ if (import.meta.client) {
     border: 0;
     padding: 3px 10px;
     border-radius: 10px;
-    background: #d7ff00;
+    background: #BFFF09;
     color: #000;
     font-size: 11px;
     font-weight: 900;
@@ -2335,7 +2338,7 @@ if (import.meta.client) {
     border: 0;
     height: 42px;
     border-radius: 21px;
-    background: #d7ff00;
+    background: #BFFF09;
     color: #000;
     font-family: inherit;
     font-size: 15px;
@@ -2475,7 +2478,7 @@ if (import.meta.client) {
   background: #262626;
 }
 .ik-mobile-draft-row.is-active {
-  border-color: #d7ff00;
+  border-color: #BFFF09;
   background: rgba(215, 255, 0, 0.06);
 }
 .ik-mobile-draft-row__title {
@@ -2494,7 +2497,7 @@ if (import.meta.client) {
   text-overflow: ellipsis;
 }
 .ik-mobile-draft-row--new .ik-mobile-draft-row__title {
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-mobile-draft-empty {

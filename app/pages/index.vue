@@ -816,15 +816,19 @@ onBeforeUnmount(() => {
   margin-bottom: 16px;
 }
 
+/* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
 .ik-category-tab {
-  --tab-color: #d7ff00;
-  padding: 7px 18px;
-  border-radius: 999px;
-  border: 1px solid var(--ik-border, #2a2a2a);
-  background: var(--ik-surface, #181818);
-  color: var(--ik-text-secondary, #999);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  border: 2px solid #222;
+  background: #1c1c1c;
+  color: #fff;
   font-size: 14px;
-  font-weight: 700;
+  line-height: 1;
   cursor: pointer;
   transition:
     color 0.15s ease,
@@ -833,14 +837,14 @@ onBeforeUnmount(() => {
 }
 
 .ik-category-tab:hover {
-  color: var(--ik-text, #fff);
-  border-color: #555;
+  border-color: #3a3a3a;
 }
 
 .ik-category-tab--active {
-  color: #111;
-  background: var(--tab-color);
-  border-color: var(--tab-color);
+  color: #222;
+  background: var(--ik-primary, #BFFF09);
+  border-color: var(--ik-primary, #BFFF09);
+  font-weight: 700;
 }
 
 @media (max-width: 768px) {
@@ -859,7 +863,8 @@ onBeforeUnmount(() => {
 
   .ik-category-tab {
     flex: 0 0 auto;
-    padding: 6px 14px;
+    height: 28px;
+    padding: 0 14px;
     font-size: 13px;
   }
 }
@@ -977,7 +982,7 @@ onBeforeUnmount(() => {
   height: 44px;
   background: transparent;
   border: none;
-  color: #d7ff00;
+  color: #BFFF09;
   font-size: 24px;
   pointer-events: none;
 }
@@ -1071,7 +1076,7 @@ onBeforeUnmount(() => {
   padding: 8px 18px;
   border: none;
   border-radius: 999px;
-  background: #d7ff00;
+  background: #BFFF09;
   color: #000;
   font-size: 14px;
   font-weight: 700;

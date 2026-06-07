@@ -418,7 +418,7 @@ onBeforeUnmount(() => {
   height: 18px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #d7ff00;
+  background: #BFFF09;
   color: #000;
   font-size: 10px;
   font-weight: 900;
@@ -448,7 +448,7 @@ onBeforeUnmount(() => {
 }
 
 .ik-hovercard__name:hover {
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-hovercard__bio {
@@ -544,7 +544,7 @@ onBeforeUnmount(() => {
 .ik-hovercard__profile-btn:hover {
   background: rgba(215, 255, 0, 0.1);
   border-color: rgba(215, 255, 0, 0.3);
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 /* 主操作：私信（黄底黑字，强调） */

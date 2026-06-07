@@ -1057,7 +1057,7 @@ onBeforeUnmount(() => {
   font-weight: 700;
   font-style: italic;
   line-height: 20px;
-  color: #d7ff00;
+  color: #BFFF09;
   flex-shrink: 0;
 }
 
@@ -1159,7 +1159,7 @@ onBeforeUnmount(() => {
 
 .ik-page__title-cat {
   margin-right: 6px;
-  color: #d7ff00;
+  color: #BFFF09;
   font-weight: 900;
 }
 
@@ -1214,7 +1214,7 @@ onBeforeUnmount(() => {
 }
 
 .ik-page__content :deep(blockquote) {
-  border-left: 4px solid #d7ff00;
+  border-left: 4px solid #BFFF09;
   padding-left: 16px;
   margin: 12px 0;
   color: #b0b0b0;
@@ -1399,7 +1399,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding: 4px 12px 0;
   font-size: 12px;
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-engage-bar__reply-close {

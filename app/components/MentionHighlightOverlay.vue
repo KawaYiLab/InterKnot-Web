@@ -214,7 +214,7 @@ watch(
 }
 
 .ik-mention-overlay__hit {
-  /* 半透明黄绿，与项目主题色 #d7ff00 一致 */
+  /* 半透明黄绿，与项目主题色 #BFFF09 一致 */
   background-color: rgba(215, 255, 0, 0.22);
   border-radius: 3px;
   /* 让背景在内联文字段两端微微外扩，更像芯片 */
