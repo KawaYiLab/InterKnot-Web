@@ -358,7 +358,7 @@ const onItemMouseDown = (e: MouseEvent, candidate: MentionCandidate) => {
   font-size: 11px;
   font-weight: 700;
   font-style: italic;
-  color: #d7ff00;
+  color: #BFFF09;
   flex-shrink: 0;
 }
 </style>

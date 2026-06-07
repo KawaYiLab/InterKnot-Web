@@ -314,7 +314,7 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #d7ff00;
+  color: #BFFF09;
 }
 
 .ik-checkin-help__list {

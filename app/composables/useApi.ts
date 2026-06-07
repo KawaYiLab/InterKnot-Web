@@ -6,9 +6,11 @@ import type {
   AvatarType,
   BusinessCard,
   BusinessCardType,
+  Category,
   Comment,
   DraftArticle,
   Post,
+  PostCategory,
   LikeToggleResult,
   Profile,
   SignedUploadResult,
@@ -35,9 +37,12 @@ const qk = {
     uploads: (page: number, pageSize: number) => ["me", "uploads", page, pageSize] as QueryKey,
     pinnedArticles: ["me", "pinned-articles"] as QueryKey,
   },
+  categories: {
+    list: ["categories", "list"] as QueryKey,
+  },
   articles: {
-    search: (query: string, start: number, limit: number) =>
-      ["articles", "search", query, start, limit] as QueryKey,
+    search: (query: string, category: string, start: number, limit: number) =>
+      ["articles", "search", query, category, start, limit] as QueryKey,
     searchAll: ["articles", "search"] as QueryKey,
     detail: (id: string) => ["articles", "detail", id] as QueryKey,
     detailAll: ["articles", "detail"] as QueryKey,
@@ -291,6 +296,18 @@ function toAuthor(raw: unknown, apiBaseUrl: string): Author {
   };
 }
 
+function toPostCategory(raw: unknown): PostCategory | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Record<string, unknown>;
+  const slug = typeof c.slug === "string" ? c.slug : "";
+  const name = typeof c.name === "string" ? c.name : "";
+  if (!slug && !name) return null;
+  return {
+    name,
+    slug,
+  };
+}
+
 function toPost(raw: unknown, apiBaseUrl: string): Post {
   const data = (raw || {}) as Record<string, unknown>;
 
@@ -335,6 +352,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     dennyCount: Number(data.dennyCount ?? 0),
     hasGivenDenny: data.hasGivenDenny === true,
     isAnonymous: data.isAnonymous === true,
+    category: toPostCategory(data.category),
     createdAt: data.createdAt as string | undefined,
     updatedAt: data.updatedAt as string | undefined,
     author: toAuthor(data.author, apiBaseUrl),
@@ -370,6 +388,7 @@ function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
     editorState: Array.isArray(raw.editorState) ? raw.editorState : undefined,
     cover: covers,
     hasPublishedVersion: raw.hasPublishedVersion === true,
+    category: toPostCategory(raw.category),
     createdAt: raw.createdAt as string | undefined,
     updatedAt: raw.updatedAt as string | undefined,
   };
@@ -595,15 +614,17 @@ export function useApi() {
   const searchArticles = async (
     query: string,
     endCur = "",
+    category = "",
   ): Promise<Pagination<Post>> => {
     const start = parseStart(endCur);
     return cachedRead(
-      qk.articles.search(query, start, DEFAULT_PAGE_SIZE),
+      qk.articles.search(query, category, start, DEFAULT_PAGE_SIZE),
       async () => {
         const endpoint = query ? "/api/articles/search" : "/api/articles/list";
         const response = await $api(endpoint, {
           query: {
             ...(query ? { q: query } : {}),
+            ...(category ? { category } : {}),
             start: String(start),
             limit: String(DEFAULT_PAGE_SIZE),
           },
@@ -630,12 +651,40 @@ export function useApi() {
   const peekArticles = (
     query: string,
     endCur = "",
+    category = "",
   ): Pagination<Post> | undefined => {
     const qc = $queryClient as QueryClient | undefined;
     if (!qc) return undefined;
     const start = parseStart(endCur);
     return qc.getQueryData<Pagination<Post>>(
-      qk.articles.search(query, start, DEFAULT_PAGE_SIZE),
+      qk.articles.search(query, category, start, DEFAULT_PAGE_SIZE),
+    );
+  };
+
+  /** 频道列表（GET /api/categories/list）：返回已上架分类，按 order 升序。 */
+  const getCategories = async (): Promise<Category[]> => {
+    return cachedRead(
+      qk.categories.list,
+      async () => {
+        const response = await $api("/api/categories/list");
+        const data = unwrapData<unknown[]>(response) || [];
+        return data
+          .map((raw): Category | null => {
+            if (!raw || typeof raw !== "object") return null;
+            const c = raw as Record<string, unknown>;
+            const slug = typeof c.slug === "string" ? c.slug : "";
+            const name = typeof c.name === "string" ? c.name : "";
+            if (!slug || !name) return null;
+            return {
+              documentId: typeof c.documentId === "string" ? c.documentId : undefined,
+              name,
+              slug,
+              order: typeof c.order === "number" ? c.order : undefined,
+            };
+          })
+          .filter((c): c is Category => c !== null);
+      },
+      STALE_LIST,
     );
   };
 
@@ -753,13 +802,63 @@ export function useApi() {
     return (unwrapData(response) as Record<string, boolean>) || {};
   };
 
+  /**
+   * 把「已读」写回 query 缓存：遍历所有文章列表/详情/个人页文章缓存，
+   * 命中 id 的节点置 isRead=true。否则乐观已读只活在当前页面的 list 里，
+   * 缓存（peekArticles 预填 / staleTime 内复用）仍是 isRead=false，
+   * 切走再回来就又显示未读。仅在确有变化时返回新引用，避免无谓重渲染。
+   */
+  const markReadInQueryCache = (articleDocumentIds: string[]) => {
+    const qc = $queryClient as QueryClient | undefined;
+    if (!qc || !articleDocumentIds.length) return;
+    const ids = new Set(articleDocumentIds);
+
+    const markPost = (post: Post): Post =>
+      post && ids.has(post.id) && !post.isRead ? { ...post, isRead: true } : post;
+
+    qc.setQueriesData<unknown>(
+      {
+        predicate: (query) => {
+          const key = query.queryKey as readonly unknown[];
+          if (key[0] === "articles" && (key[1] === "search" || key[1] === "detail")) {
+            return true;
+          }
+          // ["profile", documentId, "articles", ...]
+          return key[0] === "profile" && key[2] === "articles";
+        },
+      },
+      (data: unknown) => {
+        if (!data || typeof data !== "object") return data;
+        // 列表页：Pagination<Post>（含 nodes 数组）
+        if (Array.isArray((data as Pagination<Post>).nodes)) {
+          const page = data as Pagination<Post>;
+          let changed = false;
+          const nodes = page.nodes.map((node) => {
+            const next = markPost(node);
+            if (next !== node) changed = true;
+            return next;
+          });
+          return changed ? { ...page, nodes } : page;
+        }
+        // 详情页：单个 Post
+        if (typeof (data as Post).id === "string") {
+          return markPost(data as Post);
+        }
+        return data;
+      },
+    );
+  };
+
   const markAsReadBatch = async (articleDocumentIds: string[]) => {
     if (!articleDocumentIds.length) return;
     await $api("/api/article-reads/batch", {
       method: "POST",
       body: { articleDocumentIds, markAsRead: true },
     });
-    // 已读状态变化不一定需要立刻失效（页面通常已本地同步），但下次重拉时保持正确
+    // 持久化成功后写回缓存：保证切走再回来（peekArticles 预填 / staleTime 复用）
+    // 拿到的也是已读态，而非旧的未读快照（否则已读 API 成功了，列表却仍显示未读）。
+    // 失败则不写缓存，与服务端「未读」保持一致，由调用方回滚本地 list。
+    markReadInQueryCache(articleDocumentIds);
   };
 
   const getProfile = async (documentId: string): Promise<Profile> => {
@@ -893,12 +992,16 @@ export function useApi() {
     coverId?: string | string[];
     authorId?: string;
     isAnonymous?: boolean;
+    category?: string;
   }): Promise<DraftArticle> => {
     const data: Record<string, unknown> = {
       title: payload.title,
       text: payload.text,
       editorState: payload.editorState,
     };
+    if (payload.category) {
+      data.category = payload.category;
+    }
     if (payload.coverId != null) {
       data.cover = payload.coverId;
     }
@@ -927,12 +1030,14 @@ export function useApi() {
       coverId?: string | string[] | null;
       authorId?: string;
       isAnonymous?: boolean;
+      category?: string;
     },
   ): Promise<DraftArticle> => {
     const data: Record<string, unknown> = {};
     if (payload.title !== undefined) data.title = payload.title;
     if (payload.text !== undefined) data.text = payload.text;
     data.editorState = payload.editorState;
+    if (payload.category) data.category = payload.category;
     if (payload.coverId !== undefined) {
       data.cover = payload.coverId ?? [];
     }
@@ -1478,6 +1583,7 @@ export function useApi() {
     getSelfUser,
     searchArticles,
     peekArticles,
+    getCategories,
     getPost,
     recordArticleView,
     getComments,

@@ -53,9 +53,9 @@ const emit = defineEmits<{
 }
 
 .ik-cover-add:hover:not(:disabled) {
-  border-color: #d7ff00;
+  border-color: #BFFF09;
   background: rgba(215, 255, 0, 0.06);
-  color: #d7ff00;
+  color: #BFFF09;
   transform: translateY(-2px);
 }
 

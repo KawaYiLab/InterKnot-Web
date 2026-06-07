@@ -463,7 +463,7 @@ onBeforeUnmount(() => {
 .ik-img-card__badge {
   width: 24px;
   height: 24px;
-  background: #d7ff00;
+  background: #BFFF09;
   color: #000;
 }
 
@@ -501,7 +501,7 @@ onBeforeUnmount(() => {
   height: 18px;
   border-radius: 50%;
   border: 2px solid rgba(215, 255, 0, 0.25);
-  border-top-color: #d7ff00;
+  border-top-color: #BFFF09;
   animation: ik-img-spin 800ms linear infinite;
 }
 

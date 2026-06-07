@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDebounceFn, useWindowSize } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
-import type { Post } from "~/types/entities";
+import type { Category, Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import {
   FALLBACK_COVER_ASPECT_RATIO,
@@ -63,6 +63,9 @@ const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
 const POST_CARD_BODY_PADDING_X = 16;
 
 const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
+// 频道筛选：空串 = 全部（推荐流）。Tab 选中后随 list/缓存键一起隔离。
+const categories = ref<Category[]>([]);
+const selectedCategory = ref<string>("");
 const loading = ref(false);
 const loadingMore = ref(false);
 const refreshing = ref(false);
@@ -241,7 +244,7 @@ const fetchList = async (reset = false) => {
   // 仅对 reset=true（首屏 / 切回 / 切搜索词）启用；refreshing 是用户明确下拉，不走捷径。
   let cacheHit = false;
   if (reset && !refreshing.value) {
-    const cached = api.peekArticles(query.value.trim(), "0");
+    const cached = api.peekArticles(query.value.trim(), "0", selectedCategory.value);
     if (cached) {
       const uniqueNodes = toUniqueNodes(cached.nodes, true);
       enterAnimationIds.value = new Set();
@@ -269,7 +272,11 @@ const fetchList = async (reset = false) => {
 
   const currentVersion = ++requestVersion.value;
   try {
-    const page = await api.searchArticles(query.value.trim(), reset ? "0" : endCursor.value);
+    const page = await api.searchArticles(
+      query.value.trim(),
+      reset ? "0" : endCursor.value,
+      selectedCategory.value,
+    );
     if (currentVersion !== requestVersion.value) {
       return;
     }
@@ -375,9 +382,9 @@ const pollLatestArticles = async () => {
 
   polling = true;
   try {
-    // 强制失效空搜索的第一页，让 fetchQuery 真正打到后端
-    api.invalidateQueries(["articles", "search", ""]);
-    const page = await api.searchArticles("", "");
+    // 强制失效当前频道空搜索的第一页，让 fetchQuery 真正打到后端
+    api.invalidateQueries(["articles", "search", "", selectedCategory.value]);
+    const page = await api.searchArticles("", "", selectedCategory.value);
     if (!page.nodes.length) return;
 
     const knownIds = new Set(list.value.map((d) => d.id));
@@ -499,6 +506,35 @@ watch(
   },
 );
 
+const selectCategory = (slug: string) => {
+  if (slug === selectedCategory.value) return;
+  selectedCategory.value = slug;
+};
+
+// 切换频道：清空"新帖提示"、重置分页并强制失效缓存后重拉首屏，
+// 确保即使命中旧缓存也会真正打到后端、列表随频道刷新。
+watch(
+  () => selectedCategory.value,
+  () => {
+    newArticleIds.value = [];
+    endCursor.value = "0";
+    hasNextPage.value = true;
+    requestVersion.value++;
+    api.invalidateQueries(["articles", "search"]);
+    void fetchList(true);
+  },
+);
+
+const loadCategories = async () => {
+  try {
+    const list = await api.getCategories();
+    if (list.length) categories.value = list;
+  } catch {
+    // 频道列表拉取失败不影响推荐流浏览
+  }
+};
+void loadCategories();
+
 watch(
   () => loadMoreSentinelRef.value,
   async () => {
@@ -534,7 +570,7 @@ const consumePendingPosts = () => {
   list.value = [...fresh, ...list.value];
 };
 
-if (cached && cached.query === query.value) {
+if (cached && cached.query === query.value && cached.category === selectedCategory.value) {
   // 从缓存恢复：跳过网络请求，直接填充列表状态
   list.value = cached.list;
   endCursor.value = cached.endCursor;
@@ -605,6 +641,7 @@ onBeforeRouteLeave(() => {
     endCursor: endCursor.value,
     hasNextPage: hasNextPage.value,
     query: query.value,
+    category: selectedCategory.value,
     seenIds,
     measuredHeights: heights ? new Map(heights) : new Map(),
     scrollY: window.scrollY,
@@ -637,6 +674,28 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ik-home-container ik-stack">
+    <!-- 频道 Tab 条：按 order 展示，「全部」恒在最前 -->
+    <nav v-if="categories.length" class="ik-category-tabs" aria-label="帖子频道">
+      <button
+        type="button"
+        class="ik-category-tab"
+        :class="{ 'ik-category-tab--active': selectedCategory === '' }"
+        @click="selectCategory('')"
+      >
+        全部
+      </button>
+      <button
+        v-for="cat in categories"
+        :key="cat.slug"
+        type="button"
+        class="ik-category-tab"
+        :class="{ 'ik-category-tab--active': selectedCategory === cat.slug }"
+        @click="selectCategory(cat.slug)"
+      >
+        {{ cat.name }}
+      </button>
+    </nav>
+
     <!-- Refresh indicator (pull-to-refresh style) -->
     <Transition name="ik-refresh-indicator">
       <div v-if="refreshing" class="ik-refresh-indicator">
@@ -747,6 +806,63 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding-top: 24px;
   padding-bottom: 24px;
+}
+
+.ik-category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+/* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
+.ik-category-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  border: 2px solid #222;
+  background: #222222;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.ik-category-tab--active {
+  color: #222;
+  background: var(--ik-primary, #BFFF09);
+  border-color: var(--ik-primary, #BFFF09);
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .ik-category-tabs {
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ik-category-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ik-category-tab {
+    flex: 0 0 auto;
+    height: 28px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
 }
 
 .ik-masonry {
@@ -862,7 +978,7 @@ onBeforeUnmount(() => {
   height: 44px;
   background: transparent;
   border: none;
-  color: #d7ff00;
+  color: #BFFF09;
   font-size: 24px;
   pointer-events: none;
 }
@@ -956,7 +1072,7 @@ onBeforeUnmount(() => {
   padding: 8px 18px;
   border: none;
   border-radius: 999px;
-  background: #d7ff00;
+  background: #BFFF09;
   color: #000;
   font-size: 14px;
   font-weight: 700;
