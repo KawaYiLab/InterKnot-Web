@@ -60,6 +60,9 @@ const showImagePickerModal = ref(false);
 const DEFAULT_CATEGORY_SLUG = "general";
 const categories = ref<Category[]>([]);
 const selectedCategory = ref<string>(DEFAULT_CATEGORY_SLUG);
+// 频道列表是否仍在首次加载：用于在无缓存冷启动时渲染占位标签预留高度，
+// 避免列表后到把正文区往下挤导致页面跳动。
+const categoriesLoading = ref(true);
 
 /* ── Mobile-only UI state ─────────────────────────── */
 const isMobileDraftsOpen = ref(false);
@@ -719,6 +722,8 @@ async function loadCategories() {
     }
   } catch {
     // 拉取失败不阻塞发帖：仍以默认分类兜底（后端同样会兜底「综合」）。
+  } finally {
+    categoriesLoading.value = false;
   }
 }
 
@@ -810,23 +815,34 @@ if (import.meta.client) {
             <span class="ik-create-section__count">{{ editorTitleCount }}/200</span>
           </div>
 
-          <!-- Category section（发帖必选频道） -->
-          <div v-if="categories.length" class="ik-create-section">
+          <!-- Category section（发帖必选频道）
+               加载中即渲染占位标签，为分类栏预留高度，避免列表后到挤压正文导致跳动 -->
+          <div v-if="categoriesLoading || categories.length" class="ik-create-section">
             <div class="ik-create-section__head">
               <span class="ik-create-section__label">分类</span>
               <span class="ik-create-section__hint">选择帖子所属频道</span>
             </div>
             <div class="ik-create-category-chips">
-              <button
-                v-for="cat in categories"
-                :key="cat.slug"
-                type="button"
-                class="ik-create-category-chip"
-                :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
-                @click="selectCategory(cat.slug)"
-              >
-                {{ cat.name }}
-              </button>
+              <template v-if="categories.length">
+                <button
+                  v-for="cat in categories"
+                  :key="cat.slug"
+                  type="button"
+                  class="ik-create-category-chip"
+                  :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
+                  @click="selectCategory(cat.slug)"
+                >
+                  {{ cat.name }}
+                </button>
+              </template>
+              <template v-else>
+                <span
+                  v-for="n in 4"
+                  :key="`cat-skeleton-${n}`"
+                  class="ik-create-category-chip ik-create-category-chip--placeholder"
+                  aria-hidden="true"
+                ></span>
+              </template>
             </div>
           </div>
 
@@ -1518,6 +1534,8 @@ if (import.meta.client) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  /* 预留一行标签高度，加载中占位标签与真实标签同高，避免高度跳变 */
+  min-height: 30px;
 }
 
 /* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
@@ -1545,6 +1563,30 @@ if (import.meta.client) {
   background: var(--ik-primary, #BFFF09);
   border-color: var(--ik-primary, #BFFF09);
   font-weight: 700;
+}
+
+/* 加载占位标签：固定宽度的脉冲胶囊，仅用于预留高度，不可交互 */
+.ik-create-category-chip--placeholder {
+  width: 72px;
+  cursor: default;
+  animation: ik-chip-placeholder-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes ik-chip-placeholder-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-create-category-chip--placeholder {
+    animation: none;
+    opacity: 0.5;
+  }
 }
 
 .ik-create-section__count {

@@ -674,8 +674,10 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ik-home-container ik-stack">
-    <!-- 频道 Tab 条：按 order 展示，「全部」恒在最前 -->
-    <nav v-if="categories.length" class="ik-category-tabs" aria-label="帖子频道">
+    <!-- 频道 Tab 条：按 order 展示，「全部」恒在最前。
+         恒渲染（不随 categories 异步加载出现/消失），为分类栏预留固定高度，
+         避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
+    <nav class="ik-category-tabs" aria-label="帖子频道">
       <button
         type="button"
         class="ik-category-tab"
@@ -814,6 +816,8 @@ onBeforeUnmount(() => {
   justify-content: flex-start;
   gap: 10px;
   margin-bottom: 16px;
+  /* 预留一行频道标签高度，避免频道列表异步到达时撑高导致下方瀑布流跳动 */
+  min-height: 30px;
 }
 
 /* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
@@ -851,6 +855,7 @@ onBeforeUnmount(() => {
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    min-height: 28px;
   }
 
   .ik-category-tabs::-webkit-scrollbar {
