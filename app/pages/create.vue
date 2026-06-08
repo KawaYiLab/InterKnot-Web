@@ -18,6 +18,8 @@ import {
   ChevronRightIcon,
   RectangleStackIcon,
   EyeSlashIcon,
+  HashtagIcon,
+  CheckIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 
@@ -71,6 +73,13 @@ const visibleCategories = computed(() =>
 /* ── Mobile-only UI state ─────────────────────────── */
 const isMobileDraftsOpen = ref(false);
 const isMobileSettingsOpen = ref(false);
+const isMobileCategoryOpen = ref(false);
+// 移动端「分类」设置行展示的当前频道名（找不到则按加载态兜底文案）。
+const selectedCategoryName = computed(() => {
+  const found = categories.value.find((c) => c.slug === selectedCategory.value);
+  if (found) return found.name;
+  return categoriesLoading.value ? "加载中…" : "请选择";
+});
 
 const suppressTracking = ref(false);
 const lastSavedSnapshot = ref("");
@@ -458,6 +467,11 @@ function onMobileSelectDraft(draft: DraftArticle) {
 async function onMobileDeleteDraft() {
   isMobileSettingsOpen.value = false;
   await deleteDraft();
+}
+
+function onMobileSelectCategory(slug: string) {
+  selectCategory(slug);
+  isMobileCategoryOpen.value = false;
 }
 
 function onMenuChange(name: string | number) {
@@ -1068,6 +1082,15 @@ if (import.meta.client) {
       <div class="ik-mobile-divider"></div>
 
       <!-- Setting rows -->
+      <button type="button" class="ik-mobile-row" @click="isMobileCategoryOpen = true">
+        <HashtagIcon class="ik-mobile-row__icon" />
+        <span class="ik-mobile-row__title">分类</span>
+        <span class="ik-mobile-row__value">{{ selectedCategoryName }}</span>
+        <ChevronRightIcon class="ik-mobile-row__chevron" />
+      </button>
+
+      <div class="ik-mobile-divider"></div>
+
       <button type="button" class="ik-mobile-row" @click="openMobileCoverPicker">
         <PhotoIcon class="ik-mobile-row__icon" />
         <span class="ik-mobile-row__title">封面</span>
@@ -1218,6 +1241,43 @@ if (import.meta.client) {
                 <span class="ik-mobile-settings-row__title">删除草稿</span>
                 <ChevronRightIcon class="ik-mobile-settings-row__chevron" />
               </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ── Mobile Category Picker Sheet (bottom) ── -->
+    <Teleport to="body">
+      <Transition name="ik-mobile-sheet">
+        <div
+          v-if="isMobileCategoryOpen"
+          class="ik-mobile-sheet"
+          role="dialog"
+          aria-modal="true"
+          @click.self="isMobileCategoryOpen = false"
+        >
+          <div class="ik-mobile-sheet__panel">
+            <div class="ik-mobile-sheet__handle"></div>
+            <span class="ik-mobile-sheet__title">选择分类</span>
+            <div class="ik-mobile-sheet__body ik-mobile-sheet__body--compact ik-mobile-cat-grid">
+              <button
+                v-for="cat in visibleCategories"
+                :key="cat.slug"
+                type="button"
+                class="ik-mobile-settings-row"
+                :class="{ 'ik-mobile-settings-row--active': selectedCategory === cat.slug }"
+                @click="onMobileSelectCategory(cat.slug)"
+              >
+                <span class="ik-mobile-settings-row__title">{{ cat.name }}</span>
+                <CheckIcon
+                  v-if="selectedCategory === cat.slug"
+                  class="ik-mobile-settings-row__check"
+                />
+              </button>
+              <div v-if="!visibleCategories.length" class="ik-mobile-draft-empty">
+                {{ categoriesLoading ? "加载中..." : "暂无可选分类" }}
+              </div>
             </div>
           </div>
         </div>
@@ -2604,6 +2664,34 @@ if (import.meta.client) {
 .ik-mobile-settings-row--danger .ik-mobile-settings-row__icon,
 .ik-mobile-settings-row--danger .ik-mobile-settings-row__title {
   color: #ff6b6b;
+}
+/* 选中态：项目统一特效——黑字 + 主题色底 */
+.ik-mobile-settings-row--active {
+  background: var(--ik-primary, #BFFF09);
+  border-color: var(--ik-primary, #BFFF09);
+}
+.ik-mobile-settings-row--active:active {
+  background: var(--ik-primary, #BFFF09);
+}
+.ik-mobile-settings-row--active .ik-mobile-settings-row__title {
+  color: #222;
+  font-weight: 700;
+}
+.ik-mobile-settings-row__check {
+  width: 18px;
+  height: 18px;
+  color: #222;
+  flex-shrink: 0;
+}
+
+/* 分类选择面板：两列网格 */
+.ik-mobile-cat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ik-mobile-cat-grid .ik-mobile-draft-empty {
+  grid-column: 1 / -1;
 }
 .ik-mobile-settings-row--toggle {
   cursor: pointer;
