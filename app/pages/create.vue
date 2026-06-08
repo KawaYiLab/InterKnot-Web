@@ -1080,7 +1080,6 @@ if (import.meta.client) {
       <button
         type="button"
         class="ik-mobile-row"
-        :disabled="!documentId"
         @click="isMobileSettingsOpen = true"
       >
         <Cog6ToothIcon class="ik-mobile-row__icon" />
@@ -1103,12 +1102,6 @@ if (import.meta.client) {
           {{ drafts.length }}
         </span>
       </button>
-      <label
-        class="ik-mobile-footer__anon"
-        :aria-label="isAnonymous ? '取消匿名' : '匿名发布'"
-      >
-        <z-switch v-model="isAnonymous" @change="markDirty()" />
-      </label>
       <button
         type="button"
         class="ik-mobile-footer__publish"
@@ -1206,6 +1199,14 @@ if (import.meta.client) {
             <div class="ik-mobile-sheet__handle"></div>
             <span class="ik-mobile-sheet__title">帖子设置</span>
             <div class="ik-mobile-sheet__body ik-mobile-sheet__body--compact">
+              <label class="ik-mobile-settings-row ik-mobile-settings-row--toggle">
+                <EyeSlashIcon class="ik-mobile-settings-row__icon" />
+                <span class="ik-mobile-settings-row__text">
+                  <span class="ik-mobile-settings-row__title">匿名发布</span>
+                  <span class="ik-mobile-settings-row__desc">开启后将隐藏你的身份</span>
+                </span>
+                <z-switch v-model="isAnonymous" @change="markDirty()" />
+              </label>
               <button
                 v-if="documentId"
                 type="button"
@@ -1217,7 +1218,6 @@ if (import.meta.client) {
                 <span class="ik-mobile-settings-row__title">删除草稿</span>
                 <ChevronRightIcon class="ik-mobile-settings-row__chevron" />
               </button>
-              <div v-else class="ik-mobile-draft-empty">该委托尚未保存为草稿</div>
             </div>
           </div>
         </div>
@@ -2370,12 +2370,6 @@ if (import.meta.client) {
     line-height: 16px;
     text-align: center;
   }
-  .ik-mobile-footer__anon {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
   .ik-mobile-footer__publish {
     flex: 1;
     appearance: none;
@@ -2610,6 +2604,24 @@ if (import.meta.client) {
 .ik-mobile-settings-row--danger .ik-mobile-settings-row__icon,
 .ik-mobile-settings-row--danger .ik-mobile-settings-row__title {
   color: #ff6b6b;
+}
+.ik-mobile-settings-row--toggle {
+  cursor: pointer;
+}
+.ik-mobile-settings-row__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ik-mobile-settings-row__text .ik-mobile-settings-row__title {
+  flex: none;
+}
+.ik-mobile-settings-row__desc {
+  color: #8a8a8a;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* ── Sheet enter/leave transitions ────────────── */
