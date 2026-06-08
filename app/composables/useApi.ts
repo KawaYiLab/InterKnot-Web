@@ -67,6 +67,26 @@ const STALE_DETAIL = 2 * 60 * 1000; // 2 min
 const STALE_LIST = 1 * 60 * 1000; // 1 min
 const STALE_ME = 2 * 60 * 1000; // 2 min
 
+// 客户端累积的「已读」文章 id 集合。列表/搜索接口不返回 isRead，已读态需靠异步
+// /article-reads/batch 回填；切换分类会强制失效并重拉列表，新节点 isRead 一律为
+// false，若不预置就会出现「已读 → 闪回未读 → 再变已读」的跳动（切分类尤为明显）。
+// 这里把已知已读 id 跨频道/分页保留，构造列表页时同步预置 isRead，消除闪烁。
+// 已读单调（不会变回未读），仅在客户端维护；登录/登出时随 clearAllCache 清空。
+const knownReadIds = new Set<string>();
+
+const rememberReadIds = (ids: Iterable<string>) => {
+  for (const id of ids) if (id) knownReadIds.add(id);
+};
+
+// 用累积的已读集合预置节点 isRead，使切分类/重拉时已读态不丢失。
+const seedReadStatus = <T extends { id: string; isRead?: boolean }>(nodes: T[]): T[] => {
+  if (!import.meta.client || !knownReadIds.size) return nodes;
+  for (const node of nodes) {
+    if (!node.isRead && knownReadIds.has(node.id)) node.isRead = true;
+  }
+  return nodes;
+};
+
 interface AuthResult {
   token: string | null;
   user: Author;
@@ -489,6 +509,8 @@ export function useApi() {
   const clearAllCache = () => {
     const qc = $queryClient as QueryClient | undefined;
     qc?.clear();
+    // 身份变更：清掉累积的已读集合，避免把上个用户的已读态带给新用户。
+    knownReadIds.clear();
   };
 
   // 供页面在"用户明确刷新"等场景下跳过 staleTime 缓存使用
@@ -602,6 +624,8 @@ export function useApi() {
           readSet.add(item.articleDocumentId);
         }
       }
+      // 累积到全局已读集合：后续切分类/分页重拉时可同步预置，避免已读闪回未读。
+      rememberReadIds(readSet);
       // 原地回填，保证缓存命中（peekArticles）拿到的对象也带已读态
       for (const d of posts) {
         if (readSet.has(d.id)) d.isRead = true;
@@ -633,6 +657,9 @@ export function useApi() {
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
         const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
+        // 先用本地已读集合同步预置 isRead：切分类强制重拉时列表接口不返回 isRead，
+        // 不预置就会闪回未读。随后再异步回填本次往返发现的新增已读。
+        seedReadStatus(page.nodes);
         // 不阻塞页面返回：先让卡片立即渲染，已读态通过 readStatusReady 异步回填。
         // （登录态下每页都要打 /article-reads/batch，串行 await 会让下拉加载
         //  多等一个往返，新卡片延迟出现 → 滚动「掉帧/掉帖」感。）
@@ -811,9 +838,12 @@ export function useApi() {
    * 切走再回来就又显示未读。仅在确有变化时返回新引用，避免无谓重渲染。
    */
   const markReadInQueryCache = (articleDocumentIds: string[]) => {
-    const qc = $queryClient as QueryClient | undefined;
-    if (!qc || !articleDocumentIds.length) return;
+    if (!articleDocumentIds.length) return;
     const ids = new Set(articleDocumentIds);
+    // 乐观已读也累积到全局集合：切走再回来/切分类重拉时同样不丢已读态。
+    rememberReadIds(ids);
+    const qc = $queryClient as QueryClient | undefined;
+    if (!qc) return;
 
     const markPost = (post: Post): Post =>
       post && ids.has(post.id) && !post.isRead ? { ...post, isRead: true } : post;
@@ -954,6 +984,8 @@ export function useApi() {
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
         const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
+        // 与首页一致：先用本地已读集合预置，避免重入个人页时已读闪回未读。
+        seedReadStatus(page.nodes);
         // Must await: merging mutates the raw nodes in-place. If we fire-and-forget,
         // the caller pushes them into a reactive ref before mutation happens, and
         // direct mutation on the raw target won't trigger Vue's reactivity, so
