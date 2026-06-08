@@ -1084,7 +1084,6 @@ if (import.meta.client) {
       >
         <Cog6ToothIcon class="ik-mobile-row__icon" />
         <span class="ik-mobile-row__title">帖子设置</span>
-        <span class="ik-mobile-row__value">{{ isAnonymous ? "匿名" : "实名" }}</span>
         <ChevronRightIcon class="ik-mobile-row__chevron" />
       </button>
     </div>
