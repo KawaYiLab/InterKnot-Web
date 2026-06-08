@@ -18,6 +18,8 @@ import {
   ChevronRightIcon,
   RectangleStackIcon,
   EyeSlashIcon,
+  HashtagIcon,
+  CheckIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 
@@ -71,6 +73,13 @@ const visibleCategories = computed(() =>
 /* ── Mobile-only UI state ─────────────────────────── */
 const isMobileDraftsOpen = ref(false);
 const isMobileSettingsOpen = ref(false);
+const isMobileCategoryOpen = ref(false);
+// 移动端「分类」设置行展示的当前频道名（找不到则按加载态兜底文案）。
+const selectedCategoryName = computed(() => {
+  const found = categories.value.find((c) => c.slug === selectedCategory.value);
+  if (found) return found.name;
+  return categoriesLoading.value ? "加载中…" : "请选择";
+});
 
 const suppressTracking = ref(false);
 const lastSavedSnapshot = ref("");
@@ -458,6 +467,11 @@ function onMobileSelectDraft(draft: DraftArticle) {
 async function onMobileDeleteDraft() {
   isMobileSettingsOpen.value = false;
   await deleteDraft();
+}
+
+function onMobileSelectCategory(slug: string) {
+  selectCategory(slug);
+  isMobileCategoryOpen.value = false;
 }
 
 function onMenuChange(name: string | number) {
@@ -1057,42 +1071,6 @@ if (import.meta.client) {
 
       <div class="ik-mobile-divider"></div>
 
-      <!-- Category chips（发帖必选频道）
-           加载中渲染占位标签预留高度，避免列表后到挤压正文导致跳动 -->
-      <div
-        v-if="categoriesLoading || visibleCategories.length"
-        class="ik-mobile-category"
-      >
-        <div class="ik-mobile-category__head">
-          <span class="ik-mobile-category__label">分类</span>
-          <span class="ik-mobile-category__hint">选择帖子所属频道</span>
-        </div>
-        <div class="ik-create-category-chips">
-          <template v-if="visibleCategories.length">
-            <button
-              v-for="cat in visibleCategories"
-              :key="cat.slug"
-              type="button"
-              class="ik-create-category-chip"
-              :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
-              @click="selectCategory(cat.slug)"
-            >
-              {{ cat.name }}
-            </button>
-          </template>
-          <template v-else>
-            <span
-              v-for="n in 4"
-              :key="`m-cat-skeleton-${n}`"
-              class="ik-create-category-chip ik-create-category-chip--placeholder"
-              aria-hidden="true"
-            ></span>
-          </template>
-        </div>
-      </div>
-
-      <div class="ik-mobile-divider"></div>
-
       <!-- Body (flat textarea) -->
       <textarea
         v-model="body"
@@ -1104,6 +1082,15 @@ if (import.meta.client) {
       <div class="ik-mobile-divider"></div>
 
       <!-- Setting rows -->
+      <button type="button" class="ik-mobile-row" @click="isMobileCategoryOpen = true">
+        <HashtagIcon class="ik-mobile-row__icon" />
+        <span class="ik-mobile-row__title">分类</span>
+        <span class="ik-mobile-row__value">{{ selectedCategoryName }}</span>
+        <ChevronRightIcon class="ik-mobile-row__chevron" />
+      </button>
+
+      <div class="ik-mobile-divider"></div>
+
       <button type="button" class="ik-mobile-row" @click="openMobileCoverPicker">
         <PhotoIcon class="ik-mobile-row__icon" />
         <span class="ik-mobile-row__title">封面</span>
@@ -1254,6 +1241,43 @@ if (import.meta.client) {
                 <span class="ik-mobile-settings-row__title">删除草稿</span>
                 <ChevronRightIcon class="ik-mobile-settings-row__chevron" />
               </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ── Mobile Category Picker Sheet (bottom) ── -->
+    <Teleport to="body">
+      <Transition name="ik-mobile-sheet">
+        <div
+          v-if="isMobileCategoryOpen"
+          class="ik-mobile-sheet"
+          role="dialog"
+          aria-modal="true"
+          @click.self="isMobileCategoryOpen = false"
+        >
+          <div class="ik-mobile-sheet__panel">
+            <div class="ik-mobile-sheet__handle"></div>
+            <span class="ik-mobile-sheet__title">选择分类</span>
+            <div class="ik-mobile-sheet__body ik-mobile-sheet__body--compact">
+              <button
+                v-for="cat in visibleCategories"
+                :key="cat.slug"
+                type="button"
+                class="ik-mobile-settings-row"
+                :class="{ 'ik-mobile-settings-row--active': selectedCategory === cat.slug }"
+                @click="onMobileSelectCategory(cat.slug)"
+              >
+                <span class="ik-mobile-settings-row__title">{{ cat.name }}</span>
+                <CheckIcon
+                  v-if="selectedCategory === cat.slug"
+                  class="ik-mobile-settings-row__check"
+                />
+              </button>
+              <div v-if="!visibleCategories.length" class="ik-mobile-draft-empty">
+                {{ categoriesLoading ? "加载中..." : "暂无可选分类" }}
+              </div>
             </div>
           </div>
         </div>
@@ -2285,26 +2309,6 @@ if (import.meta.client) {
     background: #2a2a2a;
   }
 
-  /* ── Category chips ───────────────────────────── */
-  .ik-mobile-category {
-    padding: 12px 16px;
-  }
-  .ik-mobile-category__head {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
-  .ik-mobile-category__label {
-    color: #fff;
-    font-size: 16px;
-    font-weight: 700;
-  }
-  .ik-mobile-category__hint {
-    color: #686868;
-    font-size: 12px;
-  }
-
   /* ── Body (flat textarea) ─────────────────────── */
   .ik-mobile-body-input {
     width: 100%;
@@ -2660,6 +2664,18 @@ if (import.meta.client) {
 .ik-mobile-settings-row--danger .ik-mobile-settings-row__icon,
 .ik-mobile-settings-row--danger .ik-mobile-settings-row__title {
   color: #ff6b6b;
+}
+.ik-mobile-settings-row--active {
+  border-color: var(--ik-primary, #BFFF09);
+}
+.ik-mobile-settings-row--active .ik-mobile-settings-row__title {
+  color: var(--ik-primary, #BFFF09);
+}
+.ik-mobile-settings-row__check {
+  width: 18px;
+  height: 18px;
+  color: var(--ik-primary, #BFFF09);
+  flex-shrink: 0;
 }
 .ik-mobile-settings-row--toggle {
   cursor: pointer;
