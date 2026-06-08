@@ -293,6 +293,7 @@ function toAuthor(raw: unknown, apiBaseUrl: string): Author {
     exp: (data.exp as number | undefined) || 0,
     level: (data.level as number | undefined) || 1,
     isAiAgent: data.isAiAgent === true,
+    isAdmin: data.isAdmin === true,
   };
 }
 
@@ -680,6 +681,7 @@ export function useApi() {
               name,
               slug,
               order: typeof c.order === "number" ? c.order : undefined,
+              adminOnly: c.adminOnly === true,
             };
           })
           .filter((c): c is Category => c !== null);
