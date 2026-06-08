@@ -1260,7 +1260,7 @@ if (import.meta.client) {
           <div class="ik-mobile-sheet__panel">
             <div class="ik-mobile-sheet__handle"></div>
             <span class="ik-mobile-sheet__title">选择分类</span>
-            <div class="ik-mobile-sheet__body ik-mobile-sheet__body--compact">
+            <div class="ik-mobile-sheet__body ik-mobile-sheet__body--compact ik-mobile-cat-grid">
               <button
                 v-for="cat in visibleCategories"
                 :key="cat.slug"
@@ -2665,17 +2665,33 @@ if (import.meta.client) {
 .ik-mobile-settings-row--danger .ik-mobile-settings-row__title {
   color: #ff6b6b;
 }
+/* 选中态：项目统一特效——黑字 + 主题色底 */
 .ik-mobile-settings-row--active {
+  background: var(--ik-primary, #BFFF09);
   border-color: var(--ik-primary, #BFFF09);
 }
+.ik-mobile-settings-row--active:active {
+  background: var(--ik-primary, #BFFF09);
+}
 .ik-mobile-settings-row--active .ik-mobile-settings-row__title {
-  color: var(--ik-primary, #BFFF09);
+  color: #222;
+  font-weight: 700;
 }
 .ik-mobile-settings-row__check {
   width: 18px;
   height: 18px;
-  color: var(--ik-primary, #BFFF09);
+  color: #222;
   flex-shrink: 0;
+}
+
+/* 分类选择面板：两列网格 */
+.ik-mobile-cat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ik-mobile-cat-grid .ik-mobile-draft-empty {
+  grid-column: 1 / -1;
 }
 .ik-mobile-settings-row--toggle {
   cursor: pointer;
