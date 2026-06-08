@@ -63,6 +63,10 @@ const selectedCategory = ref<string>(DEFAULT_CATEGORY_SLUG);
 // 频道列表是否仍在首次加载：用于在无缓存冷启动时渲染占位标签预留高度，
 // 避免列表后到把正文区往下挤导致页面跳动。
 const categoriesLoading = ref(true);
+// 仅管理员可发帖的分区，对非管理员隐藏（后端发帖时同样会拦截，前端只是不展示入口）。
+const visibleCategories = computed(() =>
+  categories.value.filter((c) => !c.adminOnly || auth.user?.isAdmin === true),
+);
 
 /* ── Mobile-only UI state ─────────────────────────── */
 const isMobileDraftsOpen = ref(false);
@@ -715,9 +719,11 @@ async function loadCategories() {
     const list = await api.getCategories();
     if (list.length) {
       categories.value = list;
-      // 默认选中无效（如默认分类被下架）时回落到列表首项，保证发帖必选。
-      if (!list.some((c) => c.slug === selectedCategory.value)) {
-        selectedCategory.value = list[0]!.slug;
+      // 默认选中无效（如默认分类被下架，或非管理员落在仅管理员分区）时
+      // 回落到可见列表首项，保证发帖必选且不会停留在不可发帖的分区。
+      const selectable = visibleCategories.value;
+      if (selectable.length && !selectable.some((c) => c.slug === selectedCategory.value)) {
+        selectedCategory.value = selectable[0]!.slug;
       }
     }
   } catch {
@@ -817,15 +823,15 @@ if (import.meta.client) {
 
           <!-- Category section（发帖必选频道）
                加载中即渲染占位标签，为分类栏预留高度，避免列表后到挤压正文导致跳动 -->
-          <div v-if="categoriesLoading || categories.length" class="ik-create-section">
+          <div v-if="categoriesLoading || visibleCategories.length" class="ik-create-section">
             <div class="ik-create-section__head">
               <span class="ik-create-section__label">分类</span>
               <span class="ik-create-section__hint">选择帖子所属频道</span>
             </div>
             <div class="ik-create-category-chips">
-              <template v-if="categories.length">
+              <template v-if="visibleCategories.length">
                 <button
-                  v-for="cat in categories"
+                  v-for="cat in visibleCategories"
                   :key="cat.slug"
                   type="button"
                   class="ik-create-category-chip"
