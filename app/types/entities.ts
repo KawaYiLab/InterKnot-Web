@@ -10,6 +10,8 @@ export interface Author {
   exp?: number;
   level?: number;
   isAiAgent?: boolean;
+  /** 是否为管理员（仅 /api/me/profile 自身资料返回）。 */
+  isAdmin?: boolean;
 }
 
 /** 平台 AI 角色卡（GET /api/agent/characters） */
@@ -42,6 +44,8 @@ export interface Category {
   name: string;
   slug: string;
   order?: number;
+  /** 该分区是否仅管理员可发帖（发帖分类选择器据此对非管理员隐藏）。 */
+  adminOnly?: boolean;
 }
 
 /** 帖子上附带的精简分类信息（接口随文章一并返回）。 */
