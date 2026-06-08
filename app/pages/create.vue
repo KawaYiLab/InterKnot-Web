@@ -1057,6 +1057,42 @@ if (import.meta.client) {
 
       <div class="ik-mobile-divider"></div>
 
+      <!-- Category chips（发帖必选频道）
+           加载中渲染占位标签预留高度，避免列表后到挤压正文导致跳动 -->
+      <div
+        v-if="categoriesLoading || visibleCategories.length"
+        class="ik-mobile-category"
+      >
+        <div class="ik-mobile-category__head">
+          <span class="ik-mobile-category__label">分类</span>
+          <span class="ik-mobile-category__hint">选择帖子所属频道</span>
+        </div>
+        <div class="ik-create-category-chips">
+          <template v-if="visibleCategories.length">
+            <button
+              v-for="cat in visibleCategories"
+              :key="cat.slug"
+              type="button"
+              class="ik-create-category-chip"
+              :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
+              @click="selectCategory(cat.slug)"
+            >
+              {{ cat.name }}
+            </button>
+          </template>
+          <template v-else>
+            <span
+              v-for="n in 4"
+              :key="`m-cat-skeleton-${n}`"
+              class="ik-create-category-chip ik-create-category-chip--placeholder"
+              aria-hidden="true"
+            ></span>
+          </template>
+        </div>
+      </div>
+
+      <div class="ik-mobile-divider"></div>
+
       <!-- Body (flat textarea) -->
       <textarea
         v-model="body"
@@ -2247,6 +2283,26 @@ if (import.meta.client) {
   .ik-mobile-divider {
     height: 1px;
     background: #2a2a2a;
+  }
+
+  /* ── Category chips ───────────────────────────── */
+  .ik-mobile-category {
+    padding: 12px 16px;
+  }
+  .ik-mobile-category__head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .ik-mobile-category__label {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .ik-mobile-category__hint {
+    color: #686868;
+    font-size: 12px;
   }
 
   /* ── Body (flat textarea) ─────────────────────── */
