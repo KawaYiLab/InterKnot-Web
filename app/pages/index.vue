@@ -218,9 +218,11 @@ const scrollToTopAfterReset = async (reset: boolean) => {
 // 已读态异步回填：searchArticles 现在不再 await /article-reads/batch，
 // 卡片先渲染，已读 id 集合 resolve 后再以响应式方式（重建数组）合并进 list，
 // v-memo 据此重算受影响卡片。仅在确有变化时重建，避免无谓的瀑布流重算。
-const applyReadStatusReady = (ready?: Promise<Set<string>>) => {
+const applyReadStatusReady = (ready: Promise<Set<string>> | undefined, version: number) => {
   if (!ready) return;
   void ready.then((readIds) => {
+    // 切换分类/搜索词会自增 requestVersion；旧请求的已读结果不应再回填到新列表上。
+    if (version !== requestVersion.value) return;
     if (!readIds || readIds.size === 0) return;
     let changed = false;
     const next = list.value.map((d) => {
@@ -298,8 +300,8 @@ const fetchList = async (reset = false) => {
     endCursor.value = page.endCursor;
     hasNextPage.value = page.hasNextPage;
 
-    // 已读态在卡片渲染后异步回填（不阻塞本次加载）
-    applyReadStatusReady(page.readStatusReady);
+    // 已读态在卡片渲染后异步回填（不阻塞本次加载）；带上版本号，避免旧请求回填到新列表。
+    applyReadStatusReady(page.readStatusReady, currentVersion);
 
     // 缓存命中路径下，scrollToTopAfterReset 不再需要（避免破坏用户期望的滚动位置）
     if (!cacheHit) await scrollToTopAfterReset(reset);
