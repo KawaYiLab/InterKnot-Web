@@ -7,17 +7,22 @@ const SIZE_ANIMATIONS = new Set([
 
 let rafId = null
 
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 const animationSync = () => {
-  let colorCurTime
-  let sizeCurTime
+  let colorCurTime = null
+  let sizeCurTime = null
 
   document.getAnimations()
     .sort((p, n) => (p.startTime ?? Infinity) - (n.startTime ?? Infinity))
     .forEach((item) => {
       if (COLOR_ANIMATIONS.has(item.animationName)) {
-        colorCurTime ? (item.currentTime = colorCurTime) : (colorCurTime = item.currentTime)
+        colorCurTime === null ? (colorCurTime = item.currentTime) : (item.currentTime = colorCurTime)
       } else if (SIZE_ANIMATIONS.has(item.animationName)) {
-        sizeCurTime ? (item.currentTime = sizeCurTime) : (sizeCurTime = item.currentTime)
+        sizeCurTime === null ? (sizeCurTime = item.currentTime) : (item.currentTime = sizeCurTime)
       }
     })
 
@@ -26,6 +31,7 @@ const animationSync = () => {
 
 export const startAnimationSync = () => {
   if (typeof document === 'undefined') return
+  if (prefersReducedMotion()) return
   if (rafId !== null) return
   rafId = requestAnimationFrame(animationSync)
 }

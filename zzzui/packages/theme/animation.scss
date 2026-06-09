@@ -30,3 +30,32 @@
   20% { outline-width: 2px; }
   to { outline-width: 8px; }
 }
+
+// Respect the user's "reduce motion" preference: flatten the infinite
+// "breathing" color/size animations so active elements keep a static,
+// high-contrast highlight instead of continuously pulsing between two
+// colors (perceived as flicker). The functional spinner (z_ani_loading)
+// is intentionally left running.
+@media (prefers-reduced-motion: reduce) {
+  @keyframes z_ani_background {
+    from, to { background: $--gradient-yellow; }
+  }
+  @keyframes z_ani_border_color {
+    from, to { border-color: $--gradient-yellow; }
+  }
+  @keyframes z_ani_color {
+    from, to { color: $--gradient-yellow; }
+  }
+  @keyframes z_ani_outline_color {
+    from, to { outline-color: $--gradient-yellow; }
+  }
+  @keyframes z_ani_size {
+    from, to { transform: scale(1); }
+  }
+  @keyframes z_ani_skew_size {
+    from, to { transform: skew(-20deg) scale(1); }
+  }
+  @keyframes z_ani_outline_size {
+    from, to { outline-width: 2px; }
+  }
+}
