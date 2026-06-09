@@ -467,7 +467,6 @@ watch(
   overflow: hidden;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.3s ease;
 }
 
 .ik-header__progress.is-active {
