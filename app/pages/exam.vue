@@ -44,6 +44,23 @@ const answeredCount = computed(
 const typeLabel = (type: ExamQuestion["type"]) =>
   type === "multiple" ? "多选" : type === "boolean" ? "判断" : "单选";
 
+// 逐题作答：当前题号
+const qIndex = ref(0);
+const currentQuestion = computed(() => questions.value[qIndex.value] ?? null);
+const isAnswered = (q: ExamQuestion) => (answers[q.questionId] || []).length > 0;
+const goPrev = () => {
+  if (qIndex.value > 0) qIndex.value -= 1;
+};
+const goNext = () => {
+  if (qIndex.value < questions.value.length - 1) qIndex.value += 1;
+};
+const setSingle = (q: ExamQuestion, val: unknown) => {
+  answers[q.questionId] = val == null || val === "" ? [] : [String(val)];
+};
+const setMulti = (q: ExamQuestion, val: unknown) => {
+  answers[q.questionId] = Array.isArray(val) ? val.map(String) : [];
+};
+
 const loadStatus = async () => {
   phase.value = "loading";
   try {
@@ -68,6 +85,7 @@ const start = async () => {
     for (const q of res.questions) {
       if (!answers[q.questionId]) answers[q.questionId] = [];
     }
+    qIndex.value = 0;
     phase.value = "quiz";
     if (res.resumed) {
       message.success("已恢复进行中的考试");
@@ -80,17 +98,6 @@ const start = async () => {
     message.error(resolveErrorMessage(err, "开始考试失败"));
   } finally {
     starting.value = false;
-  }
-};
-
-const toggleAnswer = (q: ExamQuestion, key: string) => {
-  const current = answers[q.questionId] || [];
-  if (q.type === "multiple") {
-    answers[q.questionId] = current.includes(key)
-      ? current.filter((k) => k !== key)
-      : [...current, key];
-  } else {
-    answers[q.questionId] = [key];
   }
 };
 
@@ -139,6 +146,7 @@ const retry = async () => {
   result.value = null;
   attemptId.value = "";
   questions.value = [];
+  qIndex.value = 0;
   await loadStatus();
 };
 
@@ -179,7 +187,7 @@ useHead({ title: "入站考试 - 绳网" });
         <div class="ik-exam-panel__body ik-exam-panel__body--center">
           <h1 class="ik-exam-title">入站考试</h1>
           <p class="ik-exam-desc">登录后才能参加入站考试。</p>
-          <button class="ik-exam-btn" type="button" @click="loginDialog.open()">去登录</button>
+          <z-button type="primary" @click="loginDialog.open()">去登录</z-button>
         </div>
       </div>
 
@@ -222,14 +230,14 @@ useHead({ title: "入站考试 - 绳网" });
           <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
             失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
           </p>
-          <button
-            class="ik-exam-btn"
-            type="button"
-            :disabled="starting || cooldownRemaining > 0"
+          <z-button
+            type="primary"
+            :loading="starting"
+            :disabled="cooldownRemaining > 0"
             @click="start"
           >
             {{ starting ? "准备中…" : status?.activeAttempt ? "继续考试" : "开始考试" }}
-          </button>
+          </z-button>
         </div>
       </div>
 
@@ -243,33 +251,69 @@ useHead({ title: "入站考试 - 绳网" });
         </div>
         <div class="ik-exam-panel">
           <div class="ik-exam-panel__body">
-            <ol class="ik-exam-questions">
-              <li v-for="(q, idx) in questions" :key="q.questionId" class="ik-exam-question">
-                <p class="ik-exam-question__title">
-                  <span class="ik-exam-question__type">{{ typeLabel(q.type) }}</span>
-                  {{ idx + 1 }}. {{ q.question }}
-                </p>
-                <div class="ik-exam-options">
-                  <label
-                    v-for="opt in q.options"
-                    :key="opt.key"
-                    class="ik-exam-option"
-                    :class="{ 'ik-exam-option--checked': (answers[q.questionId] || []).includes(opt.key) }"
-                  >
-                    <input
-                      :type="q.type === 'multiple' ? 'checkbox' : 'radio'"
-                      :name="q.questionId"
-                      :checked="(answers[q.questionId] || []).includes(opt.key)"
-                      @change="toggleAnswer(q, opt.key)"
-                    />
-                    <span>{{ opt.text }}</span>
-                  </label>
-                </div>
-              </li>
-            </ol>
-            <div class="ik-exam-quiz__footer">
-              <button class="ik-exam-btn" type="button" :disabled="submitting" @click="submit()">
+            <z-progress
+              class="ik-exam-progress"
+              :percent="questions.length ? Math.round((answeredCount / questions.length) * 100) : 0"
+              color="#bfff09"
+            />
+
+            <div v-if="currentQuestion" :key="currentQuestion.questionId" class="ik-exam-question">
+              <p class="ik-exam-question__title">
+                <span class="ik-exam-question__type">{{ typeLabel(currentQuestion.type) }}</span>
+                {{ qIndex + 1 }}. {{ currentQuestion.question }}
+              </p>
+
+              <z-radio-group
+                v-if="currentQuestion.type === 'multiple'"
+                mode="checkbox"
+                class="ik-exam-options"
+                :model-value="answers[currentQuestion.questionId] || []"
+                @change="(v: unknown) => setMulti(currentQuestion!, v)"
+              >
+                <z-checkbox v-for="opt in currentQuestion.options" :key="opt.key" :value="opt.key">
+                  {{ opt.text }}
+                </z-checkbox>
+              </z-radio-group>
+
+              <z-radio-group
+                v-else
+                class="ik-exam-options"
+                :model-value="(answers[currentQuestion.questionId] || [])[0] ?? ''"
+                @change="(v: unknown) => setSingle(currentQuestion!, v)"
+              >
+                <z-radio v-for="opt in currentQuestion.options" :key="opt.key" :value="opt.key">
+                  {{ opt.text }}
+                </z-radio>
+              </z-radio-group>
+            </div>
+
+            <div class="ik-exam-quiz__nav">
+              <z-button :disabled="qIndex === 0" @click="goPrev">上一题</z-button>
+              <z-button v-if="qIndex < questions.length - 1" type="primary" @click="goNext">下一题</z-button>
+              <z-button
+                v-else
+                type="primary"
+                :loading="submitting"
+                @click="submit()"
+              >
                 {{ submitting ? "提交中…" : "提交答卷" }}
+              </z-button>
+            </div>
+
+            <!-- 题号速览：点击跳题，高亮已答/当前 -->
+            <div class="ik-exam-quiz__grid">
+              <button
+                v-for="(q, i) in questions"
+                :key="q.questionId"
+                type="button"
+                class="ik-exam-grid-btn"
+                :class="{
+                  'ik-exam-grid-btn--answered': isAnswered(q),
+                  'ik-exam-grid-btn--current': i === qIndex,
+                }"
+                @click="qIndex = i"
+              >
+                {{ i + 1 }}
               </button>
             </div>
           </div>
@@ -295,14 +339,9 @@ useHead({ title: "入站考试 - 绳网" });
             <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
               失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
             </p>
-            <button
-              class="ik-exam-btn"
-              type="button"
-              :disabled="cooldownRemaining > 0"
-              @click="retry"
-            >
+            <z-button type="primary" :disabled="cooldownRemaining > 0" @click="retry">
               再试一次
-            </button>
+            </z-button>
           </template>
         </div>
       </div>
@@ -443,21 +482,13 @@ useHead({ title: "入站考试 - 绳网" });
   color: #ff7a45;
 }
 
-.ik-exam-questions {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
+.ik-exam-progress {
+  margin-bottom: 20px;
 }
 
 .ik-exam-question {
-  padding: 20px 0;
+  min-height: 260px;
   color: #eee;
-}
-
-.ik-exam-question + .ik-exam-question {
-  border-top: 1px dashed rgba(255, 255, 255, 0.14);
 }
 
 .ik-exam-question__title {
@@ -481,38 +512,54 @@ useHead({ title: "入站考试 - 绳网" });
 .ik-exam-options {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  align-items: flex-start;
 }
 
-.ik-exam-option {
+.ik-exam-quiz__nav {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  cursor: pointer;
-  color: #ccc;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.ik-exam-option:hover {
-  border-color: rgba(191, 255, 9, 0.5);
-}
-
-.ik-exam-option--checked {
-  border-color: #bfff09;
-  background: rgba(191, 255, 9, 0.08);
-  color: #fff;
-}
-
-.ik-exam-option input {
-  accent-color: #bfff09;
-}
-
-.ik-exam-quiz__footer {
+  justify-content: center;
+  gap: 16px;
   margin-top: 24px;
-  text-align: center;
+}
+
+.ik-exam-quiz__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+}
+
+.ik-exam-grid-btn {
+  width: 36px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.ik-exam-grid-btn:hover {
+  border-color: rgba(191, 255, 9, 0.5);
+  color: #ccc;
+}
+
+.ik-exam-grid-btn--answered {
+  background: rgba(191, 255, 9, 0.14);
+  border-color: rgba(191, 255, 9, 0.4);
+  color: #bfff09;
+}
+
+.ik-exam-grid-btn--current {
+  border-color: #bfff09;
+  color: #111;
+  background: #bfff09;
 }
 
 .ik-exam-score {
