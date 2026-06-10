@@ -9,6 +9,9 @@ import type {
   Category,
   Comment,
   DraftArticle,
+  ExamStartResult,
+  ExamStatus,
+  ExamSubmitResult,
   Post,
   PostCategory,
   LikeToggleResult,
@@ -314,6 +317,7 @@ function toAuthor(raw: unknown, apiBaseUrl: string): Author {
     level: (data.level as number | undefined) || 1,
     isAiAgent: data.isAiAgent === true,
     isAdmin: data.isAdmin === true,
+    examPassed: typeof data.examPassed === "boolean" ? data.examPassed : undefined,
   };
 }
 
@@ -1606,6 +1610,28 @@ export function useApi() {
     };
   };
 
+  // ── 入站考试 ──────────────────────────────────────────────
+  const getExamStatus = async (): Promise<ExamStatus> => {
+    const response = await $api("/api/exam/status");
+    return response as ExamStatus;
+  };
+
+  const startExam = async (): Promise<ExamStartResult> => {
+    const response = await $api("/api/exam/start", { method: "POST" });
+    return response as ExamStartResult;
+  };
+
+  const submitExam = async (
+    attemptId: string,
+    answers: Record<string, string[]>,
+  ): Promise<ExamSubmitResult> => {
+    const response = await $api("/api/exam/submit", {
+      method: "POST",
+      body: { attemptId, answers },
+    });
+    return response as ExamSubmitResult;
+  };
+
   return {
     clearAllCache,
     invalidateQueries,
@@ -1657,6 +1683,10 @@ export function useApi() {
     // 签到系统
     getCheckInStatus,
     checkIn,
+    // 入站考试
+    getExamStatus,
+    startExam,
+    submitExam,
   };
 }
 

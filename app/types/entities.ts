@@ -12,6 +12,67 @@ export interface Author {
   isAiAgent?: boolean;
   /** 是否为管理员（仅 /api/me/profile 自身资料返回）。 */
   isAdmin?: boolean;
+  /** 是否已通过入站考试（仅 /api/me/profile 自身资料返回）。 */
+  examPassed?: boolean;
+}
+
+/** 入站考试题目选项 */
+export interface ExamOption {
+  key: string;
+  text: string;
+}
+
+/** 入站考试题目（不含答案，服务端判分） */
+export interface ExamQuestion {
+  questionId: string;
+  question: string;
+  type: "single" | "multiple" | "boolean";
+  options: ExamOption[];
+  weight: number;
+}
+
+export interface ExamConfig {
+  questionCount: number;
+  passScorePercent: number;
+  timeLimitSeconds: number;
+  maxFailsBeforeCooldown: number;
+  failCooldownSeconds: number;
+  rewardDenny: number;
+  rewardExp: number;
+}
+
+export interface ExamStatus {
+  passed: boolean;
+  passedAt: string | null;
+  cooldownRemaining?: number;
+  activeAttempt?: {
+    attemptId: string;
+    startedAt: string;
+    expiresAt: string;
+    questionCount: number;
+  } | null;
+  config: ExamConfig;
+}
+
+export interface ExamStartResult {
+  attemptId: string;
+  resumed: boolean;
+  startedAt: string;
+  expiresAt: string;
+  questions: ExamQuestion[];
+  config: ExamConfig;
+}
+
+export interface ExamSubmitResult {
+  passed: boolean;
+  score: number;
+  totalScore: number;
+  scorePercent: number;
+  correctCount: number;
+  questionCount: number;
+  passScorePercent: number;
+  cooldownRemaining: number;
+  reward: { denny: number; exp: number } | null;
 }
 
 /** 平台 AI 角色卡（GET /api/agent/characters） */
