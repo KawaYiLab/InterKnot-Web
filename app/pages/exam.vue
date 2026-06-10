@@ -47,7 +47,6 @@ const typeLabel = (type: ExamQuestion["type"]) =>
 // 逐题作答：当前题号
 const qIndex = ref(0);
 const currentQuestion = computed(() => questions.value[qIndex.value] ?? null);
-const isAnswered = (q: ExamQuestion) => (answers[q.questionId] || []).length > 0;
 const goPrev = () => {
   if (qIndex.value > 0) qIndex.value -= 1;
 };
@@ -298,22 +297,6 @@ useHead({ title: "入站考试 - 绳网" });
               </z-button>
             </div>
 
-            <!-- 题号速览：点击跳题，高亮已答/当前 -->
-            <div class="ik-exam-quiz__grid">
-              <button
-                v-for="(q, i) in questions"
-                :key="q.questionId"
-                type="button"
-                class="ik-exam-grid-btn"
-                :class="{
-                  'ik-exam-grid-btn--answered': isAnswered(q),
-                  'ik-exam-grid-btn--current': i === qIndex,
-                }"
-                @click="qIndex = i"
-              >
-                {{ i + 1 }}
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -502,44 +485,6 @@ useHead({ title: "入站考试 - 绳网" });
   margin-top: 24px;
 }
 
-.ik-exam-quiz__grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.14);
-}
-
-.ik-exam-grid-btn {
-  width: 36px;
-  height: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 6px;
-  background: transparent;
-  color: #888;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
-}
-
-.ik-exam-grid-btn:hover {
-  border-color: rgba(191, 255, 9, 0.5);
-  color: #ccc;
-}
-
-.ik-exam-grid-btn--answered {
-  background: rgba(191, 255, 9, 0.14);
-  border-color: rgba(191, 255, 9, 0.4);
-  color: #bfff09;
-}
-
-.ik-exam-grid-btn--current {
-  border-color: #bfff09;
-  color: #111;
-  background: #bfff09;
-}
 
 .ik-exam-score {
   font-size: 18px;

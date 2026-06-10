@@ -766,7 +766,7 @@ if (import.meta.client) {
         <div class="ik-create-exam-gate__card">
           <h2>需要先通过入站考试</h2>
           <p>通过入站考试后即可解锁发帖、评论等功能。</p>
-          <z-button @click="navigateTo('/exam')">前往考试</z-button>
+          <NuxtLink to="/exam" class="ik-create-exam-gate__btn">前往考试</NuxtLink>
         </div>
       </div>
     </div>
@@ -1390,6 +1390,16 @@ if (import.meta.client) {
 .ik-create-exam-gate__card p {
   margin: 0 0 20px;
   color: #aaa;
+}
+
+.ik-create-exam-gate__btn {
+  display: inline-block;
+  background: #bfff09;
+  color: #111;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 8px 28px;
+  text-decoration: none;
 }
 
 .ik-create-drop-overlay {
