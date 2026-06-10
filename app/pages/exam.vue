@@ -176,7 +176,7 @@ useHead({ title: "入站考试 - 绳网" });
 </script>
 
 <template>
-  <section class="ik-exam-page" :class="{ 'ik-exam-page--quiz': auth.isLogin && phase === 'quiz' }">
+  <section class="ik-exam-page">
     <!-- 45° 斜线纹理背景（与发帖页一致） -->
     <div class="ik-exam-page__stripe" aria-hidden="true"></div>
 
@@ -362,40 +362,6 @@ useHead({ title: "入站考试 - 绳网" });
   max-width: 760px;
 }
 
-/* 答题阶段：面板垂直居中、锁定页面滚动，题目过长时面板内部滚动 */
-.ik-exam-page--quiz {
-  height: 100vh;
-  min-height: 0;
-  overflow: hidden;
-  align-items: center;
-  padding: 88px 16px 40px;
-}
-
-.ik-exam-page--quiz .ik-exam-page__inner {
-  max-width: 1000px;
-  height: 100%;
-}
-
-.ik-exam-quiz {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.ik-exam-page--quiz .ik-exam-panel {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-.ik-exam-page--quiz .ik-exam-panel__body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 /* 与站内面板一致的双层框架（外层灰框 + 内层黑底点纹） */
 .ik-exam-panel {
   padding: 4px;
@@ -451,7 +417,9 @@ useHead({ title: "入站考试 - 绳网" });
 }
 
 .ik-exam-quiz__bar {
-  flex-shrink: 0;
+  position: sticky;
+  top: 64px;
+  z-index: 5;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -481,9 +449,7 @@ useHead({ title: "入站考试 - 绳网" });
 }
 
 .ik-exam-question {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  min-height: 260px;
   color: #eee;
 }
 
@@ -513,7 +479,6 @@ useHead({ title: "入站考试 - 绳网" });
 }
 
 .ik-exam-quiz__nav {
-  flex-shrink: 0;
   display: flex;
   justify-content: center;
   gap: 16px;
