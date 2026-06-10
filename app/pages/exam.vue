@@ -187,7 +187,7 @@ useHead({ title: "入站考试 - 绳网" });
         <div class="ik-exam-panel__body ik-exam-panel__body--center">
           <h1 class="ik-exam-title">入站考试</h1>
           <p class="ik-exam-desc">登录后才能参加入站考试。</p>
-          <z-button type="primary" @click="loginDialog.open()">去登录</z-button>
+          <z-button @click="loginDialog.open()">去登录</z-button>
         </div>
       </div>
 
@@ -203,7 +203,7 @@ useHead({ title: "入站考试 - 绳网" });
         <div class="ik-exam-panel__body ik-exam-panel__body--center">
           <h1 class="ik-exam-title">你已通过入站考试</h1>
           <p class="ik-exam-desc">所有功能均已解锁，去发现绳网的精彩吧。</p>
-          <NuxtLink to="/" class="ik-exam-btn">返回首页</NuxtLink>
+          <z-button @click="navigateTo('/')">返回首页</z-button>
         </div>
       </div>
 
@@ -231,7 +231,6 @@ useHead({ title: "入站考试 - 绳网" });
             失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
           </p>
           <z-button
-            type="primary"
             :loading="starting"
             :disabled="cooldownRemaining > 0"
             @click="start"
@@ -289,10 +288,9 @@ useHead({ title: "入站考试 - 绳网" });
 
             <div class="ik-exam-quiz__nav">
               <z-button :disabled="qIndex === 0" @click="goPrev">上一题</z-button>
-              <z-button v-if="qIndex < questions.length - 1" type="primary" @click="goNext">下一题</z-button>
+              <z-button v-if="qIndex < questions.length - 1" @click="goNext">下一题</z-button>
               <z-button
                 v-else
-                type="primary"
                 :loading="submitting"
                 @click="submit()"
               >
@@ -333,13 +331,13 @@ useHead({ title: "入站考试 - 绳网" });
             <p v-if="result.reward" class="ik-exam-desc">
               奖励已发放：{{ result.reward.denny }} 丁尼 + {{ result.reward.exp }} 经验。欢迎加入绳网！
             </p>
-            <NuxtLink to="/" class="ik-exam-btn">开始探索</NuxtLink>
+            <z-button @click="navigateTo('/')">开始探索</z-button>
           </template>
           <template v-else>
             <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
               失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
             </p>
-            <z-button type="primary" :disabled="cooldownRemaining > 0" @click="retry">
+            <z-button :disabled="cooldownRemaining > 0" @click="retry">
               再试一次
             </z-button>
           </template>
@@ -433,25 +431,6 @@ useHead({ title: "入站考试 - 绳网" });
 
 .ik-exam-hint--warn {
   color: #ff7a45;
-}
-
-.ik-exam-btn {
-  display: inline-block;
-  background: #bfff09;
-  color: #111;
-  font-weight: 700;
-  border: none;
-  border-radius: 999px;
-  padding: 10px 32px;
-  font-size: 16px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: opacity 0.15s;
-}
-
-.ik-exam-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .ik-exam-quiz__bar {
