@@ -87,7 +87,7 @@ const start = async () => {
     qIndex.value = 0;
     phase.value = "quiz";
     if (res.resumed) {
-      message.success("已恢复进行中的考试");
+      message.success("已开始进行中的考试");
     }
   } catch (err) {
     const e = err as { code?: string; details?: { retryAfter?: number } };
@@ -211,8 +211,8 @@ useHead({ title: "入站考试 - 绳网" });
         <div class="ik-exam-panel__body">
           <h1 class="ik-exam-title">入站考试</h1>
           <p class="ik-exam-desc">
-            为了维护绳网的社区氛围，新成员需要先通过入站考试才能解锁发帖、评论、点赞、私聊等功能。
-            考试内容主要为社区规范与基本常识，请认真作答。
+            为了维护绳网的社区氛围，新成员需要先通过入站考试才能正式入站。
+            考试内容主要为世界观知识与基本常识，请认真作答。
           </p>
           <ul v-if="status" class="ik-exam-rules">
             <li>共 <b>{{ status.config.questionCount }}</b> 题，限时 <b>{{ Math.round(status.config.timeLimitSeconds / 60) }}</b> 分钟</li>
@@ -224,7 +224,7 @@ useHead({ title: "入站考试 - 绳网" });
             </li>
           </ul>
           <p v-if="status?.activeAttempt" class="ik-exam-hint">
-            你有一场进行中的考试，点击开始将继续作答。
+            你有一场进行中的考试，点击「继续考试」将继续作答。
           </p>
           <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
             失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
