@@ -256,6 +256,8 @@ onUnmounted(() => {
               <!-- Content -->
               <div class="ik-dialog__body">
                 <IkZzzMarquee />
+                <div class="ik-login__wrapper">
+                <div class="ik-login__inner">
                 <div class="ik-login-form">
                   <!-- 邮箱：始终可见 -->
                   <z-input
@@ -323,8 +325,19 @@ onUnmounted(() => {
                       </z-input>
                     </div>
                   </div>
+
+                  <!-- 底部留白：与字段共用 grid 动画，避免切换时顿挫 -->
+                  <div
+                    class="ik-login-field-grid ik-login-form-spacer"
+                    :class="{ 'is-open': isRegister || (isReset && isCodeSent) }"
+                  >
+                    <div class="ik-login-field-grid__inner">
+                      <div class="ik-login-form-spacer__fill" aria-hidden="true" />
+                    </div>
+                  </div>
                 </div>
 
+                </div>
                 <div class="ik-login-footer">
                   <z-button @click="toggleMode">
                     {{ isReset || isRegister ? "返回登录" : "注册账号" }}
@@ -334,7 +347,6 @@ onUnmounted(() => {
                   <template v-if="isReset && !isCodeSent">
                     <z-button
                       v-if="!isSendingCode"
-                      :icon="{ success: '#00cc0d' }"
                       @click="sendCode"
                     >
                       重置密码
@@ -346,7 +358,6 @@ onUnmounted(() => {
                   <template v-else-if="isReset && isCodeSent">
                     <z-button
                       v-if="!isLoading"
-                      :icon="{ success: '#00cc0d' }"
                       @click="submit"
                     >
                       重置密码
@@ -358,15 +369,15 @@ onUnmounted(() => {
                   <template v-else>
                     <z-button
                       v-if="!isLoading"
-                      :icon="{ success: '#00cc0d' }"
                       @click="submit"
                     >
-                      {{ isRegister ? "注册" : "登录" }}
+                      {{ isRegister ? "注册账号" : "登录账号" }}
                     </z-button>
                     <z-button v-else loading>
-                      {{ isRegister ? "注册" : "登录" }}
+                      {{ isRegister ? "注册账号" : "登录账号" }}
                     </z-button>
                   </template>
+                </div>
                 </div>
               </div>
             </div>
@@ -485,9 +496,14 @@ onUnmounted(() => {
 /* ── Body ──────────────────────────────────────── */
 .ik-dialog__body {
   position: relative;
+  flex: 1;
+  min-height: 0;
   padding: 24px;
   background: #121212;
   border-radius: 0 0 18px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ── Autofill override ─────────────────────────── */
@@ -499,6 +515,25 @@ onUnmounted(() => {
   -webkit-text-fill-color: #fff !important;
   transition: background-color 5000s ease-in-out 0s;
   caret-color: #fff;
+}
+
+/* ── Wrapper / Panel (matches logout dialog) ──── */
+.ik-login__wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.ik-login__inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 16px;
 }
 
 /* ── Form ──────────────────────────────────────── */
@@ -518,12 +553,12 @@ onUnmounted(() => {
 
 /* ── Footer ────────────────────────────────────── */
 .ik-login-footer {
-  position: relative;
-  z-index: 1;
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 20px;
+  margin-top: -18px;
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Inline send-code button ──────────────────── */
@@ -594,6 +629,15 @@ onUnmounted(() => {
 
 .ik-login-field-grid__inner {
   overflow: hidden;
+}
+
+/* 登录时由折叠字段的 flex gap 占位；注册时展开 32px，抵消前一项 gap */
+.ik-login-form-spacer {
+  margin-top: -16px;
+}
+
+.ik-login-form-spacer__fill {
+  height: 32px;
 }
 
 /* ── Mobile ───────────────────────────────────── */
