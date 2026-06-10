@@ -325,6 +325,16 @@ onUnmounted(() => {
                       </z-input>
                     </div>
                   </div>
+
+                  <!-- 底部留白：与字段共用 grid 动画，避免切换时顿挫 -->
+                  <div
+                    class="ik-login-field-grid ik-login-form-spacer"
+                    :class="{ 'is-open': isRegister || (isReset && isCodeSent) }"
+                  >
+                    <div class="ik-login-field-grid__inner">
+                      <div class="ik-login-form-spacer__fill" aria-hidden="true" />
+                    </div>
+                  </div>
                 </div>
 
                 </div>
@@ -337,7 +347,6 @@ onUnmounted(() => {
                   <template v-if="isReset && !isCodeSent">
                     <z-button
                       v-if="!isSendingCode"
-                      :icon="{ success: '#00cc0d' }"
                       @click="sendCode"
                     >
                       重置密码
@@ -349,7 +358,6 @@ onUnmounted(() => {
                   <template v-else-if="isReset && isCodeSent">
                     <z-button
                       v-if="!isLoading"
-                      :icon="{ success: '#00cc0d' }"
                       @click="submit"
                     >
                       重置密码
@@ -361,13 +369,12 @@ onUnmounted(() => {
                   <template v-else>
                     <z-button
                       v-if="!isLoading"
-                      :icon="{ success: '#00cc0d' }"
                       @click="submit"
                     >
-                      {{ isRegister ? "注册" : "登录" }}
+                      {{ isRegister ? "注册账号" : "登录账号" }}
                     </z-button>
                     <z-button v-else loading>
-                      {{ isRegister ? "注册" : "登录" }}
+                      {{ isRegister ? "注册账号" : "登录账号" }}
                     </z-button>
                   </template>
                 </div>
@@ -622,6 +629,15 @@ onUnmounted(() => {
 
 .ik-login-field-grid__inner {
   overflow: hidden;
+}
+
+/* 登录时由折叠字段的 flex gap 占位；注册时展开 32px，抵消前一项 gap */
+.ik-login-form-spacer {
+  margin-top: -16px;
+}
+
+.ik-login-form-spacer__fill {
+  height: 32px;
 }
 
 /* ── Mobile ───────────────────────────────────── */
