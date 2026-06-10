@@ -762,10 +762,12 @@ if (import.meta.client) {
 
     <!-- 未通过入站考试：禁止发帖，引导去考试页 -->
     <div v-if="auth.needExam" class="ik-create-exam-gate">
-      <div class="ik-create-exam-gate__card">
-        <h2>需要先通过入站考试</h2>
-        <p>通过入站考试后即可解锁发帖、评论等功能。</p>
-        <NuxtLink to="/exam" class="ik-create-exam-gate__btn">前往考试</NuxtLink>
+      <div class="ik-create-exam-gate__panel">
+        <div class="ik-create-exam-gate__card">
+          <h2>需要先通过入站考试</h2>
+          <p>通过入站考试后即可解锁发帖、评论等功能。</p>
+          <NuxtLink to="/exam" class="ik-create-exam-gate__btn">前往考试</NuxtLink>
+        </div>
       </div>
     </div>
 
@@ -1362,12 +1364,21 @@ if (import.meta.client) {
   backdrop-filter: blur(8px);
 }
 
+.ik-create-exam-gate__panel {
+  padding: 4px;
+  background: #2D2C2D;
+  border-radius: 24px 0 24px 24px;
+  overflow: hidden;
+}
+
 .ik-create-exam-gate__card {
   text-align: center;
   padding: 40px 56px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  background: rgba(20, 20, 20, 0.95);
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(180deg, #0a0a0a 0%, #070707 100%);
+  border: 4px solid #000;
+  border-radius: 22px 0 22px 22px;
   color: #eee;
 }
 

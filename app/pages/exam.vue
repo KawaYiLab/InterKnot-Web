@@ -170,56 +170,67 @@ useHead({ title: "入站考试 - 绳网" });
 
 <template>
   <section class="ik-exam-page">
+    <!-- 45° 斜线纹理背景（与发帖页一致） -->
+    <div class="ik-exam-page__stripe" aria-hidden="true"></div>
+
     <div class="ik-exam-page__inner">
       <!-- 未登录 -->
-      <div v-if="!auth.isLogin" class="ik-exam-card ik-exam-card--center">
-        <h1 class="ik-exam-title">入站考试</h1>
-        <p class="ik-exam-desc">登录后才能参加入站考试。</p>
-        <button class="ik-exam-btn" type="button" @click="loginDialog.open()">去登录</button>
+      <div v-if="!auth.isLogin" class="ik-exam-panel">
+        <div class="ik-exam-panel__body ik-exam-panel__body--center">
+          <h1 class="ik-exam-title">入站考试</h1>
+          <p class="ik-exam-desc">登录后才能参加入站考试。</p>
+          <button class="ik-exam-btn" type="button" @click="loginDialog.open()">去登录</button>
+        </div>
       </div>
 
       <!-- 加载中 -->
-      <div v-else-if="phase === 'loading'" class="ik-exam-card ik-exam-card--center">
-        <p class="ik-exam-desc">加载中…</p>
+      <div v-else-if="phase === 'loading'" class="ik-exam-panel">
+        <div class="ik-exam-panel__body ik-exam-panel__body--center">
+          <p class="ik-exam-desc">加载中…</p>
+        </div>
       </div>
 
       <!-- 已通过 -->
-      <div v-else-if="phase === 'intro' && status?.passed" class="ik-exam-card ik-exam-card--center">
-        <h1 class="ik-exam-title">你已通过入站考试</h1>
-        <p class="ik-exam-desc">所有功能均已解锁，去发现绳网的精彩吧。</p>
-        <NuxtLink to="/" class="ik-exam-btn">返回首页</NuxtLink>
+      <div v-else-if="phase === 'intro' && status?.passed" class="ik-exam-panel">
+        <div class="ik-exam-panel__body ik-exam-panel__body--center">
+          <h1 class="ik-exam-title">你已通过入站考试</h1>
+          <p class="ik-exam-desc">所有功能均已解锁，去发现绳网的精彩吧。</p>
+          <NuxtLink to="/" class="ik-exam-btn">返回首页</NuxtLink>
+        </div>
       </div>
 
       <!-- 介绍 / 开始 -->
-      <div v-else-if="phase === 'intro'" class="ik-exam-card">
-        <h1 class="ik-exam-title">入站考试</h1>
-        <p class="ik-exam-desc">
-          为了维护绳网的社区氛围，新成员需要先通过入站考试才能解锁发帖、评论、点赞、私聊等功能。
-          考试内容主要为社区规范与基本常识，请认真作答。
-        </p>
-        <ul v-if="status" class="ik-exam-rules">
-          <li>共 <b>{{ status.config.questionCount }}</b> 题，限时 <b>{{ Math.round(status.config.timeLimitSeconds / 60) }}</b> 分钟</li>
-          <li>得分达到 <b>{{ status.config.passScorePercent }}%</b> 即为通过</li>
-          <li>多选题需选出全部正确选项才得分</li>
-          <li>连续失败 <b>{{ status.config.maxFailsBeforeCooldown }}</b> 次需等待 <b>{{ Math.round(status.config.failCooldownSeconds / 60) }}</b> 分钟后再试</li>
-          <li v-if="status.config.rewardDenny > 0 || status.config.rewardExp > 0">
-            通过可获得 <b>{{ status.config.rewardDenny }}</b> 丁尼与 <b>{{ status.config.rewardExp }}</b> 经验奖励
-          </li>
-        </ul>
-        <p v-if="status?.activeAttempt" class="ik-exam-hint">
-          你有一场进行中的考试，点击开始将继续作答。
-        </p>
-        <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
-          失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
-        </p>
-        <button
-          class="ik-exam-btn"
-          type="button"
-          :disabled="starting || cooldownRemaining > 0"
-          @click="start"
-        >
-          {{ starting ? "准备中…" : status?.activeAttempt ? "继续考试" : "开始考试" }}
-        </button>
+      <div v-else-if="phase === 'intro'" class="ik-exam-panel">
+        <div class="ik-exam-panel__body">
+          <h1 class="ik-exam-title">入站考试</h1>
+          <p class="ik-exam-desc">
+            为了维护绳网的社区氛围，新成员需要先通过入站考试才能解锁发帖、评论、点赞、私聊等功能。
+            考试内容主要为社区规范与基本常识，请认真作答。
+          </p>
+          <ul v-if="status" class="ik-exam-rules">
+            <li>共 <b>{{ status.config.questionCount }}</b> 题，限时 <b>{{ Math.round(status.config.timeLimitSeconds / 60) }}</b> 分钟</li>
+            <li>得分达到 <b>{{ status.config.passScorePercent }}%</b> 即为通过</li>
+            <li>多选题需选出全部正确选项才得分</li>
+            <li>连续失败 <b>{{ status.config.maxFailsBeforeCooldown }}</b> 次需等待 <b>{{ Math.round(status.config.failCooldownSeconds / 60) }}</b> 分钟后再试</li>
+            <li v-if="status.config.rewardDenny > 0 || status.config.rewardExp > 0">
+              通过可获得 <b>{{ status.config.rewardDenny }}</b> 丁尼与 <b>{{ status.config.rewardExp }}</b> 经验奖励
+            </li>
+          </ul>
+          <p v-if="status?.activeAttempt" class="ik-exam-hint">
+            你有一场进行中的考试，点击开始将继续作答。
+          </p>
+          <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
+            失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
+          </p>
+          <button
+            class="ik-exam-btn"
+            type="button"
+            :disabled="starting || cooldownRemaining > 0"
+            @click="start"
+          >
+            {{ starting ? "准备中…" : status?.activeAttempt ? "继续考试" : "开始考试" }}
+          </button>
+        </div>
       </div>
 
       <!-- 答题 -->
@@ -230,64 +241,70 @@ useHead({ title: "入站考试 - 绳网" });
             ⏱ {{ formatDuration(remainingSeconds) }}
           </span>
         </div>
-        <ol class="ik-exam-questions">
-          <li v-for="(q, idx) in questions" :key="q.questionId" class="ik-exam-question">
-            <p class="ik-exam-question__title">
-              <span class="ik-exam-question__type">{{ typeLabel(q.type) }}</span>
-              {{ idx + 1 }}. {{ q.question }}
-            </p>
-            <div class="ik-exam-options">
-              <label
-                v-for="opt in q.options"
-                :key="opt.key"
-                class="ik-exam-option"
-                :class="{ 'ik-exam-option--checked': (answers[q.questionId] || []).includes(opt.key) }"
-              >
-                <input
-                  :type="q.type === 'multiple' ? 'checkbox' : 'radio'"
-                  :name="q.questionId"
-                  :checked="(answers[q.questionId] || []).includes(opt.key)"
-                  @change="toggleAnswer(q, opt.key)"
-                />
-                <span>{{ opt.text }}</span>
-              </label>
+        <div class="ik-exam-panel">
+          <div class="ik-exam-panel__body">
+            <ol class="ik-exam-questions">
+              <li v-for="(q, idx) in questions" :key="q.questionId" class="ik-exam-question">
+                <p class="ik-exam-question__title">
+                  <span class="ik-exam-question__type">{{ typeLabel(q.type) }}</span>
+                  {{ idx + 1 }}. {{ q.question }}
+                </p>
+                <div class="ik-exam-options">
+                  <label
+                    v-for="opt in q.options"
+                    :key="opt.key"
+                    class="ik-exam-option"
+                    :class="{ 'ik-exam-option--checked': (answers[q.questionId] || []).includes(opt.key) }"
+                  >
+                    <input
+                      :type="q.type === 'multiple' ? 'checkbox' : 'radio'"
+                      :name="q.questionId"
+                      :checked="(answers[q.questionId] || []).includes(opt.key)"
+                      @change="toggleAnswer(q, opt.key)"
+                    />
+                    <span>{{ opt.text }}</span>
+                  </label>
+                </div>
+              </li>
+            </ol>
+            <div class="ik-exam-quiz__footer">
+              <button class="ik-exam-btn" type="button" :disabled="submitting" @click="submit()">
+                {{ submitting ? "提交中…" : "提交答卷" }}
+              </button>
             </div>
-          </li>
-        </ol>
-        <div class="ik-exam-quiz__footer">
-          <button class="ik-exam-btn" type="button" :disabled="submitting" @click="submit()">
-            {{ submitting ? "提交中…" : "提交答卷" }}
-          </button>
+          </div>
         </div>
       </div>
 
       <!-- 结果 -->
-      <div v-else-if="phase === 'result' && result" class="ik-exam-card ik-exam-card--center">
-        <h1 class="ik-exam-title">
-          {{ result.passed ? "🎉 考试通过！" : "未通过" }}
-        </h1>
-        <p class="ik-exam-score">
-          得分 <b>{{ result.scorePercent }}%</b>（{{ result.correctCount }} / {{ result.questionCount }} 题正确，及格线 {{ result.passScorePercent }}%）
-        </p>
-        <template v-if="result.passed">
-          <p v-if="result.reward" class="ik-exam-desc">
-            奖励已发放：{{ result.reward.denny }} 丁尼 + {{ result.reward.exp }} 经验。欢迎加入绳网！
+      <div v-else-if="phase === 'result' && result" class="ik-exam-panel">
+        <div class="ik-exam-panel__body ik-exam-panel__body--center">
+          <h1 class="ik-exam-title">
+            {{ result.passed ? "🎉 考试通过！" : "未通过" }}
+          </h1>
+          <p class="ik-exam-score">
+            得分 <b>{{ result.scorePercent }}%</b>（{{ result.correctCount }} / {{ result.questionCount }} 题正确，及格线 {{ result.passScorePercent }}%）
           </p>
-          <NuxtLink to="/" class="ik-exam-btn">开始探索</NuxtLink>
-        </template>
-        <template v-else>
-          <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
-            失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
-          </p>
-          <button
-            class="ik-exam-btn"
-            type="button"
-            :disabled="cooldownRemaining > 0"
-            @click="retry"
-          >
-            再试一次
-          </button>
-        </template>
+          <template v-if="result.passed">
+            <p v-if="result.reward" class="ik-exam-desc">
+              奖励已发放：{{ result.reward.denny }} 丁尼 + {{ result.reward.exp }} 经验。欢迎加入绳网！
+            </p>
+            <NuxtLink to="/" class="ik-exam-btn">开始探索</NuxtLink>
+          </template>
+          <template v-else>
+            <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
+              失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
+            </p>
+            <button
+              class="ik-exam-btn"
+              type="button"
+              :disabled="cooldownRemaining > 0"
+              @click="retry"
+            >
+              再试一次
+            </button>
+          </template>
+        </div>
       </div>
     </div>
   </section>
@@ -295,26 +312,55 @@ useHead({ title: "入站考试 - 绳网" });
 
 <style scoped>
 .ik-exam-page {
+  position: relative;
   min-height: 100vh;
   padding: 96px 16px 64px;
   display: flex;
   justify-content: center;
 }
 
+/* 与发帖页一致的 45° 斜线纹理背景 */
+.ik-exam-page__stripe {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    40deg,
+    transparent,
+    transparent 3.5px,
+    rgba(255, 255, 255, 0.09) 4.5px,
+    rgba(255, 255, 255, 0.09) 7.5px,
+    transparent 8.5px
+  );
+}
+
 .ik-exam-page__inner {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 760px;
 }
 
-.ik-exam-card {
-  background: rgba(20, 20, 20, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 32px;
+/* 与站内面板一致的双层框架（外层灰框 + 内层黑底点纹） */
+.ik-exam-panel {
+  padding: 4px;
+  background: #2d2c2d;
+  border-radius: 24px 0 24px 24px;
+  overflow: hidden;
+}
+
+.ik-exam-panel__body {
+  padding: 28px 32px;
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(180deg, #0a0a0a 0%, #070707 100%);
+  border: 4px solid #000;
+  border-radius: 22px 0 22px 22px;
   color: #eee;
 }
 
-.ik-exam-card--center {
+.ik-exam-panel__body--center {
   text-align: center;
 }
 
@@ -376,12 +422,15 @@ useHead({ title: "入站考试 - 绳网" });
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
   padding: 12px 20px;
-  color: #ccc;
   margin-bottom: 16px;
+  color: #ccc;
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(180deg, #0a0a0a 0%, #070707 100%);
+  border: 4px solid #000;
+  border-radius: 12px 0 12px 12px;
+  box-shadow: 0 0 0 4px #2d2c2d;
 }
 
 .ik-exam-quiz__timer {
@@ -400,15 +449,15 @@ useHead({ title: "入站考试 - 绳网" });
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
 .ik-exam-question {
-  background: rgba(20, 20, 20, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 20px 24px;
+  padding: 20px 0;
   color: #eee;
+}
+
+.ik-exam-question + .ik-exam-question {
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
 }
 
 .ik-exam-question__title {
