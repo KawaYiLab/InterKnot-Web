@@ -760,6 +760,15 @@ if (import.meta.client) {
     <!-- 45° 斜线纹理背景 -->
     <div class="ik-create-page__stripe" aria-hidden="true"></div>
 
+    <!-- 未通过入站考试：禁止发帖，引导去考试页 -->
+    <div v-if="auth.needExam" class="ik-create-exam-gate">
+      <div class="ik-create-exam-gate__card">
+        <h2>需要先通过入站考试</h2>
+        <p>通过入站考试后即可解锁发帖、评论等功能。</p>
+        <NuxtLink to="/exam" class="ik-create-exam-gate__btn">前往考试</NuxtLink>
+      </div>
+    </div>
+
     <!-- Drag overlay -->
     <Transition name="ik-fade">
       <div v-if="isDragging" class="ik-create-drop-overlay">
@@ -1342,6 +1351,46 @@ if (import.meta.client) {
 }
 
 /* ── Drag & Drop Overlay ─────────────────────────── */
+.ik-create-exam-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+}
+
+.ik-create-exam-gate__card {
+  text-align: center;
+  padding: 40px 56px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(20, 20, 20, 0.95);
+  color: #eee;
+}
+
+.ik-create-exam-gate__card h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.ik-create-exam-gate__card p {
+  margin: 0 0 20px;
+  color: #aaa;
+}
+
+.ik-create-exam-gate__btn {
+  display: inline-block;
+  background: #bfff09;
+  color: #111;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 8px 28px;
+  text-decoration: none;
+}
+
 .ik-create-drop-overlay {
   position: fixed;
   inset: 0;

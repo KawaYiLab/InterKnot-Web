@@ -18,6 +18,17 @@ if (import.meta.client) {
     router.replace(decodeURIComponent(fallbackPath)).catch(() => undefined);
   }
 
+  // 后端返回 EXAM_REQUIRED（未通过入站考试）时引导去考试页
+  let lastExamRedirectAt = 0;
+  window.addEventListener("exam:required", () => {
+    const now = Date.now();
+    if (now - lastExamRedirectAt < 3000) return;
+    lastExamRedirectAt = now;
+    if (router.currentRoute.value.path !== "/exam") {
+      router.push("/exam").catch(() => undefined);
+    }
+  });
+
   // 监听浏览器后退/前进：如果弹窗打开，关闭它
   window.addEventListener("popstate", postModal.handlePopState);
   window.addEventListener("popstate", knockModal.handlePopState);

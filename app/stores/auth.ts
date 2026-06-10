@@ -19,6 +19,13 @@ export const useAuthStore = defineStore("auth", {
   }),
   getters: {
     isLogin: (state) => !!state.token,
+    /** 已登录但还没通过入站考试（管理员 / AI 账号豁免） */
+    needExam: (state): boolean =>
+      !!state.token &&
+      !!state.user &&
+      state.user.examPassed === false &&
+      !state.user.isAdmin &&
+      !state.user.isAiAgent,
     profilePath: (state): string | null => {
       const id = state.user?.authorId || state.user?.documentId;
       return id ? `/profile/${id}` : null;

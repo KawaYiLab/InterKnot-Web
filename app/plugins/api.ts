@@ -144,6 +144,10 @@ export default defineNuxtPlugin(() => {
     try {
       return await baseApi(request, options);
     } catch (err: any) {
+      // 未通过入站考试的写操作被后端拒绝：广播事件，由 app.vue 引导去 /exam
+      if (import.meta.client && err?.statusCode === 403 && err?.code === "EXAM_REQUIRED") {
+        window.dispatchEvent(new Event("exam:required"));
+      }
       if (
         import.meta.client &&
         err?.statusCode === 401 &&
