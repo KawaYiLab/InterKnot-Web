@@ -202,6 +202,14 @@ useHead({ title: "入站考试 - 绳网" });
         <div class="ik-exam-panel__body ik-exam-panel__body--center">
           <h1 class="ik-exam-title">你已通过入站考试</h1>
           <p class="ik-exam-desc">所有功能均已解锁，去发现绳网的精彩吧。</p>
+          <p class="ik-exam-desc">
+            欢迎为入站考试投稿题目：<a
+              class="ik-exam-link"
+              href="https://docs.qq.com/sheet/DRkRLYkd4a0VScG9I"
+              target="_blank"
+              rel="noopener noreferrer"
+            >题目投稿入口</a>
+          </p>
           <z-button @click="navigateTo('/')">返回首页</z-button>
         </div>
       </div>
@@ -313,6 +321,14 @@ useHead({ title: "入站考试 - 绳网" });
           <template v-if="result.passed">
             <p v-if="result.reward" class="ik-exam-desc">
               奖励已发放：{{ result.reward.denny }} 丁尼 + {{ result.reward.exp }} 经验。欢迎加入绳网！
+            </p>
+            <p class="ik-exam-desc">
+              欢迎为入站考试投稿题目：<a
+                class="ik-exam-link"
+                href="https://docs.qq.com/sheet/DRkRLYkd4a0VScG9I"
+                target="_blank"
+                rel="noopener noreferrer"
+              >题目投稿入口</a>
             </p>
             <z-button @click="navigateTo('/')">开始探索</z-button>
           </template>
@@ -494,5 +510,16 @@ useHead({ title: "入站考试 - 绳网" });
 .ik-exam-score b {
   color: #bfff09;
   font-size: 24px;
+}
+
+.ik-exam-link {
+  color: #bfff09;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s;
+}
+
+.ik-exam-link:hover {
+  color: #d9ff66;
 }
 </style>
