@@ -176,6 +176,7 @@ const postModal = usePostModal();
 const SUGGEST_DEBOUNCE_MS = 200;
 const suggestions = ref<SearchSuggestion[]>([]);
 const suggestVisible = ref(false);
+const searchFocused = ref(false);
 const activeSuggestIndex = ref(-1);
 let suggestTimer: ReturnType<typeof setTimeout> | null = null;
 let suggestSeq = 0;
@@ -200,7 +201,8 @@ const fetchSuggestions = async (keyword: string) => {
     if (seq !== suggestSeq) return; // 丢弃过期响应
     suggestions.value = list;
     activeSuggestIndex.value = -1;
-    suggestVisible.value = true;
+    // 只在输入框聚焦时展示：路由同步 ?q= 等程序化赋值不应弹出下拉
+    suggestVisible.value = searchFocused.value;
   } catch {
     if (seq === suggestSeq) suggestions.value = [];
   }
@@ -217,6 +219,7 @@ watch(searchKeyword, (next) => {
   }
   suggestTimer = setTimeout(() => {
     suggestTimer = null;
+    if (!searchFocused.value) return; // 非用户输入（如路由同步 ?q=）不请求联想
     void fetchSuggestions(keyword);
   }, SUGGEST_DEBOUNCE_MS);
 });
@@ -240,12 +243,14 @@ const moveSuggestIndex = (delta: number) => {
 };
 
 const handleSearchFocus = () => {
+  searchFocused.value = true;
   if (suggestions.value.length > 0 && searchKeyword.value.trim()) {
     suggestVisible.value = true;
   }
 };
 
 const handleSearchBlur = () => {
+  searchFocused.value = false;
   // 延迟关闭：让列表项的 mousedown/click 先于 blur 生效
   setTimeout(closeSuggest, 120);
 };
