@@ -232,6 +232,12 @@ watch(searchKeyword, (next) => {
 const closeSuggest = () => {
   suggestVisible.value = false;
   activeSuggestIndex.value = -1;
+  // 取消未触发的防抖与在途请求，避免提交搜索后下拉又弹回来
+  if (suggestTimer) {
+    clearTimeout(suggestTimer);
+    suggestTimer = null;
+  }
+  suggestSeq += 1;
 };
 
 const selectSuggestion = (s: SearchSuggestion) => {
