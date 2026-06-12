@@ -90,6 +90,20 @@ const seedReadStatus = <T extends { id: string; isRead?: boolean }>(nodes: T[]):
   return nodes;
 };
 
+/** 实时搜索联想项（GET /api/articles/suggest） */
+export interface SearchSuggestion {
+  documentId: string;
+  title: string;
+  /** 高亮后的标题（<mark> 包裹命中片段，需用 v-html 渲染） */
+  titleHighlighted: string;
+  /** 正文命中片段（裁剪 + 高亮） */
+  excerpt: string;
+  authorName: string | null;
+  categoryName: string | null;
+  categorySlug: string | null;
+  isAnonymous: boolean;
+}
+
 interface AuthResult {
   token: string | null;
   user: Author;
@@ -691,6 +705,47 @@ export function useApi() {
     return qc.getQueryData<Pagination<Post>>(
       qk.articles.search(query, category, start, DEFAULT_PAGE_SIZE),
     );
+  };
+
+  /**
+   * 实时联想搜索（GET /api/articles/suggest）：边输入边搜。
+   * 走 Meilisearch，不走 TanStack 缓存（调用方自行防抖 + 丢弃过期响应）。
+   */
+  const suggestArticles = async (
+    query: string,
+    category = "",
+  ): Promise<SearchSuggestion[]> => {
+    const q = query.trim();
+    if (!q) return [];
+    const response = await $api("/api/articles/suggest", {
+      query: {
+        q,
+        ...(category ? { category } : {}),
+      },
+    });
+    const data = unwrapData<unknown[]>(response) || [];
+    return data
+      .map((raw): SearchSuggestion | null => {
+        if (!raw || typeof raw !== "object") return null;
+        const s = raw as Record<string, unknown>;
+        const documentId = typeof s.documentId === "string" ? s.documentId : "";
+        const title = typeof s.title === "string" ? s.title : "";
+        if (!documentId || !title) return null;
+        return {
+          documentId,
+          title,
+          titleHighlighted:
+            typeof s.titleHighlighted === "string" && s.titleHighlighted
+              ? s.titleHighlighted
+              : title,
+          excerpt: typeof s.excerpt === "string" ? s.excerpt : "",
+          authorName: typeof s.authorName === "string" ? s.authorName : null,
+          categoryName: typeof s.categoryName === "string" ? s.categoryName : null,
+          categorySlug: typeof s.categorySlug === "string" ? s.categorySlug : null,
+          isAnonymous: s.isAnonymous === true,
+        };
+      })
+      .filter((s): s is SearchSuggestion => s !== null);
   };
 
   /** 频道列表（GET /api/categories/list）：返回已上架分类，按 order 升序。 */
@@ -1642,6 +1697,7 @@ export function useApi() {
     resetPassword,
     getSelfUser,
     searchArticles,
+    suggestArticles,
     peekArticles,
     getCategories,
     getPost,
