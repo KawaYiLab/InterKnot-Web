@@ -2,6 +2,7 @@
 import { useEventListener } from "@vueuse/core";
 import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/vue/24/solid";
 import { LEVEL_THRESHOLDS, MAX_LEVEL } from "~/utils/level";
+import type { SearchSuggestion } from "~/composables/useApi";
 
 const route = useRoute();
 const router = useRouter();
@@ -170,6 +171,85 @@ const searchKeyword = ref("");
 const applyingSearch = ref(false);
 const searchInputRef = ref<InstanceType<any>>();
 
+// ── 实时搜索联想（Meilisearch 驱动）─────────────────────────
+const postModal = usePostModal();
+const SUGGEST_DEBOUNCE_MS = 200;
+const suggestions = ref<SearchSuggestion[]>([]);
+const suggestVisible = ref(false);
+const activeSuggestIndex = ref(-1);
+let suggestTimer: ReturnType<typeof setTimeout> | null = null;
+let suggestSeq = 0;
+
+const suggestOpen = computed(
+  () => suggestVisible.value && suggestions.value.length > 0 && !!searchKeyword.value.trim(),
+);
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// 先整体转义再放行 <mark>：高亮由 v-html 渲染，但标题本身的任意 HTML 不可信。
+const renderHighlight = (s: string) =>
+  escapeHtml(s)
+    .replace(/&lt;mark&gt;/g, "<mark>")
+    .replace(/&lt;\/mark&gt;/g, "</mark>");
+
+const fetchSuggestions = async (keyword: string) => {
+  const seq = ++suggestSeq;
+  try {
+    const list = await api.suggestArticles(keyword);
+    if (seq !== suggestSeq) return; // 丢弃过期响应
+    suggestions.value = list;
+    activeSuggestIndex.value = -1;
+    suggestVisible.value = true;
+  } catch {
+    if (seq === suggestSeq) suggestions.value = [];
+  }
+};
+
+watch(searchKeyword, (next) => {
+  const keyword = next.trim();
+  if (suggestTimer) clearTimeout(suggestTimer);
+  if (!keyword) {
+    suggestSeq += 1;
+    suggestions.value = [];
+    activeSuggestIndex.value = -1;
+    return;
+  }
+  suggestTimer = setTimeout(() => {
+    suggestTimer = null;
+    void fetchSuggestions(keyword);
+  }, SUGGEST_DEBOUNCE_MS);
+});
+
+const closeSuggest = () => {
+  suggestVisible.value = false;
+  activeSuggestIndex.value = -1;
+};
+
+const selectSuggestion = (s: SearchSuggestion) => {
+  closeSuggest();
+  postModal.open(s.documentId, { preview: { title: s.title } });
+};
+
+const moveSuggestIndex = (delta: number) => {
+  if (!suggestOpen.value) return;
+  const count = suggestions.value.length;
+  if (count === 0) return;
+  const next = activeSuggestIndex.value + delta;
+  activeSuggestIndex.value = next < -1 ? count - 1 : next >= count ? -1 : next;
+};
+
+const handleSearchFocus = () => {
+  if (suggestions.value.length > 0 && searchKeyword.value.trim()) {
+    suggestVisible.value = true;
+  }
+};
+
+const handleSearchBlur = () => {
+  // 延迟关闭：让列表项的 mousedown/click 先于 blur 生效
+  setTimeout(closeSuggest, 120);
+};
+
 const resolveActiveTab = (path: string): HeaderTabName => {
   if (path.startsWith("/profile")) {
     return "mine";
@@ -212,6 +292,12 @@ const applySearch = async () => {
 };
 
 const handleSearchEnter = () => {
+  const active = activeSuggestIndex.value;
+  if (suggestOpen.value && active >= 0 && suggestions.value[active]) {
+    selectSuggestion(suggestions.value[active]);
+    return;
+  }
+  closeSuggest();
   applySearch().catch(() => undefined);
 };
 
@@ -313,7 +399,14 @@ watch(
       </div>
 
       <div class="ik-header__middle">
-        <div class="ik-search-shell">
+        <div
+          class="ik-search-shell"
+          @focusin="handleSearchFocus"
+          @focusout="handleSearchBlur"
+          @keydown.down.prevent="moveSuggestIndex(1)"
+          @keydown.up.prevent="moveSuggestIndex(-1)"
+          @keydown.esc="closeSuggest"
+        >
           <z-input
             ref="searchInputRef"
             v-model="searchKeyword"
@@ -331,6 +424,39 @@ watch(
               </button>
             </template>
           </z-input>
+
+          <!-- 实时联想下拉 -->
+          <Transition name="ik-suggest">
+            <div v-if="suggestOpen" class="ik-search-suggest" role="listbox">
+              <button
+                v-for="(s, i) in suggestions"
+                :key="s.documentId"
+                type="button"
+                class="ik-search-suggest__item"
+                :class="{ 'is-active': i === activeSuggestIndex }"
+                role="option"
+                :aria-selected="i === activeSuggestIndex"
+                @mousedown.prevent
+                @mousemove="activeSuggestIndex = i"
+                @click="selectSuggestion(s)"
+              >
+                <span class="ik-search-suggest__title" v-html="renderHighlight(s.titleHighlighted)" />
+                <span v-if="s.excerpt" class="ik-search-suggest__excerpt" v-html="renderHighlight(s.excerpt)" />
+                <span class="ik-search-suggest__meta">
+                  <span v-if="s.categoryName" class="ik-search-suggest__category">{{ s.categoryName }}</span>
+                  <span class="ik-search-suggest__author">{{ s.isAnonymous ? "匿名" : (s.authorName || "") }}</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                class="ik-search-suggest__all"
+                @mousedown.prevent
+                @click="handleSearchEnter"
+              >
+                查看“{{ searchKeyword.trim() }}”的全部结果
+              </button>
+            </div>
+          </Transition>
         </div>
       </div>
 
@@ -534,11 +660,121 @@ watch(
 }
 
 .ik-search-shell {
+  position: relative;
   width: clamp(400px, 30vw, 540px);
   max-width: 100%;
   min-width: 240px;
   display: flex;
   align-items: center;
+}
+
+.ik-search-suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+}
+
+.ik-search-suggest__item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+}
+
+.ik-search-suggest__item.is-active,
+.ik-search-suggest__item:hover {
+  background: rgba(215, 255, 0, 0.1);
+}
+
+.ik-search-suggest__title {
+  color: #e8e8e8;
+  font-size: 14px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+.ik-search-suggest__excerpt {
+  color: #8a8a8a;
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+.ik-search-suggest__title :deep(mark),
+.ik-search-suggest__excerpt :deep(mark) {
+  background: transparent;
+  color: #fbfe00;
+  font-weight: 600;
+}
+
+.ik-search-suggest__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6f6f6f;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.ik-search-suggest__category {
+  color: #9db500;
+}
+
+.ik-search-suggest__all {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0 0 8px 8px;
+  background: transparent;
+  color: #fbfe00;
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  appearance: none;
+}
+
+.ik-search-suggest__all:hover {
+  background: rgba(215, 255, 0, 0.1);
+}
+
+.ik-suggest-enter-active,
+.ik-suggest-leave-active {
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.ik-suggest-enter-from,
+.ik-suggest-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .ik-header__right {
