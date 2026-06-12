@@ -179,6 +179,7 @@ const suggestVisible = ref(false);
 const searchFocused = ref(false);
 const activeSuggestIndex = ref(-1);
 let suggestTimer: ReturnType<typeof setTimeout> | null = null;
+let blurTimer: ReturnType<typeof setTimeout> | null = null;
 let suggestSeq = 0;
 
 const suggestOpen = computed(
@@ -255,6 +256,11 @@ const moveSuggestIndex = (delta: number) => {
 
 const handleSearchFocus = () => {
   searchFocused.value = true;
+  // 取消待触发的延迟关闭：焦点在 shell 内部子元素间移动时不应收起下拉
+  if (blurTimer) {
+    clearTimeout(blurTimer);
+    blurTimer = null;
+  }
   if (suggestions.value.length > 0 && searchKeyword.value.trim()) {
     suggestVisible.value = true;
   }
@@ -263,7 +269,11 @@ const handleSearchFocus = () => {
 const handleSearchBlur = () => {
   searchFocused.value = false;
   // 延迟关闭：让列表项的 mousedown/click 先于 blur 生效
-  setTimeout(closeSuggest, 120);
+  if (blurTimer) clearTimeout(blurTimer);
+  blurTimer = setTimeout(() => {
+    blurTimer = null;
+    closeSuggest();
+  }, 120);
 };
 
 const resolveActiveTab = (path: string): HeaderTabName => {
