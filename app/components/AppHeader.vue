@@ -297,6 +297,11 @@ const handleSearchEnter = () => {
     selectSuggestion(suggestions.value[active]);
     return;
   }
+  handleFullSearch();
+};
+
+// 显式全量搜索（搜索按钮 / 查看全部结果）：无视键盘选中的联想项
+const handleFullSearch = () => {
   closeSuggest();
   applySearch().catch(() => undefined);
 };
@@ -419,7 +424,7 @@ watch(
                 <i class="z-icon-error" />
               </span>
               <span class="ik-search-divider" />
-              <button type="button" class="ik-search-action" aria-label="搜索" @click="handleSearchEnter">
+              <button type="button" class="ik-search-action" aria-label="搜索" @click="handleFullSearch">
                 <i class="z-icon-search" />
               </button>
             </template>
@@ -451,7 +456,7 @@ watch(
                 type="button"
                 class="ik-search-suggest__all"
                 @mousedown.prevent
-                @click="handleSearchEnter"
+                @click="handleFullSearch"
               >
                 查看“{{ searchKeyword.trim() }}”的全部结果
               </button>
