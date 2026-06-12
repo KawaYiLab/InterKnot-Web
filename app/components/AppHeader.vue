@@ -219,7 +219,12 @@ watch(searchKeyword, (next) => {
   }
   suggestTimer = setTimeout(() => {
     suggestTimer = null;
-    if (!searchFocused.value) return; // 非用户输入（如路由同步 ?q=）不请求联想
+    if (!searchFocused.value) {
+      // 非用户输入（如路由同步 ?q=）：不请求联想，并清掉旧关键词的残留结果
+      suggestions.value = [];
+      activeSuggestIndex.value = -1;
+      return;
+    }
     void fetchSuggestions(keyword);
   }, SUGGEST_DEBOUNCE_MS);
 });
