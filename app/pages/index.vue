@@ -329,33 +329,44 @@ const goPost = (post: Post, event: MouseEvent) => {
     },
   });
 
-  // 乐观标记已读 → 后端失败时回滚，避免“UI 已读、服务端未读”状态不一致
-  // （下次 refresh 会被服务端数据覆盖，造成已读闪烁）。
+  // 标记已读：网络请求立即发出（不占主线程），但本地 list 的重建推迟到
+  // 弹窗关闭之后——被点开的卡片在弹窗期间完全被遮住，用户看不到已读变化，
+  // 而重建数组会触发瀑布流重算 + 可见卡片 patch，与 PostOverlay 的挂载、
+  // 详情/评论数据回填渲染争抢主线程，正是「点开弹窗卡顿」的来源。
   if (post.isRead) return;
   const targetId = post.id;
-
-  // 重建整个 list 数组（瀑布流据此重算）成本不低，而被点开的卡片此刻正被
-  // 弹窗完全遮住，用户看不到它的已读变化——把这步推迟到弹窗开场动画之后，
-  // 避免和 PostOverlay 挂载抢同一帧主线程，缓解「点开弹窗卡顿」。
-  const markRead = () => {
-    list.value = list.value.map((d) =>
-      d.id === targetId ? { ...d, isRead: true } : d,
-    );
-    api.markAsReadBatch([targetId]).catch(() => {
-      // 回滚仅限本地中依然是已读的那一条。用户可能中间又点过别的卡片，
-      // 或者 refresh 后列表被替换；都不需要动。
-      list.value = list.value.map((d) =>
-        d.id === targetId && d.isRead ? { ...d, isRead: false } : d,
-      );
-    });
-  };
-  if (import.meta.client) {
-    // 略大于 ik-overlay 入场过渡（~200ms），确保让位给挂载与开场动画
-    window.setTimeout(markRead, 280);
-  } else {
-    markRead();
-  }
+  pendingReadIds.add(targetId);
+  api.markAsReadBatch([targetId]).catch(() => {
+    pendingReadIds.delete(targetId);
+  });
 };
+
+// 弹窗期间累积的待回填已读 id；弹窗离场动画结束后一次性合并进 list
+const pendingReadIds = new Set<string>();
+
+const flushPendingReadIds = () => {
+  if (pendingReadIds.size === 0) return;
+  const ids = new Set(pendingReadIds);
+  pendingReadIds.clear();
+  let changed = false;
+  const next = list.value.map((d) => {
+    if (ids.has(d.id) && !d.isRead) {
+      changed = true;
+      return { ...d, isRead: true };
+    }
+    return d;
+  });
+  if (changed) list.value = next;
+};
+
+watch(
+  () => postModal.isOpen.value,
+  (open) => {
+    if (open || !import.meta.client) return;
+    // 等弹窗离场动画（~200ms）结束后再重建 list，避免卡到关闭动画
+    window.setTimeout(flushPendingReadIds, 320);
+  },
+);
 
 const handleRefresh = async () => {
   if (refreshing.value || loading.value) return;
