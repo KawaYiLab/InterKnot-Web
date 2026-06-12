@@ -337,7 +337,11 @@ const goPost = (post: Post, event: MouseEvent) => {
   const targetId = post.id;
   pendingReadIds.add(targetId);
   api.markAsReadBatch([targetId]).catch(() => {
-    pendingReadIds.delete(targetId);
+    // 失败时若尚未回填，从 pending 移除即可；若已回填到 list，需回滚已读态
+    if (pendingReadIds.delete(targetId)) return;
+    list.value = list.value.map((d) =>
+      d.id === targetId && d.isRead ? { ...d, isRead: false } : d,
+    );
   });
 };
 
