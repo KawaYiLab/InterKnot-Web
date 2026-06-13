@@ -186,6 +186,41 @@ const startDm = async () => {
   }
 };
 
+/** 是否可关注该用户：非自己、未隐藏。 */
+const canFollow = computed<boolean>(() => {
+  const p = profile.value;
+  if (!p) return false;
+  if (p.isSelf) return false;
+  if (p.isHidden) return false;
+  return true;
+});
+
+const followLoading = ref(false);
+
+const toggleFollow = async () => {
+  if (!authStore.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  const p = profile.value;
+  if (!canFollow.value || !p?.documentId) return;
+  if (followLoading.value) return;
+  followLoading.value = true;
+  try {
+    const result = await api.toggleFollow(p.documentId);
+    profile.value = {
+      ...p,
+      isFollowing: result.following,
+      followersCount: result.followersCount,
+    };
+    message.success(result.following ? "已关注" : "已取消关注");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "操作失败"));
+  } finally {
+    followLoading.value = false;
+  }
+};
+
 const onCardEquipped = (card: BusinessCard | null) => {
   if (profile.value) {
     profile.value = { ...profile.value, equippedCard: card ?? undefined };
@@ -385,7 +420,17 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <z-button v-if="profile.isSelf" @click="openModal('settings')">更多操作</z-button>
-        <z-button v-else-if="canSendDm" :loading="dmStarting" @click="startDm">私信</z-button>
+        <div v-else class="ik-tab-bar__actions">
+          <z-button
+            v-if="canFollow"
+            :type="profile.isFollowing ? 'default' : 'primary'"
+            :loading="followLoading"
+            @click="toggleFollow"
+          >
+            {{ profile.isFollowing ? "已关注" : "关注" }}
+          </z-button>
+          <z-button v-if="canSendDm" :loading="dmStarting" @click="startDm">私信</z-button>
+        </div>
       </div>
 
       <!-- ── A-Frame (包含名片 + 帖子) ────────── -->
@@ -437,6 +482,16 @@ onBeforeUnmount(() => {
             <span class="ik-stat">
               <span class="ik-stat__label">点赞</span>
               <span class="ik-stat__num">{{ formatNumber(profile.stats.totalLikes) }}</span>
+            </span>
+            <span class="ik-stat__sep">-</span>
+            <span class="ik-stat">
+              <span class="ik-stat__label">关注</span>
+              <span class="ik-stat__num">{{ formatNumber(profile.followingCount ?? 0) }}</span>
+            </span>
+            <span class="ik-stat__sep">-</span>
+            <span class="ik-stat">
+              <span class="ik-stat__label">粉丝</span>
+              <span class="ik-stat__num">{{ formatNumber(profile.followersCount ?? 0) }}</span>
             </span>
           </div>
 
@@ -657,6 +712,11 @@ onBeforeUnmount(() => {
   background:
     url("/images/tab-bg-point.webp") repeat,
     linear-gradient(180deg, #161616 0%, #080808 100%);
+}
+.ik-tab-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .ik-tab-bar__left {
   display: flex;

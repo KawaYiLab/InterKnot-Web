@@ -130,6 +130,8 @@ export interface Post {
   commentsCount?: number;
   isRead?: boolean;
   liked?: boolean;
+  favorited?: boolean;
+  favoritesCount?: number;
   dennyCount?: number;
   hasGivenDenny?: boolean;
   isAnonymous?: boolean;
@@ -204,6 +206,9 @@ export interface Profile {
   isSelf?: boolean;
   isHidden?: boolean;
   profileHidden?: boolean;
+  isFollowing?: boolean;
+  followersCount?: number;
+  followingCount?: number;
   stats?: ProfileStats;
   equippedCard?: BusinessCard;
   equippedAvatar?: Avatar;
@@ -214,6 +219,19 @@ export interface LikeToggleResult {
   liked: boolean;
   likesCount: number;
 }
+
+export interface FavoriteToggleResult {
+  favorited: boolean;
+  favoritesCount: number;
+}
+
+export interface FollowToggleResult {
+  following: boolean;
+  followersCount: number;
+}
+
+/** 首页 feed 模式：推荐 / 我关注的作者 / 我的收藏。 */
+export type ArticleFeed = "recommend" | "following" | "favorites";
 
 export type UploadStatus =
   | "pending"

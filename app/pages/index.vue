@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDebounceFn, useWindowSize } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
-import type { Category, Post } from "~/types/entities";
+import type { ArticleFeed, Category, Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import {
   FALLBACK_COVER_ASPECT_RATIO,
@@ -24,6 +24,8 @@ const route = useRoute();
 const postModal = usePostModal();
 const message = useMessage();
 const pageDataLoading = usePageDataLoading();
+const auth = useAuthStore();
+const loginDialog = useLoginDialog();
 
 useSeoMeta({
   title: "绳网",
@@ -66,6 +68,28 @@ const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined)
 // 频道筛选：空串 = 全部（推荐流）。Tab 选中后随 list/缓存键一起隔离。
 const categories = ref<Category[]>([]);
 const selectedCategory = ref<string>("");
+
+// feed 模式：推荐 / 关注（我关注的作者）/ 收藏（我的收藏）。
+// 关注、收藏需登录；缓存键随 feed 一起隔离（见 useApi.searchArticles）。
+const feedMode = ref<ArticleFeed>("recommend");
+const feedTabs: { key: ArticleFeed; label: string; requireAuth: boolean }[] = [
+  { key: "recommend", label: "推荐", requireAuth: false },
+  { key: "following", label: "关注", requireAuth: true },
+  { key: "favorites", label: "收藏", requireAuth: true },
+];
+
+const selectFeed = (mode: ArticleFeed) => {
+  if (mode === feedMode.value) return;
+  const tab = feedTabs.find((t) => t.key === mode);
+  if (tab?.requireAuth && !auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  feedMode.value = mode;
+};
+
+/** 当前生效的搜索词：仅推荐流支持文本搜索，关注/收藏强制走列表流。 */
+const activeQuery = () => (feedMode.value === "recommend" ? query.value.trim() : "");
 const loading = ref(false);
 const loadingMore = ref(false);
 const refreshing = ref(false);
@@ -246,7 +270,7 @@ const fetchList = async (reset = false) => {
   // 仅对 reset=true（首屏 / 切回 / 切搜索词）启用；refreshing 是用户明确下拉，不走捷径。
   let cacheHit = false;
   if (reset && !refreshing.value) {
-    const cached = api.peekArticles(query.value.trim(), "0", selectedCategory.value);
+    const cached = api.peekArticles(activeQuery(), "0", selectedCategory.value, feedMode.value);
     if (cached) {
       const uniqueNodes = toUniqueNodes(cached.nodes, true);
       enterAnimationIds.value = new Set();
@@ -275,9 +299,10 @@ const fetchList = async (reset = false) => {
   const currentVersion = ++requestVersion.value;
   try {
     const page = await api.searchArticles(
-      query.value.trim(),
+      activeQuery(),
       reset ? "0" : endCursor.value,
       selectedCategory.value,
+      feedMode.value,
     );
     if (currentVersion !== requestVersion.value) {
       return;
@@ -389,7 +414,8 @@ const handleRefresh = async () => {
 
 // ── 后台静默轮询：只比对最新一页第一条 id 与本地 list 的差集 ────
 const pollLatestArticles = async () => {
-  // 仅在推荐流（无搜索词）下做轮询
+  // 仅在推荐流（无搜索词、非关注/收藏）下做轮询
+  if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
   // 不与正在进行的请求/刷新冲突
   if (polling || loading.value || refreshing.value || loadingMore.value) return;
@@ -504,6 +530,13 @@ watch(
   (q) => {
     // 切换到搜索时清掉"新帖提示"，搜索流不轮询
     newArticleIds.value = [];
+    // 输入搜索词时回到推荐流（关注/收藏不支持文本搜索）。
+    // feedMode 变化会触发其 watcher 重拉，避免与 debouncedSearch 重复，这里提前 return。
+    if (q.trim() && feedMode.value !== "recommend") {
+      feedMode.value = "recommend";
+      stopPolling();
+      return;
+    }
     debouncedSearch();
     // q 非空 ⇒ 进入搜索；空 ⇒ 回到推荐流（轮询照常运行）
     if (q.trim()) {
@@ -538,6 +571,25 @@ watch(
     hasNextPage.value = true;
     requestVersion.value++;
     api.invalidateQueries(["articles", "search"]);
+    void fetchList(true);
+  },
+);
+
+// 缓存恢复时同步 feedMode 会触发下面的 watcher；用此标记跳过那次重拉。
+let skipFeedWatch = false;
+
+// 切换 feed（推荐/关注/收藏）：重置分页并重拉首屏。
+watch(
+  () => feedMode.value,
+  () => {
+    if (skipFeedWatch) {
+      skipFeedWatch = false;
+      return;
+    }
+    newArticleIds.value = [];
+    endCursor.value = "0";
+    hasNextPage.value = true;
+    requestVersion.value++;
     void fetchList(true);
   },
 );
@@ -589,6 +641,11 @@ const consumePendingPosts = () => {
 
 if (cached && cached.query === query.value && cached.category === selectedCategory.value) {
   // 从缓存恢复：跳过网络请求，直接填充列表状态
+  const restoredFeed = cached.feed ?? "recommend";
+  if (restoredFeed !== feedMode.value) {
+    skipFeedWatch = true;
+    feedMode.value = restoredFeed;
+  }
   list.value = cached.list;
   endCursor.value = cached.endCursor;
   hasNextPage.value = cached.hasNextPage;
@@ -659,6 +716,7 @@ onBeforeRouteLeave(() => {
     hasNextPage: hasNextPage.value,
     query: query.value,
     category: selectedCategory.value,
+    feed: feedMode.value,
     seenIds,
     measuredHeights: heights ? new Map(heights) : new Map(),
     scrollY: window.scrollY,
@@ -691,29 +749,49 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ik-home-container ik-stack">
-    <!-- 频道 Tab 条：按 order 展示，「全部」恒在最前。
-         恒渲染（不随 categories 异步加载出现/消失），为分类栏预留固定高度，
-         避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
-    <nav class="ik-category-tabs" aria-label="帖子频道">
-      <button
-        type="button"
-        class="ik-category-tab"
-        :class="{ 'ik-category-tab--active': selectedCategory === '' }"
-        @click="selectCategory('')"
-      >
-        全部
-      </button>
-      <button
-        v-for="cat in categories"
-        :key="cat.slug"
-        type="button"
-        class="ik-category-tab"
-        :class="{ 'ik-category-tab--active': selectedCategory === cat.slug }"
-        @click="selectCategory(cat.slug)"
-      >
-        {{ cat.name }}
-      </button>
-    </nav>
+    <!-- 45° 斜线纹理背景（与发帖页 / 入站考试页一致） -->
+    <div class="ik-home-page__stripe" aria-hidden="true"></div>
+
+    <!-- 顶部工具条：左侧频道分类，右侧 feed 切换（推荐/关注/收藏），两组错开。 -->
+    <div class="ik-home-toolbar">
+      <!-- 频道 Tab 条：按 order 展示，「全部」恒在最前。
+           恒渲染（不随 categories 异步加载出现/消失），为分类栏预留固定高度，
+           避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
+      <nav class="ik-category-tabs" aria-label="帖子频道">
+        <button
+          type="button"
+          class="ik-category-tab"
+          :class="{ 'ik-category-tab--active': selectedCategory === '' }"
+          @click="selectCategory('')"
+        >
+          全部
+        </button>
+        <button
+          v-for="cat in categories"
+          :key="cat.slug"
+          type="button"
+          class="ik-category-tab"
+          :class="{ 'ik-category-tab--active': selectedCategory === cat.slug }"
+          @click="selectCategory(cat.slug)"
+        >
+          {{ cat.name }}
+        </button>
+      </nav>
+
+      <!-- feed 切换：推荐 / 关注 / 收藏。关注、收藏未登录时引导登录。 -->
+      <nav class="ik-feed-tabs" aria-label="内容筛选">
+        <button
+          v-for="tab in feedTabs"
+          :key="tab.key"
+          type="button"
+          class="ik-feed-tab"
+          :class="{ 'ik-feed-tab--active': feedMode === tab.key }"
+          @click="selectFeed(tab.key)"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
+    </div>
 
     <!-- Refresh indicator (pull-to-refresh style) -->
     <Transition name="ik-refresh-indicator">
@@ -827,14 +905,84 @@ onBeforeUnmount(() => {
   padding-bottom: 24px;
 }
 
+/* 45° 斜线纹理背景（与发帖页 / 入站考试页一致） */
+.ik-home-page__stripe {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    40deg,
+    transparent,
+    transparent 3.5px,
+    rgba(255, 255, 255, 0.09) 4.5px,
+    rgba(255, 255, 255, 0.09) 7.5px,
+    transparent 8.5px
+  );
+}
+
+/* 内容层抬到斜纹之上（固定定位的刷新/回顶按钮本就在更高层级） */
+.ik-home-toolbar,
+.ik-skeleton-state,
+.ik-empty,
+.ik-list-state {
+  position: relative;
+  z-index: 1;
+}
+
+/* 顶部工具条：左侧频道分类（可换行/横滑），右侧 feed 切换。 */
+.ik-home-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
 .ik-category-tabs {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: 10px;
-  margin-bottom: 16px;
   /* 预留一行频道标签高度，避免频道列表异步到达时撑高导致下方瀑布流跳动 */
   min-height: 30px;
+}
+
+/* feed 切换标签（推荐/关注/收藏）：与频道标签同款胶囊，靠右与分类错开。 */
+.ik-feed-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.ik-feed-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  border: 2px solid #222;
+  background: #222222;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.ik-feed-tab--active {
+  color: #222;
+  background: var(--ik-primary, #BFFF09);
+  border-color: var(--ik-primary, #BFFF09);
+  font-weight: 700;
 }
 
 /* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
@@ -865,9 +1013,13 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  .ik-home-toolbar {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
   .ik-category-tabs {
     gap: 8px;
-    margin-bottom: 12px;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
@@ -883,6 +1035,12 @@ onBeforeUnmount(() => {
     flex: 0 0 auto;
     height: 28px;
     padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .ik-feed-tab {
+    height: 28px;
+    padding: 0 12px;
     font-size: 13px;
   }
 }

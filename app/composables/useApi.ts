@@ -14,7 +14,10 @@ import type {
   ExamSubmitResult,
   Post,
   PostCategory,
+  ArticleFeed,
   LikeToggleResult,
+  FavoriteToggleResult,
+  FollowToggleResult,
   Profile,
   SignedUploadResult,
   UploadedFile,
@@ -388,6 +391,8 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     commentsCount: Number(data.commentsCount ?? 0),
     isRead: data.isRead === true,
     liked: data.liked === true,
+    favorited: data.favorited === true,
+    favoritesCount: Number(data.favoritesCount ?? 0),
     dennyCount: Number(data.dennyCount ?? 0),
     hasGivenDenny: data.hasGivenDenny === true,
     isAnonymous: data.isAnonymous === true,
@@ -658,16 +663,20 @@ export function useApi() {
     query: string,
     endCur = "",
     category = "",
+    feed: ArticleFeed = "recommend",
   ): Promise<Pagination<Post>> => {
     const start = parseStart(endCur);
+    // feed != recommend 时把 feed 折进 category 缓存槽，避免推荐/关注/收藏互相串缓存。
+    const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
     return cachedRead(
-      qk.articles.search(query, category, start, DEFAULT_PAGE_SIZE),
+      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE),
       async () => {
         const endpoint = query ? "/api/articles/search" : "/api/articles/list";
         const response = await $api(endpoint, {
           query: {
             ...(query ? { q: query } : {}),
             ...(category ? { category } : {}),
+            ...(feed !== "recommend" ? { feed } : {}),
             start: String(start),
             limit: String(DEFAULT_PAGE_SIZE),
           },
@@ -698,12 +707,14 @@ export function useApi() {
     query: string,
     endCur = "",
     category = "",
+    feed: ArticleFeed = "recommend",
   ): Pagination<Post> | undefined => {
     const qc = $queryClient as QueryClient | undefined;
     if (!qc) return undefined;
     const start = parseStart(endCur);
+    const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
     return qc.getQueryData<Pagination<Post>>(
-      qk.articles.search(query, category, start, DEFAULT_PAGE_SIZE),
+      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE),
     );
   };
 
@@ -890,6 +901,54 @@ export function useApi() {
     return (unwrapData(response) as Record<string, boolean>) || {};
   };
 
+  const toggleFavorite = async (
+    articleDocumentId: string,
+  ): Promise<FavoriteToggleResult> => {
+    const response = await $api("/api/favorites/toggle", {
+      method: "POST",
+      body: { targetId: articleDocumentId },
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      favorited: data.favorited === true,
+      favoritesCount: Number(data.favoritesCount || 0),
+    };
+  };
+
+  const batchCheckFavorites = async (
+    targetIds: string[],
+  ): Promise<Record<string, boolean>> => {
+    if (!targetIds.length) return {};
+    const response = await $api("/api/favorites/check", {
+      query: { targetIds: targetIds.join(",") },
+    });
+    return (unwrapData(response) as Record<string, boolean>) || {};
+  };
+
+  const toggleFollow = async (
+    authorDocumentId: string,
+  ): Promise<FollowToggleResult> => {
+    const response = await $api("/api/follows/toggle", {
+      method: "POST",
+      body: { authorDocumentId },
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      following: data.following === true,
+      followersCount: Number(data.followersCount || 0),
+    };
+  };
+
+  const batchCheckFollows = async (
+    authorDocumentIds: string[],
+  ): Promise<Record<string, boolean>> => {
+    if (!authorDocumentIds.length) return {};
+    const response = await $api("/api/follows/check", {
+      query: { authorIds: authorDocumentIds.join(",") },
+    });
+    return (unwrapData(response) as Record<string, boolean>) || {};
+  };
+
   /**
    * 把「已读」写回 query 缓存：遍历所有文章列表/详情/个人页文章缓存，
    * 命中 id 的节点置 isRead=true。否则乐观已读只活在当前页面的 list 里，
@@ -1011,6 +1070,9 @@ export function useApi() {
       isSelf: data.isSelf === true,
       isHidden: data.isHidden === true,
       profileHidden: data.profileHidden === true,
+      isFollowing: data.isFollowing === true,
+      followersCount: Number(data.followersCount || 0),
+      followingCount: Number(data.followingCount || 0),
       stats: statsRaw
         ? {
             articleCount: Number(statsRaw.articleCount || 0),
@@ -1707,6 +1769,10 @@ export function useApi() {
     deleteComment,
     toggleLike,
     batchCheckLikes,
+    toggleFavorite,
+    batchCheckFavorites,
+    toggleFollow,
+    batchCheckFollows,
     markAsReadBatch,
     getProfile,
     getProfileArticles,
