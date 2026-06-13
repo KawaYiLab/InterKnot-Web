@@ -570,26 +570,16 @@ const selectCategory = (slug: string) => {
   selectedCategory.value = slug;
 };
 
-// 切换频道：清空"新帖提示"、重置分页并强制失效缓存后重拉首屏，
-// 确保即使命中旧缓存也会真正打到后端、列表随频道刷新。
-watch(
-  () => selectedCategory.value,
-  () => {
-    newArticleIds.value = [];
-    endCursor.value = "0";
-    hasNextPage.value = true;
-    requestVersion.value++;
-    api.invalidateQueries(["articles", "search"]);
-    void fetchList(true);
-  },
-);
-
 // 缓存恢复时同步 feedMode 会触发下面的 watcher；用此标记跳过那次重拉。
 let skipFeedWatch = false;
 
-// 切换 feed（推荐/关注/收藏）：重置分页并重拉首屏。
+// 切换频道或 feed：清空"新帖提示"、重置分页并强制失效缓存后重拉首屏，
+// 确保即使命中旧缓存也会真正打到后端、列表随频道/feed 刷新。
+// 合并 feedMode + selectedCategory 为单个 watcher：切 feed 时常会同时改这两个值
+// （见 selectFeed / selectCategory），合并后同一 flush 周期只触发一次，避免两个独立
+// watcher 各自 ++requestVersion 互相作废导致 fetchList 提前 return、列表不刷新。
 watch(
-  () => feedMode.value,
+  () => [feedMode.value, selectedCategory.value] as const,
   () => {
     if (skipFeedWatch) {
       skipFeedWatch = false;
@@ -599,7 +589,6 @@ watch(
     endCursor.value = "0";
     hasNextPage.value = true;
     requestVersion.value++;
-    // 与切频道一致：失效列表缓存，保证每次切 feed 都打到后端拉最新。
     api.invalidateQueries(["articles", "search"]);
     void fetchList(true);
   },
