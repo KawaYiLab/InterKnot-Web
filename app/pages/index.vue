@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDebounceFn, useWindowSize } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
-import type { Category, Post } from "~/types/entities";
+import type { ArticleFeed, Category, Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import {
   FALLBACK_COVER_ASPECT_RATIO,
@@ -24,6 +24,8 @@ const route = useRoute();
 const postModal = usePostModal();
 const message = useMessage();
 const pageDataLoading = usePageDataLoading();
+const auth = useAuthStore();
+const loginDialog = useLoginDialog();
 
 useSeoMeta({
   title: "绳网",
@@ -66,6 +68,35 @@ const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined)
 // 频道筛选：空串 = 全部（推荐流）。Tab 选中后随 list/缓存键一起隔离。
 const categories = ref<Category[]>([]);
 const selectedCategory = ref<string>("");
+
+// feed 模式：推荐 / 关注（我关注的作者）/ 收藏（我的收藏）。
+// 关注、收藏需登录；缓存键随 feed 一起隔离（见 useApi.searchArticles）。
+const feedMode = ref<ArticleFeed>("recommend");
+// 右侧仅展示「关注 / 收藏」两个特殊筛选；默认（推荐）态由左侧分类栏主导，
+// 此时这两个按钮均不高亮。再次点击已激活的按钮即可切回推荐。
+const feedTabs: { key: Exclude<ArticleFeed, "recommend">; label: string }[] = [
+  { key: "following", label: "关注" },
+  { key: "favorites", label: "收藏" },
+];
+
+const selectFeed = (mode: Exclude<ArticleFeed, "recommend">) => {
+  // 点击已激活的 feed：切回推荐流。
+  if (mode === feedMode.value) {
+    feedMode.value = "recommend";
+    return;
+  }
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  // 关注/收藏是独立流，不与分类叠加：进入时清空已选分类，避免分类 tab 仍高亮
+  // 且后端把 category 与 feed 过滤叠加导致结果是子集。
+  selectedCategory.value = "";
+  feedMode.value = mode;
+};
+
+/** 当前生效的搜索词：仅推荐流支持文本搜索，关注/收藏强制走列表流。 */
+const activeQuery = () => (feedMode.value === "recommend" ? query.value.trim() : "");
 const loading = ref(false);
 const loadingMore = ref(false);
 const refreshing = ref(false);
@@ -246,7 +277,7 @@ const fetchList = async (reset = false) => {
   // 仅对 reset=true（首屏 / 切回 / 切搜索词）启用；refreshing 是用户明确下拉，不走捷径。
   let cacheHit = false;
   if (reset && !refreshing.value) {
-    const cached = api.peekArticles(query.value.trim(), "0", selectedCategory.value);
+    const cached = api.peekArticles(activeQuery(), "0", selectedCategory.value, feedMode.value);
     if (cached) {
       const uniqueNodes = toUniqueNodes(cached.nodes, true);
       enterAnimationIds.value = new Set();
@@ -275,9 +306,10 @@ const fetchList = async (reset = false) => {
   const currentVersion = ++requestVersion.value;
   try {
     const page = await api.searchArticles(
-      query.value.trim(),
+      activeQuery(),
       reset ? "0" : endCursor.value,
       selectedCategory.value,
+      feedMode.value,
     );
     if (currentVersion !== requestVersion.value) {
       return;
@@ -389,7 +421,8 @@ const handleRefresh = async () => {
 
 // ── 后台静默轮询：只比对最新一页第一条 id 与本地 list 的差集 ────
 const pollLatestArticles = async () => {
-  // 仅在推荐流（无搜索词）下做轮询
+  // 仅在推荐流（无搜索词、非关注/收藏）下做轮询
+  if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
   // 不与正在进行的请求/刷新冲突
   if (polling || loading.value || refreshing.value || loadingMore.value) return;
@@ -504,6 +537,13 @@ watch(
   (q) => {
     // 切换到搜索时清掉"新帖提示"，搜索流不轮询
     newArticleIds.value = [];
+    // 输入搜索词时回到推荐流（关注/收藏不支持文本搜索）。
+    // feedMode 变化会触发其 watcher 重拉，避免与 debouncedSearch 重复，这里提前 return。
+    if (q.trim() && feedMode.value !== "recommend") {
+      feedMode.value = "recommend";
+      stopPolling();
+      return;
+    }
     debouncedSearch();
     // q 非空 ⇒ 进入搜索；空 ⇒ 回到推荐流（轮询照常运行）
     if (q.trim()) {
@@ -524,15 +564,27 @@ watch(
 );
 
 const selectCategory = (slug: string) => {
+  // 选分类即回到推荐流（关注/收藏是独立筛选，不与分类叠加）。
+  if (feedMode.value !== "recommend") feedMode.value = "recommend";
   if (slug === selectedCategory.value) return;
   selectedCategory.value = slug;
 };
 
-// 切换频道：清空"新帖提示"、重置分页并强制失效缓存后重拉首屏，
-// 确保即使命中旧缓存也会真正打到后端、列表随频道刷新。
+// 缓存恢复时同步 feedMode 会触发下面的 watcher；用此标记跳过那次重拉。
+let skipFeedWatch = false;
+
+// 切换频道或 feed：清空"新帖提示"、重置分页并强制失效缓存后重拉首屏，
+// 确保即使命中旧缓存也会真正打到后端、列表随频道/feed 刷新。
+// 合并 feedMode + selectedCategory 为单个 watcher：切 feed 时常会同时改这两个值
+// （见 selectFeed / selectCategory），合并后同一 flush 周期只触发一次，避免两个独立
+// watcher 各自 ++requestVersion 互相作废导致 fetchList 提前 return、列表不刷新。
 watch(
-  () => selectedCategory.value,
+  () => [feedMode.value, selectedCategory.value] as const,
   () => {
+    if (skipFeedWatch) {
+      skipFeedWatch = false;
+      return;
+    }
     newArticleIds.value = [];
     endCursor.value = "0";
     hasNextPage.value = true;
@@ -569,9 +621,10 @@ let initialFetchPromise: Promise<void>;
 
 // 乐观插入：消费 /create 发布后塞入的 pending 队列，把刚发布的帖子
 // unshift 到 list 头部并加入 seenIds，避免后续 fetch 返回相同 id 时被去重逻辑过滤掉。
-// 搜索流下不插入，避免污染搜索结果。drain 仅在真正会写入 list 时调用，
-// 不能在冷启动 fetchList 之前就 drain——fetchList 会重置 seenIds 和 list。
+// 搜索流 / 关注 / 收藏 feed 下不插入，避免污染这些列表（新帖既未被收藏也未必来自关注作者）。
+// drain 仅在真正会写入 list 时调用，不能在冷启动 fetchList 之前就 drain——fetchList 会重置 seenIds 和 list。
 const consumePendingPosts = () => {
+  if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
   if (!pendingPost.peek().length) return;
   const pending = pendingPost.drain();
@@ -589,6 +642,11 @@ const consumePendingPosts = () => {
 
 if (cached && cached.query === query.value && cached.category === selectedCategory.value) {
   // 从缓存恢复：跳过网络请求，直接填充列表状态
+  const restoredFeed = cached.feed ?? "recommend";
+  if (restoredFeed !== feedMode.value) {
+    skipFeedWatch = true;
+    feedMode.value = restoredFeed;
+  }
   list.value = cached.list;
   endCursor.value = cached.endCursor;
   hasNextPage.value = cached.hasNextPage;
@@ -659,6 +717,7 @@ onBeforeRouteLeave(() => {
     hasNextPage: hasNextPage.value,
     query: query.value,
     category: selectedCategory.value,
+    feed: feedMode.value,
     seenIds,
     measuredHeights: heights ? new Map(heights) : new Map(),
     scrollY: window.scrollY,
@@ -691,29 +750,49 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ik-home-container ik-stack">
-    <!-- 频道 Tab 条：按 order 展示，「全部」恒在最前。
-         恒渲染（不随 categories 异步加载出现/消失），为分类栏预留固定高度，
-         避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
-    <nav class="ik-category-tabs" aria-label="帖子频道">
-      <button
-        type="button"
-        class="ik-category-tab"
-        :class="{ 'ik-category-tab--active': selectedCategory === '' }"
-        @click="selectCategory('')"
-      >
-        全部
-      </button>
-      <button
-        v-for="cat in categories"
-        :key="cat.slug"
-        type="button"
-        class="ik-category-tab"
-        :class="{ 'ik-category-tab--active': selectedCategory === cat.slug }"
-        @click="selectCategory(cat.slug)"
-      >
-        {{ cat.name }}
-      </button>
-    </nav>
+    <!-- 45° 斜线纹理背景（与发帖页 / 入站考试页一致） -->
+    <div class="ik-home-page__stripe" aria-hidden="true"></div>
+
+    <!-- 顶部工具条：左侧频道分类，右侧 feed 切换（推荐/关注/收藏），两组错开。 -->
+    <div class="ik-home-toolbar">
+      <!-- 频道 Tab 条：按 order 展示，「全部」恒在最前。
+           恒渲染（不随 categories 异步加载出现/消失），为分类栏预留固定高度，
+           避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
+      <nav class="ik-category-tabs" aria-label="帖子频道">
+        <button
+          type="button"
+          class="ik-category-tab"
+          :class="{ 'ik-category-tab--active': selectedCategory === '' }"
+          @click="selectCategory('')"
+        >
+          全部
+        </button>
+        <button
+          v-for="cat in categories"
+          :key="cat.slug"
+          type="button"
+          class="ik-category-tab"
+          :class="{ 'ik-category-tab--active': selectedCategory === cat.slug }"
+          @click="selectCategory(cat.slug)"
+        >
+          {{ cat.name }}
+        </button>
+
+        <!-- feed 切换：关注 / 收藏，接在分类标签最后。未登录时引导登录；
+             再次点击已激活项切回推荐。 -->
+        <span class="ik-feed-sep" aria-hidden="true"></span>
+        <button
+          v-for="tab in feedTabs"
+          :key="tab.key"
+          type="button"
+          class="ik-feed-tab"
+          :class="{ 'ik-feed-tab--active': feedMode === tab.key }"
+          @click="selectFeed(tab.key)"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
+    </div>
 
     <!-- Refresh indicator (pull-to-refresh style) -->
     <Transition name="ik-refresh-indicator">
@@ -827,14 +906,86 @@ onBeforeUnmount(() => {
   padding-bottom: 24px;
 }
 
+/* 45° 斜线纹理背景（与发帖页 / 入站考试页一致） */
+.ik-home-page__stripe {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    40deg,
+    transparent,
+    transparent 3.5px,
+    rgba(255, 255, 255, 0.09) 4.5px,
+    rgba(255, 255, 255, 0.09) 7.5px,
+    transparent 8.5px
+  );
+}
+
+/* 内容层抬到斜纹之上（固定定位的刷新/回顶按钮本就在更高层级） */
+.ik-home-toolbar,
+.ik-skeleton-state,
+.ik-empty,
+.ik-list-state {
+  position: relative;
+  z-index: 1;
+}
+
+/* 顶部工具条：频道分类（可换行/横滑），末尾接 feed 切换。 */
+.ik-home-toolbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
 .ik-category-tabs {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  margin-bottom: 16px;
   /* 预留一行频道标签高度，避免频道列表异步到达时撑高导致下方瀑布流跳动 */
   min-height: 30px;
+}
+
+/* 分类与 feed 切换之间的竖向分隔线 */
+.ik-feed-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: #333;
+}
+
+/* feed 切换标签（关注/收藏）：与频道标签同款胶囊，接在分类末尾。 */
+.ik-feed-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  border: 2px solid #222;
+  background: #222222;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.ik-feed-tab--active {
+  color: #222;
+  background: var(--ik-primary, #BFFF09);
+  border-color: var(--ik-primary, #BFFF09);
+  font-weight: 700;
 }
 
 /* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
@@ -865,9 +1016,13 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  .ik-home-toolbar {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
   .ik-category-tabs {
     gap: 8px;
-    margin-bottom: 12px;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
@@ -883,6 +1038,12 @@ onBeforeUnmount(() => {
     flex: 0 0 auto;
     height: 28px;
     padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .ik-feed-tab {
+    height: 28px;
+    padding: 0 12px;
     font-size: 13px;
   }
 }

@@ -6,7 +6,7 @@ import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
 import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, EyeSlashIcon } from "@heroicons/vue/24/outline";
-import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
+import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
@@ -301,8 +301,26 @@ const handleDeleteArticle = async () => {
   }
 };
 
-const showCollectComingSoon = () => {
-  message.warning("收藏功能即将开放");
+const favoriting = ref(false);
+
+const favoriteArticle = async () => {
+  if (!post.value) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (favoriting.value) return;
+  favoriting.value = true;
+  try {
+    const result = await api.toggleFavorite(post.value.id);
+    post.value.favorited = result.favorited;
+    post.value.favoritesCount = result.favoritesCount;
+    message.success(result.favorited ? "已收藏" : "已取消收藏");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "收藏失败"));
+  } finally {
+    favoriting.value = false;
+  }
 };
 
 const likeArticle = async () => {
@@ -798,9 +816,16 @@ onBeforeUnmount(() => {
                         <img src="/images/materials/dennies_v2.webp" class="ik-engage-icon ik-engage-icon--denny" alt="投币" />
                         <IkRollingDigit :value="post.dennyCount ?? 0" fallback="投币" />
                       </button>
-                      <button type="button" class="ik-engage-bar__action" @click="showCollectComingSoon">
-                        <StarIcon class="ik-engage-icon" aria-hidden="true" />
-                        <span>收藏</span>
+                      <button
+                        type="button"
+                        class="ik-engage-bar__action"
+                        :class="{ 'ik-engage-bar__action--active': post.favorited }"
+                        :disabled="favoriting"
+                        @click="favoriteArticle"
+                      >
+                        <StarIconSolid v-if="post.favorited" class="ik-engage-icon" aria-hidden="true" />
+                        <StarIcon v-else class="ik-engage-icon" aria-hidden="true" />
+                        <IkRollingDigit :value="post.favoritesCount ?? 0" fallback="收藏" />
                       </button>
                       <button
                         v-if="isOwner"
