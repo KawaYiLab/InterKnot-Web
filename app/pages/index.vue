@@ -621,9 +621,10 @@ let initialFetchPromise: Promise<void>;
 
 // 乐观插入：消费 /create 发布后塞入的 pending 队列，把刚发布的帖子
 // unshift 到 list 头部并加入 seenIds，避免后续 fetch 返回相同 id 时被去重逻辑过滤掉。
-// 搜索流下不插入，避免污染搜索结果。drain 仅在真正会写入 list 时调用，
-// 不能在冷启动 fetchList 之前就 drain——fetchList 会重置 seenIds 和 list。
+// 搜索流 / 关注 / 收藏 feed 下不插入，避免污染这些列表（新帖既未被收藏也未必来自关注作者）。
+// drain 仅在真正会写入 list 时调用，不能在冷启动 fetchList 之前就 drain——fetchList 会重置 seenIds 和 list。
 const consumePendingPosts = () => {
+  if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
   if (!pendingPost.peek().length) return;
   const pending = pendingPost.drain();

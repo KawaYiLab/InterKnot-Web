@@ -186,12 +186,12 @@ const startDm = async () => {
   }
 };
 
-/** 是否可关注该用户：非自己、未隐藏。 */
+/** 是否可关注该用户：非自己、未隐藏（与 canSendDm 一致用 profileHidden）。 */
 const canFollow = computed<boolean>(() => {
   const p = profile.value;
   if (!p) return false;
   if (p.isSelf) return false;
-  if (p.isHidden) return false;
+  if (p.profileHidden) return false;
   return true;
 });
 
