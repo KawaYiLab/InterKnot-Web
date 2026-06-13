@@ -89,6 +89,9 @@ const selectFeed = (mode: Exclude<ArticleFeed, "recommend">) => {
     loginDialog.open();
     return;
   }
+  // 关注/收藏是独立流，不与分类叠加：进入时清空已选分类，避免分类 tab 仍高亮
+  // 且后端把 category 与 feed 过滤叠加导致结果是子集。
+  selectedCategory.value = "";
   feedMode.value = mode;
 };
 
