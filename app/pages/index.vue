@@ -72,16 +72,20 @@ const selectedCategory = ref<string>("");
 // feed 模式：推荐 / 关注（我关注的作者）/ 收藏（我的收藏）。
 // 关注、收藏需登录；缓存键随 feed 一起隔离（见 useApi.searchArticles）。
 const feedMode = ref<ArticleFeed>("recommend");
-const feedTabs: { key: ArticleFeed; label: string; requireAuth: boolean }[] = [
-  { key: "recommend", label: "推荐", requireAuth: false },
-  { key: "following", label: "关注", requireAuth: true },
-  { key: "favorites", label: "收藏", requireAuth: true },
+// 右侧仅展示「关注 / 收藏」两个特殊筛选；默认（推荐）态由左侧分类栏主导，
+// 此时这两个按钮均不高亮。再次点击已激活的按钮即可切回推荐。
+const feedTabs: { key: Exclude<ArticleFeed, "recommend">; label: string }[] = [
+  { key: "following", label: "关注" },
+  { key: "favorites", label: "收藏" },
 ];
 
-const selectFeed = (mode: ArticleFeed) => {
-  if (mode === feedMode.value) return;
-  const tab = feedTabs.find((t) => t.key === mode);
-  if (tab?.requireAuth && !auth.isLogin) {
+const selectFeed = (mode: Exclude<ArticleFeed, "recommend">) => {
+  // 点击已激活的 feed：切回推荐流。
+  if (mode === feedMode.value) {
+    feedMode.value = "recommend";
+    return;
+  }
+  if (!auth.isLogin) {
     loginDialog.open();
     return;
   }
@@ -557,6 +561,8 @@ watch(
 );
 
 const selectCategory = (slug: string) => {
+  // 选分类即回到推荐流（关注/收藏是独立筛选，不与分类叠加）。
+  if (feedMode.value !== "recommend") feedMode.value = "recommend";
   if (slug === selectedCategory.value) return;
   selectedCategory.value = slug;
 };
