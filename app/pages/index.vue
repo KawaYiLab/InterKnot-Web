@@ -783,10 +783,10 @@ onBeforeUnmount(() => {
         >
           {{ cat.name }}
         </button>
-      </nav>
 
-      <!-- feed 切换：推荐 / 关注 / 收藏。关注、收藏未登录时引导登录。 -->
-      <nav class="ik-feed-tabs" aria-label="内容筛选">
+        <!-- feed 切换：关注 / 收藏，接在分类标签最后。未登录时引导登录；
+             再次点击已激活项切回推荐。 -->
+        <span class="ik-feed-sep" aria-hidden="true"></span>
         <button
           v-for="tab in feedTabs"
           :key="tab.key"
@@ -937,11 +937,10 @@ onBeforeUnmount(() => {
   z-index: 1;
 }
 
-/* 顶部工具条：左侧频道分类（可换行/横滑），右侧 feed 切换。 */
+/* 顶部工具条：频道分类（可换行/横滑），末尾接 feed 切换。 */
 .ik-home-toolbar {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -951,20 +950,23 @@ onBeforeUnmount(() => {
   flex: 1 1 auto;
   min-width: 0;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-start;
   gap: 10px;
   /* 预留一行频道标签高度，避免频道列表异步到达时撑高导致下方瀑布流跳动 */
   min-height: 30px;
 }
 
-/* feed 切换标签（推荐/关注/收藏）：与频道标签同款胶囊，靠右与分类错开。 */
-.ik-feed-tabs {
-  display: flex;
+/* 分类与 feed 切换之间的竖向分隔线 */
+.ik-feed-sep {
   flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: #333;
 }
 
+/* feed 切换标签（关注/收藏）：与频道标签同款胶囊，接在分类末尾。 */
 .ik-feed-tab {
   display: inline-flex;
   align-items: center;
