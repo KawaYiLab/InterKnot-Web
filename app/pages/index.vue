@@ -596,6 +596,8 @@ watch(
     endCursor.value = "0";
     hasNextPage.value = true;
     requestVersion.value++;
+    // 与切频道一致：失效列表缓存，保证每次切 feed 都打到后端拉最新。
+    api.invalidateQueries(["articles", "search"]);
     void fetchList(true);
   },
 );
