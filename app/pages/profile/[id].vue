@@ -421,12 +421,7 @@ onBeforeUnmount(() => {
         </div>
         <z-button v-if="profile.isSelf" @click="openModal('settings')">更多操作</z-button>
         <div v-else class="ik-tab-bar__actions">
-          <z-button
-            v-if="canFollow"
-            :type="profile.isFollowing ? 'default' : 'primary'"
-            :loading="followLoading"
-            @click="toggleFollow"
-          >
+          <z-button v-if="canFollow" @click="toggleFollow">
             {{ profile.isFollowing ? "已关注" : "关注" }}
           </z-button>
           <z-button v-if="canSendDm" :loading="dmStarting" @click="startDm">私信</z-button>

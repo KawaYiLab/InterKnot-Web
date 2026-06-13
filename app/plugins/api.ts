@@ -126,7 +126,16 @@ export default defineNuxtPlugin(() => {
         const token = localStorage.getItem(TOKEN_KEY) || "";
         const path = request;
         const method = (options.method || "GET").toUpperCase();
-        if (shouldAttachToken(path, method, token)) {
+        // /api/articles/list 公开（recommend 可缓存），但 feed=following/favorites
+        // 是用户私有流，需带 token 让后端识别当前用户（带 token 也会绕过公开缓存）。
+        const query = (options.query || {}) as Record<string, unknown>;
+        const personalizedFeed =
+          path.startsWith("/api/articles/list") &&
+          (query.feed === "following" || query.feed === "favorites");
+        if (
+          shouldAttachToken(path, method, token) ||
+          (Boolean(token) && personalizedFeed)
+        ) {
           options.headers = {
             ...options.headers,
             Authorization: `Bearer ${token}`,

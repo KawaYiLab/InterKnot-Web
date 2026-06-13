@@ -24,9 +24,6 @@ export function shouldAttachToken(path: string, method: string, token: string): 
   if (
     upperMethod === "GET" &&
     (pathname.startsWith("/api/articles/detail/") ||
-      // 首页列表本身公开，但 feed=following/favorites 需后端识别当前用户；
-      // 带上 token（存在时）才能让 optional-auth 填充 ctx.state.user。
-      pathname.startsWith("/api/articles/list") ||
       pathname.startsWith("/api/comments/list") ||
       pathname.startsWith("/api/profiles/") ||
       // /api/authors/search 走鉴权（后端按 user.id 做 Redis 限流），但路径前缀
