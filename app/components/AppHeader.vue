@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { useEventListener } from "@vueuse/core";
 import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/vue/24/solid";
+import { ClockIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import { LEVEL_THRESHOLDS, MAX_LEVEL } from "~/utils/level";
 import type { SearchSuggestion } from "~/composables/useApi";
 
@@ -186,6 +187,23 @@ const suggestOpen = computed(
   () => suggestVisible.value && suggestions.value.length > 0 && !!searchKeyword.value.trim(),
 );
 
+// ── 本地搜索历史：聚焦且无输入时展示，与联想下拉互斥 ──────────
+const {
+  history: searchHistory,
+  add: addSearchHistory,
+  remove: removeSearchHistory,
+  clear: clearSearchHistory,
+} = useSearchHistory();
+const activeHistoryIndex = ref(-1);
+
+const historyOpen = computed(
+  () => searchFocused.value && !searchKeyword.value.trim() && searchHistory.value.length > 0,
+);
+
+watch(historyOpen, () => {
+  activeHistoryIndex.value = -1;
+});
+
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -242,6 +260,8 @@ const closeSuggest = () => {
 };
 
 const selectSuggestion = (s: SearchSuggestion) => {
+  // 点选联想项视为一次搜索：记录用户当时输入的关键词
+  addSearchHistory(searchKeyword.value);
   closeSuggest();
   postModal.open(s.documentId, { preview: { title: s.title } });
 };
@@ -252,6 +272,47 @@ const moveSuggestIndex = (delta: number) => {
   if (count === 0) return;
   const next = activeSuggestIndex.value + delta;
   activeSuggestIndex.value = next < -1 ? count - 1 : next >= count ? -1 : next;
+};
+
+// 失焦输入框：选中历史 / 关闭历史下拉时复用，触发 focusout 收起下拉
+const blurSearchInput = () => {
+  const input = searchInputRef.value?.$el?.querySelector("input") as
+    | HTMLInputElement
+    | undefined;
+  input?.blur();
+};
+
+// 点选历史记录：回填关键词并直接发起全量搜索
+const selectHistory = (keyword: string) => {
+  searchKeyword.value = keyword;
+  blurSearchInput();
+  closeSuggest();
+  applySearch().catch(() => undefined);
+};
+
+const moveHistoryIndex = (delta: number) => {
+  const count = searchHistory.value.length;
+  if (count === 0) return;
+  const next = activeHistoryIndex.value + delta;
+  activeHistoryIndex.value = next < -1 ? count - 1 : next >= count ? -1 : next;
+};
+
+// 上下键统一分发到当前展开的下拉（联想优先，其次历史）
+const moveActiveIndex = (delta: number) => {
+  if (suggestOpen.value) {
+    moveSuggestIndex(delta);
+  } else if (historyOpen.value) {
+    moveHistoryIndex(delta);
+  }
+};
+
+const handleSearchEscape = () => {
+  // 历史下拉只能靠失焦收起（其可见性由 searchFocused 派生）
+  if (historyOpen.value) {
+    blurSearchInput();
+    return;
+  }
+  closeSuggest();
 };
 
 const handleSearchFocus = () => {
@@ -296,6 +357,9 @@ const applySearch = async () => {
   const currentKeyword = pickFirstQuery(route.query.q as string | string[] | undefined).trim();
   const query = keyword ? { q: keyword } : {};
 
+  // 仅记录用户主动发起的非空搜索（applySearch 只由用户交互触发）
+  if (keyword) addSearchHistory(keyword);
+
   if (route.path === "/" && keyword === currentKeyword) {
     return;
   }
@@ -318,9 +382,14 @@ const applySearch = async () => {
 };
 
 const handleSearchEnter = () => {
-  const active = activeSuggestIndex.value;
-  if (suggestOpen.value && active >= 0 && suggestions.value[active]) {
-    selectSuggestion(suggestions.value[active]);
+  const activeSuggest = activeSuggestIndex.value;
+  if (suggestOpen.value && activeSuggest >= 0 && suggestions.value[activeSuggest]) {
+    selectSuggestion(suggestions.value[activeSuggest]);
+    return;
+  }
+  const activeHistory = activeHistoryIndex.value;
+  if (historyOpen.value && activeHistory >= 0 && searchHistory.value[activeHistory]) {
+    selectHistory(searchHistory.value[activeHistory]);
     return;
   }
   handleFullSearch();
@@ -434,9 +503,9 @@ watch(
           class="ik-search-shell"
           @focusin="handleSearchFocus"
           @focusout="handleSearchBlur"
-          @keydown.down.prevent="moveSuggestIndex(1)"
-          @keydown.up.prevent="moveSuggestIndex(-1)"
-          @keydown.esc="closeSuggest"
+          @keydown.down.prevent="moveActiveIndex(1)"
+          @keydown.up.prevent="moveActiveIndex(-1)"
+          @keydown.esc="handleSearchEscape"
         >
           <z-input
             ref="searchInputRef"
@@ -485,6 +554,51 @@ watch(
                 @click="handleFullSearch"
               >
                 查看“{{ searchKeyword.trim() }}”的全部结果
+              </button>
+            </div>
+          </Transition>
+
+          <!-- 本地搜索历史（聚焦且无输入时展示） -->
+          <Transition name="ik-suggest">
+            <div v-if="historyOpen" class="ik-search-suggest ik-search-history" role="listbox">
+              <div class="ik-search-history__head">
+                <span class="ik-search-history__title">
+                  <ClockIcon class="ik-search-history__title-icon" aria-hidden="true" />
+                  搜索历史
+                </span>
+                <button
+                  type="button"
+                  class="ik-search-history__clear"
+                  @mousedown.prevent
+                  @click="clearSearchHistory"
+                >
+                  清空
+                </button>
+              </div>
+              <button
+                v-for="(item, i) in searchHistory"
+                :key="item"
+                type="button"
+                class="ik-search-suggest__item ik-search-history__item"
+                :class="{ 'is-active': i === activeHistoryIndex }"
+                role="option"
+                :aria-selected="i === activeHistoryIndex"
+                @mousedown.prevent
+                @mousemove="activeHistoryIndex = i"
+                @click="selectHistory(item)"
+              >
+                <ClockIcon class="ik-search-history__item-icon" aria-hidden="true" />
+                <span class="ik-search-history__item-text">{{ item }}</span>
+                <span
+                  class="ik-search-history__remove"
+                  role="button"
+                  tabindex="-1"
+                  :aria-label="`删除“${item}”`"
+                  @mousedown.prevent
+                  @click.stop="removeSearchHistory(item)"
+                >
+                  <XMarkIcon class="ik-search-history__remove-icon" aria-hidden="true" />
+                </span>
               </button>
             </div>
           </Transition>
@@ -848,6 +962,122 @@ watch(
 .ik-suggest-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+
+/* ── 搜索历史下拉 ───────────────────────────────────── */
+.ik-search-history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 8px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ik-search-history__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.ik-search-history__title-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.ik-search-history__clear {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  cursor: pointer;
+  appearance: none;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.ik-search-history__clear:hover {
+  color: var(--ik-primary, #bfff09);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* 复用 .ik-search-suggest__item 的内边距/圆角/选中态，仅改为单行横向布局 */
+.ik-search-history__item {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.ik-search-history__item-icon {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: rgba(255, 255, 255, 0.35);
+  transition: color 0.1s ease;
+}
+
+.ik-search-history__item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ik-search-history__remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.1s ease, background-color 0.1s ease, opacity 0.1s ease;
+}
+
+.ik-search-history__remove-icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* 选中/hover：主题色底 + 深色文字（与联想项一致） */
+.ik-search-history__item.is-active .ik-search-history__item-text,
+.ik-search-history__item:hover .ik-search-history__item-text,
+.ik-search-history__item.is-active .ik-search-history__item-icon,
+.ik-search-history__item:hover .ik-search-history__item-icon {
+  color: #111;
+}
+
+.ik-search-history__item.is-active .ik-search-history__remove,
+.ik-search-history__item:hover .ik-search-history__remove {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.ik-search-history__remove:hover {
+  background: rgba(0, 0, 0, 0.16);
+  color: #000;
+}
+
+/* 仅在支持 hover 的设备上默认隐藏删除按钮、悬停行才浮现；
+   触屏设备保持常显，确保可删除。 */
+@media (hover: hover) {
+  .ik-search-history__remove {
+    opacity: 0;
+  }
+
+  .ik-search-history__item.is-active .ik-search-history__remove,
+  .ik-search-history__item:hover .ik-search-history__remove {
+    opacity: 1;
+  }
 }
 
 .ik-header__right {
