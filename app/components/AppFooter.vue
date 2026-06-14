@@ -2,54 +2,21 @@
   <footer class="app-footer">
     <div class="app-footer__inner">
       <div class="app-footer__brand">
-        <span class="app-footer__logo">InterKnot</span>
-        <span class="app-footer__copy">&copy; {{ year }} 新艾利都最大的匿名委托中枢。</span>
+        <span class="app-footer__logo">{{ SITE_BRAND }}</span>
+        <span class="app-footer__copy">{{ siteCopyright() }}</span>
       </div>
 
       <div class="app-footer__links">
-        <div class="app-footer__group">
-          <h4 class="app-footer__heading">联系我们</h4>
+        <div
+          v-for="group in siteLinkGroups"
+          :key="group.heading"
+          class="app-footer__group"
+        >
+          <h4 class="app-footer__heading">{{ group.heading }}</h4>
           <ul class="app-footer__list">
-            <li>
-              <a
-                href="https://qm.qq.com/q/6Nr24XIzBK"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                QQ
-              </a>
-            </li>
-            <li>
-              <a
-                href="http://discord.gg/6TQpUwGvFG"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Discord
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://github.com/KawaYiLab/InterKnot-Web"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                GitHub
-              </a>
-            </li>
-          </ul>
-        </div>
-
-        <div class="app-footer__group">
-          <h4 class="app-footer__heading">友情链接</h4>
-          <ul class="app-footer__list">
-            <li>
-              <a
-                href="https://mc.tiwat.cn"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                提瓦特服务器
+            <li v-for="link in group.links" :key="link.href">
+              <a :href="link.href" target="_blank" rel="noopener noreferrer">
+                {{ link.label }}
               </a>
             </li>
           </ul>
@@ -60,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-const year = new Date().getFullYear();
+import { SITE_BRAND, siteCopyright, siteLinkGroups } from "~/utils/site-links";
 </script>
 
 <style scoped>
