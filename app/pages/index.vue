@@ -890,10 +890,11 @@ onBeforeUnmount(() => {
     </ClientOnly>
     </div>
 
-    <!-- 右侧常驻侧栏：承载页脚信息，并作为未来功能模块的容器 -->
-    <aside class="ik-home-aside">
+    <!-- 右侧常驻侧栏：承载页脚信息，并作为未来功能模块的容器。
+         外层用 div，语义 <aside> 由 AppSidebar 根节点提供，避免嵌套 landmark。 -->
+    <div class="ik-home-aside">
       <AppSidebar />
-    </aside>
+    </div>
     </div>
 
     <!-- Refresh FAB -->
