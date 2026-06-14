@@ -17,7 +17,7 @@ export const siteLinkGroups: SiteLinkGroup[] = [
     heading: "联系我们",
     links: [
       { label: "QQ", href: "https://qm.qq.com/q/6Nr24XIzBK" },
-      { label: "Discord", href: "http://discord.gg/6TQpUwGvFG" },
+      { label: "Discord", href: "https://discord.gg/6TQpUwGvFG" },
       { label: "GitHub", href: "https://github.com/KawaYiLab/InterKnot-Web" },
     ],
   },
