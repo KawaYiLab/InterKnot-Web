@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>模仿制作的「绝区零」世界观中的"绳网"——新艾利都最大的匿名委托中枢。</strong>
+  <strong>绳网——新艾利都最大的匿名委托中枢。</strong>
 </p>
 
 <p align="center">
@@ -20,18 +20,6 @@
 > 移动端请前往 [KawaYiLab/InterKnot-App](https://github.com/KawaYiLab/InterKnot-App)（Android / iOS）。
 > 
 > 后端 [KawaYiLab/InterKnot-server](https://github.com/KawaYiLab/InterKnot-server)。
-
----
-
-## ✨ 功能亮点
-
-- **帖子弹窗** — 还原弹窗式浏览，支持评论与回复
-- **发帖** — 支持草稿保存，图片上传
-- **用户体系** — 还原个人主页、绳网经验等级
-- **图片画廊** — 集成 lightGallery，支持缩放与幻灯片
-- **UI还原** — 使用 [zenless-ui](https://github.com/ChrisChan13/zenless-ui) 组件库
-- **响应式** — 桌面端 + 移动端自适应
-- **SPA + 静态生成** — 纯客户端渲染，可部署至任意静态托管
 
 ---
 
