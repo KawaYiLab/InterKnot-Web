@@ -1041,7 +1041,38 @@ onBeforeUnmount(() => {
   .ik-profile { padding: 20px 24px 32px; }
 }
 @media (min-width: 1024px) and (orientation: landscape) {
-  .ik-article-grid { grid-template-columns: repeat(6, 1fr); }
+  /* 一屏不滚动布局下，帖子区按可用高度自适应：让网格填满 .ik-aframe__content
+     的剩余高度，单行 6 列等高，封面占据卡片去掉信息区后的剩余空间（object-fit
+     裁切），避免窗口偏矮时被 overflow:hidden 截断、偏高时底部留大片空白。 */
+  .ik-article-grid {
+    grid-template-columns: repeat(6, 1fr);
+    grid-auto-rows: minmax(0, 1fr);
+    flex: 1;
+    min-height: 0;
+  }
+  .ik-article-grid__item {
+    min-height: 0;
+    height: 100%;
+  }
+  .ik-article-grid__item :deep(.ik-card),
+  .ik-article-grid__item :deep(.ik-card__link) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  .ik-article-grid__item :deep(.ik-card__cover-wrap) {
+    flex: 1;
+    min-height: 0;
+  }
+  .ik-article-grid__item :deep(.ik-card__cover-frame) {
+    height: 100%;
+    max-height: none;
+    aspect-ratio: auto;
+  }
+  .ik-article-grid__item :deep(.ik-card__body) {
+    flex-shrink: 0;
+  }
 }
 
 /* ── Medium / portrait viewports ─────────────────
