@@ -753,9 +753,6 @@ onBeforeUnmount(() => {
     <!-- 45° 斜线纹理背景（与发帖页 / 入站考试页一致） -->
     <div class="ik-home-page__stripe" aria-hidden="true"></div>
 
-    <!-- 两列布局：左主栏（工具条 + 瀑布流）+ 右侧常驻侧栏。
-         固定定位的刷新/回顶按钮、斜纹背景不进网格，仍相对视口/容器定位。 -->
-    <div class="ik-home-layout">
     <div class="ik-home-main ik-stack">
     <!-- 顶部工具条：左侧频道分类，右侧 feed 切换（推荐/关注/收藏），两组错开。 -->
     <div class="ik-home-toolbar">
@@ -890,13 +887,6 @@ onBeforeUnmount(() => {
     </ClientOnly>
     </div>
 
-    <!-- 右侧常驻侧栏：承载页脚信息，并作为未来功能模块的容器。
-         外层用 div，语义 <aside> 由 AppSidebar 根节点提供，避免嵌套 landmark。 -->
-    <div class="ik-home-aside">
-      <AppSidebar />
-    </div>
-    </div>
-
     <!-- Refresh FAB -->
     <z-button
       circle
@@ -919,29 +909,10 @@ onBeforeUnmount(() => {
   padding-bottom: 24px;
 }
 
-/* 两列网格：主栏自适应填满，侧栏固定宽度。瀑布流列数随主栏宽度自动重排。 */
-.ik-home-layout {
+.ik-home-main {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 32px;
-  align-items: start;
-}
-
-.ik-home-main {
   min-width: 0;
-}
-
-/* 侧栏吸顶常驻：长 feed 滚动时始终可见；内容超高时自身滚动。 */
-.ik-home-aside {
-  position: sticky;
-  top: calc(78px + 24px);
-  align-self: start;
-  z-index: 1;
-  max-height: calc(100vh - 78px - 48px);
-  overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 /* 45° 斜线纹理背景（与发帖页 / 入站考试页一致） */
@@ -1175,17 +1146,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 中小屏隐藏侧栏，瀑布流恢复全宽（与顶部 tabs / MobileBottomNav 切换区间协调） */
-@media (max-width: 1200px) {
-  .ik-home-layout {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
 
-  .ik-home-aside {
-    display: none;
-  }
-}
 
 @media (max-width: 768px) {
   .ik-home-container {

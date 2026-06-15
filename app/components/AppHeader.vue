@@ -698,6 +698,8 @@ watch(
             <span class="ik-header-tab__content">{{ mineTabText }}</span>
           </button>
         </div>
+
+        <AppSidebar />
       </div>
     </div>
     <div class="ik-header__progress" :class="{ 'is-active': showProgress }">

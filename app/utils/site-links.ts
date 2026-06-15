@@ -1,6 +1,6 @@
 /**
  * 站点信息（联系方式 / 友情链接 / 版权）单一数据源。
- * AppFooter（个人页）与 AppSidebar（主页侧栏）共用，避免两处维护。
+ * AppFooter（个人页）与 AppSidebar（右上角菜单抽屉）共用，避免两处维护。
  */
 export interface SiteLink {
   label: string;
