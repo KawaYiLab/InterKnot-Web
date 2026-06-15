@@ -61,7 +61,7 @@
       &.is-active::before {
         transform: none;
         animation: z_ani_background $--animate-color-duration $--animate-color-bezier infinite alternate,
-                   z_ani_size $--animate-size-duration $--animate-size-bezier infinite alternate;
+                   z_ani_size $--animate-size-duration $--animate-size-bezier infinite;
 
       }
     }
@@ -80,7 +80,7 @@
         border-radius: inherit;
         transform: skew(-20deg);
         animation: z_ani_background $--animate-color-duration $--animate-color-bezier infinite alternate,
-                   z_ani_skew_size $--animate-size-duration $--animate-size-bezier infinite alternate;
+                   z_ani_skew_size $--animate-size-duration $--animate-size-bezier infinite;
       }
     }
     &.is-disabled {

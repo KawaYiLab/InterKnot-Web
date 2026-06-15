@@ -15,20 +15,47 @@
   to { outline-color: $--gradient-green; }
 }
 @keyframes z_ani_size {
-  20% { transform: scale(1); }
-  to { transform: scale(1.3); }
+  0% {
+    transform: scale(1.1);
+    animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+  }
+  50% {
+    transform: scale(1.25);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    transform: scale(1.1);
+  }
 }
 @keyframes z_ani_skew_size {
-  20% { transform: skew(-20deg) scale(1); }
-  to { transform: skew(-20deg) scale(1.3); }
+  0% {
+    transform: skew(-20deg) scale(1.1);
+    animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+  }
+  50% {
+    transform: skew(-20deg) scale(1.25);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    transform: skew(-20deg) scale(1.1);
+  }
 }
 @keyframes z_ani_loading {
   from { transform: rotate(0); }
   to { transform: rotate(1turn); }
 }
 @keyframes z_ani_outline_size {
-  20% { outline-width: 2px; }
-  to { outline-width: 8px; }
+  0% {
+    outline-width: 2px;
+    animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+  }
+  50% {
+    outline-width: 8px;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    outline-width: 2px;
+  }
 }
 
 // Respect the user's "reduce motion" preference: flatten the infinite
@@ -50,10 +77,10 @@
     from, to { outline-color: $--gradient-yellow; }
   }
   @keyframes z_ani_size {
-    from, to { transform: scale(1); }
+    from, to { transform: scale(1.1); }
   }
   @keyframes z_ani_skew_size {
-    from, to { transform: skew(-20deg) scale(1); }
+    from, to { transform: skew(-20deg) scale(1.1); }
   }
   @keyframes z_ani_outline_size {
     from, to { outline-width: 2px; }

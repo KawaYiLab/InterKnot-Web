@@ -16,10 +16,10 @@ $--color-physical: #f0d12a;
 $--gradient-green: #91bc00;
 $--gradient-yellow: #ffea00;
 
-$--animate-color-duration: 1s;
-$--animate-color-bezier: ease-in-out;
-$--animate-size-duration: 0.33s;
-$--animate-size-bezier: cubic-bezier(1, 0, 0.5, 1);
+$--animate-color-duration: 800ms;
+$--animate-color-bezier: linear;
+$--animate-size-duration: 700ms;
+$--animate-size-bezier: linear;
 $--animate-flash-duration: 0.05s;
 $--animate-flash-bezier: linear;
 $--animate-flash-count: 4;

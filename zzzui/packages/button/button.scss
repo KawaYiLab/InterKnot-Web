@@ -291,7 +291,7 @@
       from, to { color: $--color-black; }
     }
     $button-active-animate: z_ani_background $--animate-color-duration $--animate-color-bezier infinite alternate,
-                            z_ani_size $--animate-size-duration $--animate-size-bezier infinite alternate;
+                            z_ani_size $--animate-size-duration $--animate-size-bezier infinite;
     &:has(.is-fadeout) {
       animation: z_ani_btn_inactive_color $--animate-flash-duration $--animate-flash-bezier $--animate-flash-count alternate;
       &>.z-button__content,

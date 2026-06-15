@@ -6,7 +6,7 @@
   &.is-focused {
     outline: 2px solid transparent;
     animation: z_ani_outline_color $--animate-color-duration $--animate-color-bezier infinite alternate,
-               z_ani_outline_size $--animate-size-duration $--animate-size-bezier infinite alternate;
+               z_ani_outline_size $--animate-size-duration $--animate-size-bezier infinite;
   }
   &.is-disabled {
     .z-select {
