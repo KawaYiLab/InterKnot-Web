@@ -17,8 +17,6 @@
 
 本项目是 [KawaYiLab/InterKnot-App](https://github.com/KawaYiLab/InterKnot-App) 独立开发的**网页前端**，使用 Nuxt 4 从零构建，模仿绝区零UI风格，后端对接自建 Strapi v5。
 
-> 移动端请前往 [KawaYiLab/InterKnot-App](https://github.com/KawaYiLab/InterKnot-App)（Android / iOS）。
-> 
 > 后端 [KawaYiLab/InterKnot-server](https://github.com/KawaYiLab/InterKnot-server)。
 
 ---
