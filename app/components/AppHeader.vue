@@ -1632,7 +1632,6 @@ watch(
 }
 
 .ik-header-denny__content {
-  font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-feature-settings: "tnum"; /* 开启 OpenType Tabular Numbers 特征，使非等宽字体强制以等宽数字排列，防止宽度抖动 */
   font-size: 14px;
   font-weight: 700;

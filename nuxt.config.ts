@@ -29,29 +29,6 @@ export default defineNuxtConfig({
         // 以及 #__nuxt::before 背景图未就绪出现的"黑屏"过渡。
         { rel: "preload", as: "image", href: "/images/loading.gif", fetchpriority: "high" },
         { rel: "preload", as: "image", href: "/images/main.avif", fetchpriority: "high" },
-        // 首屏关键字体分片预加载：仅 Latin/常用范围的 Regular & Bold（中文分片由 unicode-range 按需触发）
-        // 注：crossorigin 是 woff2 preload 的硬性要求，否则浏览器会发起第二次请求
-        {
-          rel: "preload",
-          as: "font",
-          type: "font/woff2",
-          href: "/fonts/HarmonyOS_SansSC_Regular/6a46ab7f.woff2",
-          crossorigin: "anonymous",
-        },
-        {
-          rel: "preload",
-          as: "font",
-          type: "font/woff2",
-          href: "/fonts/HarmonyOS_SansSC_Bold/6a46ab7f.woff2",
-          crossorigin: "anonymous",
-        },
-        // fonts.css 改为 preload + onload swap，避免 72KB 字体声明阻塞首屏渲染
-        {
-          rel: "preload",
-          as: "style",
-          href: "/fonts/fonts.css",
-          onload: "this.onload=null;this.rel='stylesheet'",
-        },
         { rel: "preconnect", href: "https://image.tiwat.cn" },
       ],
       htmlAttrs: {
