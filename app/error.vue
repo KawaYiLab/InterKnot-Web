@@ -30,6 +30,7 @@ const handleClear = () => clearError({ redirect: "/" });
   justify-content: center;
   min-height: 100vh;
   background: #efefef;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .ik-error__img {

@@ -85,6 +85,7 @@ body,
   min-height: 100%;
   background: #000;
   color: var(--ik-text);
+  font-family: sans-serif;
   cursor: var(--ik-cursor-default);
   /* 隐藏滚动条 (IE, Edge, Firefox) */
   -ms-overflow-style: none;
