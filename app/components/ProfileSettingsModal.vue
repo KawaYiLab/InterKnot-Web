@@ -785,7 +785,6 @@ onBeforeUnmount(() => {
 }
 
 .ik-edit-name__cost-amount {
-  font-family: "HarmonyOS Sans SC", "PingFang SC", sans-serif;
   font-size: 12px; /* 调小至 12px，与字数统计（12px）完全等大对齐 */
   font-weight: 700;
   color: var(--ik-primary);
