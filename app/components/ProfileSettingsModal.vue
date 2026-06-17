@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
                       <div class="ik-edit-name__meta">
                         <span class="ik-edit-name__count">{{ nameInput.trim().length }}/{{ NAME_MAX }}</span>
                         <div class="ik-edit-name__cost">
-                          <span class="ik-edit-name__cost-amount">50</span>
+                          <span class="ik-edit-name__cost-amount">10</span>
                           <img src="/images/materials/dennies_v2.webp" alt="Dennies" class="ik-edit-name__cost-img" draggable="false" />
                         </div>
                       </div>
