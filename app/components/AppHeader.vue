@@ -93,21 +93,21 @@ const userAvatar = computed(() => auth.user?.avatar || "/images/default-avatar.w
 
 // 等级阈值表 - 与后端 server/src/utils/level.ts 保持一致
 
-// 计算下一级所需的总经验值
+// 计算下一级所需的总绳网信用值
 const expForNextLevel = computed(() => {
   const level = userLevel.value;
   if (level >= MAX_LEVEL) return LEVEL_THRESHOLDS[MAX_LEVEL - 1];
   return LEVEL_THRESHOLDS[level] || 0;
 });
 
-// 计算当前等级已积累的经验（当前总经验 - 当前等级所需的总经验）
+// 计算当前等级已积累的绳网信用（当前总绳网信用 - 当前等级所需的总绳网信用）
 const currentLevelExp = computed(() => {
   const totalExp = userExp.value;
   const currentLevelThreshold = LEVEL_THRESHOLDS[userLevel.value - 1] || 0;
   return totalExp - currentLevelThreshold;
 });
 
-// 计算当前等级升到下一级还需要的经验
+// 计算当前等级升到下一级还需要的绳网信用
 const expNeededToNext = computed(() => {
   const level = userLevel.value;
   if (level >= MAX_LEVEL) return 0;
