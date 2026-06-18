@@ -1,4 +1,4 @@
-/** 绳网等级累计经验门槛（与后端 / 顶栏进度条一致，最高 Lv.7） */
+/** 绳网等级累计绳网信用门槛（与后端 / 顶栏进度条一致，最高 Lv.7） */
 export const LEVEL_THRESHOLDS = [0, 500, 2000, 6000, 15000, 35000, 80000] as const;
 
 export const MAX_LEVEL = LEVEL_THRESHOLDS.length;
@@ -13,7 +13,7 @@ export const LEVEL_TITLES: Record<number, string> = {
   7: "传说绳匠",
 };
 
-/** 升到下一级，在当前等级内还需获得的经验 */
+/** 升到下一级，在当前等级内还需获得的绳网信用 */
 export function expNeededWithinLevel(level: number): number {
   if (level >= MAX_LEVEL) return 0;
   return LEVEL_THRESHOLDS[level]! - LEVEL_THRESHOLDS[level - 1]!;

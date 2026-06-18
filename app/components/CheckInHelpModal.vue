@@ -80,25 +80,25 @@ onBeforeUnmount(() => {
               <section class="ik-checkin-help__block">
                 <h3 class="ik-checkin-help__heading">签到</h3>
                 <p>点击「今日签到」完成今日的签到；<strong>每天只能签到一次</strong>，至下一签到日开启后可再次签到。</p>
-                <p>签到成功可获得 <strong>10 丁尼</strong> 与绳网经验（经验规则见下），按钮旁括号内为累计签到天数。</p>
+                <p>签到成功可获得 <strong>10 丁尼</strong> 与绳网信用（信用规则见下），按钮旁括号内为累计签到天数。</p>
                 <p>签到日以<strong>每天凌晨 4:00</strong>为界（例如 3:59 仍算前一日，4:00 起算新一日），与连续签到、当日名次统计一致。</p>
               </section>
 
               <section class="ik-checkin-help__block">
-                <h3 class="ik-checkin-help__heading">经验（XP）</h3>
-                <p>签到奖励计入绳网经验，并受「主动行为」每日上限约束（当前上限 <strong>50 XP/每天</strong>）。</p>
+                <h3 class="ik-checkin-help__heading">绳网信用</h3>
+                <p>签到奖励计入绳网信用，并受「主动行为」每日上限约束（当前上限 <strong>50 绳网信用/每天</strong>）。</p>
                 <ul class="ik-checkin-help__list">
-                  <li>每次签到基础 <strong>6 XP</strong></li>
-                  <li>连签加成：每多连续 1 天额外 <strong>+1 XP</strong>，最多额外 <strong>+4 XP</strong>（即连签 5 天起均为 <strong>10 XP</strong>）</li>
+                  <li>每次签到基础 <strong>6 绳网信用</strong></li>
+                  <li>连签加成：每多连续 1 天额外 <strong>+1 绳网信用</strong>，最多额外 <strong>+4 绳网信用</strong>（即连签 5 天起均为 <strong>10 绳网信用</strong>）</li>
                   <li>当日名次：按签到时间先后排名，越早签到名次越靠前</li>
                 </ul>
-                <p class="ik-checkin-help__muted">其他主动行为：发帖 +4、评论 +3、点赞 +1（均计入上述 50 XP 日上限）。他人与你互动还可获得经验（如被点赞 +1、被评论 +1、被收藏 +2），该部分日上限为 1000 XP。</p>
+                <p class="ik-checkin-help__muted">其他主动行为：发帖 +4、评论 +3、点赞 +1（均计入上述 50 绳网信用日上限）。他人与你互动还可获得绳网信用（如被点赞 +1、被评论 +1、被收藏 +2），该部分日上限为 1000 绳网信用。</p>
               </section>
 
               <section class="ik-checkin-help__block">
                 <h3 class="ik-checkin-help__heading">绳网等级</h3>
-                <p>绳网等级（<strong>Lv.</strong>）由<strong>累计经验</strong>决定，最高 <strong>Lv.{{ MAX_LEVEL }}</strong>。总经验达到门槛后自动升级，显示在顶部左上角区域。</p>
-                <p>下表为各等级的<strong>累计经验门槛</strong>；「本级还需」指从该等级起点升到下一级，在本级内还要获得的经验（等级越高，跨度越大）：</p>
+                <p>绳网等级（<strong>Lv.</strong>）由<strong>累计绳网信用</strong>决定，最高 <strong>Lv.{{ MAX_LEVEL }}</strong>。总绳网信用达到门槛后自动升级，显示在顶部左上角区域。</p>
+                <p>下表为各等级的<strong>累计绳网信用门槛</strong>；「本级还需」指从该等级起点升到下一级，在本级内还要获得的绳网信用（等级越高，跨度越大）：</p>
                 <ul class="ik-checkin-help__list ik-checkin-help__list--levels">
                   <li
                     v-for="row in levelGuideRows"
@@ -113,12 +113,12 @@ onBeforeUnmount(() => {
                     </template>
                   </li>
                 </ul>
-                <p class="ik-checkin-help__muted">顶栏进度条上的 <strong>当前/目标</strong> 即「本级已获得 / 本级还需」；例如 Lv.2 需在本级攒满 1,500 经验（总经验从 500 到 2,000）。</p>
+                <p class="ik-checkin-help__muted">顶栏进度条上的 <strong>当前/目标</strong> 即「本级已获得 / 本级还需」；例如 Lv.2 需在本级攒满 1,500 绳网信用（总绳网信用从 500 到 2,000）。</p>
               </section>
 
               <section class="ik-checkin-help__block">
                 <h3 class="ik-checkin-help__heading">丁尼</h3>
-                <p>丁尼是站内流通货币，存放于你的丁尼余额中。每日签到会发放 <strong>10 丁尼</strong>（与经验一并到账）。</p>
+                <p>丁尼是站内流通货币，存放于你的丁尼余额中。每日签到会发放 <strong>10 丁尼</strong>（与绳网信用一并到账）。</p>
                 <p>你可以将丁尼投给喜欢的帖子以支持作者：投币会消耗你的余额，帖子会累计显示收到的丁尼数量。</p>
               </section>
 
