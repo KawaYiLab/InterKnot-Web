@@ -85,40 +85,34 @@ onBeforeUnmount(() => {
               </section>
 
               <section class="ik-checkin-help__block">
-                <h3 class="ik-checkin-help__heading">经验（XP）</h3>
-                <p>签到奖励计入绳网经验，并受「主动行为」每日上限约束（当前上限 <strong>50 XP/每天</strong>）。</p>
+                <h3 class="ik-checkin-help__heading">绳网信用</h3>
+                <p>签到可得<strong>10 丁</strong>，并获得绳网信用。</p>
+                <p>绳网信用按每日上限 <strong>50 绳网信用/天</strong> 结算。</p>
                 <ul class="ik-checkin-help__list">
-                  <li>每次签到基础 <strong>6 XP</strong></li>
-                  <li>连签加成：每多连续 1 天额外 <strong>+1 XP</strong>，最多额外 <strong>+4 XP</strong>（即连签 5 天起均为 <strong>10 XP</strong>）</li>
-                  <li>当日名次：按签到时间先后排名，越早签到名次越靠前</li>
+                  <li>每次签到基础 <strong>6 绳网信用</strong></li>
+                  <li>连签加成：每多续 1 天额外 <strong>+1 绳网信用</strong>，额外 <strong>+4 绳网信用</strong>，连签 5 天可达 <strong>10 绳网信用</strong></li>
+                  <li>签到顺位按提交时间排序，越早越靠前</li>
                 </ul>
-                <p class="ik-checkin-help__muted">其他主动行为：发帖 +4、评论 +3、点赞 +1（均计入上述 50 XP 日上限）。他人与你互动还可获得经验（如被点赞 +1、被评论 +1、被收藏 +2），该部分日上限为 1000 XP。</p>
+                <p class="ik-checkin-help__muted">互动奖励：发帖 +4、评论 +3、点赞 +1；主动行为可得绳网信用：发帖 +1、评论 +1、收藏 +2。单日上限 1000 绳网信用。</p>
               </section>
 
               <section class="ik-checkin-help__block">
-                <h3 class="ik-checkin-help__heading">绳网等级</h3>
-                <p>绳网等级（<strong>Lv.</strong>）由<strong>累计经验</strong>决定，最高 <strong>Lv.{{ MAX_LEVEL }}</strong>。总经验达到门槛后自动升级，显示在顶部左上角区域。</p>
-                <p>下表为各等级的<strong>累计经验门槛</strong>；「本级还需」指从该等级起点升到下一级，在本级内还要获得的经验（等级越高，跨度越大）：</p>
+                <h3 class="ik-checkin-help__heading">绳等</h3>
+                <p>绳等（<strong>Lv.</strong>）由<strong>累计绳网信用</strong>决定，最高 <strong>Lv.{{ MAX_LEVEL }}</strong>。达到门槛后等级会显示在顶部。</p>
+                <p>下方为各等级的<strong>累计绳网信用门槛</strong>；本页显示从当前等级到下一档还需要的绳网信用。</p>
                 <ul class="ik-checkin-help__list ik-checkin-help__list--levels">
                   <li
                     v-for="row in levelGuideRows"
                     :key="row.level"
                   >
-                    <strong>Lv.{{ row.level }}</strong> {{ row.title }} — 累计 {{ formatExp(row.totalExp) }}
+                    <strong>Lv.{{ row.level }}</strong> {{ row.title }} — 累计 {{ formatExp(row.totalExp) }} 绳网信用
                     <template v-if="row.spanExp > 0">
-                      （本级还需 {{ formatExp(row.spanExp) }}）
-                    </template>
-                    <template v-else>
-                      （满级）
+                      （级需 {{ formatExp(row.spanExp) }} 绳网信用）
                     </template>
                   </li>
                 </ul>
-                <p class="ik-checkin-help__muted">顶栏进度条上的 <strong>当前/目标</strong> 即「本级已获得 / 本级还需」；例如 Lv.2 需在本级攒满 1,500 经验（总经验从 500 到 2,000）。</p>
+                <p class="ik-checkin-help__muted">进度条里的“当前/目标”指本页已获得与还需；例如 Lv.2 需要累计 1,500 绳网信用（从 500 到 2,000）。</p>
               </section>
-
-              <section class="ik-checkin-help__block">
-                <h3 class="ik-checkin-help__heading">丁尼</h3>
-                <p>丁尼是站内流通货币，存放于你的丁尼余额中。每日签到会发放 <strong>10 丁尼</strong>（与经验一并到账）。</p>
                 <p>你可以将丁尼投给喜欢的帖子以支持作者：投币会消耗你的余额，帖子会累计显示收到的丁尼数量。</p>
               </section>
 

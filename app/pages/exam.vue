@@ -228,7 +228,7 @@ useHead({ title: "入站考试 - 绳网" });
             <li>多选题需选出全部正确选项才得分</li>
             <li>连续失败 <b>{{ status.config.maxFailsBeforeCooldown }}</b> 次需等待 <b>{{ Math.round(status.config.failCooldownSeconds / 60) }}</b> 分钟后再试</li>
             <li v-if="status.config.rewardDenny > 0 || status.config.rewardExp > 0">
-              通过可获得 <b>{{ status.config.rewardDenny }}</b> 丁尼与 <b>{{ status.config.rewardExp }}</b> 经验奖励
+              通可得<b>{{ status.config.rewardDenny }}</b> 丁与<b>{{ status.config.rewardExp }}</b> 绳网信用奖
             </li>
           </ul>
           <p v-if="status?.activeAttempt" class="ik-exam-hint">
@@ -318,9 +318,9 @@ useHead({ title: "入站考试 - 绳网" });
           <p class="ik-exam-score">
             得分 <b>{{ result.scorePercent }}%</b>（{{ result.correctCount }} / {{ result.questionCount }} 题正确，及格线 {{ result.passScorePercent }}%）
           </p>
-          <template v-if="result.passed">
             <p v-if="result.reward" class="ik-exam-desc">
-              奖励已发放：{{ result.reward.denny }} 丁尼 + {{ result.reward.exp }} 经验。欢迎加入绳网！
+              奖已放{{ result.reward.denny }} 丁 + {{ result.reward.exp }} 绳网信用。迎入网
+            </p>
             </p>
             <p class="ik-exam-desc">
               欢迎为入站考试投稿题目：<a

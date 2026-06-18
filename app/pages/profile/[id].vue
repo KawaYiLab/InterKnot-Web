@@ -133,8 +133,8 @@ const doCheckIn = async () => {
     }
 
     const dennyAdded = result.dennyAdded > 0 ? result.dennyAdded : 10;
-    const rewardParts = [`丁尼+${dennyAdded}`];
-    if (result.reward > 0) rewardParts.push(`经验+${result.reward}`);
+    const rewardParts = [`丁+${dennyAdded}`];
+    if (result.reward > 0) rewardParts.push(`绳网信用+${result.reward}`);
     const rankText = result.rank > 0 ? `，今日第${result.rank}名` : "";
     const daysText =
       checkInStatus.value.totalDays > 0
