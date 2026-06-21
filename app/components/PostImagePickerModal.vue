@@ -140,57 +140,61 @@ onBeforeUnmount(() => {
             <div class="ik-img-main">
               <IkZzzMarquee />
               <div class="ik-img-grid-wrap">
-                <div v-if="loading" class="ik-img-state">
-                  <span class="ik-img-spinner" aria-hidden="true"></span>
-                  加载中...
-                </div>
-
-                <z-scrollbar v-else class="ik-img-grid-scroll">
-                  <div class="ik-img-grid">
-                    <CoverImageAddButton
-                      :disabled="remainingCount <= 0"
-                      @click="triggerFileInput"
-                    />
-                    <input
-                      ref="fileInputRef"
-                      type="file"
-                      accept="image/jpeg,image/png,image/gif,image/webp"
-                      multiple
-                      class="ik-img-file-input"
-                      @change="onFileSelected"
-                    />
-
-                    <button
-                      v-for="upload in uploads"
-                      :key="upload.documentId"
-                      type="button"
-                      class="ik-img-card"
-                      :class="{
-                        'is-selected': selectedIdSet.has(upload.documentId),
-                        'is-disabled': existingIdSet.has(upload.documentId),
-                      }"
-                      @click="toggleUpload(upload)"
-                    >
-                      <div class="ik-img-card__thumb">
-                        <img
-                          :src="toThumbUrl(upload.url)"
-                          :alt="upload.name || '历史图片'"
-                          class="ik-img-card__image"
-                          loading="lazy"
-                          decoding="async"
-                          draggable="false"
-                          @error="($event.target as HTMLImageElement).src = upload.url"
-                        />
-                      </div>
-                      <span class="ik-img-card__name">{{ upload.name || '历史图片' }}</span>
-                      <span v-if="selectedIdSet.has(upload.documentId)" class="ik-img-card__badge">
-                        <CheckIcon class="ik-img-card__badge-icon" />
-                      </span>
-                      <span v-else-if="existingIdSet.has(upload.documentId)" class="ik-img-card__used">已添加</span>
-                    </button>
+                <Transition name="ik-img-fade">
+                  <div v-if="loading" class="ik-img-state">
+                    <span class="ik-img-spinner" aria-hidden="true"></span>
+                    加载中...
                   </div>
-                  <div v-if="!uploads.length" class="ik-img-empty">暂无图片，请上传一张图片试试吧(✿◡‿◡)</div>
-                </z-scrollbar>
+                </Transition>
+
+                <Transition name="ik-img-fade">
+                  <z-scrollbar v-if="!loading" class="ik-img-grid-scroll">
+                    <div class="ik-img-grid">
+                      <CoverImageAddButton
+                        :disabled="remainingCount <= 0"
+                        @click="triggerFileInput"
+                      />
+                      <input
+                        ref="fileInputRef"
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        multiple
+                        class="ik-img-file-input"
+                        @change="onFileSelected"
+                      />
+
+                      <button
+                        v-for="upload in uploads"
+                        :key="upload.documentId"
+                        type="button"
+                        class="ik-img-card"
+                        :class="{
+                          'is-selected': selectedIdSet.has(upload.documentId),
+                          'is-disabled': existingIdSet.has(upload.documentId),
+                        }"
+                        @click="toggleUpload(upload)"
+                      >
+                        <div class="ik-img-card__thumb">
+                          <img
+                            :src="toThumbUrl(upload.url)"
+                            :alt="upload.name || '历史图片'"
+                            class="ik-img-card__image"
+                            loading="lazy"
+                            decoding="async"
+                            draggable="false"
+                            @error="($event.target as HTMLImageElement).src = upload.url"
+                          />
+                        </div>
+                        <span class="ik-img-card__name">{{ upload.name || '历史图片' }}</span>
+                        <span v-if="selectedIdSet.has(upload.documentId)" class="ik-img-card__badge">
+                          <CheckIcon class="ik-img-card__badge-icon" />
+                        </span>
+                        <span v-else-if="existingIdSet.has(upload.documentId)" class="ik-img-card__used">已添加</span>
+                      </button>
+                    </div>
+                    <div v-if="!uploads.length" class="ik-img-empty">暂无图片，请上传一张图片试试吧(✿◡‿◡)</div>
+                  </z-scrollbar>
+                </Transition>
               </div>
 
               <div class="ik-img-footer">
@@ -492,6 +496,19 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+.ik-img-fade-enter-active,
+.ik-img-fade-leave-active {
+  transition: opacity 200ms ease;
+}
+.ik-img-fade-enter-from,
+.ik-img-fade-leave-to {
+  opacity: 0;
+}
+.ik-img-fade-leave-active {
+  position: absolute;
+  inset: 0;
+}
+
 .ik-img-empty {
   min-height: 80px;
 }
@@ -579,16 +596,19 @@ onBeforeUnmount(() => {
     background: #181818;
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+    height: auto;
   }
 
   .ik-img-frame__inner {
     padding: 0;
     background: transparent;
     border-radius: 16px 16px 0 0;
+    height: auto;
   }
 
   .ik-img-frame__body {
     border-radius: 16px 16px 0 0;
+    height: auto;
   }
 
   .ik-img-header {
@@ -626,6 +646,7 @@ onBeforeUnmount(() => {
   .ik-img-main {
     padding: 0 16px 12px;
     background: transparent;
+    flex: none;
   }
 
   .ik-img-main :deep(.ik-zzz-marquee) {
@@ -633,12 +654,21 @@ onBeforeUnmount(() => {
   }
 
   .ik-img-grid-wrap {
+    position: relative;
     background: rgba(255, 255, 255, 0.03);
     border-radius: 12px;
+    min-height: 120px;
+    flex: none;
+    overflow: hidden;
+  }
+
+  .ik-img-state {
+    min-height: 120px;
   }
 
   .ik-img-grid-scroll {
     border-radius: 12px;
+    max-height: 60vh;
   }
 
   .ik-img-grid-scroll :deep(.z-scrollbar__bar) {
@@ -648,12 +678,16 @@ onBeforeUnmount(() => {
   .ik-img-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    padding: 12px;
+  }
+
+  .ik-img-card__image {
+    transition: opacity 200ms ease;
   }
 
   .ik-img-footer {
     margin-top: 0;
-    padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px));
     gap: 10px;
   }
 
