@@ -21,6 +21,7 @@ export interface PostPreview {
   title?: string;
   author?: Author;
   createdAt?: string;
+  category?: { name: string; slug: string } | null;
 }
 
 export function usePostModal() {
