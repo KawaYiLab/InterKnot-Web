@@ -494,6 +494,10 @@ useHead({ title: "入站考试 - 绳网" });
   align-items: stretch;
 }
 
+.ik-exam-options :deep(.z-radio__input) {
+  display: none;
+}
+
 .ik-exam-options :deep(.z-radio),
 .ik-exam-options :deep(.z-checkbox) {
   white-space: normal;
@@ -525,12 +529,6 @@ useHead({ title: "入站考试 - 绳网" });
 .ik-exam-options :deep(.z-checkbox.is-checked .z-radio__label) {
   color: #000;
   font-weight: 600;
-}
-
-.ik-exam-options :deep(.z-radio.is-checked .z-radio__input),
-.ik-exam-options :deep(.z-checkbox.is-checked .z-radio__input) {
-  border-color: #000;
-  outline-color: #000;
 }
 
 .ik-exam-options :deep(.z-radio__label),
