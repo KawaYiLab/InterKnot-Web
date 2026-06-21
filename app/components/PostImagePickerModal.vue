@@ -548,26 +548,111 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 500px) {
-  .ik-img-dialog {
-    width: 100%;
-    height: 95%;
+@media (max-width: 768px) {
+  .ik-overlay {
+    align-items: flex-end;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
   }
 
-  .ik-img-frame,
-  .ik-img-frame__inner,
+  .ik-overlay__stripe {
+    display: none;
+  }
+
+  .ik-img-dialog {
+    width: 100%;
+    height: auto;
+    max-height: 88vh;
+    transform: none;
+  }
+
+  .ik-overlay-enter-from .ik-img-dialog {
+    transform: translateY(100%);
+  }
+  .ik-overlay-leave-to .ik-img-dialog {
+    transform: translateY(100%);
+  }
+
+  .ik-img-frame {
+    padding: 0;
+    background: #181818;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .ik-img-frame__inner {
+    padding: 0;
+    background: transparent;
+    border-radius: 16px 16px 0 0;
+  }
+
   .ik-img-frame__body {
+    border-radius: 16px 16px 0 0;
+  }
+
+  .ik-img-header {
+    min-height: auto;
+    padding: 16px 16px 10px;
+    background: transparent;
     border-radius: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .ik-img-header::before {
+    content: "";
+    width: 36px;
+    height: 4px;
+    margin: 0 auto 12px;
+    border-radius: 99px;
+    background: #383838;
+  }
+
+  .ik-img-header__text {
+    justify-content: space-between;
+  }
+
+  .ik-img-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .ik-img-close {
+    display: none;
   }
 
   .ik-img-main {
-    padding: 12px;
+    padding: 0 16px 12px;
+    background: transparent;
+  }
+
+  .ik-img-main :deep(.ik-zzz-marquee) {
+    display: none;
+  }
+
+  .ik-img-grid-wrap {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    max-height: 50vh;
   }
 
   .ik-img-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    padding: 12px 12px 54px;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .ik-img-footer {
+    margin-top: 0;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+    gap: 10px;
+  }
+
+  .ik-img-footer :deep(.z-button) {
+    flex: 1;
+    min-width: 0;
   }
 }
 </style>
