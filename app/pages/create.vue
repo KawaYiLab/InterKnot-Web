@@ -1155,12 +1155,12 @@ if (import.meta.client) {
       <Transition name="ik-mobile-sheet">
         <div
           v-if="isMobileDraftsOpen"
-          class="ik-mobile-sheet ik-mobile-sheet--full"
+          class="ik-mobile-sheet"
           role="dialog"
           aria-modal="true"
           @click.self="isMobileDraftsOpen = false"
         >
-          <div class="ik-mobile-sheet__panel ik-mobile-sheet__panel--full">
+          <div class="ik-mobile-sheet__panel ik-mobile-sheet__panel--drafts">
             <div class="ik-mobile-sheet__handle"></div>
             <header class="ik-mobile-sheet__header">
               <span class="ik-mobile-sheet__title">草稿箱</span>
@@ -2577,6 +2577,10 @@ if (import.meta.client) {
 
 .ik-mobile-sheet__panel--full {
   height: 88vh;
+  padding-top: 6px;
+}
+.ik-mobile-sheet__panel--drafts {
+  max-height: 70vh;
   padding-top: 6px;
 }
 
