@@ -563,7 +563,7 @@ onBeforeUnmount(() => {
   .ik-img-dialog {
     width: 100%;
     height: auto;
-    max-height: 55vh;
+    max-height: 88vh;
     transform: none;
   }
 
