@@ -516,8 +516,21 @@ useHead({ title: "入站考试 - 绳网" });
 
 .ik-exam-options :deep(.z-radio.is-checked),
 .ik-exam-options :deep(.z-checkbox.is-checked) {
-  background: rgba(191, 255, 9, 0.08);
-  border-color: rgba(191, 255, 9, 0.3);
+  background: #bfff09;
+  border-color: #bfff09;
+  color: #000;
+}
+
+.ik-exam-options :deep(.z-radio.is-checked .z-radio__label),
+.ik-exam-options :deep(.z-checkbox.is-checked .z-radio__label) {
+  color: #000;
+  font-weight: 600;
+}
+
+.ik-exam-options :deep(.z-radio.is-checked .z-radio__input),
+.ik-exam-options :deep(.z-checkbox.is-checked .z-radio__input) {
+  border-color: #000;
+  outline-color: #000;
 }
 
 .ik-exam-options :deep(.z-radio__label),

@@ -1375,6 +1375,35 @@ watch(
   }
 }
 
+/* 移动端登录后头像（替代 logo） */
+.ik-mobile-avatar {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+
+.ik-mobile-avatar__img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  transition: border-color 0.2s ease;
+}
+
+.ik-mobile-avatar:active .ik-mobile-avatar__img {
+  border-color: rgba(191, 255, 9, 0.4);
+}
+
 @media (max-width: 1180px) {
   .ik-brand__title {
     font-size: 20px;
@@ -1668,32 +1697,4 @@ watch(
   }
 }
 
-/* 移动端登录后头像（替代 logo） */
-.ik-mobile-avatar {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  flex-shrink: 0;
-}
-
-.ik-mobile-avatar__img {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  transition: border-color 0.2s ease;
-}
-
-.ik-mobile-avatar:active .ik-mobile-avatar__img {
-  border-color: rgba(191, 255, 9, 0.4);
-}
 </style>
