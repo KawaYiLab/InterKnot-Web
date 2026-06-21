@@ -20,6 +20,8 @@ import {
   EyeSlashIcon,
   HashtagIcon,
   CheckIcon,
+  PlusCircleIcon,
+  InboxIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 
@@ -1171,38 +1173,53 @@ if (import.meta.client) {
                 <XMarkIcon style="width:20px;height:20px" />
               </button>
             </header>
-            <div class="ik-mobile-sheet__body">
+            <div class="ik-mobile-sheet__body ik-mobile-sheet__body--no-scrollbar">
               <button
                 type="button"
                 class="ik-mobile-draft-row ik-mobile-draft-row--new"
                 :class="{ 'is-active': !documentId }"
                 @click="onMobileNewDraft"
               >
-                <span class="ik-mobile-draft-row__title">编辑新委托</span>
-                <span class="ik-mobile-draft-row__meta">
-                  {{ documentId ? "点击开始编辑新委托" : "当前正在编辑" }}
-                </span>
+                <PlusCircleIcon class="ik-mobile-draft-row__icon" />
+                <div class="ik-mobile-draft-row__content">
+                  <span class="ik-mobile-draft-row__title">编辑新委托</span>
+                  <span class="ik-mobile-draft-row__meta">
+                    {{ documentId ? "点击开始编辑新委托" : "当前正在编辑" }}
+                  </span>
+                </div>
               </button>
-              <button
-                v-for="draft in drafts"
-                :key="draft.documentId"
-                type="button"
-                class="ik-mobile-draft-row"
-                :class="{ 'is-active': draft.documentId === documentId }"
-                @click="onMobileSelectDraft(draft)"
-              >
-                <span class="ik-mobile-draft-row__title">
-                  {{ draft.title || "无标题" }}
-                </span>
-                <span class="ik-mobile-draft-row__meta">
-                  {{ draftPreviewText(draft) }}
-                </span>
-              </button>
+              <TransitionGroup name="ik-draft-list">
+                <button
+                  v-for="(draft, idx) in drafts"
+                  :key="draft.documentId"
+                  type="button"
+                  class="ik-mobile-draft-row"
+                  :class="{ 'is-active': draft.documentId === documentId }"
+                  :style="{ transitionDelay: `${idx * 30}ms` }"
+                  @click="onMobileSelectDraft(draft)"
+                >
+                  <RectangleStackIcon class="ik-mobile-draft-row__icon" />
+                  <div class="ik-mobile-draft-row__content">
+                    <span class="ik-mobile-draft-row__title">
+                      {{ draft.title || "无标题" }}
+                    </span>
+                    <span class="ik-mobile-draft-row__meta">
+                      {{ draftPreviewText(draft) }}
+                    </span>
+                  </div>
+                </button>
+              </TransitionGroup>
               <div v-if="!auth.isLogin" class="ik-mobile-draft-empty">
-                请先登录
+                <InboxIcon class="ik-mobile-draft-empty__icon" />
+                <span>请先登录</span>
               </div>
               <div v-else-if="draftsLoading && !drafts.length" class="ik-mobile-draft-empty">
-                加载中...
+                <span class="ik-mobile-draft-spinner" aria-hidden="true"></span>
+                <span>加载中...</span>
+              </div>
+              <div v-else-if="auth.isLogin && !drafts.length && !draftsLoading" class="ik-mobile-draft-empty">
+                <InboxIcon class="ik-mobile-draft-empty__icon" />
+                <span>暂无草稿</span>
               </div>
               <button
                 v-if="auth.isLogin && draftsHasNext && drafts.length"
@@ -1211,6 +1228,7 @@ if (import.meta.client) {
                 :disabled="draftsLoading"
                 @click="loadMoreDrafts"
               >
+                <span v-if="draftsLoading" class="ik-mobile-draft-spinner ik-mobile-draft-spinner--small" aria-hidden="true"></span>
                 {{ draftsLoading ? "加载中..." : "加载更多" }}
               </button>
             </div>
@@ -2615,6 +2633,13 @@ if (import.meta.client) {
   flex: 0 0 auto;
   padding: 6px 0 0;
 }
+.ik-mobile-sheet__body--no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ik-mobile-sheet__body--no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 
 /* ── Draft list rows (in drafts sheet) ────────── */
 .ik-mobile-draft-row {
@@ -2626,10 +2651,10 @@ if (import.meta.client) {
   padding: 12px 14px;
   text-align: left;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 12px;
   cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease;
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
   font-family: inherit;
 }
 .ik-mobile-draft-row:active {
@@ -2637,7 +2662,24 @@ if (import.meta.client) {
 }
 .ik-mobile-draft-row.is-active {
   border-color: #BFFF09;
-  background: rgba(215, 255, 0, 0.06);
+  background: #BFFF09;
+}
+.ik-mobile-draft-row__icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: #888;
+  transition: color 200ms ease;
+}
+.ik-mobile-draft-row.is-active .ik-mobile-draft-row__icon {
+  color: #000;
+}
+.ik-mobile-draft-row__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .ik-mobile-draft-row__title {
   color: #fff;
@@ -2646,6 +2688,10 @@ if (import.meta.client) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 200ms ease;
+}
+.ik-mobile-draft-row.is-active .ik-mobile-draft-row__title {
+  color: #000;
 }
 .ik-mobile-draft-row__meta {
   color: #9a9a9a;
@@ -2653,16 +2699,57 @@ if (import.meta.client) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 200ms ease;
+}
+.ik-mobile-draft-row.is-active .ik-mobile-draft-row__meta {
+  color: rgba(0, 0, 0, 0.55);
+}
+.ik-mobile-draft-row--new .ik-mobile-draft-row__icon {
+  color: #BFFF09;
 }
 .ik-mobile-draft-row--new .ik-mobile-draft-row__title {
   color: #BFFF09;
+}
+.ik-mobile-draft-row--new.is-active .ik-mobile-draft-row__icon,
+.ik-mobile-draft-row--new.is-active .ik-mobile-draft-row__title {
+  color: #000;
 }
 
 .ik-mobile-draft-empty {
   text-align: center;
   color: #6a6a6a;
   font-size: 13px;
-  padding: 24px 0;
+  padding: 40px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.ik-mobile-draft-empty__icon {
+  width: 36px;
+  height: 36px;
+  color: #444;
+}
+
+.ik-mobile-draft-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(215, 255, 0, 0.25);
+  border-top-color: #BFFF09;
+  animation: ik-draft-spin 800ms linear infinite;
+}
+.ik-mobile-draft-spinner--small {
+  width: 14px;
+  height: 14px;
+  border-width: 1.5px;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+@keyframes ik-draft-spin {
+  to { transform: rotate(360deg); }
 }
 
 .ik-mobile-draft-loadmore {
@@ -2678,10 +2765,30 @@ if (import.meta.client) {
   margin: 8px auto 4px;
   padding: 0 18px;
   align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: background 140ms ease, opacity 140ms ease;
+}
+.ik-mobile-draft-loadmore:active {
+  background: rgba(255, 255, 255, 0.04);
 }
 .ik-mobile-draft-loadmore:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Draft list entry animation ────────────────── */
+.ik-draft-list-enter-active {
+  transition: opacity 250ms ease, transform 250ms ease;
+}
+.ik-draft-list-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.ik-draft-list-move {
+  transition: transform 250ms ease;
 }
 
 /* ── Settings rows (in settings sheet) ────────── */
