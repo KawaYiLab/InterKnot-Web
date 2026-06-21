@@ -378,7 +378,6 @@ useHead({ title: "入站考试 - 绳网" });
   max-width: 760px;
 }
 
-/* 与站内面板一致的双层框架（外层灰框 + 内层黑底点纹） */
 .ik-exam-panel {
   padding: 4px;
   background: #2d2c2d;
@@ -404,6 +403,7 @@ useHead({ title: "入站考试 - 绳网" });
   font-size: 28px;
   font-weight: 800;
   margin: 0 0 16px;
+  letter-spacing: -0.02em;
 }
 
 .ik-exam-desc {
@@ -470,7 +470,7 @@ useHead({ title: "入站考试 - 绳网" });
 }
 
 .ik-exam-question__title {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   font-weight: 600;
   line-height: 1.7;
 }
@@ -490,17 +490,50 @@ useHead({ title: "入站考试 - 绳网" });
 .ik-exam-options {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  align-items: flex-start;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.ik-exam-options :deep(.z-radio),
+.ik-exam-options :deep(.z-checkbox) {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  height: auto;
+  min-height: 40px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.ik-exam-options :deep(.z-radio:hover),
+.ik-exam-options :deep(.z-checkbox:hover) {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.ik-exam-options :deep(.z-radio.is-checked),
+.ik-exam-options :deep(.z-checkbox.is-checked) {
+  background: rgba(191, 255, 9, 0.08);
+  border-color: rgba(191, 255, 9, 0.3);
+}
+
+.ik-exam-options :deep(.z-radio__label),
+.ik-exam-options :deep(.z-checkbox__label) {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.5;
 }
 
 .ik-exam-quiz__nav {
   display: flex;
   justify-content: center;
   gap: 16px;
-  margin-top: 24px;
+  margin-top: 28px;
 }
-
 
 .ik-exam-score {
   font-size: 18px;
@@ -521,5 +554,76 @@ useHead({ title: "入站考试 - 绳网" });
 
 .ik-exam-link:hover {
   color: #d9ff66;
+}
+
+/* ── 移动端优化 ── */
+@media (max-width: 768px) {
+  .ik-exam-page {
+    padding: 72px 12px 48px;
+  }
+
+  .ik-exam-panel {
+    border-radius: 20px 0 20px 20px;
+  }
+
+  .ik-exam-panel__body {
+    padding: 20px 16px;
+    border-radius: 18px 0 18px 18px;
+  }
+
+  .ik-exam-title {
+    font-size: 22px;
+  }
+
+  .ik-exam-desc {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .ik-exam-rules {
+    padding-left: 16px;
+    font-size: 14px;
+    line-height: 1.8;
+  }
+
+  .ik-exam-quiz__bar {
+    top: 56px;
+    padding: 10px 14px;
+    font-size: 14px;
+    border-radius: 10px 0 10px 10px;
+  }
+
+  .ik-exam-question {
+    min-height: 200px;
+  }
+
+  .ik-exam-question__title {
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .ik-exam-options {
+    gap: 8px;
+  }
+
+  .ik-exam-options :deep(.z-radio),
+  .ik-exam-options :deep(.z-checkbox) {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+
+  .ik-exam-quiz__nav {
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .ik-exam-score {
+    font-size: 16px;
+  }
+
+  .ik-exam-score b {
+    font-size: 20px;
+  }
 }
 </style>

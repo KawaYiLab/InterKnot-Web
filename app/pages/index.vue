@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useDebounceFn, useWindowSize } from "@vueuse/core";
+import { useDebounceFn, useWindowSize, useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { ArticleFeed, Category, Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -128,6 +128,7 @@ let polling = false;
 const masonryKeyMapper = (post: Post) => post.id;
 const skeletonKeyMapper = (item: SkeletonItem) => item.id;
 const { width: viewportWidth } = useWindowSize({ initialWidth: 0 });
+const isMobile = useMediaQuery("(max-width: 768px)");
 
 // 瀑布流列间距：移动端收窄，避免两列离得过远（与 .ik-home-container 的左右边距协调）
 const feedGap = computed(() => (viewportWidth.value && viewportWidth.value <= 768 ? 14 : 32));
@@ -671,6 +672,47 @@ const onHomeRefreshEvent = () => {
   void handleRefresh();
 };
 
+// ── 移动端下拉刷新（touch-based pull-to-refresh） ─────────────
+const PULL_THRESHOLD = 60;
+const PULL_MAX = 120;
+let pullStartY = 0;
+let isPulling = false;
+const pullDistance = ref(0);
+const pullTriggered = ref(false);
+
+const onTouchStart = (e: TouchEvent) => {
+  if (!isMobile.value || refreshing.value || loading.value) return;
+  if (window.scrollY > 5) return;
+  const touch = e.touches[0];
+  if (!touch) return;
+  pullStartY = touch.clientY;
+  isPulling = true;
+};
+
+const onTouchMove = (e: TouchEvent) => {
+  if (!isPulling) return;
+  const touch = e.touches[0];
+  if (!touch) return;
+  const deltaY = touch.clientY - pullStartY;
+  if (deltaY < 0) {
+    pullDistance.value = 0;
+    return;
+  }
+  const dampened = Math.min(PULL_MAX, deltaY * 0.4);
+  pullDistance.value = dampened;
+  pullTriggered.value = dampened >= PULL_THRESHOLD;
+};
+
+const onTouchEnd = () => {
+  if (!isPulling) return;
+  isPulling = false;
+  if (pullTriggered.value && !refreshing.value) {
+    void handleRefresh();
+  }
+  pullDistance.value = 0;
+  pullTriggered.value = false;
+};
+
 // 乐观删除：帖子详情页/弹窗删除成功后，从首页列表中移除
 const onArticleDeleted = (e: Event) => {
   const deletedId = (e as CustomEvent<string>).detail;
@@ -684,6 +726,9 @@ onMounted(async () => {
     window.addEventListener("ik:home-refresh", onHomeRefreshEvent);
     window.addEventListener("ik:tab-visible", onTabVisible);
     window.addEventListener("ik:article-deleted", onArticleDeleted);
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
   }
   await initialFetchPromise;
   // 注册 pending 队列 watch（immediate=true）：
@@ -729,6 +774,9 @@ onBeforeUnmount(() => {
     window.removeEventListener("ik:home-refresh", onHomeRefreshEvent);
     window.removeEventListener("ik:tab-visible", onTabVisible);
     window.removeEventListener("ik:article-deleted", onArticleDeleted);
+    window.removeEventListener("touchstart", onTouchStart);
+    window.removeEventListener("touchmove", onTouchMove);
+    window.removeEventListener("touchend", onTouchEnd);
     if (scrollBridge) {
       window.removeEventListener("scroll", scrollBridge);
       scrollBridge = null;
@@ -794,9 +842,18 @@ onBeforeUnmount(() => {
       </nav>
     </div>
 
+    <!-- 移动端下拉刷新指示器 -->
+    <div
+      v-if="pullDistance > 0 || refreshing"
+      class="ik-pull-indicator"
+      :style="{ opacity: refreshing ? 1 : Math.min(1, pullDistance / PULL_THRESHOLD), transform: `translateX(-50%) translateY(${refreshing ? 0 : pullDistance - PULL_THRESHOLD}px) rotate(${pullDistance * 3}deg)` }"
+    >
+      <i class="z-icon-loading ik-refresh-spin" />
+    </div>
+
     <!-- Refresh indicator (pull-to-refresh style) -->
     <Transition name="ik-refresh-indicator">
-      <div v-if="refreshing" class="ik-refresh-indicator">
+      <div v-if="refreshing" class="ik-refresh-indicator ik-refresh-indicator--desktop">
         <i class="z-icon-loading ik-refresh-spin" />
       </div>
     </Transition>
@@ -884,7 +941,7 @@ onBeforeUnmount(() => {
         </div>
       </Transition>
     </ClientOnly>
-    <!-- Refresh FAB -->
+    <!-- Refresh FAB (hidden on mobile) -->
     <z-button
       circle
       class="ik-refresh-fab"
@@ -893,7 +950,7 @@ onBeforeUnmount(() => {
     >
       <ArrowPathIcon v-if="!refreshing" style="width:1em;height:1em" />
     </z-button>
-    <z-backtop :target="scrollTarget" :right="32" :bottom="95" />
+    <z-backtop class="ik-backtop" :target="scrollTarget" :right="32" :bottom="95" />
   </section>
 </template>
 
@@ -1231,14 +1288,51 @@ onBeforeUnmount(() => {
 @media (max-width: 1100px) {
   .ik-refresh-fab {
     right: 16px;
-    /* Lift above the fixed MobileBottomNav (58px) plus iOS safe area */
     bottom: calc(58px + 16px + env(safe-area-inset-bottom, 0px));
   }
-  /* Stack the back-to-top button above the refresh FAB (refresh ~28px tall +
-     12px gap) and align right edges. Override z-backtop's inline bottom/right. */
   :deep(.z-backtop) {
     right: 16px !important;
     bottom: calc(58px + 16px + 56px + 12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .ik-refresh-fab,
+  .ik-backtop {
+    display: none !important;
+  }
+
+  :deep(.z-backtop) {
+    display: none !important;
+  }
+
+  .ik-refresh-indicator--desktop {
+    display: none;
+  }
+}
+
+.ik-pull-indicator {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(30, 30, 30, 0.9);
+  color: #bfff09;
+  font-size: 18px;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+@media (min-width: 769px) {
+  .ik-pull-indicator {
+    display: none;
   }
 }
 
