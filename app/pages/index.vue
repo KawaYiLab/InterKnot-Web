@@ -961,6 +961,7 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding-top: 24px;
   padding-bottom: 24px;
+  overscroll-behavior-y: contain;
 }
 
 /* 45° 斜线纹理背景（与发帖页 / 入站考试页一致） */

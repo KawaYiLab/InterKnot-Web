@@ -1409,6 +1409,15 @@ watch(
   .ik-header__knock {
     display: inline-flex;
   }
+
+  /* 登录后显示头像替代 logo（与 tabs 同步隐藏断点） */
+  .ik-header.is-login .ik-brand {
+    display: none;
+  }
+
+  .ik-mobile-avatar {
+    display: flex;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1478,19 +1487,6 @@ watch(
   /* 移动端隐藏等级显示 */
   .ik-level-display {
     display: none;
-  }
-
-  /* 移动端未登录显示 logo，登录后隐藏 logo、显示头像 */
-  .ik-header:not(.is-login) .ik-brand {
-    display: inline-flex;
-  }
-
-  .ik-header.is-login .ik-brand {
-    display: none;
-  }
-
-  .ik-mobile-avatar {
-    display: flex;
   }
 }
 
