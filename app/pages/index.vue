@@ -359,6 +359,7 @@ const goPost = (post: Post, event: MouseEvent) => {
       title: post.title,
       author: post.author,
       createdAt: post.createdAt,
+      category: post.category ?? null,
     },
   });
 
@@ -698,6 +699,11 @@ const onTouchMove = (e: TouchEvent) => {
     pullDistance.value = 0;
     return;
   }
+  // 页面在顶部且下拉中：阻止浏览器默认 overscroll/bounce 行为，
+  // 确保自定义下拉刷新手势不被原生行为覆盖。
+  if (deltaY > 0 && window.scrollY <= 0) {
+    e.preventDefault();
+  }
   const dampened = Math.min(PULL_MAX, deltaY * 0.4);
   pullDistance.value = dampened;
   pullTriggered.value = dampened >= PULL_THRESHOLD;
@@ -727,7 +733,7 @@ onMounted(async () => {
     window.addEventListener("ik:tab-visible", onTabVisible);
     window.addEventListener("ik:article-deleted", onArticleDeleted);
     window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onTouchEnd);
   }
   await initialFetchPromise;
@@ -961,7 +967,6 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding-top: 24px;
   padding-bottom: 24px;
-  overscroll-behavior-y: contain;
 }
 
 /* 45° 斜线纹理背景（与发帖页 / 入站考试页一致） */
