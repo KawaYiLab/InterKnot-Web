@@ -731,6 +731,14 @@ const onTouchEnd = () => {
   pullTriggered.value = false;
 };
 
+const onTouchCancel = () => {
+  if (!isPulling) return;
+  isPulling = false;
+  detachPullMove();
+  pullDistance.value = 0;
+  pullTriggered.value = false;
+};
+
 // 乐观删除：帖子详情页/弹窗删除成功后，从首页列表中移除
 const onArticleDeleted = (e: Event) => {
   const deletedId = (e as CustomEvent<string>).detail;
@@ -746,6 +754,7 @@ onMounted(async () => {
     window.addEventListener("ik:article-deleted", onArticleDeleted);
     window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchCancel);
   }
   await initialFetchPromise;
   // 注册 pending 队列 watch（immediate=true）：
@@ -793,6 +802,7 @@ onBeforeUnmount(() => {
     window.removeEventListener("ik:article-deleted", onArticleDeleted);
     window.removeEventListener("touchstart", onTouchStart);
     window.removeEventListener("touchend", onTouchEnd);
+    window.removeEventListener("touchcancel", onTouchCancel);
     detachPullMove();
     if (scrollBridge) {
       window.removeEventListener("scroll", scrollBridge);
