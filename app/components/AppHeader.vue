@@ -491,11 +491,22 @@ watch(
           </div>
         </div>
 
-        <!-- 品牌 Logo：桌面端仅未登录显示（登录时换成等级/丁尼）；移动端始终显示 -->
+        <!-- 品牌 Logo：桌面端仅未登录显示；移动端未登录显示 logo，登录后显示头像 -->
         <NuxtLink to="/" class="ik-brand" aria-label="Inter Knot 首页">
           <img src="/images/zzzicon.png" alt="Inter Knot" class="ik-brand__icon" draggable="false" />
           <strong class="ik-brand__title">INTER-KNOT</strong>
         </NuxtLink>
+
+        <!-- 移动端登录后显示头像（替代 logo） -->
+        <button
+          v-if="auth.isLogin"
+          type="button"
+          class="ik-mobile-avatar"
+          aria-label="个人资料"
+          @click="navigateTo(auth.profilePath || '/profile')"
+        >
+          <img :src="userAvatar" alt="avatar" class="ik-mobile-avatar__img" />
+        </button>
       </div>
 
       <div class="ik-header__middle">
@@ -1364,6 +1375,35 @@ watch(
   }
 }
 
+/* 移动端登录后头像（替代 logo） */
+.ik-mobile-avatar {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+
+.ik-mobile-avatar__img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  transition: border-color 0.2s ease;
+}
+
+.ik-mobile-avatar:active .ik-mobile-avatar__img {
+  border-color: rgba(191, 255, 9, 0.4);
+}
+
 @media (max-width: 1180px) {
   .ik-brand__title {
     font-size: 20px;
@@ -1397,6 +1437,15 @@ watch(
 
   .ik-header__knock {
     display: inline-flex;
+  }
+
+  /* 登录后显示头像替代 logo（与 tabs 同步隐藏断点） */
+  .ik-header.is-login .ik-brand {
+    display: none;
+  }
+
+  .ik-mobile-avatar {
+    display: flex;
   }
 }
 
@@ -1453,16 +1502,9 @@ watch(
     padding-right: 5px;
   }
 
-  /* 去掉分隔线，搜索按钮做成醒目的圆形主色按钮 */
-  .ik-search-divider {
-    display: none;
-  }
-
   .ik-search-action {
-    width: 34px;
-    height: 34px;
-    background: rgba(215, 255, 0, 0.14);
-    color: #fbfe00;
+    width: 32px;
+    height: 32px;
     font-size: 17px;
   }
 
@@ -1474,11 +1516,6 @@ watch(
   /* 移动端隐藏等级显示 */
   .ik-level-display {
     display: none;
-  }
-
-  /* 移动端无论登录与否都显示品牌 Logo */
-  .ik-header.is-login .ik-brand {
-    display: inline-flex;
   }
 }
 
@@ -1659,4 +1696,5 @@ watch(
     display: none;
   }
 }
+
 </style>
