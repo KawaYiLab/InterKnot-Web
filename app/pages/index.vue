@@ -681,16 +681,9 @@ let isPulling = false;
 const pullDistance = ref(0);
 const pullTriggered = ref(false);
 
-const onTouchStart = (e: TouchEvent) => {
-  if (!isMobile.value || refreshing.value || loading.value) return;
-  if (window.scrollY > 5) return;
-  const touch = e.touches[0];
-  if (!touch) return;
-  pullStartY = touch.clientY;
-  isPulling = true;
-};
-
-const onTouchMove = (e: TouchEvent) => {
+// 动态注册 non-passive touchmove：仅在下拉条件满足时激活，
+// 避免全局 non-passive 监听器阻塞浏览器滚动优化。
+const onPullTouchMove = (e: TouchEvent) => {
   if (!isPulling) return;
   const touch = e.touches[0];
   if (!touch) return;
@@ -709,9 +702,28 @@ const onTouchMove = (e: TouchEvent) => {
   pullTriggered.value = dampened >= PULL_THRESHOLD;
 };
 
+const attachPullMove = () => {
+  window.addEventListener("touchmove", onPullTouchMove, { passive: false });
+};
+const detachPullMove = () => {
+  window.removeEventListener("touchmove", onPullTouchMove);
+};
+
+const onTouchStart = (e: TouchEvent) => {
+  if (!isMobile.value || refreshing.value || loading.value) return;
+  if (window.scrollY > 5) return;
+  const touch = e.touches[0];
+  if (!touch) return;
+  pullStartY = touch.clientY;
+  isPulling = true;
+  // 仅在可能触发下拉时注册 non-passive touchmove，不影响其余正常滚动
+  attachPullMove();
+};
+
 const onTouchEnd = () => {
   if (!isPulling) return;
   isPulling = false;
+  detachPullMove();
   if (pullTriggered.value && !refreshing.value) {
     void handleRefresh();
   }
@@ -733,7 +745,6 @@ onMounted(async () => {
     window.addEventListener("ik:tab-visible", onTabVisible);
     window.addEventListener("ik:article-deleted", onArticleDeleted);
     window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onTouchEnd);
   }
   await initialFetchPromise;
@@ -781,8 +792,8 @@ onBeforeUnmount(() => {
     window.removeEventListener("ik:tab-visible", onTabVisible);
     window.removeEventListener("ik:article-deleted", onArticleDeleted);
     window.removeEventListener("touchstart", onTouchStart);
-    window.removeEventListener("touchmove", onTouchMove);
     window.removeEventListener("touchend", onTouchEnd);
+    detachPullMove();
     if (scrollBridge) {
       window.removeEventListener("scroll", scrollBridge);
       scrollBridge = null;
