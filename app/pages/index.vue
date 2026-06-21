@@ -359,6 +359,7 @@ const goPost = (post: Post, event: MouseEvent) => {
       title: post.title,
       author: post.author,
       createdAt: post.createdAt,
+      category: post.category ?? null,
     },
   });
 
@@ -680,16 +681,9 @@ let isPulling = false;
 const pullDistance = ref(0);
 const pullTriggered = ref(false);
 
-const onTouchStart = (e: TouchEvent) => {
-  if (!isMobile.value || refreshing.value || loading.value) return;
-  if (window.scrollY > 5) return;
-  const touch = e.touches[0];
-  if (!touch) return;
-  pullStartY = touch.clientY;
-  isPulling = true;
-};
-
-const onTouchMove = (e: TouchEvent) => {
+// 动态注册 non-passive touchmove：仅在下拉条件满足时激活，
+// 避免全局 non-passive 监听器阻塞浏览器滚动优化。
+const onPullTouchMove = (e: TouchEvent) => {
   if (!isPulling) return;
   const touch = e.touches[0];
   if (!touch) return;
@@ -698,17 +692,49 @@ const onTouchMove = (e: TouchEvent) => {
     pullDistance.value = 0;
     return;
   }
+  // 页面在顶部且下拉中：阻止浏览器默认 overscroll/bounce 行为，
+  // 确保自定义下拉刷新手势不被原生行为覆盖。
+  if (deltaY > 0 && window.scrollY <= 0) {
+    e.preventDefault();
+  }
   const dampened = Math.min(PULL_MAX, deltaY * 0.4);
   pullDistance.value = dampened;
   pullTriggered.value = dampened >= PULL_THRESHOLD;
 };
 
+const attachPullMove = () => {
+  window.addEventListener("touchmove", onPullTouchMove, { passive: false });
+};
+const detachPullMove = () => {
+  window.removeEventListener("touchmove", onPullTouchMove);
+};
+
+const onTouchStart = (e: TouchEvent) => {
+  if (!isMobile.value || refreshing.value || loading.value) return;
+  if (window.scrollY > 5) return;
+  const touch = e.touches[0];
+  if (!touch) return;
+  pullStartY = touch.clientY;
+  isPulling = true;
+  // 仅在可能触发下拉时注册 non-passive touchmove，不影响其余正常滚动
+  attachPullMove();
+};
+
 const onTouchEnd = () => {
   if (!isPulling) return;
   isPulling = false;
+  detachPullMove();
   if (pullTriggered.value && !refreshing.value) {
     void handleRefresh();
   }
+  pullDistance.value = 0;
+  pullTriggered.value = false;
+};
+
+const onTouchCancel = () => {
+  if (!isPulling) return;
+  isPulling = false;
+  detachPullMove();
   pullDistance.value = 0;
   pullTriggered.value = false;
 };
@@ -727,8 +753,8 @@ onMounted(async () => {
     window.addEventListener("ik:tab-visible", onTabVisible);
     window.addEventListener("ik:article-deleted", onArticleDeleted);
     window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
     window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchCancel);
   }
   await initialFetchPromise;
   // 注册 pending 队列 watch（immediate=true）：
@@ -775,8 +801,9 @@ onBeforeUnmount(() => {
     window.removeEventListener("ik:tab-visible", onTabVisible);
     window.removeEventListener("ik:article-deleted", onArticleDeleted);
     window.removeEventListener("touchstart", onTouchStart);
-    window.removeEventListener("touchmove", onTouchMove);
     window.removeEventListener("touchend", onTouchEnd);
+    window.removeEventListener("touchcancel", onTouchCancel);
+    detachPullMove();
     if (scrollBridge) {
       window.removeEventListener("scroll", scrollBridge);
       scrollBridge = null;
@@ -961,7 +988,6 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding-top: 24px;
   padding-bottom: 24px;
-  overscroll-behavior-y: contain;
 }
 
 /* 45° 斜线纹理背景（与发帖页 / 入站考试页一致） */

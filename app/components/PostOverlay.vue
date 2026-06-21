@@ -46,6 +46,7 @@ const loadError = ref(false);
 const headerAuthor = computed<Author | null>(() => post.value?.author ?? props.preview?.author ?? null);
 const headerCreatedAt = computed<string | undefined>(() => post.value?.createdAt ?? props.preview?.createdAt);
 const headerTitle = computed<string>(() => post.value?.title ?? props.preview?.title ?? "");
+const headerCategory = computed(() => post.value?.category ?? props.preview?.category ?? null);
 
 const comments = ref<Comment[]>([]);
 const commentsCursor = ref("");
@@ -874,7 +875,7 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                   <div class="ik-dialog__detail">
-                    <h1 v-if="headerTitle" class="ik-dialog__title">{{ headerTitle }}</h1>
+                    <h1 v-if="headerTitle" class="ik-dialog__title"><span v-if="headerCategory" class="ik-dialog__title-cat">[ {{ headerCategory.name }} ]</span>{{ headerTitle }}</h1>
                     <div v-else class="ik-skel ik-skel--title"></div>
                     <div class="ik-skel ik-skel--line" style="width:100%"></div>
                     <div class="ik-skel ik-skel--line" style="width:90%"></div>

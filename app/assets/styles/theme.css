@@ -92,6 +92,11 @@ body,
   scrollbar-width: none;
 }
 
+/* 阻止浏览器原生 pull-to-refresh，确保自定义下拉刷新正常工作 */
+html {
+  overscroll-behavior-y: contain;
+}
+
 /* 隐藏滚动条 (Chrome, Safari, Opera) */
 #__nuxt {
   position: relative;
