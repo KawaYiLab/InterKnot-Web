@@ -563,7 +563,7 @@ onBeforeUnmount(() => {
   .ik-img-dialog {
     width: 100%;
     height: auto;
-    max-height: 88vh;
+    max-height: 55vh;
     transform: none;
   }
 
@@ -635,7 +635,14 @@ onBeforeUnmount(() => {
   .ik-img-grid-wrap {
     background: rgba(255, 255, 255, 0.03);
     border-radius: 12px;
-    max-height: 50vh;
+  }
+
+  .ik-img-grid-scroll {
+    border-radius: 12px;
+  }
+
+  .ik-img-grid-scroll :deep(.z-scrollbar__bar) {
+    display: none;
   }
 
   .ik-img-grid {
