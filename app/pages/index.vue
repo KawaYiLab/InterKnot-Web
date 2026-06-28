@@ -26,6 +26,13 @@ const message = useMessage();
 const pageDataLoading = usePageDataLoading();
 const auth = useAuthStore();
 const loginDialog = useLoginDialog();
+const { online: presenceOnline, avatars: presenceAvatars } = usePresence();
+// 头像堆叠最多展示几个，剩余的用 +N 收口。
+const PRESENCE_AVATAR_MAX = 5;
+const presenceShownAvatars = computed(() => presenceAvatars.value.slice(0, PRESENCE_AVATAR_MAX));
+const presenceOverflow = computed(() =>
+  Math.max(0, presenceOnline.value - presenceShownAvatars.value.length),
+);
 
 useSeoMeta({
   title: "绳网",
@@ -867,6 +874,23 @@ onBeforeUnmount(() => {
           {{ tab.label }}
         </button>
       </nav>
+
+      <!-- 在线人数：🟢 N 在线 + 头像堆叠 +N -->
+      <div v-if="presenceOnline > 0" class="ik-online" aria-label="在线人数">
+        <span class="ik-online__dot" aria-hidden="true" />
+        <span class="ik-online__count">{{ presenceOnline }} 在线</span>
+        <div v-if="presenceShownAvatars.length" class="ik-online__stack" aria-hidden="true">
+          <img
+            v-for="(url, i) in presenceShownAvatars"
+            :key="url + i"
+            :src="url"
+            class="ik-online__avatar"
+            alt=""
+            loading="lazy"
+          />
+          <span v-if="presenceOverflow > 0" class="ik-online__more">+{{ presenceOverflow }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- 移动端下拉刷新指示器 -->
@@ -1099,6 +1123,72 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+/* 在线人数：🟢 N 在线 + 头像堆叠 +N */
+.ik-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: auto;
+  padding-left: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.ik-online__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18);
+  flex-shrink: 0;
+}
+
+.ik-online__count {
+  font-feature-settings: "tnum";
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.ik-online__stack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ik-online__avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #1c1c1c;
+  background: #2a2a2a;
+}
+
+.ik-online__avatar:not(:first-child) {
+  margin-left: -8px;
+}
+
+.ik-online__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  margin-left: -8px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  border: 2px solid #1c1c1c;
+  background: #333;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  font-weight: 700;
+  font-feature-settings: "tnum";
+}
+
 @media (max-width: 768px) {
   .ik-home-toolbar {
     gap: 10px;
@@ -1129,6 +1219,19 @@ onBeforeUnmount(() => {
     height: 28px;
     padding: 0 12px;
     font-size: 13px;
+  }
+
+  .ik-online {
+    gap: 6px;
+    padding-left: 8px;
+    font-size: 12px;
+  }
+
+  .ik-online__avatar,
+  .ik-online__more {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
   }
 }
 
