@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { useEventListener } from "@vueuse/core";
-import { ChatBubbleOvalLeftEllipsisIcon, SignalIcon } from "@heroicons/vue/24/solid";
+import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/vue/24/solid";
 import { ClockIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import { LEVEL_THRESHOLDS, MAX_LEVEL } from "~/utils/level";
 import type { SearchSuggestion } from "~/composables/useApi";
@@ -15,8 +15,6 @@ const { isActive: showProgress, progress: progressValue, isClaimed, start: start
 // 敲敲未读：登录态由 knock-auth-bridge 插件在登录后自动启动 stream + refresh，
 // 所以此处只需要订阅 totalUnread 即可——未登录时一直为 0，不显示 badge。
 const { totalUnread: knockUnread } = useDmConversations();
-
-const { online: presenceOnline } = usePresence();
 /** badge 文案：>99 显示 "99+"，否则原数字 */
 const knockUnreadLabel = computed(() => {
   const n = knockUnread.value;
@@ -619,12 +617,6 @@ watch(
       </div>
 
       <div class="ik-header__right">
-        <!-- 在线人数 -->
-        <span v-if="presenceOnline > 0" class="ik-header__online" aria-label="在线人数">
-          <SignalIcon class="ik-header__online-icon" aria-hidden="true" />
-          <span class="ik-header__online-count">{{ presenceOnline }}</span>
-        </span>
-
         <!-- 移动端：tabs 隐藏后，把「敲敲」入口放到搜索框右侧 -->
         <button
           type="button"
@@ -1105,30 +1097,6 @@ watch(
   display: inline-flex;
   justify-content: flex-end;
   align-items: center;
-}
-
-/* 在线人数 */
-.ik-header__online {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1;
-  user-select: none;
-  white-space: nowrap;
-  margin-right: 4px;
-}
-
-.ik-header__online-icon {
-  width: 14px;
-  height: 14px;
-  color: #4ade80;
-}
-
-.ik-header__online-count {
-  font-feature-settings: "tnum";
 }
 
 /* 移动端「敲敲」入口：桌面端用 tabs，不显示此按钮 */

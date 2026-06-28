@@ -26,6 +26,7 @@ const message = useMessage();
 const pageDataLoading = usePageDataLoading();
 const auth = useAuthStore();
 const loginDialog = useLoginDialog();
+const { online: presenceOnline } = usePresence();
 
 useSeoMeta({
   title: "绳网",
@@ -867,6 +868,12 @@ onBeforeUnmount(() => {
           {{ tab.label }}
         </button>
       </nav>
+
+      <!-- 在线人数 -->
+      <span v-if="presenceOnline > 0" class="ik-online-badge">
+        <span class="ik-online-badge__dot" aria-hidden="true" />
+        <span class="ik-online-badge__count">{{ presenceOnline }} 在线</span>
+      </span>
     </div>
 
     <!-- 移动端下拉刷新指示器 -->
@@ -1130,6 +1137,37 @@ onBeforeUnmount(() => {
     padding: 0 12px;
     font-size: 13px;
   }
+
+  .ik-online-badge {
+    font-size: 12px;
+  }
+}
+
+/* 在线人数徽章 */
+.ik-online-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  align-self: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.ik-online-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 4px rgba(74, 222, 128, 0.6);
+  flex-shrink: 0;
+}
+
+.ik-online-badge__count {
+  font-feature-settings: "tnum";
 }
 
 .ik-masonry {
