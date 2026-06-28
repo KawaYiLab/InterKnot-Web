@@ -2,7 +2,7 @@
  * usePresence —— 在线人数心跳与轮询（模块级单例）。
  *
  * - 生成并持久化随机 presenceId（localStorage），用于匿名访客去重。
- * - 定时 POST /api/presence/ping 上报心跳，用返回值更新在线人数。
+ * - 定时 POST /api/presence/ping 上报心跳，用返回值更新在线人数与头像堆叠。
  * - 页面隐藏时停止心跳，可见时立即恢复。
  * - 无需登录即可运行。
  */
@@ -13,7 +13,12 @@ const PING_INTERVAL_MS = 20_000;
 const STORAGE_KEY = "presence:id";
 
 interface PingResponse {
-  data: { online: number };
+  data: { online: number; avatars?: string[] };
+}
+
+interface PresenceState {
+  online: ReturnType<typeof useState<number>>;
+  avatars: ReturnType<typeof useState<string[]>>;
 }
 
 let started = false;
@@ -29,9 +34,7 @@ const getPresenceId = (): string => {
   return id;
 };
 
-const doPing = async (
-  online: ReturnType<typeof useState<number>>,
-): Promise<void> => {
+const doPing = async (state: PresenceState): Promise<void> => {
   try {
     const { $api } = useNuxtApp();
     const presenceId = getPresenceId();
@@ -40,22 +43,26 @@ const doPing = async (
       body: { presenceId },
     });
     const n = resp?.data?.online;
-    if (typeof n === "number") online.value = n;
+    if (typeof n === "number") state.online.value = n;
+    const avatars = resp?.data?.avatars;
+    if (Array.isArray(avatars)) {
+      state.avatars.value = avatars.filter((u): u is string => typeof u === "string");
+    }
   } catch {
     /* fail-open */
   }
 };
 
-const onVisibility = (online: ReturnType<typeof useState<number>>) => {
+const onVisibility = (state: PresenceState) => {
   if (document.visibilityState === "hidden") {
     if (pingTimer) {
       clearInterval(pingTimer);
       pingTimer = null;
     }
   } else {
-    void doPing(online);
+    void doPing(state);
     if (!pingTimer) {
-      pingTimer = setInterval(() => void doPing(online), PING_INTERVAL_MS);
+      pingTimer = setInterval(() => void doPing(state), PING_INTERVAL_MS);
     }
   }
 };
@@ -64,16 +71,18 @@ let visibilityHandler: (() => void) | null = null;
 
 export function usePresence() {
   const online = useState<number>("presence:online", () => 0);
+  const avatars = useState<string[]>("presence:avatars", () => []);
+  const state: PresenceState = { online, avatars };
 
   const start = () => {
     if (!import.meta.client) return;
     if (started) return;
     started = true;
 
-    void doPing(online);
-    pingTimer = setInterval(() => void doPing(online), PING_INTERVAL_MS);
+    void doPing(state);
+    pingTimer = setInterval(() => void doPing(state), PING_INTERVAL_MS);
 
-    visibilityHandler = () => onVisibility(online);
+    visibilityHandler = () => onVisibility(state);
     document.addEventListener("visibilitychange", visibilityHandler);
   };
 
@@ -91,6 +100,7 @@ export function usePresence() {
 
   return {
     online: computed(() => online.value),
+    avatars: computed(() => avatars.value),
     start,
     stop,
   };
