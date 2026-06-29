@@ -30,6 +30,7 @@
     "vue-advanced-cropper": "^2.8.9"
   },
   "devDependencies": {
+    "@nuxtjs/sitemap": "8.2.1",
     "@playwright/test": "^1.56.0",
     "@testing-library/vue": "^8.1.0",
     "@types/markdown-it": "^14.1.2",

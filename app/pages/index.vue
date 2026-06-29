@@ -34,11 +34,44 @@ const presenceOverflow = computed(() =>
   Math.max(0, presenceOnline.value - presenceShownAvatars.value.length),
 );
 
+const runtimeConfig = useRuntimeConfig();
+const siteUrl = runtimeConfig.public.siteUrl;
+const HOME_DESC = "绳网是一个游戏、技术交流平台，发现并分享有趣的内容。";
+const HOME_IMAGE = `${siteUrl}/images/zzzicon_200x200.png`;
+
 useSeoMeta({
   title: "绳网",
-  description: "绳网是一个游戏、技术交流平台，发现并分享有趣的内容。",
+  description: HOME_DESC,
   ogTitle: "绳网",
-  ogDescription: "绳网是一个游戏、技术交流平台，发现并分享有趣的内容。",
+  ogDescription: HOME_DESC,
+  ogImage: HOME_IMAGE,
+  ogUrl: siteUrl,
+  ogType: "website",
+  twitterTitle: "绳网",
+  twitterDescription: HOME_DESC,
+  twitterImage: HOME_IMAGE,
+});
+
+// canonical + 结构化数据（WebSite + 站内搜索），利于品牌词富摘要。
+useHead({
+  link: [{ rel: "canonical", href: siteUrl }],
+  script: [
+    {
+      type: "application/ld+json",
+      innerHTML: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: "绳网",
+        url: siteUrl,
+        description: HOME_DESC,
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${siteUrl}/?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
+      }),
+    },
+  ],
 });
 
 const scrollTarget = ref<HTMLElement>();

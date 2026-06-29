@@ -16,6 +16,8 @@ function _clearTimers() {
 }
 
 function _startTicking() {
+  // 进度条纯客户端视觉，服务端不启动定时器（避免 SSR setInterval 泄漏告警）。
+  if (!import.meta.client) return;
   if (_interval) return;
   _interval = setInterval(() => {
     _progress.value += (90 - _progress.value) * 0.1;

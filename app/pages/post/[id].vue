@@ -21,10 +21,6 @@ const confirmDialog = useConfirmDialog();
 const pageDataLoading = usePageDataLoading();
 const message = useMessage();
 
-const post = ref<Post | null>(null);
-const loading = ref(true);
-const loadError = ref(false);
-
 const comments = ref<Comment[]>([]);
 const commentsCursor = ref("");
 const commentsHasNext = ref(true);
@@ -60,6 +56,33 @@ const mention = useMentionInput({
 
 const postId = computed(() => String(route.params.id || ""));
 
+// SSR：服务端预取帖子正文，爬虫可直接抓到内容（payload 会注入，客户端无需重复请求）。
+const {
+  data: post,
+  status: postStatus,
+  error: postError,
+} = await useAsyncData<Post | null>(
+  () => `post-detail-${postId.value}`,
+  () => api.getPost(postId.value),
+  { watch: [postId], default: () => null },
+);
+
+// 服务端首次加载遇到「不存在」→ 返回 404，利于 SEO 正确状态码。
+if (import.meta.server && postError.value && isNotFoundError(postError.value)) {
+  throw createError({ statusCode: 404, statusMessage: "帖子不存在", fatal: true });
+}
+
+const loading = computed(() => postStatus.value === "pending" && !post.value);
+const loadError = computed(() => Boolean(postError.value) && !post.value);
+
+// 客户端导航若遇错误，给出提示（404 由 loadError 占位 UI 承载）。
+if (import.meta.client) {
+  watch(postError, (err) => {
+    if (err && !isNotFoundError(err)) {
+      message.error(resolveErrorMessage(err, "获取帖子详情失败"));
+    }
+  });
+}
 
 
 const covers = computed(() => post.value?.covers ?? []);
@@ -88,24 +111,7 @@ const openCoverPreview = () => {
   if (images.length) openGallery(images, 0);
 };
 
-/* ── 数据加载 ──────────────────────────────────── */
-const loadPost = async () => {
-  loading.value = true;
-  loadError.value = false;
-  try {
-    post.value = await api.getPost(postId.value);
-  } catch (err) {
-    if (isNotFoundError(err)) {
-      showError({ statusCode: 404, message: "帖子不存在" });
-      return;
-    }
-    loadError.value = true;
-    message.error(resolveErrorMessage(err, "获取帖子详情失败"));
-  } finally {
-    loading.value = false;
-  }
-};
-
+/* ── 评论加载 ──────────────────────────────────── */
 const loadComments = async () => {
   if (commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
@@ -459,7 +465,14 @@ const pageDescription = computed(() => {
   const text = post.value?.bodyText || post.value?.rawBodyText || "";
   return text.length > 160 ? text.slice(0, 157) + "..." : text || "绳网是一个游戏、技术交流平台";
 });
-const pageCover = computed(() => post.value?.cover || "/images/zzzicon_200x200.png");
+const runtimeConfig = useRuntimeConfig();
+const siteUrl = runtimeConfig.public.siteUrl;
+const canonicalUrl = computed(() => `${siteUrl}/post/${postId.value}`);
+const pageCover = computed(() => {
+  const c = post.value?.cover;
+  if (!c) return `${siteUrl}/images/zzzicon_200x200.png`;
+  return c.startsWith("http") ? c : `${siteUrl}${c}`;
+});
 
 useSeoMeta({
   title: pageTitle,
@@ -467,7 +480,53 @@ useSeoMeta({
   ogTitle: pageTitle,
   ogDescription: pageDescription,
   ogImage: pageCover,
+  ogUrl: canonicalUrl,
   ogType: "article",
+  twitterTitle: pageTitle,
+  twitterDescription: pageDescription,
+  twitterImage: pageCover,
+});
+
+// canonical + 结构化数据（DiscussionForumPosting），供搜索引擎富摘要展示。
+useHead({
+  link: [{ rel: "canonical", href: canonicalUrl }],
+  script: [
+    {
+      type: "application/ld+json",
+      innerHTML: computed(() => {
+        const p = post.value;
+        if (!p) return "";
+        const ld: Record<string, unknown> = {
+          "@context": "https://schema.org",
+          "@type": "DiscussionForumPosting",
+          headline: p.title,
+          url: canonicalUrl.value,
+          author: {
+            "@type": "Person",
+            name: p.isAnonymous ? "匿名" : p.author?.name || "匿名",
+          },
+          interactionStatistic: [
+            {
+              "@type": "InteractionCounter",
+              interactionType: "https://schema.org/LikeAction",
+              userInteractionCount: p.likesCount ?? 0,
+            },
+            {
+              "@type": "InteractionCounter",
+              interactionType: "https://schema.org/CommentAction",
+              userInteractionCount: p.commentsCount ?? 0,
+            },
+          ],
+        };
+        const body = p.bodyText || p.rawBodyText;
+        if (body) ld.articleBody = body.slice(0, 5000);
+        if (p.createdAt) ld.datePublished = p.createdAt;
+        if (p.updatedAt) ld.dateModified = p.updatedAt;
+        if (p.cover) ld.image = pageCover.value;
+        return JSON.stringify(ld);
+      }),
+    },
+  ],
 });
 
 /**
@@ -513,7 +572,6 @@ onMounted(async () => {
   // 让只看文字、不点图的用户不必下载这套资源。
   pageDataLoading.claim();
   try {
-    await loadPost();
     await Promise.all([recordView(), loadComments()]);
   } finally {
     pageDataLoading.finish();

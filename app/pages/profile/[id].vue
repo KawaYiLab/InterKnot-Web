@@ -12,10 +12,6 @@ const pageDataLoading = usePageDataLoading();
 const message = useMessage();
 const auth = useAuthStore();
 
-const profile = ref<Profile | null>(null);
-const loadError = ref(false);
-const loading = ref(false);
-
 const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'pinned', 'social', 'logout'];
 const modalQuery = computed(() => String(route.query.modal || ''));
 const showCardModal = computed(() => modalQuery.value === 'banner');
@@ -36,6 +32,32 @@ const articleHasNext = ref(true);
 const articleLoading = ref(false);
 
 const profileId = computed(() => String(route.params.id || ""));
+
+// SSR：服务端预取用户主页资料，爬虫可直接抓到名称 / 简介。
+const {
+  data: profile,
+  status: profileStatus,
+  error: profileError,
+} = await useAsyncData<Profile | null>(
+  () => `profile-detail-${profileId.value}`,
+  () => api.getProfile(profileId.value),
+  { watch: [profileId], default: () => null },
+);
+
+if (import.meta.server && profileError.value && isNotFoundError(profileError.value)) {
+  throw createError({ statusCode: 404, statusMessage: "用户不存在", fatal: true });
+}
+
+const loading = computed(() => profileStatus.value === "pending" && !profile.value);
+const loadError = computed(() => Boolean(profileError.value) && !profile.value);
+
+if (import.meta.client) {
+  watch(profileError, (err) => {
+    if (err && !isNotFoundError(err)) {
+      message.error(resolveErrorMessage(err, "获取用户信息失败"));
+    }
+  });
+}
 
 const PROFILE_ARTICLES_MAX = 6;
 
@@ -296,36 +318,57 @@ const profileDescription = computed(() =>
   profile.value?.bio || `查看 ${profile.value?.name || "用户"} 在绳网上的帖子和评论`,
 );
 
+const runtimeConfig = useRuntimeConfig();
+const siteUrl = runtimeConfig.public.siteUrl;
+const canonicalUrl = computed(() => `${siteUrl}/profile/${profileId.value}`);
+const profileImage = computed(() => {
+  const a = profile.value?.avatar;
+  if (!a) return `${siteUrl}/images/zzzicon_200x200.png`;
+  return a.startsWith("http") ? a : `${siteUrl}${a}`;
+});
+
 useSeoMeta({
   title: profileTitle,
   description: profileDescription,
   ogTitle: profileTitle,
   ogDescription: profileDescription,
-  ogImage: () => profile.value?.avatar || "/images/zzzicon_200x200.png",
+  ogImage: profileImage,
+  ogUrl: canonicalUrl,
+  ogType: "profile",
+  twitterTitle: profileTitle,
+  twitterDescription: profileDescription,
+  twitterImage: profileImage,
+});
+
+// canonical + 结构化数据（Person）。
+useHead({
+  link: [{ rel: "canonical", href: canonicalUrl }],
+  script: [
+    {
+      type: "application/ld+json",
+      innerHTML: computed(() => {
+        const p = profile.value;
+        if (!p) return "";
+        const ld: Record<string, unknown> = {
+          "@context": "https://schema.org",
+          "@type": "Person",
+          name: p.name || p.login || "用户",
+          url: canonicalUrl.value,
+        };
+        if (p.bio) ld.description = p.bio;
+        if (p.avatar) ld.image = profileImage.value;
+        return JSON.stringify(ld);
+      }),
+    },
+  ],
 });
 
 const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
 
 onMounted(async () => {
-  loading.value = true;
-  loadError.value = false;
-  pageDataLoading.claim();
-  try {
-    profile.value = await api.getProfile(profileId.value);
-    profileTabLabel.value = profile.value?.isSelf
-      ? null
-      : (profile.value?.name || profile.value?.login || null);
-  } catch (err) {
-    if (isNotFoundError(err)) {
-      showError({ statusCode: 404, message: "用户不存在" });
-      return;
-    }
-    loadError.value = true;
-    message.error(resolveErrorMessage(err, "获取用户信息失败"));
-  } finally {
-    loading.value = false;
-    pageDataLoading.finish();
-  }
+  profileTabLabel.value = profile.value && !profile.value.isSelf
+    ? (profile.value.name || profile.value.login || null)
+    : null;
   if (profile.value && !profile.value.isHidden) {
     void loadProfileArticles();
   }
