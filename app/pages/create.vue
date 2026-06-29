@@ -160,14 +160,6 @@ function isAllowedImage(filename: string): boolean {
   return ALLOWED_EXTENSIONS.has(ext);
 }
 
-// 封面缩略图 URL：本地 blob/data 预览不动，远程 URL 拼接七牛云的 -small.webp。
-// 避免在草稿网格里加载原图（30MB+ 大图会浪费带宽和解码时间）。
-function toCoverThumbUrl(url: string): string {
-  if (!url) return url;
-  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
-  return `${url}-small.webp`;
-}
-
 /* ── Auto-save ────────────────────────────────────── */
 const performSaveDraft = async (force = false) => {
   if (!auth.isLogin) return;
@@ -922,13 +914,15 @@ if (import.meta.client) {
                 @mouseenter="task.status === 'done' && preloadGallery()"
                 @click="openCoverPreview(idx)"
               >
-                <img
-                  :src="toCoverThumbUrl(task.previewUrl)"
+                <NuxtImg
+                  :src="task.previewUrl"
                   :alt="task.filename"
                   class="ik-cover-thumb__img"
+                  width="240"
+                  height="240"
                   decoding="async"
                   draggable="false"
-                  @error="($event.target as HTMLImageElement).src = task.previewUrl"
+                  @error="(e) => { if (typeof e !== 'string') (e.target as HTMLImageElement).src = task.previewUrl; }"
                 />
                 <div v-if="task.status === 'uploading'" class="ik-cover-thumb__overlay">
                   <span class="ik-cover-thumb__pct">{{ task.progress }}%</span>
@@ -1029,13 +1023,15 @@ if (import.meta.client) {
           class="ik-mobile-cover-tile"
           @click="task.status === 'done' && openCoverPreview(idx)"
         >
-          <img
-            :src="toCoverThumbUrl(task.previewUrl)"
+          <NuxtImg
+            :src="task.previewUrl"
             :alt="task.filename"
             class="ik-mobile-cover-tile__img"
+            width="240"
+            height="240"
             decoding="async"
             draggable="false"
-            @error="($event.target as HTMLImageElement).src = task.previewUrl"
+            @error="(e) => { if (typeof e !== 'string') (e.target as HTMLImageElement).src = task.previewUrl; }"
           />
           <div
             v-if="task.status === 'uploading'"

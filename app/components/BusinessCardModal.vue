@@ -35,14 +35,6 @@ const equippedCard = ref<BusinessCard | null>(null);
 const selectedCard = ref<BusinessCard | null>(null);
 const equipping = ref(false);
 
-// 网格缩略图：拼接七牛云 -small.webp，避免列表里加载原图。
-// 大图（详情/Banner）保留原 URL。
-const toThumbUrl = (url: string | undefined): string => {
-  if (!url) return "";
-  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
-  return `${url}-small.webp`;
-};
-
 const tabs: { key: TabKey; label: string }[] = [
   { key: "all", label: "全部" },
   { key: "character", label: "代理人" },
@@ -283,11 +275,14 @@ onBeforeUnmount(() => {
                         @click="selectCard(card)"
                       >
                         <div class="ik-bc-grid__thumb">
-                          <img
+                          <NuxtImg
                             v-if="card.image"
-                            :src="toThumbUrl(card.image)"
+                            :src="card.image"
                             alt=""
                             class="ik-bc-grid__img"
+                            width="320"
+                            height="180"
+                            loading="lazy"
                           />
                           <div v-else class="ik-bc-grid__placeholder">
                             {{ card.name.charAt(0) }}

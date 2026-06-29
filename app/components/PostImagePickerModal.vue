@@ -35,11 +35,6 @@ const selectedUploads = computed(() => {
   return uploads.value.filter((upload) => selected.has(upload.documentId));
 });
 
-const toThumbUrl = (url: string): string => {
-  if (!url || url.startsWith("blob:") || url.startsWith("data:")) return url;
-  return `${url}-small.webp`;
-};
-
 const triggerFileInput = () => {
   if (remainingCount.value <= 0) {
     message.warning("图片数量已达上限");
@@ -175,14 +170,16 @@ onBeforeUnmount(() => {
                         @click="toggleUpload(upload)"
                       >
                         <div class="ik-img-card__thumb">
-                          <img
-                            :src="toThumbUrl(upload.url)"
+                          <NuxtImg
+                            :src="upload.url"
                             :alt="upload.name || '历史图片'"
                             class="ik-img-card__image"
+                            width="240"
+                            height="240"
                             loading="lazy"
                             decoding="async"
                             draggable="false"
-                            @error="($event.target as HTMLImageElement).src = upload.url"
+                            @error="(e) => { if (typeof e !== 'string') (e.target as HTMLImageElement).src = upload.url; }"
                           />
                         </div>
                         <span class="ik-img-card__name">{{ upload.name || '历史图片' }}</span>
