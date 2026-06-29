@@ -4,7 +4,7 @@ const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
 </script>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch, type ComponentPublicInstance } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 import UserHoverCard from "./UserHoverCard.vue";
@@ -31,7 +31,8 @@ const coverImageLoaded = ref(false);
 const coverIsFallback = ref(false);
 const avatarSrc = ref(DEFAULT_AVATAR_IMAGE);
 const cardRef = ref<HTMLElement | null>(null);
-const coverImgRef = ref<HTMLImageElement | null>(null);
+// NuxtImg 渲染为 <img> 根节点，ref 取到的是组件实例，真实 <img> 在 $el 上。
+const coverImgRef = ref<ComponentPublicInstance | null>(null);
 
 const hasBackendCoverSize = computed(() =>
   typeof props.post.coverWidth === "number" &&
@@ -68,7 +69,9 @@ watch(
 );
 
 onMounted(() => {
-  if (coverImgRef.value?.complete) {
+  // 命中浏览器缓存时 load 事件可能不触发，用 <img>.complete 兜底标记已就绪。
+  const img = coverImgRef.value?.$el as HTMLImageElement | undefined;
+  if (img?.complete) {
     coverImageLoaded.value = true;
   }
 });
@@ -122,7 +125,7 @@ const handleOpen = (e: MouseEvent) => {
     >
       <div class="ik-card__cover-wrap">
         <div class="ik-card__cover-frame" :style="{ aspectRatio: String(coverAspectRatio) }">
-          <img
+          <NuxtImg
             ref="coverImgRef"
             :src="coverSrc"
             :alt="coverIsFallback ? 'default cover' : post.title"
@@ -131,6 +134,7 @@ const handleOpen = (e: MouseEvent) => {
               'ik-card__cover--fallback': coverIsFallback,
               'ik-card__cover--loading': !coverReady,
             }"
+            sizes="50vw sm:33vw md:25vw lg:20vw"
             :loading="eager ? 'eager' : 'lazy'"
             decoding="async"
             :fetchpriority="eager ? 'high' : 'low'"
@@ -161,10 +165,12 @@ const handleOpen = (e: MouseEvent) => {
         <div class="ik-card__author-row">
           <UserHoverCard v-if="canHover" :author-id="post.author?.documentId">
             <div class="ik-card__avatar-shell">
-              <img
+              <NuxtImg
                 :src="avatarSrc"
                 :alt="authorName"
                 class="ik-card__avatar-image"
+                width="80"
+                height="80"
                 loading="lazy"
                 decoding="async"
                 @error="onAvatarError"
@@ -172,10 +178,12 @@ const handleOpen = (e: MouseEvent) => {
             </div>
           </UserHoverCard>
           <div v-else class="ik-card__avatar-shell">
-            <img
+            <NuxtImg
               :src="avatarSrc"
               :alt="authorName"
               class="ik-card__avatar-image"
+              width="80"
+              height="80"
               loading="lazy"
               decoding="async"
               @error="onAvatarError"

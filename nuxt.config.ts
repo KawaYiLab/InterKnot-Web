@@ -3,12 +3,38 @@ import { fileURLToPath } from "node:url";
 
 const zzzuiPackages = fileURLToPath(new URL("./zzzui/packages", import.meta.url));
 const zzzuiSrc = fileURLToPath(new URL("./zzzui/src", import.meta.url));
+const qiniuProvider = fileURLToPath(new URL("./app/providers/qiniu.ts", import.meta.url));
 
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-01",
   srcDir: "app/",
-  modules: ["@pinia/nuxt"],
+  modules: ["@pinia/nuxt", "@nuxt/image"],
   ssr: false,
+  // 图片优化：image.tiwat.cn（七牛 + ESA）走自定义 provider 生成响应式 srcset
+  // + 现代格式。开通七牛图片处理 / ESA 透传 query 后自动生效（详见 providers/qiniu.ts）。
+  image: {
+    provider: "qiniu",
+    providers: {
+      qiniu: {
+        provider: qiniuProvider,
+        options: {},
+      },
+    },
+    domains: ["image.tiwat.cn"],
+    quality: 80,
+    // 现代格式：统一用 webp。七牛 dora 的 avif 编码实测比 webp 大约 20%（原图
+    // 229KB → w400 webp 42KB / avif 51KB；w800 webp 104KB / avif 126KB），
+    // 对本站图片是负优化，故不启用 avif，仅 webp（兼容性 ~98%，已是 −80% 量级）。
+    format: ["webp"],
+    screens: {
+      xs: 320,
+      sm: 480,
+      md: 768,
+      lg: 1024,
+      xl: 1280,
+      xxl: 1536,
+    },
+  },
   nitro: {
     preset: "static",
   },
