@@ -22,10 +22,10 @@ export default defineNuxtConfig({
     },
     domains: ["image.tiwat.cn"],
     quality: 80,
-    // 现代格式：统一用 webp。七牛 dora 的 avif 编码实测比 webp 大约 20%（原图
-    // 229KB → w400 webp 42KB / avif 51KB；w800 webp 104KB / avif 126KB），
-    // 对本站图片是负优化，故不启用 avif，仅 webp（兼容性 ~98%，已是 −80% 量级）。
-    format: ["webp"],
+    // 现代格式：统一用 webp。注意 @nuxt/image 的 format / 全局 modifiers 配置不会
+    // 下发到自定义 provider 的 modifiers（实测只有组件级 format 属性才生效），所以
+    // webp 默认值放在 provider 内兜底（见 app/providers/qiniu.ts 的 DEFAULT_FORMAT），
+    // 而非在此处配置。七牛 dora 的 avif 实测比 webp 大 ~20%，对本站是负优化，故只用 webp。
     screens: {
       xs: 320,
       sm: 480,

@@ -26,6 +26,11 @@ interface GetImageOptions {
 
 const QINIU_HOST = "image.tiwat.cn";
 const DEFAULT_QUALITY = 80;
+// 默认统一转 webp。@nuxt/image 的全局 format/modifiers 配置不会下发到自定义
+// provider 的 modifiers（实测只有组件级 format 属性才会），故在 provider 内兜底，
+// 保证所有七牛图都转 webp（−80% 量级），无需在每个 <NuxtImg> 上重复写 format。
+// 七牛 dora 的 avif 实测比 webp 大 ~20%，对本站是负优化，故只用 webp。
+const DEFAULT_FORMAT = "webp";
 
 function toPositiveInt(value: number | string | undefined): number | undefined {
   if (value === undefined) return undefined;
@@ -42,14 +47,15 @@ export function getImage(src: string, { modifiers = {} }: GetImageOptions = {}) 
   const width = toPositiveInt(modifiers.width);
   const height = toPositiveInt(modifiers.height);
   const quality = toPositiveInt(modifiers.quality) ?? DEFAULT_QUALITY;
-  const { format, fit } = modifiers;
+  const { fit } = modifiers;
+  const format = modifiers.format ?? DEFAULT_FORMAT;
 
   // 同时有宽高且要求裁剪填充时用 mode 1，否则等比缩略 mode 2。
   const mode = fit === "cover" && width && height ? "1" : "2";
   const ops: string[] = ["imageView2", mode];
   if (width) ops.push("w", String(width));
   if (height) ops.push("h", String(height));
-  if (format) ops.push("format", format);
+  ops.push("format", format);
   ops.push("q", String(quality));
 
   const fop = ops.join("/");
