@@ -10,7 +10,12 @@ type BodyFormatter = typeof import("~/utils/format-body");
 let formatterPromise: Promise<BodyFormatter> | null = null;
 function loadBodyFormatter(): Promise<BodyFormatter> {
   if (!formatterPromise) {
-    formatterPromise = import("~/utils/format-body");
+    // chunk 拉取失败（弱网/代理）时不要把 rejected promise 永久缓存，
+    // 否则后续渲染永远拿到失败结果、无法恢复。失败即清空，留待下次重试。
+    formatterPromise = import("~/utils/format-body").catch((err) => {
+      formatterPromise = null;
+      throw err;
+    });
   }
   return formatterPromise;
 }
@@ -48,12 +53,18 @@ export function useRenderedBody(
         bodyHtml.value = "";
         return;
       }
-      const fmt = await loadBodyFormatter();
-      // 渲染期间 source 可能已切换，丢弃过期结果。
-      if (current !== token) return;
-      bodyHtml.value = post.body
-        ? fmt.sanitizeBodyHtml(post.body)
-        : fmt.formatBodyText(post.bodyText ?? "");
+      try {
+        const fmt = await loadBodyFormatter();
+        // 渲染期间 source 可能已切换，丢弃过期结果。
+        if (current !== token) return;
+        bodyHtml.value = post.body
+          ? fmt.sanitizeBodyHtml(post.body)
+          : fmt.formatBodyText(post.bodyText ?? "");
+      } catch {
+        // 格式化库加载失败（弱网/代理）：保持空正文，不抛未捕获异常。
+        // loadBodyFormatter 已清空缓存，source 变化时会自动重试。
+        if (current === token) bodyHtml.value = "";
+      }
     },
     { immediate: true },
   );
