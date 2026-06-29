@@ -126,15 +126,16 @@ export default defineNuxtPlugin(() => {
         const token = localStorage.getItem(TOKEN_KEY) || "";
         const path = request;
         const method = (options.method || "GET").toUpperCase();
-        // /api/articles/list 公开（recommend 可缓存），但 feed=following/favorites
-        // 是用户私有流，需带 token 让后端识别当前用户（带 token 也会绕过公开缓存）。
-        const query = (options.query || {}) as Record<string, unknown>;
-        const personalizedFeed =
-          path.startsWith("/api/articles/list") &&
-          (query.feed === "following" || query.feed === "favorites");
+        // /api/articles/list、/api/articles/search 默认公开（匿名请求不带 token，
+        // 走共享缓存）。但登录用户需要带 token，让后端为当前用户内联 isRead 等
+        // 个性化字段；带 token 的请求也会绕过公开缓存（cacheAuthorizedRequests:false），
+        // 匿名请求仍可命中共享缓存。
+        const articleFeed =
+          path.startsWith("/api/articles/list") ||
+          path.startsWith("/api/articles/search");
         if (
           shouldAttachToken(path, method, token) ||
-          (Boolean(token) && personalizedFeed)
+          (Boolean(token) && articleFeed)
         ) {
           options.headers = {
             ...options.headers,

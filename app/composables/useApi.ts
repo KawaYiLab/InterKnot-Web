@@ -73,10 +73,10 @@ const STALE_DETAIL = 2 * 60 * 1000; // 2 min
 const STALE_LIST = 1 * 60 * 1000; // 1 min
 const STALE_ME = 2 * 60 * 1000; // 2 min
 
-// 客户端累积的「已读」文章 id 集合。列表/搜索接口不返回 isRead，已读态需靠异步
-// /article-reads/batch 回填；切换分类会强制失效并重拉列表，新节点 isRead 一律为
-// false，若不预置就会出现「已读 → 闪回未读 → 再变已读」的跳动（切分类尤为明显）。
-// 这里把已知已读 id 跨频道/分页保留，构造列表页时同步预置 isRead，消除闪烁。
+// 客户端累积的「乐观已读」文章 id 集合。列表/搜索/个人页接口现已对登录用户内联
+// isRead（服务端权威态）；但点开帖子时的乐观标记请求可能尚未落库，此时若切分类
+// 强制重拉，服务端可能仍返回 isRead=false，导致「已读 → 闪回未读」跳动。这里把
+// 乐观已读 id 跨频道/分页保留，构造列表时同步补齐，消除该窗口内的闪烁。
 // 已读单调（不会变回未读），仅在客户端维护；登录/登出时随 clearAllCache 清空。
 const knownReadIds = new Set<string>();
 
@@ -84,7 +84,7 @@ const rememberReadIds = (ids: Iterable<string>) => {
   for (const id of ids) if (id) knownReadIds.add(id);
 };
 
-// 用累积的已读集合预置节点 isRead，使切分类/重拉时已读态不丢失。
+// 用累积的乐观已读集合补齐节点 isRead，覆盖「标记请求尚未落库」窗口。
 const seedReadStatus = <T extends { id: string; isRead?: boolean }>(nodes: T[]): T[] => {
   if (!import.meta.client || !knownReadIds.size) return nodes;
   for (const node of nodes) {
@@ -629,36 +629,6 @@ export function useApi() {
     );
   };
 
-  const mergeReadStatus = async (posts: Post[]): Promise<Set<string>> => {
-    const readSet = new Set<string>();
-    if (!import.meta.client || !posts.length) return readSet;
-    const userId = localStorage.getItem("user_id");
-    if (!userId) return readSet;
-    const ids = posts.map((d) => d.id);
-    try {
-      const res = await $api("/api/article-reads/batch", {
-        method: "POST",
-        body: { articleDocumentIds: ids },
-      });
-      const list = unwrapData<Array<{ articleDocumentId?: string; isRead?: boolean }>>(res);
-      if (!Array.isArray(list)) return readSet;
-      for (const item of list) {
-        if (item.isRead && item.articleDocumentId) {
-          readSet.add(item.articleDocumentId);
-        }
-      }
-      // 累积到全局已读集合：后续切分类/分页重拉时可同步预置，避免已读闪回未读。
-      rememberReadIds(readSet);
-      // 原地回填，保证缓存命中（peekArticles）拿到的对象也带已读态
-      for (const d of posts) {
-        if (readSet.has(d.id)) d.isRead = true;
-      }
-    } catch {
-      // ignore read status failures
-    }
-    return readSet;
-  };
-
   const searchArticles = async (
     query: string,
     endCur = "",
@@ -684,13 +654,9 @@ export function useApi() {
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
         const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
-        // 先用本地已读集合同步预置 isRead：切分类强制重拉时列表接口不返回 isRead，
-        // 不预置就会闪回未读。随后再异步回填本次往返发现的新增已读。
+        // 列表/搜索接口已对登录用户内联 isRead（权威态）；这里仅用本地乐观已读集合
+        // 补齐「标记请求尚未落库」窗口内的节点，避免切分类重拉时已读短暂闪回未读。
         seedReadStatus(page.nodes);
-        // 不阻塞页面返回：先让卡片立即渲染，已读态通过 readStatusReady 异步回填。
-        // （登录态下每页都要打 /article-reads/batch，串行 await 会让下拉加载
-        //  多等一个往返，新卡片延迟出现 → 滚动「掉帧/掉帖」感。）
-        page.readStatusReady = mergeReadStatus(page.nodes);
         return page;
       },
       STALE_LIST,
@@ -793,7 +759,8 @@ export function useApi() {
       async () => {
         const response = await $api(`/api/articles/detail/${id}`);
         const post = toPost(unwrapData(response), apiBaseUrl);
-        await mergeReadStatus([post]);
+        // 详情接口已对登录用户内联 isRead；本地乐观已读集合补齐尚未落库窗口。
+        seedReadStatus([post]);
         return post;
       },
       STALE_DETAIL,
@@ -1105,13 +1072,9 @@ export function useApi() {
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
         const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
-        // 与首页一致：先用本地已读集合预置，避免重入个人页时已读闪回未读。
+        // 个人页文章接口已对登录用户内联 isRead；这里仅用本地乐观已读集合补齐
+        // 「标记请求尚未落库」窗口，避免重入个人页时已读短暂闪回未读。
         seedReadStatus(page.nodes);
-        // Must await: merging mutates the raw nodes in-place. If we fire-and-forget,
-        // the caller pushes them into a reactive ref before mutation happens, and
-        // direct mutation on the raw target won't trigger Vue's reactivity, so
-        // every card stays in the unread (blue) state until the next re-render.
-        await mergeReadStatus(page.nodes);
         return page;
       },
       STALE_LIST,
