@@ -4,7 +4,7 @@ import { useMessage } from "zenless-ui";
 import type { Author, Comment, Post } from "~/types/entities";
 import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
-import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
+import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
@@ -41,6 +41,9 @@ const message = useMessage();
 const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
+
+// 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
+const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
 
 // 弹窗刚打开时优先展示首页卡片传入的 preview，等接口数据回来后无缝替换。
 const headerAuthor = computed<Author | null>(() => post.value?.author ?? props.preview?.author ?? null);
@@ -1018,14 +1021,9 @@ onBeforeUnmount(() => {
                         <span v-if="post.category" class="ik-dialog__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
                       </h1>
                       <div
-                        v-if="post.body"
+                        v-if="bodyHasContent"
                         class="ik-dialog__content"
-                        v-html="sanitizeBodyHtml(post.body)"
-                      ></div>
-                      <div
-                        v-else-if="post.bodyText"
-                        class="ik-dialog__content"
-                        v-html="formatBodyText(post.bodyText)"
+                        v-html="bodyHtml"
                       ></div>
                       <p v-else class="ik-dialog__content" style="color: #808080">
                         啥都木有¯\(°_o)/¯
