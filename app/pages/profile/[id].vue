@@ -587,7 +587,7 @@ onBeforeUnmount(() => {
       <ClientOnly>
         <Teleport to="body">
           <Transition name="ik-overlay" appear>
-            <AvatarModal
+            <LazyAvatarModal
               v-if="showAvatarModal"
               :profile="profile"
               @close="closeModal"
@@ -595,6 +595,7 @@ onBeforeUnmount(() => {
               @custom-uploaded="onCustomAvatarUploaded"
             />
           </Transition>
+          <!-- Lazy：cropper（vue-advanced-cropper）按需加载，不进 profile 路由首屏 chunk -->
         </Teleport>
       </ClientOnly>
 
