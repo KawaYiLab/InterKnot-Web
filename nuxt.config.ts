@@ -15,9 +15,11 @@ export default defineNuxtConfig({
   // 开启 SSR：公共内容（帖子 / 用户主页）服务端渲染，爬虫可直接抓到正文与元信息。
   ssr: true,
   nitro: {
-    // 由静态 SPA 改为 Node 服务端渲染。部署时按平台调整 preset
-    // （如 vercel / netlify / cloudflare-pages 等）。
-    preset: "node-server",
+    // 由静态 SPA 改为 SSR。默认 node-server（已验证可用）；
+    // 可用 NITRO_PRESET 覆盖为 cloudflare-pages / vercel / netlify 等。
+    // 注意：Cloudflare Pages(workerd) 下帖子页依赖的 isomorphic-dompurify(jsdom)
+    // 无法运行，切到 cloudflare-pages 前需先替换为 workers 兼容的净化方案。
+    preset: process.env.NITRO_PRESET || "node-server",
   },
   // 混合渲染：公共页 SSR + 增量静态/SWR；交互/鉴权页保持纯客户端渲染。
   routeRules: {

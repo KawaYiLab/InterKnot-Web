@@ -27,6 +27,7 @@ function _startTicking() {
 export const usePageDataLoading = () => {
   /** Begin a new progress bar (called on route navigation start). */
   const start = () => {
+    if (!import.meta.client) return;
     _clearTimers();
     _claimed.value = false;
     _active.value = true;
@@ -41,6 +42,8 @@ export const usePageDataLoading = () => {
 
   /** Complete the progress bar with a fill-to-100% animation. */
   const finish = () => {
+    // 进度条纯客户端视觉，服务端不启动定时器（避免 SSR setTimeout 泄漏）。
+    if (!import.meta.client) return;
     _clearTimers();
     _claimed.value = false;
     _progress.value = 100;
