@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useMessage } from "zenless-ui";
 import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
-import { formatBodyText, sanitizeBodyHtml } from "~/utils/format-body";
+import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, EyeSlashIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
@@ -24,6 +24,9 @@ const message = useMessage();
 const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
+
+// 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
+const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
 
 const comments = ref<Comment[]>([]);
 const commentsCursor = ref("");
@@ -687,14 +690,9 @@ onBeforeUnmount(() => {
                   <span v-if="post.category" class="ik-page__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
                 </h1>
                 <div
-                  v-if="post.body"
+                  v-if="bodyHasContent"
                   class="ik-page__content"
-                  v-html="sanitizeBodyHtml(post.body)"
-                ></div>
-                <div
-                  v-else-if="post.bodyText"
-                  class="ik-page__content"
-                  v-html="formatBodyText(post.bodyText)"
+                  v-html="bodyHtml"
                 ></div>
                 <p v-else class="ik-page__content" style="color: #808080">
                   啥都木有¯\(°_o)/¯
