@@ -6,7 +6,7 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 
@@ -1097,6 +1097,15 @@ onBeforeUnmount(() => {
                     <div class="ik-engage-bar">
                       <div class="ik-engage-bar__main">
                         <div ref="commentInputBoxRef" class="ik-engage-bar__content-edit" @click="focusCommentInput">
+                          <z-input
+                            v-model="newComment"
+                            type="textarea"
+                            class="ik-engage-bar__textarea"
+                            placeholder=""
+                            @focus="handleCommentInputFocus"
+                            @input="syncCommentInputHeight"
+                            @keydown.enter.exact.prevent="sendComment"
+                          />
                           <div v-if="commentImages.uploadTasks.value.length" class="ik-engage-bar__attachments">
                             <div
                               v-for="(task, index) in commentImages.uploadTasks.value"
@@ -1121,15 +1130,6 @@ onBeforeUnmount(() => {
                               </div>
                             </div>
                           </div>
-                          <z-input
-                            v-model="newComment"
-                            type="textarea"
-                            class="ik-engage-bar__textarea"
-                            placeholder=""
-                            @focus="handleCommentInputFocus"
-                            @input="syncCommentInputHeight"
-                            @keydown.enter.exact.prevent="sendComment"
-                          />
                           <!-- @ 提及高亮叠加层：teleport 到 textarea 父级，pointer-events:none -->
                           <MentionHighlightOverlay
                             :target="commentTextareaRef"
@@ -1231,9 +1231,6 @@ onBeforeUnmount(() => {
                               @click.stop="mention.insertAtTrigger"
                             >
                               <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
-                            </button>
-                            <button type="button" class="ik-engage-bar__tool" aria-label="表情">
-                              <FaceSmileIcon class="ik-engage-icon" aria-hidden="true" />
                             </button>
                             <button
                               type="button"

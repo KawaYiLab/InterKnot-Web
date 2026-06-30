@@ -5,7 +5,7 @@ import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, EyeSlashIcon, PhotoIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, TrashIcon, EyeSlashIcon, PhotoIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 
@@ -782,6 +782,30 @@ onBeforeUnmount(() => {
                       @input="syncCommentInputHeight"
                       @keydown.enter.exact.prevent="sendComment"
                     />
+                    <div v-if="commentImages.uploadTasks.value.length" class="ik-engage-bar__attachments">
+                      <div
+                        v-for="(task, index) in commentImages.uploadTasks.value"
+                        :key="task.localId"
+                        class="ik-engage-bar__attachment"
+                        :class="`is-${task.status}`"
+                      >
+                        <img
+                          :src="task.serverUrl || task.previewUrl"
+                          :alt="task.filename"
+                          class="ik-engage-bar__attachment-thumb"
+                        />
+                        <div v-if="task.status === 'uploading' || task.status === 'pending' || task.status === 'compressing'" class="ik-engage-bar__attachment-progress">
+                          <span>{{ Math.round(task.progress) }}%</span>
+                        </div>
+                        <div v-else-if="task.status === 'error'" class="ik-engage-bar__attachment-error">
+                          <span>{{ task.error || '上传失败' }}</span>
+                        </div>
+                        <div class="ik-engage-bar__attachment-actions">
+                          <button type="button" @click.stop="commentImages.removeUpload(index)">移除</button>
+                          <button v-if="task.status === 'error'" type="button" @click.stop="commentImages.retryUpload(task)">重试</button>
+                        </div>
+                      </div>
+                    </div>
                     <!-- @ 提及高亮叠加层：teleport 到 textarea 父级，与 textarea 同位置；
                          pointer-events:none 不影响输入。 -->
                     <MentionHighlightOverlay
@@ -811,31 +835,6 @@ onBeforeUnmount(() => {
                       <span>{{ postCommentCount }}</span>
                     </div>
                   </div>
-
-                    <div v-if="commentImages.uploadTasks.value.length" class="ik-engage-bar__attachments">
-                      <div
-                        v-for="(task, index) in commentImages.uploadTasks.value"
-                        :key="task.localId"
-                        class="ik-engage-bar__attachment"
-                        :class="`is-${task.status}`"
-                      >
-                        <img
-                          :src="task.serverUrl || task.previewUrl"
-                          :alt="task.filename"
-                          class="ik-engage-bar__attachment-thumb"
-                        />
-                        <div v-if="task.status === 'uploading' || task.status === 'pending' || task.status === 'compressing'" class="ik-engage-bar__attachment-progress">
-                          <span>{{ Math.round(task.progress) }}%</span>
-                        </div>
-                        <div v-else-if="task.status === 'error'" class="ik-engage-bar__attachment-error">
-                          <span>{{ task.error || '上传失败' }}</span>
-                        </div>
-                        <div class="ik-engage-bar__attachment-actions">
-                          <button type="button" @click.stop="commentImages.removeUpload(index)">移除</button>
-                          <button v-if="task.status === 'error'" type="button" @click.stop="commentImages.retryUpload(task)">重试</button>
-                        </div>
-                      </div>
-                    </div>
 
                   <div class="ik-engage-bar__interact-container">
                     <div class="ik-engage-bar__buttons">
@@ -909,9 +908,6 @@ onBeforeUnmount(() => {
                         @click.stop="mention.insertAtTrigger"
                       >
                         <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
-                      </button>
-                      <button type="button" class="ik-engage-bar__tool" aria-label="表情">
-                        <FaceSmileIcon class="ik-engage-icon" aria-hidden="true" />
                       </button>
                       <button
                         type="button"
