@@ -797,13 +797,20 @@ onBeforeUnmount(() => {
                         <div v-if="task.status === 'uploading' || task.status === 'pending' || task.status === 'compressing'" class="ik-engage-bar__attachment-progress">
                           <span>{{ Math.round(task.progress) }}%</span>
                         </div>
-                        <div v-else-if="task.status === 'error'" class="ik-engage-bar__attachment-error">
-                          <span>{{ task.error || '上传失败' }}</span>
-                        </div>
-                        <div class="ik-engage-bar__attachment-actions">
-                          <button type="button" @click.stop="commentImages.removeUpload(index)">移除</button>
-                          <button v-if="task.status === 'error'" type="button" @click.stop="commentImages.retryUpload(task)">重试</button>
-                        </div>
+                        <button
+                          v-else-if="task.status === 'error'"
+                          type="button"
+                          class="ik-engage-bar__attachment-error"
+                          @click.stop="commentImages.retryUpload(task)"
+                        >
+                          <span>{{ task.error || '上传失败' }}<br>点击重试</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="ik-engage-bar__attachment-remove"
+                          aria-label="移除"
+                          @click.stop="commentImages.removeUpload(index)"
+                        >✕</button>
                       </div>
                     </div>
                     <!-- @ 提及高亮叠加层：teleport 到 textarea 父级，与 textarea 同位置；
@@ -1571,25 +1578,34 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-.ik-engage-bar__attachment-actions {
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  bottom: 6px;
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
+.ik-engage-bar__attachment-error {
+  border: 0;
+  line-height: 1.3;
+  cursor: var(--ik-cursor-pointer);
 }
 
-.ik-engage-bar__attachment-actions button {
-  flex: 1;
+.ik-engage-bar__attachment-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 0;
-  border-radius: 999px;
-  padding: 4px 6px;
-  background: rgba(0, 0, 0, 0.68);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1;
   cursor: var(--ik-cursor-pointer);
+}
+
+.ik-engage-bar__attachment-remove:hover {
+  background: rgba(0, 0, 0, 0.85);
 }
 
 .ik-engage-bar__interact-container {
