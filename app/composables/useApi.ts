@@ -132,6 +132,7 @@ interface PostCommentPayload {
   parentId?: string;
   authorDocumentId?: string;
   isAnonymous?: boolean;
+  images?: string[];
 }
 
 interface MyBusinessCardsResult {
@@ -486,6 +487,7 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
   return {
     id: String(data.documentId || data.id || ""),
     content: String(data.content || ""),
+    images: extractAllMediaMeta(data.images, apiBaseUrl),
     liked: data.liked === true,
     likesCount: Number(data.likesCount ?? 0),
     createdAt: data.createdAt as string | undefined,
@@ -495,6 +497,7 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
       return {
         id: String(reply.documentId || reply.id || ""),
         content: String(reply.content || ""),
+        images: extractAllMediaMeta(reply.images, apiBaseUrl),
         liked: reply.liked === true,
         likesCount: Number(reply.likesCount ?? 0),
         createdAt: reply.createdAt as string | undefined,
@@ -807,6 +810,7 @@ export function useApi() {
     parentId,
     authorDocumentId,
     isAnonymous,
+    images,
   }: PostCommentPayload) => {
     const res = await $api("/api/comments", {
       method: "POST",
@@ -817,6 +821,7 @@ export function useApi() {
           ...(authorDocumentId ? { author: authorDocumentId } : {}),
           ...(parentId ? { parent: parentId } : {}),
           ...(isAnonymous ? { isAnonymous: true } : {}),
+          ...(images?.length ? { images } : {}),
         },
       },
     });

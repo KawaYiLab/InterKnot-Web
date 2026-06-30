@@ -7,6 +7,8 @@ import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid
 import UserHoverCard from "./UserHoverCard.vue";
 import CommentBody from "./CommentBody.vue";
 
+const { openGallery } = useLightGallery();
+
 const props = defineProps<{
   comment: Comment;
   index?: number;
@@ -32,6 +34,24 @@ const isOwnReply = (reply: CommentReply) =>
 const floorLabel = computed(() =>
   props.index != null ? `F${props.index + 1}` : "",
 );
+
+const toThumbUrl = (url: string): string => {
+  if (!url || url.startsWith("blob:") || url.startsWith("data:")) return url;
+  return `${url}-small.webp`;
+};
+
+const openCommentImages = (images?: Comment["images"], index = 0) => {
+  if (!images?.length) return;
+  openGallery(
+    images.map((image) => ({
+      src: image.url,
+      thumb: toThumbUrl(image.url),
+      width: image.width,
+      height: image.height,
+    })),
+    index,
+  );
+};
 </script>
 
 <template>
@@ -65,6 +85,22 @@ const floorLabel = computed(() =>
       <!-- Body -->
       <div class="ik-comment__body">
         <CommentBody :content="comment.content" />
+      </div>
+
+      <div v-if="comment.images?.length" class="ik-comment__media-grid">
+        <button
+          v-for="(image, imageIndex) in comment.images"
+          :key="`${comment.id}-image-${imageIndex}`"
+          type="button"
+          class="ik-comment__media-item"
+          @click="openCommentImages(comment.images, imageIndex)"
+        >
+          <img
+            :src="toThumbUrl(image.url)"
+            :alt="comment.author?.name || '评论图片'"
+            class="ik-comment__media-thumb"
+          />
+        </button>
       </div>
 
       <!-- Footer: date left · interactions right -->
@@ -126,6 +162,22 @@ const floorLabel = computed(() =>
             </div>
             <div class="ik-comment__body ik-comment__body--reply">
               <CommentBody :content="reply.content" />
+            </div>
+
+            <div v-if="reply.images?.length" class="ik-comment__media-grid ik-comment__media-grid--reply">
+              <button
+                v-for="(image, imageIndex) in reply.images"
+                :key="`${reply.id}-image-${imageIndex}`"
+                type="button"
+                class="ik-comment__media-item"
+                @click="openCommentImages(reply.images, imageIndex)"
+              >
+                <img
+                  :src="toThumbUrl(image.url)"
+                  :alt="reply.author?.name || '回复图片'"
+                  class="ik-comment__media-thumb"
+                />
+              </button>
             </div>
             <div class="ik-comment__footer">
               <div class="ik-comment__meta">
@@ -259,6 +311,37 @@ const floorLabel = computed(() =>
 
 .ik-comment__body--reply {
   font-size: 14px;
+}
+
+.ik-comment__media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ik-comment__media-grid--reply {
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+}
+
+.ik-comment__media-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1d1d1d;
+  cursor: var(--ik-cursor-pointer);
+}
+
+.ik-comment__media-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 /* ── Footer: meta (left) + actions (right) ────── */

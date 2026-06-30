@@ -144,6 +144,7 @@ export interface Post {
 export interface CommentReply {
   id: string;
   content: string;
+  images?: CoverImage[];
   liked?: boolean;
   likesCount?: number;
   createdAt?: string;
@@ -153,6 +154,7 @@ export interface CommentReply {
 export interface Comment {
   id: string;
   content: string;
+  images?: CoverImage[];
   liked?: boolean;
   likesCount?: number;
   createdAt?: string;
