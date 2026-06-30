@@ -88,7 +88,7 @@ const handleClose = () => {
 };
 
 const handleOverlayClick = (event: MouseEvent) => {
-  if ((event.target as HTMLElement).classList.contains("ik-overlay")) {
+  if ((event.target as HTMLElement).classList.contains("ik-img-overlay")) {
     handleClose();
   }
 };
@@ -121,7 +121,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="ik-overlay" @click="handleOverlayClick">
+  <div class="ik-img-overlay" @click="handleOverlayClick">
     <div class="ik-overlay__stripe" aria-hidden="true" />
     <div class="ik-img-dialog" @click.stop>
       <div class="ik-img-frame">
@@ -212,7 +212,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.ik-overlay {
+.ik-img-overlay {
   position: fixed;
   inset: 0;
   z-index: 9000;
@@ -566,7 +566,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .ik-overlay {
+  .ik-img-overlay {
     align-items: flex-end;
     background: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(2px);

@@ -237,10 +237,6 @@ const openCommentImagePicker = () => {
     loginDialog.open();
     return;
   }
-  // 移动端先收起评论框软键盘，否则键盘仍占据可视视口，底部抽屉式图片选择
-  // 弹窗（position: fixed）会按完整布局视口定位，导致位置与发帖页不一致。
-  const activeEl = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLElement | null;
-  activeEl?.blur();
   commentImages.openImagePicker();
 };
 
