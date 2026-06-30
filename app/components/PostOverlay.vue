@@ -6,7 +6,7 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 
@@ -80,6 +80,7 @@ const mention = useMentionInput({
   textareaRef: commentTextareaRef,
   search: api.searchAuthors,
 });
+const commentImages = useCommentImages();
 
 const scrollRef = ref<HTMLElement | null>(null);
 const covers = computed(() => post.value?.covers ?? []);
@@ -371,7 +372,11 @@ const sendComment = async () => {
     loginDialog.open();
     return;
   }
-  if (!newComment.value.trim()) return;
+  if (commentImages.hasPendingUploads.value) {
+    message.warning("图片上传中，请稍候");
+    return;
+  }
+  if (!newComment.value.trim() && commentImages.uploadedImageIds.value.length === 0) return;
 
   sendingComment.value = true;
   const isReply = !!replyTarget.value;
@@ -386,6 +391,7 @@ const sendComment = async () => {
       authorDocumentId: auth.user?.authorId,
       parentId,
       isAnonymous: commentAnonymous.value || undefined,
+      images: commentImages.uploadedImageIds.value,
     });
     const resData = (res as Record<string, unknown>).data as Record<string, unknown> | undefined;
     const localId = String(resData?.documentId || resData?.id || `local-${Date.now()}`);
@@ -397,6 +403,9 @@ const sendComment = async () => {
           avatar: auth.user?.avatar,
           level: auth.user?.level,
         };
+    const localImages = commentImages.uploadTasks.value
+      .filter((task) => task.status === "done" && task.serverUrl)
+      .map((task) => ({ url: task.serverUrl! }));
     if (isReply && parentId) {
       const parent = comments.value.find((c) => c.id === parentId);
       if (parent) {
@@ -408,6 +417,7 @@ const sendComment = async () => {
           likesCount: 0,
           createdAt: new Date().toISOString(),
           author: localAuthor,
+          images: localImages,
         });
       }
     } else {
@@ -418,6 +428,7 @@ const sendComment = async () => {
         likesCount: 0,
         createdAt: new Date().toISOString(),
         author: localAuthor,
+        images: localImages,
         replies: [],
       });
     }
@@ -428,6 +439,7 @@ const sendComment = async () => {
     }
     newComment.value = "";
     mention.reset();
+    commentImages.clearUploads();
     commentInputFocused.value = false;
     replyTarget.value = null;
     syncCommentInputHeight();
@@ -440,6 +452,14 @@ const sendComment = async () => {
   } finally {
     sendingComment.value = false;
   }
+};
+
+const openCommentImagePicker = () => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  commentImages.openImagePicker();
 };
 
 const likeArticle = async () => {
@@ -541,6 +561,7 @@ const cancelComment = () => {
   }
   newComment.value = "";
   mention.reset();
+  commentImages.clearUploads();
   commentInputFocused.value = false;
   replyTarget.value = null;
   syncCommentInputHeight();
@@ -1075,6 +1096,30 @@ onBeforeUnmount(() => {
                     <div class="ik-engage-bar">
                       <div class="ik-engage-bar__main">
                         <div ref="commentInputBoxRef" class="ik-engage-bar__content-edit" @click="focusCommentInput">
+                          <div v-if="commentImages.uploadTasks.value.length" class="ik-engage-bar__attachments">
+                            <div
+                              v-for="(task, index) in commentImages.uploadTasks.value"
+                              :key="task.localId"
+                              class="ik-engage-bar__attachment"
+                              :class="`is-${task.status}`"
+                            >
+                              <img
+                                :src="task.serverUrl || task.previewUrl"
+                                :alt="task.filename"
+                                class="ik-engage-bar__attachment-thumb"
+                              />
+                              <div v-if="task.status === 'uploading' || task.status === 'pending' || task.status === 'compressing'" class="ik-engage-bar__attachment-progress">
+                                <span>{{ Math.round(task.progress) }}%</span>
+                              </div>
+                              <div v-else-if="task.status === 'error'" class="ik-engage-bar__attachment-error">
+                                <span>{{ task.error || '上传失败' }}</span>
+                              </div>
+                              <div class="ik-engage-bar__attachment-actions">
+                                <button type="button" @click.stop="commentImages.removeUpload(index)">移除</button>
+                                <button v-if="task.status === 'error'" type="button" @click.stop="commentImages.retryUpload(task)">重试</button>
+                              </div>
+                            </div>
+                          </div>
                           <z-input
                             v-model="newComment"
                             type="textarea"
@@ -1163,6 +1208,17 @@ onBeforeUnmount(() => {
                       <div class="ik-engage-bar__bottom">
                         <div class="ik-engage-bar__bottom-inner">
                           <div class="ik-engage-bar__left-icons">
+                      <button
+                        type="button"
+                        class="ik-engage-bar__tool"
+                        :class="{ 'ik-engage-bar__tool--active': commentImages.uploadTasks.value.length > 0 }"
+                        aria-label="添加图片"
+                        :title="commentImages.remainingImageSlots.value <= 0 ? '图片数量已达上限' : '添加图片'"
+                        :disabled="commentImages.remainingImageSlots.value <= 0"
+                        @click.stop="openCommentImagePicker"
+                      >
+                        <PhotoIcon class="ik-engage-icon" aria-hidden="true" />
+                      </button>
                             <!-- @ 按钮：在光标处插入 @ 并立即弹出 picker。
                                  click.stop 阻止冒泡到外层的 focusCommentInput。 -->
                             <button
@@ -1193,7 +1249,7 @@ onBeforeUnmount(() => {
                             <button
                               type="button"
                               class="ik-engage-bar__submit"
-                              :disabled="!newComment.trim() || sendingComment"
+                              :disabled="sendingComment || commentImages.hasPendingUploads.value || (!newComment.trim() && commentImages.uploadedImageIds.value.length === 0)"
                               @click="sendComment"
                             >
                               {{ sendingComment ? "发送中" : "发送" }}
@@ -1225,6 +1281,19 @@ onBeforeUnmount(() => {
         @select="mention.selectCandidate"
         @hover="(idx: number) => (mention.pickerActiveIndex.value = idx)"
       />
+
+      <Teleport to="body">
+        <Transition name="ik-overlay" appear>
+          <PostImagePickerModal
+            v-if="commentImages.showImagePickerModal.value"
+            :existing-ids="commentImages.existingUploadIds.value"
+            :remaining="commentImages.remainingImageSlots.value"
+            @close="commentImages.showImagePickerModal.value = false"
+            @upload="commentImages.handleImagePickerUpload"
+            @select="commentImages.handleImagePickerSelect"
+          />
+        </Transition>
+      </Teleport>
     </div>
 </template>
 
@@ -2006,6 +2075,65 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   object-fit: cover;
   background: #2a2a2a;
+}
+
+.ik-engage-bar__attachments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.ik-engage-bar__attachment {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ik-engage-bar__attachment-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ik-engage-bar__attachment-progress,
+.ik-engage-bar__attachment-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.48);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ik-engage-bar__attachment-actions {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ik-engage-bar__attachment-actions button {
+  flex: 1;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.68);
+  color: #fff;
+  font-size: 11px;
+  cursor: var(--ik-cursor-pointer);
 }
 
 .ik-engage-bar__interact-container {
