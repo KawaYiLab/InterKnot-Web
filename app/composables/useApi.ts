@@ -19,6 +19,8 @@ import type {
   FavoriteToggleResult,
   FollowToggleResult,
   Profile,
+  ReportReason,
+  ReportTargetType,
   SignedUploadResult,
   UploadedFile,
 } from "~/types/entities";
@@ -916,6 +918,34 @@ export function useApi() {
     return (unwrapData(response) as Record<string, boolean>) || {};
   };
 
+  const submitReport = async (
+    targetType: ReportTargetType,
+    targetId: string,
+    reason: ReportReason,
+    detail?: string,
+  ): Promise<boolean> => {
+    const response = await $api("/api/reports", {
+      method: "POST",
+      body: {
+        targetType,
+        targetId,
+        reason,
+        ...(detail ? { detail } : {}),
+      },
+    });
+    return (response as Record<string, unknown>)?.reported === true;
+  };
+
+  const checkReport = async (
+    targetType: ReportTargetType,
+    targetId: string,
+  ): Promise<boolean> => {
+    const response = await $api("/api/reports/check", {
+      query: { targetType, targetId },
+    });
+    return (response as Record<string, unknown>)?.reported === true;
+  };
+
   /**
    * 把「已读」写回 query 缓存：遍历所有文章列表/详情/个人页文章缓存，
    * 命中 id 的节点置 isRead=true。否则乐观已读只活在当前页面的 list 里，
@@ -1736,6 +1766,8 @@ export function useApi() {
     batchCheckFavorites,
     toggleFollow,
     batchCheckFollows,
+    submitReport,
+    checkReport,
     markAsReadBatch,
     getProfile,
     getProfileArticles,

@@ -129,6 +129,11 @@ const overlayOpen = computed(
       <LazyConfirmDialog />
     </ClientOnly>
 
+    <!-- 举报弹窗 -->
+    <ClientOnly>
+      <LazyReportModal />
+    </ClientOnly>
+
     <!-- 敲敲弹窗（消息通知 / 私聊 / 群聊入口） -->
     <ClientOnly>
       <LazyKnockKnockModal />

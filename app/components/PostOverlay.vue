@@ -6,7 +6,7 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, FaceSmileIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, FlagIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 
@@ -36,6 +36,7 @@ const auth = useAuthStore();
 const postModal = usePostModal();
 const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
+const reportDialog = useReportDialog();
 const message = useMessage();
 
 const post = ref<Post | null>(null);
@@ -60,6 +61,12 @@ const commentsLoading = ref(false);
 // 若此时就按「无评论」显示空提示，会出现「空提示 → 骨架 → 评论」的闪烁。
 // 用此标记把「尚未加载」与「加载完确实为空」区分开：未加载完一律显示骨架。
 const commentsLoaded = ref(false);
+const articleReported = ref(false);
+const articleReportChecked = ref(false);
+const reportingArticle = ref(false);
+const commentReported = ref<Record<string, boolean>>({});
+const commentReportChecked = ref<Record<string, boolean>>({});
+const reportingCommentIds = ref<Record<string, boolean>>({});
 
 const newComment = ref("");
 const sendingComment = ref(false);
@@ -87,6 +94,64 @@ const hasCovers = computed(() => covers.value.length > 0);
 const isCommentEditorActive = computed(() => commentInputFocused.value);
 const postLikeCount = computed(() => post.value?.likesCount ?? 0);
 const postCommentCount = computed(() => post.value?.commentsCount ?? comments.value.length);
+
+const isCommentReported = (commentId: string) => commentReported.value[commentId] === true;
+const isCommentReporting = (commentId: string) => reportingCommentIds.value[commentId] === true;
+const isReplyReported = (reply: Comment["replies"][number]) => isCommentReported(reply.id);
+
+const markCommentReportState = (commentId: string, reported: boolean) => {
+  commentReported.value = { ...commentReported.value, [commentId]: reported };
+  commentReportChecked.value = { ...commentReportChecked.value, [commentId]: true };
+};
+
+const ensureArticleReportState = async () => {
+  if (!auth.isLogin || !post.value?.id || articleReportChecked.value) return;
+  try {
+    articleReported.value = await api.checkReport("article", post.value.id);
+  } catch {
+    return;
+  } finally {
+    articleReportChecked.value = true;
+  }
+};
+
+const ensureCommentReportState = async (commentId: string) => {
+  if (!auth.isLogin || commentReportChecked.value[commentId]) return;
+  try {
+    const reported = await api.checkReport("comment", commentId);
+    markCommentReportState(commentId, reported);
+  } catch {
+    return;
+  }
+};
+
+const hydrateCommentReportStates = async (items: Comment[]) => {
+  if (!auth.isLogin || !items.length) return;
+  await Promise.all(
+    items.flatMap((comment) => [
+      comment.id,
+      ...(comment.replies?.map((reply) => reply.id) || []),
+    ]).map((id) => ensureCommentReportState(id)),
+  );
+};
+
+watch(
+  () => auth.isLogin,
+  (isLogin) => {
+    if (!isLogin) {
+      articleReported.value = false;
+      articleReportChecked.value = false;
+      reportingArticle.value = false;
+      commentReported.value = {};
+      commentReportChecked.value = {};
+      reportingCommentIds.value = {};
+      return;
+    }
+    void ensureArticleReportState();
+    void hydrateCommentReportStates(comments.value);
+  },
+  { immediate: true },
+);
 
 const syncCommentInputHeight = async () => {
   await nextTick();
@@ -315,6 +380,7 @@ watch(() => covers.value.length, (n) => {
 const loadPost = async () => {
   try {
     post.value = await api.getPost(props.postId);
+    await ensureArticleReportState();
     if (post.value?.title) {
       postModal.setTitle(post.value.title);
     }
@@ -332,6 +398,7 @@ const loadComments = async () => {
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
+    await hydrateCommentReportStates(page.nodes);
   } catch (err) {
     message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
@@ -601,6 +668,32 @@ const handleDeleteArticle = async () => {
   }
 };
 
+const reportArticle = async () => {
+  if (!post.value?.id) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (articleReported.value || reportingArticle.value) return;
+
+  const result = await reportDialog.open({ targetType: "article" });
+  if (!result) return;
+
+  reportingArticle.value = true;
+  try {
+    const reported = await api.submitReport("article", post.value.id, result.reason, result.detail);
+    if (reported) {
+      articleReported.value = true;
+      articleReportChecked.value = true;
+      message.success("举报已提交，感谢你的反馈");
+    }
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "举报失败"));
+  } finally {
+    reportingArticle.value = false;
+  }
+};
+
 const favoriting = ref(false);
 
 const favoriteArticle = async () => {
@@ -666,6 +759,31 @@ const handleDeleteComment = async (comment: Comment) => {
   }
 };
 
+const reportComment = async (comment: Comment) => {
+  if (!comment.id) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (isCommentReported(comment.id) || isCommentReporting(comment.id)) return;
+
+  const result = await reportDialog.open({ targetType: "comment" });
+  if (!result) return;
+
+  reportingCommentIds.value = { ...reportingCommentIds.value, [comment.id]: true };
+  try {
+    const reported = await api.submitReport("comment", comment.id, result.reason, result.detail);
+    if (reported) {
+      markCommentReportState(comment.id, true);
+      message.success("举报已提交，感谢你的反馈");
+    }
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "举报失败"));
+  } finally {
+    reportingCommentIds.value = { ...reportingCommentIds.value, [comment.id]: false };
+  }
+};
+
 const handleDeleteReply = async (reply: Comment["replies"][number], parentComment: Comment) => {
   const ok = await confirmDialog.open({ title: "删除回复", message: "确定删除这条回复吗？", confirmText: "删除", danger: true });
   if (!ok) return;
@@ -678,6 +796,31 @@ const handleDeleteReply = async (reply: Comment["replies"][number], parentCommen
     message.success("回复已删除");
   } catch (err) {
     message.error(resolveErrorMessage(err, "删除回复失败"));
+  }
+};
+
+const reportReply = async (reply: Comment["replies"][number]) => {
+  if (!reply.id) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (isCommentReported(reply.id) || isCommentReporting(reply.id)) return;
+
+  const result = await reportDialog.open({ targetType: "comment" });
+  if (!result) return;
+
+  reportingCommentIds.value = { ...reportingCommentIds.value, [reply.id]: true };
+  try {
+    const reported = await api.submitReport("comment", reply.id, result.reason, result.detail);
+    if (reported) {
+      markCommentReportState(reply.id, true);
+      message.success("举报已提交，感谢你的反馈");
+    }
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "举报失败"));
+  } finally {
+    reportingCommentIds.value = { ...reportingCommentIds.value, [reply.id]: false };
   }
 };
 
@@ -710,6 +853,12 @@ const resetAndLoad = async () => {
   commentsHasNext.value = true;
   commentsLoaded.value = false;
   loadError.value = false;
+  articleReported.value = false;
+  articleReportChecked.value = false;
+  reportingArticle.value = false;
+  commentReported.value = {};
+  commentReportChecked.value = {};
+  reportingCommentIds.value = {};
   newComment.value = "";
   commentInputFocused.value = false;
   replyTarget.value = null;
@@ -1053,12 +1202,16 @@ onBeforeUnmount(() => {
                         :comment="comment"
                         :index="idx"
                         :current-user-author-id="auth.user?.authorId"
+                        :is-comment-reported="isCommentReported(comment.id)"
+                        :is-reply-reported="isReplyReported"
                         @like-comment="likeComment"
                         @like-reply="likeReply"
                         @reply-comment="startReply"
                         @reply-to-reply="startReplyToReply"
                         @delete-comment="handleDeleteComment"
                         @delete-reply="handleDeleteReply"
+                        @report-comment="reportComment"
+                        @report-reply="reportReply"
                       />
                       <div v-if="commentsHasNext && comments.length" class="ik-dialog__load-more">
                         <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>
@@ -1155,6 +1308,17 @@ onBeforeUnmount(() => {
                               @click="handleDeleteArticle"
                             >
                               <TrashIcon class="ik-engage-icon" aria-hidden="true" />
+                            </button>
+                            <button
+                              v-else
+                              type="button"
+                              class="ik-engage-bar__action ik-engage-bar__action--report"
+                              :disabled="reportingArticle || articleReported"
+                              :title="articleReported ? '已举报' : '举报帖子'"
+                              @click="reportArticle"
+                            >
+                              <FlagIcon class="ik-engage-icon" aria-hidden="true" />
+                              <span>{{ articleReported ? "已举报" : "举报" }}</span>
                             </button>
                           </div>
                         </div>
@@ -1425,6 +1589,15 @@ onBeforeUnmount(() => {
 
 .ik-engage-bar__action--danger:disabled {
   opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ik-engage-bar__action--report {
+  color: #bfbfbf;
+}
+
+.ik-engage-bar__action--report:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 

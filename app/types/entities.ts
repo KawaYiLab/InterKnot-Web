@@ -563,3 +563,16 @@ export interface DmWsEvent<TData = unknown> {
   data?: TData;
   at: string;
 }
+
+/** 举报对象类型（与后端 report.targetType 对齐） */
+export type ReportTargetType = "article" | "comment";
+
+/** 举报原因（与后端 report.reason 枚举对齐） */
+export type ReportReason =
+  | "spam"
+  | "harassment"
+  | "porn"
+  | "illegal"
+  | "ad"
+  | "off_topic"
+  | "other";

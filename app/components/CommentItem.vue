@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Comment, CommentReply } from "~/types/entities";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, ChatBubbleLeftIcon, TrashIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, ChatBubbleLeftIcon, TrashIcon, FlagIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
 
 import UserHoverCard from "./UserHoverCard.vue";
@@ -11,6 +11,8 @@ const props = defineProps<{
   comment: Comment;
   index?: number;
   currentUserAuthorId?: string;
+  isCommentReported?: boolean;
+  isReplyReported?: (reply: CommentReply) => boolean;
 }>();
 
 const emit = defineEmits<{
@@ -20,6 +22,8 @@ const emit = defineEmits<{
   replyToReply: [reply: CommentReply, parentComment: Comment];
   deleteComment: [comment: Comment];
   deleteReply: [reply: CommentReply, parentComment: Comment];
+  reportComment: [comment: Comment];
+  reportReply: [reply: CommentReply, parentComment: Comment];
 }>();
 
 const isOwnComment = computed(() =>
@@ -92,6 +96,16 @@ const floorLabel = computed(() =>
           >
             <TrashIcon class="ik-comment__icon" />
           </button>
+          <button
+            v-else
+            class="ik-comment__action-btn ik-comment__action-btn--report"
+            :disabled="!!isCommentReported"
+            :title="isCommentReported ? '已举报' : '举报评论'"
+            @click="emit('reportComment', comment)"
+          >
+            <FlagIcon class="ik-comment__icon" />
+            <span class="ik-comment__action-text">{{ isCommentReported ? "已举报" : "举报" }}</span>
+          </button>
         </div>
       </div>
 
@@ -150,6 +164,16 @@ const floorLabel = computed(() =>
                   @click="emit('deleteReply', reply, comment)"
                 >
                   <TrashIcon class="ik-comment__icon" />
+                </button>
+                <button
+                  v-else
+                  class="ik-comment__action-btn ik-comment__action-btn--report"
+                  :disabled="!!isReplyReported?.(reply)"
+                  :title="isReplyReported?.(reply) ? '已举报' : '举报回复'"
+                  @click="emit('reportReply', reply, comment)"
+                >
+                  <FlagIcon class="ik-comment__icon" />
+                  <span class="ik-comment__action-text">{{ isReplyReported?.(reply) ? "已举报" : "举报" }}</span>
                 </button>
               </div>
             </div>
@@ -319,6 +343,21 @@ const floorLabel = computed(() =>
 
 .ik-comment__action-btn--delete:hover {
   color: #ff6b6b;
+}
+
+.ik-comment__action-btn--report:hover {
+  color: #bfff09;
+}
+
+.ik-comment__action-btn:disabled,
+.ik-comment__action-btn:disabled:hover {
+  color: #666;
+  cursor: not-allowed;
+}
+
+.ik-comment__action-text {
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .ik-comment__action-count {
