@@ -732,6 +732,7 @@ const resetAndLoad = async () => {
   commentsLoaded.value = false;
   loadError.value = false;
   newComment.value = "";
+  commentImages.clearUploads();
   commentInputFocused.value = false;
   replyTarget.value = null;
   loading.value = true;

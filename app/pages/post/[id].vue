@@ -949,14 +949,18 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
-    <PostImagePickerModal
-      v-if="commentImages.showImagePickerModal.value"
-      :existing-ids="commentImages.existingUploadIds.value"
-      :remaining="commentImages.remainingImageSlots.value"
-      @close="commentImages.showImagePickerModal.value = false"
-      @upload="commentImages.handleImagePickerUpload"
-      @select="commentImages.handleImagePickerSelect"
-    />
+    <Teleport to="body">
+      <Transition name="ik-overlay" appear>
+        <PostImagePickerModal
+          v-if="commentImages.showImagePickerModal.value"
+          :existing-ids="commentImages.existingUploadIds.value"
+          :remaining="commentImages.remainingImageSlots.value"
+          @close="commentImages.showImagePickerModal.value = false"
+          @upload="commentImages.handleImagePickerUpload"
+          @select="commentImages.handleImagePickerSelect"
+        />
+      </Transition>
+    </Teleport>
 
     <!-- @ 提及候选下拉：组件内部 Teleport 到 body，避免父级 overflow 截断 -->
     <MentionPicker
