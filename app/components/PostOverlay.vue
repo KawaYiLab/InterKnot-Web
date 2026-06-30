@@ -377,6 +377,10 @@ const sendComment = async () => {
     message.warning("图片上传中，请稍候");
     return;
   }
+  if (commentImages.hasErroredUploads.value) {
+    message.warning("有图片上传失败，请重试或移除后再发送");
+    return;
+  }
   if (!newComment.value.trim()) return;
 
   sendingComment.value = true;
@@ -715,7 +719,9 @@ const onBackdropClick = (e: MouseEvent) => {
 };
 
 const onKeyDown = (e: KeyboardEvent) => {
-  if (e.key === "Escape" && !isAnyGalleryOpen.value) {
+  // 图片选择弹窗打开时，ESC 由弹窗自己处理（仅关闭弹窗），
+  // 不能在这里 cancelComment——否则会连带清空用户已写的正文与已选图片。
+  if (e.key === "Escape" && !isAnyGalleryOpen.value && !commentImages.showImagePickerModal.value) {
     if (isCommentEditorActive.value) {
       cancelComment();
     } else {
@@ -1255,7 +1261,7 @@ onBeforeUnmount(() => {
                             <button
                               type="button"
                               class="ik-engage-bar__submit"
-                              :disabled="sendingComment || commentImages.hasPendingUploads.value || !newComment.trim()"
+                              :disabled="sendingComment || commentImages.hasPendingUploads.value || commentImages.hasErroredUploads.value || !newComment.trim()"
                               @click="sendComment"
                             >
                               {{ sendingComment ? "发送中" : "发送" }}
