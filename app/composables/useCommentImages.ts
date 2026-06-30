@@ -72,6 +72,10 @@ export function useCommentImages() {
       .map((task) => task.serverId!),
   );
 
+  const hasErroredUploads = computed(() =>
+    uploadTasks.value.some((task) => task.status === "error"),
+  );
+
   const openImagePicker = () => {
     if (remainingImageSlots.value <= 0) {
       message.warning(`最多只能添加 ${MAX_COMMENT_IMAGES} 张图片`);
@@ -183,6 +187,7 @@ export function useCommentImages() {
     existingUploadIds,
     remainingImageSlots,
     hasPendingUploads,
+    hasErroredUploads,
     uploadedImageIds,
     openImagePicker,
     handleImagePickerUpload,
