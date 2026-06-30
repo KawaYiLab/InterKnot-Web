@@ -24,6 +24,12 @@ export interface GalleryImage {
 
 let modulesPromise: Promise<any[]> | null = null;
 
+// 模块级共享计数：任意一个 gallery 实例打开都会 +1。
+// 用于让宿主组件（如帖子弹窗）判断「当前是否有大图预览打开」，
+// 避免 ESC 在关闭大图的同时把宿主弹窗也一起关掉。
+const _openGalleryCount = ref(0);
+export const isAnyGalleryOpen = computed(() => _openGalleryCount.value > 0);
+
 function ensureModules() {
   if (modulesPromise) return modulesPromise;
   modulesPromise = Promise.all([
@@ -40,7 +46,20 @@ function ensureModules() {
 
 export function useLightGallery() {
   let lgInstance: LightGallery | null = null;
+  let _counted = false;
   const isOpen = ref(false);
+
+  function _markOpen() {
+    if (_counted) return;
+    _counted = true;
+    _openGalleryCount.value++;
+  }
+
+  function _markClosed() {
+    if (!_counted) return;
+    _counted = false;
+    _openGalleryCount.value = Math.max(0, _openGalleryCount.value - 1);
+  }
   const isLoading = ref(false);
   const loadingProgress = ref(0);
   let _tickInterval: ReturnType<typeof setInterval> | null = null;
@@ -149,9 +168,11 @@ export function useLightGallery() {
     });
 
     isOpen.value = true;
+    _markOpen();
 
     container.addEventListener("lgAfterClose", () => {
       isOpen.value = false;
+      _markClosed();
       // lgAfterClose 触发时 gallery 已关闭，只需清理引用和 DOM
       lgInstance = null;
       container.remove();
@@ -168,6 +189,7 @@ export function useLightGallery() {
     lgInstance?.destroy();
     lgInstance = null;
     isOpen.value = false;
+    _markClosed();
   }
 
   return { isOpen: readonly(isOpen), isLoading: readonly(isLoading), loadingProgress: readonly(loadingProgress), openGallery, openImage, preload, destroy };
