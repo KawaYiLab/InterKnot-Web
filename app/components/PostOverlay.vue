@@ -377,7 +377,7 @@ const sendComment = async () => {
     message.warning("图片上传中，请稍候");
     return;
   }
-  if (!newComment.value.trim() && commentImages.uploadedImageIds.value.length === 0) return;
+  if (!newComment.value.trim()) return;
 
   sendingComment.value = true;
   const isReply = !!replyTarget.value;
@@ -1255,7 +1255,7 @@ onBeforeUnmount(() => {
                             <button
                               type="button"
                               class="ik-engage-bar__submit"
-                              :disabled="sendingComment || commentImages.hasPendingUploads.value || (!newComment.trim() && commentImages.uploadedImageIds.value.length === 0)"
+                              :disabled="sendingComment || commentImages.hasPendingUploads.value || !newComment.trim()"
                               @click="sendComment"
                             >
                               {{ sendingComment ? "发送中" : "发送" }}
