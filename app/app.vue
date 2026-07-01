@@ -92,7 +92,9 @@ const handleOverlayClose = () => {
 
 // create 页有自带的移动端底部操作栏（发布 / 草稿），全局 MobileBottomNav 在此隐藏避免堆叠
 const route = useRoute();
-const showMobileBottomNav = computed(() => !route.path.startsWith("/create"));
+const showMobileBottomNav = computed(
+  () => !route.path.startsWith("/create") && !route.path.startsWith("/post/"),
+);
 
 // 全屏弹窗（帖子 / 敲敲）打开时，全局背景跑马灯被完全遮住但仍在动，且处于
 // 弹窗 backdrop-filter 模糊之后 → 迫使模糊每帧重算。此时暂停它（弹窗自带的
