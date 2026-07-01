@@ -815,7 +815,8 @@ onBeforeUnmount(() => {
   .ik-overlay-leave-to .ik-bc-dialog { transform: scale(1) translateX(-5%); }
   .ik-bc-bottom { flex-direction: column; }
   .ik-bc-detail { padding: 12px 0 0; }
-  .ik-bc-grid { grid-template-columns: repeat(3, 1fr); }
+  /* 移动端无自定义滚动条，去掉桌面端为滚动条轨道预留的右侧间距 */
+  .ik-bc-grid { grid-template-columns: repeat(3, 1fr); padding: 0 12px; }
 }
 
 @media (max-width: 500px) {
