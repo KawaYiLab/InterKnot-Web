@@ -1899,8 +1899,15 @@ onBeforeUnmount(() => {
     height: auto;
     min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     -ms-overflow-style: none;
     scrollbar-width: none;
+    border-radius: 0;
+    background: transparent;
+    will-change: scroll-position;
+    -webkit-transform: translateZ(0);
   }
 
   .ik-page__body::-webkit-scrollbar {
@@ -1914,9 +1921,11 @@ onBeforeUnmount(() => {
   .ik-page__left-scroll {
     flex: none;
     max-height: none;
-    overflow-y: visible;
+    overflow: visible;
     margin: 0;
     border-radius: 0;
+    will-change: auto;
+    transform: none;
   }
 
   .ik-page__cover-wrap {
@@ -1934,27 +1943,31 @@ onBeforeUnmount(() => {
   }
 
   .ik-page__right {
-    flex: 1;
+    flex: 1 0 auto;
     margin: 0;
     border-radius: 0;
+    overflow: visible;
     border-top: 1px solid #313132;
-    min-height: 300px;
+    background: transparent;
   }
 
   .ik-page__comments-scroll {
-    overflow-y: visible;
+    flex: 1 0 auto;
+    min-height: 0;
+    overflow: visible;
+    will-change: auto;
+    transform: none;
   }
 
   .ik-page__actions {
-    position: fixed;
+    position: sticky;
     bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 100;
+    z-index: 3;
     border-radius: 0;
     background: rgba(7, 7, 7, 0.96);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
   }
 }
 
