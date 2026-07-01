@@ -1166,8 +1166,12 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  /* 移动端工具栏改为两行：分类标签独占一整行横向滑动，
+     在线人数缩到第二行右侧，避免挤占分类可见空间。 */
   .ik-home-toolbar {
-    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
     margin-bottom: 12px;
   }
 
@@ -1198,8 +1202,10 @@ onBeforeUnmount(() => {
   }
 
   .ik-online {
+    align-self: flex-end;
     gap: 6px;
-    padding-left: 8px;
+    margin-left: 0;
+    padding-left: 0;
     font-size: 12px;
   }
 
