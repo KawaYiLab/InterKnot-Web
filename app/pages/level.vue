@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMessage } from "zenless-ui";
 import {
   LEVEL_THRESHOLDS,
   LEVEL_TITLES,
@@ -71,7 +72,7 @@ const checkInReward = computed(() => {
   return Math.min(6 + consecutive, 10);
 });
 
-const { success: showSuccess, error: showError } = useMessage();
+const message = useMessage();
 
 const loadData = async () => {
   if (!auth.isLogin) return;
@@ -122,13 +123,13 @@ const doCheckIn = async () => {
     const parts = [`丁尼+${dennyAdded}`];
     if (result.reward > 0) parts.push(`绳网信用+${result.reward}`);
     const rankText = result.rank > 0 ? `，今日第${result.rank}名` : "";
-    showSuccess(`签到成功！${parts.join("，")}${rankText}`);
+    message.success(`签到成功！${parts.join("，")}${rankText}`);
   } catch (err: any) {
     if (err?.data?.error?.code === "CHECK_IN_ALREADY_TODAY") {
-      showError("今日已签到");
+      message.warning("今日已签到");
       checkInStatus.value.canCheckIn = false;
     } else {
-      showError(err?.data?.error?.message || "签到失败");
+      message.error(err?.data?.error?.message || "签到失败");
     }
   } finally {
     checkInLoading.value = false;
