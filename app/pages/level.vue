@@ -108,11 +108,11 @@ const doCheckIn = async () => {
     checkInStatus.value.consecutiveDays = result.consecutiveDays || checkInStatus.value.consecutiveDays;
     checkInStatus.value.rank = result.rank > 0 ? result.rank : checkInStatus.value.rank;
 
-    if (result.currentExp !== undefined || result.currentLevel !== undefined) {
-      auth.updateUserPartial({
-        exp: result.currentExp,
-        level: result.currentLevel,
-      });
+    const userUpdates: Partial<{ exp: number; level: number }> = {};
+    if (result.currentExp !== undefined) userUpdates.exp = result.currentExp;
+    if (result.currentLevel !== undefined) userUpdates.level = result.currentLevel;
+    if (Object.keys(userUpdates).length > 0) {
+      auth.updateUserPartial(userUpdates);
     }
     if (result.currentDenny !== undefined) {
       dennyBalance.value = result.currentDenny;
