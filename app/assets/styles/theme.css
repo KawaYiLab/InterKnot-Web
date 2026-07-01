@@ -111,6 +111,18 @@ body::-webkit-scrollbar,
   display: none;
 }
 
+/* 移动端全局隐藏所有元素的滚动条：覆盖组件内部的 overflow-x/y: auto/scroll，
+   避免逐个组件排查遗漏。桌面端保留各组件自行控制。 */
+@media (max-width: 768px) {
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;
