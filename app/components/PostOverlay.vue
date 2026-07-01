@@ -2394,6 +2394,9 @@ onBeforeUnmount(() => {
     border-radius: 0;
     /* 保持透明，让 .ik-dialog__main 里的跑马灯水印透出来（与桌面端一致） */
     background: transparent;
+    /* 提升为独立合成层，避免 iOS 上 overflow:hidden 祖先导致触摸滚动卡死 */
+    will-change: scroll-position;
+    -webkit-transform: translateZ(0);
   }
 
   .ik-dialog__body::-webkit-scrollbar {
@@ -2422,6 +2425,12 @@ onBeforeUnmount(() => {
   .ik-dialog__cover-border {
     border-radius: 0;
     border-width: 0 0 4px;
+  }
+
+  /* 多图轮播在移动端需要同时允许水平（切图）与垂直（翻页）触摸滑动，
+     否则手指落在封面区域时无法上下滚动整个弹窗。 */
+  .ik-dialog__cover-scroller {
+    touch-action: pan-x pan-y;
   }
 
   .ik-dialog__detail {
