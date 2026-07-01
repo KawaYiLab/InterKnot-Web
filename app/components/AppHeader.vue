@@ -508,17 +508,7 @@ watch(
           <img :src="userAvatar" alt="avatar" class="ik-mobile-avatar__img" />
         </button>
 
-        <!-- 移动端等级入口（登录后显示，桌面端隐藏） -->
-        <button
-          v-if="auth.isLogin"
-          type="button"
-          class="ik-mobile-level"
-          aria-label="绳网等级"
-          @click="navigateTo('/level')"
-        >
-          <span class="ik-mobile-level__num">{{ userLevel }}</span>
-          <span class="ik-mobile-level__label">LV</span>
-        </button>
+
       </div>
 
       <div class="ik-header__middle">
@@ -1460,9 +1450,6 @@ watch(
     display: flex;
   }
 
-  .ik-mobile-level {
-    display: flex;
-  }
 }
 
 @media (max-width: 768px) {
@@ -1703,45 +1690,6 @@ watch(
   z-index: 1; /* 置于边框阴影之上 */
   margin-left: -4px; /* 向左打破边界，在左侧营造 3D 越界感 */
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45)); /* 溢出落影 */
-}
-
-/* ── 移动端等级入口按钮 ── */
-.ik-mobile-level {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  height: 32px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  flex-shrink: 0;
-  transition: background 0.15s ease;
-}
-
-.ik-mobile-level:active {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.ik-mobile-level__num {
-  font-size: 15px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #4661fd, #10bff0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  line-height: 1;
-}
-
-.ik-mobile-level__label {
-  font-size: 9px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.35);
-  line-height: 1;
-  margin-top: 1px;
 }
 
 /* 响应式断点隐藏 */

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
+import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/vue/24/solid";
 import {
   HomeIcon as HomeOutlineIcon,
   UserIcon as UserOutlineIcon,
@@ -13,7 +14,18 @@ import {
 const route = useRoute();
 const auth = useAuthStore();
 const loginDialog = useLoginDialog();
+const knockKnockModal = useKnockKnockModal();
 const message = useMessage();
+
+const { totalUnread: knockUnread } = useDmConversations();
+const knockUnreadLabel = computed(() => {
+  const n = knockUnread.value;
+  if (n <= 0) return "";
+  return n > 99 ? "99+" : String(n);
+});
+
+const userLevel = computed(() => auth.user?.level ?? 1);
+const isLevel = computed(() => route.path === "/level");
 
 const isHome = computed(() => route.path === "/");
 const isMine = computed(
@@ -57,6 +69,22 @@ const handleCreatePost = () => {
   }
   navigateTo("/create");
 };
+
+const handleKnockClick = () => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  knockKnockModal.open();
+};
+
+const handleLevelClick = () => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  navigateTo("/level");
+};
 </script>
 
 <template>
@@ -79,6 +107,25 @@ const handleCreatePost = () => {
       </span>
     </button>
 
+    <button
+      type="button"
+      class="ik-mobile-nav__item"
+      aria-label="敲敲"
+      @click="handleKnockClick"
+    >
+      <span class="ik-mobile-nav__inner">
+        <span class="ik-mobile-nav__knock-wrap">
+          <ChatBubbleOvalLeftEllipsisIcon class="ik-mobile-nav__icon" aria-hidden="true" />
+          <span
+            v-if="knockUnreadLabel"
+            class="ik-mobile-nav__badge"
+            aria-hidden="true"
+          >{{ knockUnreadLabel }}</span>
+        </span>
+        <span class="ik-mobile-nav__label">敲敲</span>
+      </span>
+    </button>
+
     <div class="ik-mobile-nav__create-wrap">
       <button
         type="button"
@@ -89,6 +136,20 @@ const handleCreatePost = () => {
         <PlusIcon class="ik-mobile-nav__create-icon" aria-hidden="true" />
       </button>
     </div>
+
+    <button
+      type="button"
+      class="ik-mobile-nav__item"
+      :class="{ 'is-active': isLevel }"
+      :aria-current="isLevel ? 'page' : undefined"
+      aria-label="绳网等级"
+      @click="handleLevelClick"
+    >
+      <span class="ik-mobile-nav__inner">
+        <span class="ik-mobile-nav__lv-icon" aria-hidden="true">{{ userLevel }}</span>
+        <span class="ik-mobile-nav__label">等级</span>
+      </span>
+    </button>
 
     <button
       type="button"
@@ -224,6 +285,47 @@ const handleCreatePost = () => {
   to {
     background-color: #dcfe00;
   }
+}
+
+/* ── Knock badge ───────────────────────────────── */
+.ik-mobile-nav__knock-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ik-mobile-nav__badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f04040;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── Level icon ────────────────────────────────── */
+.ik-mobile-nav__lv-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, #4661fd, #10bff0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 @media (prefers-reduced-motion: reduce) {
