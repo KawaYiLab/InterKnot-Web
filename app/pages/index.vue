@@ -659,8 +659,11 @@ const onHomeRefreshEvent = () => {
 // ── 移动端下拉刷新（touch-based pull-to-refresh） ─────────────
 const PULL_THRESHOLD = 60;
 const PULL_MAX = 120;
+let pullStartX = 0;
 let pullStartY = 0;
 let isPulling = false;
+// 手势方向已锁定：一旦判定为横向滑动就不再干预，避免反复检测。
+let pullDirectionLocked = false;
 const pullDistance = ref(0);
 const pullTriggered = ref(false);
 
@@ -670,7 +673,20 @@ const onPullTouchMove = (e: TouchEvent) => {
   if (!isPulling) return;
   const touch = e.touches[0];
   if (!touch) return;
+  const deltaX = Math.abs(touch.clientX - pullStartX);
   const deltaY = touch.clientY - pullStartY;
+
+  // 手势方向判定：横向位移占主导时放弃下拉刷新，让浏览器处理原生横向滚动
+  // （如分类标签栏左右滑动）。阈值 8px 过滤抖动。
+  if (!pullDirectionLocked && deltaX > 8 && deltaX > Math.abs(deltaY)) {
+    isPulling = false;
+    pullDirectionLocked = true;
+    detachPullMove();
+    pullDistance.value = 0;
+    pullTriggered.value = false;
+    return;
+  }
+
   if (deltaY < 0) {
     pullDistance.value = 0;
     return;
@@ -697,8 +713,10 @@ const onTouchStart = (e: TouchEvent) => {
   if (window.scrollY > 5) return;
   const touch = e.touches[0];
   if (!touch) return;
+  pullStartX = touch.clientX;
   pullStartY = touch.clientY;
   isPulling = true;
+  pullDirectionLocked = false;
   // 仅在可能触发下拉时注册 non-passive touchmove，不影响其余正常滚动
   attachPullMove();
 };
