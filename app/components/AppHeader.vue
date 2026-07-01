@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { useEventListener } from "@vueuse/core";
-import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/vue/24/solid";
+import { BellIcon } from "@heroicons/vue/24/solid";
 import { ClockIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import { LEVEL_THRESHOLDS, MAX_LEVEL } from "~/utils/level";
 import type { SearchSuggestion } from "~/composables/useApi";
@@ -507,6 +507,8 @@ watch(
         >
           <img :src="userAvatar" alt="avatar" class="ik-mobile-avatar__img" />
         </button>
+
+
       </div>
 
       <div class="ik-header__middle">
@@ -624,7 +626,7 @@ watch(
           :aria-label="knockUnread > 0 ? `敲敲，${knockUnread} 条未读` : '敲敲'"
           @click="handleTabChange('notification')"
         >
-          <ChatBubbleOvalLeftEllipsisIcon class="ik-header__knock-icon" aria-hidden="true" />
+          <BellIcon class="ik-header__knock-icon" aria-hidden="true" />
           <span
             v-if="knockUnreadLabel"
             class="ik-header__knock-badge"
@@ -1109,7 +1111,7 @@ watch(
   padding: 0;
   border: 0;
   background: transparent;
-  color: #fbfe00;
+  color: #fff;
   cursor: pointer;
   align-items: center;
   justify-content: center;
@@ -1119,6 +1121,7 @@ watch(
 .ik-header__knock-icon {
   width: 26px;
   height: 26px;
+  color: #fff;
 }
 
 .ik-header__knock-badge {
@@ -1447,6 +1450,7 @@ watch(
   .ik-mobile-avatar {
     display: flex;
   }
+
 }
 
 @media (max-width: 768px) {
