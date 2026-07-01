@@ -250,40 +250,72 @@ const handleLevelClick = () => {
   justify-content: center;
 }
 
+/* 悬浮式中心操作按钮：抬出底栏、渐变高光 + 多层阴影，营造高级质感 */
 .ik-mobile-nav__create-btn {
-  width: 44px;
-  height: 44px;
+  position: relative;
+  width: 54px;
+  height: 54px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: #fbfe00;
-  color: #000;
+  transform: translateY(-12px);
+  color: #14140a;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  animation: ik-mobile-nav-create-pulse 800ms linear infinite alternate;
-  transition: transform 120ms ease;
+  background:
+    radial-gradient(120% 120% at 50% 22%, #ffff8c 0%, #fdff42 38%, #f4f700 66%, #dfe200 100%);
+  /* 由外到内：环形底座（从底栏“挖”出来的观感）→ 品牌光晕 → 接触阴影 →
+     顶部内高光 → 底部内阴影，叠出立体圆润的实体按钮 */
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.28),
+    0 10px 22px rgba(251, 254, 0, 0.30),
+    0 6px 14px rgba(0, 0, 0, 0.45),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 6px rgba(150, 152, 0, 0.55);
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 180ms ease;
+  animation: ik-mobile-nav-create-glow 2600ms ease-in-out infinite;
 }
 
 .ik-mobile-nav__create-btn:active {
-  transform: scale(0.94);
+  transform: translateY(-9px) scale(0.93);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.28),
+    0 4px 10px rgba(251, 254, 0, 0.28),
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.7),
+    inset 0 -2px 5px rgba(150, 152, 0, 0.6);
+  animation: none;
 }
 
 .ik-mobile-nav__create-icon {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   display: block;
-  /* PlusIcon (24/solid) uses fill=currentColor; parent sets color: #000 */
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35));
+  /* PlusIcon (24/solid) uses fill=currentColor; parent sets color: #14140a */
 }
 
-@keyframes ik-mobile-nav-create-pulse {
-  from {
-    background-color: #fbfe00;
+@keyframes ik-mobile-nav-create-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.28),
+      0 10px 22px rgba(251, 254, 0, 0.28),
+      0 6px 14px rgba(0, 0, 0, 0.45),
+      inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
+      inset 0 -3px 6px rgba(150, 152, 0, 0.55);
   }
-  to {
-    background-color: #dcfe00;
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.28),
+      0 12px 28px rgba(251, 254, 0, 0.5),
+      0 6px 14px rgba(0, 0, 0, 0.45),
+      inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
+      inset 0 -3px 6px rgba(150, 152, 0, 0.55);
   }
 }
 
