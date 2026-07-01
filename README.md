@@ -1,6 +1,5 @@
 # 绳网 (InterKnot)
 
-> **⚠️ 本仓库已停止维护，不再接收功能更新，仅供学习、参考与历史版本存档。**
 
 <p align="center">
   <img src="icon.webp" alt="Inter-Knot Logo" width="120" />
@@ -85,11 +84,6 @@ npm run preview
 
 ---
 
-## 🤝 贡献指南
-
-由于本项目已停止维护，原则上不再接受新功能开发。如发现安全问题或严重 Bug，可提交 Issue 进行讨论。
-
----
 
 ## ❤️ 致谢
 
