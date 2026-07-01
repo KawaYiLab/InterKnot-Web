@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { useEventListener } from "@vueuse/core";
-import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/vue/24/solid";
+import { BellIcon } from "@heroicons/vue/24/solid";
 import { ClockIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import { LEVEL_THRESHOLDS, MAX_LEVEL } from "~/utils/level";
 import type { SearchSuggestion } from "~/composables/useApi";
@@ -626,7 +626,7 @@ watch(
           :aria-label="knockUnread > 0 ? `敲敲，${knockUnread} 条未读` : '敲敲'"
           @click="handleTabChange('notification')"
         >
-          <ChatBubbleOvalLeftEllipsisIcon class="ik-header__knock-icon" aria-hidden="true" />
+          <BellIcon class="ik-header__knock-icon" aria-hidden="true" />
           <span
             v-if="knockUnreadLabel"
             class="ik-header__knock-badge"

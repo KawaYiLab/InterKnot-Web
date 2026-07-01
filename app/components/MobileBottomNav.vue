@@ -146,7 +146,7 @@ const handleLevelClick = () => {
       @click="handleLevelClick"
     >
       <span class="ik-mobile-nav__inner">
-        <span class="ik-mobile-nav__lv-icon" aria-hidden="true">{{ userLevel }}</span>
+        <span class="ik-mobile-nav__lv-icon" aria-hidden="true">LV</span>
         <span class="ik-mobile-nav__label">等级</span>
       </span>
     </button>

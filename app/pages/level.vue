@@ -161,6 +161,7 @@ useHead({ title: "绳网等级" });
 
 <template>
   <div class="ik-lv">
+    <IkZzzMarquee class="ik-lv__marquee" />
     <div class="ik-lv__container">
 
       <!-- Hero: avatar + level ring -->
@@ -356,13 +357,24 @@ useHead({ title: "绳网等级" });
 <style scoped>
 /* ── Page container ── */
 .ik-lv {
+  position: relative;
   width: 100%;
   min-height: 100vh;
   background: #000;
   padding-bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+}
+
+.ik-lv__marquee {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .ik-lv__container {
+  position: relative;
+  z-index: 1;
   max-width: 480px;
   margin: 0 auto;
   padding: 0 20px;
