@@ -434,6 +434,7 @@ useHead({ title: "绳网等级" });
   font-weight: 800;
   color: #fff;
   letter-spacing: 0.3px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
 .ik-lv__level-badge {
@@ -465,6 +466,7 @@ useHead({ title: "绳网等级" });
   color: #fff;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
 .ik-lv__exp-text--max {
@@ -492,10 +494,13 @@ useHead({ title: "绳网等级" });
 
 /* ── Card ── */
 .ik-lv__card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(18, 18, 20, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 20px;
   overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .ik-lv__card-header {
