@@ -1111,7 +1111,7 @@ watch(
   padding: 0;
   border: 0;
   background: transparent;
-  color: #fbfe00;
+  color: #fff;
   cursor: pointer;
   align-items: center;
   justify-content: center;
@@ -1121,6 +1121,7 @@ watch(
 .ik-header__knock-icon {
   width: 26px;
   height: 26px;
+  color: #fff;
 }
 
 .ik-header__knock-badge {

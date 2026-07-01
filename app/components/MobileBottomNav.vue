@@ -322,10 +322,8 @@ const handleLevelClick = () => {
   font-size: 14px;
   font-weight: 800;
   line-height: 1;
-  background: linear-gradient(135deg, #4661fd, #10bff0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  letter-spacing: 0.5px;
+  color: #fff;
 }
 
 @media (prefers-reduced-motion: reduce) {

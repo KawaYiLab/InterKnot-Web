@@ -161,7 +161,8 @@ useHead({ title: "绳网等级" });
 
 <template>
   <div class="ik-lv">
-    <IkZzzMarquee class="ik-lv__marquee" />
+    <!-- 45° 斜线纹理背景（与主页 / 发帖页一致；跑马灯由 app.vue 全局背景透出） -->
+    <div class="ik-lv__stripe" aria-hidden="true"></div>
     <div class="ik-lv__container">
 
       <!-- Hero: avatar + level ring -->
@@ -360,16 +361,23 @@ useHead({ title: "绳网等级" });
   position: relative;
   width: 100%;
   min-height: 100vh;
-  background: #000;
   padding-bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-  overflow: hidden;
 }
 
-.ik-lv__marquee {
+/* 45° 斜线纹理背景（与 .ik-home-page__stripe 完全一致） */
+.ik-lv__stripe {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  background: repeating-linear-gradient(
+    40deg,
+    transparent,
+    transparent 3.5px,
+    rgba(255, 255, 255, 0.09) 4.5px,
+    rgba(255, 255, 255, 0.09) 7.5px,
+    transparent 8.5px
+  );
 }
 
 .ik-lv__container {
