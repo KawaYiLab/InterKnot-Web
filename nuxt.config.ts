@@ -50,6 +50,14 @@ export default defineNuxtConfig({
         { property: "og:image", content: "/images/zzzicon_200x200.png" },
         { name: "twitter:card", content: "summary_large_image" },
       ],
+      script: [
+        // Cloudflare Web Analytics
+        {
+          src: "https://static.cloudflareinsights.com/beacon.min.js",
+          defer: true,
+          "data-cf-beacon": '{"token": "87a21c330b51466ca19ec0b32ff89a51"}',
+        },
+      ],
     },
   },
   typescript: {
