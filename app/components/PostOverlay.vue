@@ -6,7 +6,7 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon, FlagIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
@@ -628,6 +628,14 @@ const handleDeleteArticle = async () => {
   }
 };
 
+const handleArticleMenuCommand = (command: string | number) => {
+  if (command === "delete") {
+    handleDeleteArticle();
+  } else if (command === "report") {
+    handleReportArticle();
+  }
+};
+
 const handleReportArticle = () => {
   if (!post.value?.id) return;
   if (!auth.isLogin) {
@@ -1239,24 +1247,20 @@ onBeforeUnmount(() => {
                               <StarIcon v-else class="ik-engage-icon" aria-hidden="true" />
                               <IkRollingDigit :value="post.favoritesCount ?? 0" fallback="收藏" />
                             </button>
-                            <button
-                              v-if="isOwner"
-                              type="button"
-                              class="ik-engage-bar__action ik-engage-bar__action--danger"
-                              :disabled="deletingArticle"
-                              @click="handleDeleteArticle"
+                            <z-dropdown
+                              trigger="click"
+                              size="small"
+                              class="ik-engage-bar__more"
+                              @command="handleArticleMenuCommand"
                             >
-                              <TrashIcon class="ik-engage-icon" aria-hidden="true" />
-                            </button>
-                            <button
-                              v-else
-                              type="button"
-                              class="ik-engage-bar__action ik-engage-bar__action--danger"
-                              title="举报帖子"
-                              @click="handleReportArticle"
-                            >
-                              <FlagIcon class="ik-engage-icon" aria-hidden="true" />
-                            </button>
+                              <button type="button" class="ik-engage-bar__action" title="更多操作">
+                                <EllipsisVerticalIcon class="ik-engage-icon" aria-hidden="true" />
+                              </button>
+                              <template #dropdown>
+                                <z-dropdown-item v-if="isOwner" command="delete" :disabled="deletingArticle">删除帖子</z-dropdown-item>
+                                <z-dropdown-item v-else command="report">举报帖子</z-dropdown-item>
+                              </template>
+                            </z-dropdown>
                           </div>
                         </div>
                       </div>
@@ -1537,17 +1541,25 @@ onBeforeUnmount(() => {
   color: #808080;
 }
 
-.ik-engage-bar__action--danger {
-  color: #ff6b6b;
+/* ── 「⋮」上拉菜单：z-dropdown 默认向下展开，这里改为向上 ── */
+.ik-engage-bar__more {
+  margin-left: 0;
 }
 
-.ik-engage-bar__action--danger:hover {
-  color: #ff4040;
+.ik-engage-bar__more :deep(.z-dropdown__content) {
+  bottom: auto;
+  top: -8px;
+  transform-origin: bottom;
+  transform: translateY(-100%) scaleY(0);
 }
 
-.ik-engage-bar__action--danger:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.ik-engage-bar__more.is-visible :deep(.z-dropdown__content) {
+  transform: translateY(-100%) scaleY(1);
+}
+
+.ik-engage-bar__more :deep(.z-dropdown__content)::before {
+  top: 0;
+  bottom: -8px;
 }
 
 .ik-dialog__close {

@@ -92,39 +92,44 @@ onBeforeUnmount(() => {
 
               <!-- Body -->
               <div class="ik-dialog__body">
-                <p class="ik-report__hint">请选择举报理由，我们会尽快核实处理。</p>
+                <IkZzzMarquee />
+                <div class="ik-report__wrapper">
+                  <div class="ik-report__inner">
+                    <p class="ik-report__hint">请选择举报理由，我们会尽快核实处理。</p>
 
-                <div class="ik-report__reasons">
-                  <button
-                    v-for="option in REPORT_REASON_OPTIONS"
-                    :key="option.value"
-                    type="button"
-                    class="ik-report__reason"
-                    :class="{ 'ik-report__reason--active': reason === option.value }"
-                    @click="reason = option.value"
-                  >
-                    {{ option.label }}
-                  </button>
-                </div>
+                    <div class="ik-report__reasons">
+                      <button
+                        v-for="option in REPORT_REASON_OPTIONS"
+                        :key="option.value"
+                        type="button"
+                        class="ik-report__reason"
+                        :class="{ 'ik-report__reason--active': reason === option.value }"
+                        @click="reason = option.value"
+                      >
+                        {{ option.label }}
+                      </button>
+                    </div>
 
-                <textarea
-                  v-model="detail"
-                  class="ik-report__detail"
-                  :maxlength="MAX_DETAIL_LENGTH"
-                  rows="3"
-                  :placeholder="reason === 'other' ? '请补充说明举报原因（必填）' : '补充说明（选填）'"
-                ></textarea>
-                <div class="ik-report__counter">{{ detail.length }} / {{ MAX_DETAIL_LENGTH }}</div>
+                    <textarea
+                      v-model="detail"
+                      class="ik-report__detail"
+                      :maxlength="MAX_DETAIL_LENGTH"
+                      rows="3"
+                      :placeholder="reason === 'other' ? '请补充说明举报原因（必填）' : '补充说明（选填）'"
+                    ></textarea>
+                    <div class="ik-report__counter">{{ detail.length }} / {{ MAX_DETAIL_LENGTH }}</div>
+                  </div>
 
-                <div class="ik-report__footer">
-                  <z-button :icon="{ error: '#ff4444' }" @click="cancel">取消</z-button>
-                  <z-button
-                    :icon="{ success: '#00cc0d' }"
-                    :disabled="!canSubmit"
-                    @click="submit"
-                  >
-                    {{ submitting ? "提交中..." : "提交举报" }}
-                  </z-button>
+                  <div class="ik-report__actions">
+                    <z-button :icon="{ error: '#ff4444' }" @click="cancel">取消</z-button>
+                    <z-button
+                      :icon="{ success: '#00cc0d' }"
+                      :disabled="!canSubmit"
+                      @click="submit"
+                    >
+                      {{ submitting ? "提交中..." : "确定" }}
+                    </z-button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -237,12 +242,33 @@ onBeforeUnmount(() => {
 }
 
 .ik-dialog__body {
-  padding: 20px 24px 24px;
+  position: relative;
+  padding: 24px;
   background: #121212;
   border-radius: 0 0 18px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* ── Report form ───────────────────────────────── */
+/* ── Report form（与 更多操作/退出登录 弹窗同构：黑卡片 + 底部叠压按钮）── */
+.ik-report__wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.ik-report__inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 16px;
+}
+
 .ik-report__hint {
   margin: 0 0 14px;
   font-size: 13px;
@@ -258,34 +284,34 @@ onBeforeUnmount(() => {
 
 .ik-report__reason {
   padding: 8px 10px;
-  border: 1px solid #333;
-  border-radius: 0 8px 8px 8px;
-  background: #1a1a1a;
-  color: #ccc;
+  border: none;
+  border-radius: 9999px;
+  background: #2d2c2d;
+  color: #fff;
   font-size: 13px;
-  text-align: left;
+  font-weight: 700;
+  text-align: center;
   cursor: pointer;
-  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+  transition: color 140ms ease, background 140ms ease;
 }
 
 .ik-report__reason:hover {
-  border-color: #555;
-  color: #fff;
+  background: #3a3a3a;
 }
 
-.ik-report__reason--active {
-  border-color: #BFFF09;
-  color: #BFFF09;
-  background: rgba(191, 255, 9, 0.08);
+.ik-report__reason--active,
+.ik-report__reason--active:hover {
+  background: var(--ik-primary, #BFFF09);
+  color: #000;
 }
 
 .ik-report__detail {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #333;
-  border-radius: 0 8px 8px 8px;
-  background: #1a1a1a;
-  color: #e0e0e0;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 12px;
+  background: #2d2c2d;
+  color: #fff;
   font-size: 14px;
   line-height: 1.5;
   font-family: inherit;
@@ -294,23 +320,28 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 
+.ik-report__detail::placeholder {
+  color: #808080;
+}
+
 .ik-report__detail:focus {
   outline: none;
-  border-color: #555;
+  background: #3a3a3a;
 }
 
 .ik-report__counter {
   margin-top: 4px;
   font-size: 11px;
-  color: #555;
+  color: #808080;
   text-align: right;
 }
 
-.ik-report__footer {
+.ik-report__actions {
   display: flex;
-  justify-content: flex-end;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: -18px;
+  position: relative;
+  z-index: 1;
 }
 
 @media (max-width: 500px) {
