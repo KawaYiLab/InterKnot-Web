@@ -14,6 +14,7 @@ const auth = useAuthStore();
 const loginDialog = useLoginDialog();
 const knockKnockModal = useKnockKnockModal();
 const dm = useDmConversations();
+const reportDialog = useReportDialog();
 
 const triggerRef = ref<HTMLElement | null>(null);
 const cardRef = ref<HTMLElement | null>(null);
@@ -35,6 +36,27 @@ const canSendDm = computed<boolean>(() => {
   if (typeof profile.value.uid !== "number") return false;
   return true;
 });
+
+const canReport = computed<boolean>(() => {
+  if (!profile.value) return false;
+  if (profile.value.isSelf) return false;
+  return typeof profile.value.uid === "number";
+});
+
+const reportUser = () => {
+  const target = profile.value;
+  if (!target || typeof target.uid !== "number") return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  visible.value = false;
+  reportDialog.open({
+    targetType: "user",
+    targetId: String(target.uid),
+    targetLabel: `用户 ${target.name || target.login || ""}`.trim(),
+  });
+};
 
 const cardStyle = ref<Record<string, string>>({});
 
@@ -305,6 +327,15 @@ onBeforeUnmount(() => {
                 {{ dmStarting ? "..." : "私信" }}
               </button>
               <button class="ik-hovercard__profile-btn" @click="goProfile">查看主页</button>
+              <button
+                v-if="canReport"
+                type="button"
+                class="ik-hovercard__report-btn"
+                title="举报用户"
+                @click="reportUser"
+              >
+                举报
+              </button>
             </div>
           </div>
         </template>
@@ -539,6 +570,25 @@ onBeforeUnmount(() => {
   font-weight: 700;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.ik-hovercard__report-btn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.ik-hovercard__report-btn:hover {
+  background: rgba(255, 107, 107, 0.1);
+  border-color: rgba(255, 107, 107, 0.4);
+  color: #ff6b6b;
 }
 
 .ik-hovercard__profile-btn:hover {
