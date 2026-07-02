@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Comment, CommentReply } from "~/types/entities";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, ChatBubbleLeftIcon, TrashIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, ChatBubbleLeftIcon, TrashIcon, FlagIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
 
 import UserHoverCard from "./UserHoverCard.vue";
@@ -22,6 +22,8 @@ const emit = defineEmits<{
   replyToReply: [reply: CommentReply, parentComment: Comment];
   deleteComment: [comment: Comment];
   deleteReply: [reply: CommentReply, parentComment: Comment];
+  reportComment: [comment: Comment];
+  reportReply: [reply: CommentReply, parentComment: Comment];
 }>();
 
 const isOwnComment = computed(() =>
@@ -128,6 +130,14 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
           >
             <TrashIcon class="ik-comment__icon" />
           </button>
+          <button
+            v-else
+            class="ik-comment__action-btn ik-comment__action-btn--delete"
+            title="举报评论"
+            @click="emit('reportComment', comment)"
+          >
+            <FlagIcon class="ik-comment__icon" />
+          </button>
         </div>
       </div>
 
@@ -202,6 +212,14 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                   @click="emit('deleteReply', reply, comment)"
                 >
                   <TrashIcon class="ik-comment__icon" />
+                </button>
+                <button
+                  v-else
+                  class="ik-comment__action-btn ik-comment__action-btn--delete"
+                  title="举报回复"
+                  @click="emit('reportReply', reply, comment)"
+                >
+                  <FlagIcon class="ik-comment__icon" />
                 </button>
               </div>
             </div>

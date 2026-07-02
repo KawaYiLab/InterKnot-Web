@@ -135,6 +135,8 @@ export interface Post {
   dennyCount?: number;
   hasGivenDenny?: boolean;
   isAnonymous?: boolean;
+  /** 仅作者本人可见：内容因举报被隐藏（他人访问详情直接 404） */
+  isHidden?: boolean;
   category?: PostCategory | null;
   createdAt?: string;
   updatedAt?: string;

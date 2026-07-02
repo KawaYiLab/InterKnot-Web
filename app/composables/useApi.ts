@@ -397,6 +397,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     dennyCount: Number(data.dennyCount ?? 0),
     hasGivenDenny: data.hasGivenDenny === true,
     isAnonymous: data.isAnonymous === true,
+    isHidden: data.isHidden === true,
     category: toPostCategory(data.category),
     createdAt: data.createdAt as string | undefined,
     updatedAt: data.updatedAt as string | undefined,
@@ -865,6 +866,39 @@ export function useApi() {
   ): Promise<Record<string, boolean>> => {
     if (!targetIds.length) return {};
     const response = await $api("/api/likes/check", {
+      query: {
+        targetType,
+        targetIds: targetIds.join(","),
+      },
+    });
+    return (unwrapData(response) as Record<string, boolean>) || {};
+  };
+
+  const createReport = async (payload: {
+    targetType: "article" | "comment" | "user";
+    targetId: string;
+    reason: string;
+    detail?: string;
+  }): Promise<{ documentId: string }> => {
+    const response = await $api("/api/reports", {
+      method: "POST",
+      body: {
+        targetType: payload.targetType,
+        targetId: payload.targetId,
+        reason: payload.reason,
+        ...(payload.detail ? { detail: payload.detail } : {}),
+      },
+    });
+    const data = (unwrapData(response) || response || {}) as Record<string, unknown>;
+    return { documentId: String(data.documentId || "") };
+  };
+
+  const batchCheckReports = async (
+    targetType: "article" | "comment" | "user",
+    targetIds: string[],
+  ): Promise<Record<string, boolean>> => {
+    if (!targetIds.length) return {};
+    const response = await $api("/api/reports/check", {
       query: {
         targetType,
         targetIds: targetIds.join(","),
@@ -1739,6 +1773,8 @@ export function useApi() {
     batchCheckLikes,
     toggleFavorite,
     batchCheckFavorites,
+    createReport,
+    batchCheckReports,
     toggleFollow,
     batchCheckFollows,
     markAsReadBatch,
