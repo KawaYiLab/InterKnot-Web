@@ -1544,6 +1544,7 @@ onBeforeUnmount(() => {
 /* ── 「⋮」上拉菜单：z-dropdown 默认向下展开，这里改为向上 ── */
 .ik-engage-bar__more {
   margin-left: 0;
+  z-index: 5;
 }
 
 .ik-engage-bar__more :deep(.z-dropdown__content) {
@@ -1995,6 +1996,8 @@ onBeforeUnmount(() => {
 
 /* ── Actions Bar ───────────────────────────────── */
 .ik-dialog__actions {
+  position: relative;
+  z-index: 4;
   flex-shrink: 0;
   padding: 8px 16px;
   display: flex;
@@ -2029,7 +2032,8 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   min-width: 0;
-  overflow: hidden;
+  /* 不能 overflow:hidden：会把「⋮」上拉菜单剪掉 */
+  overflow: visible;
 }
 
 .ik-engage-bar__content-edit {
