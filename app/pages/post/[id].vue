@@ -5,7 +5,7 @@ import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, TrashIcon, EyeSlashIcon, PhotoIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, TrashIcon, EyeSlashIcon, PhotoIcon, FlagIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 
@@ -18,6 +18,7 @@ const api = useApi();
 const auth = useAuthStore();
 const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
+const reportDialog = useReportDialog();
 const pageDataLoading = usePageDataLoading();
 const message = useMessage();
 
@@ -327,6 +328,31 @@ const handleDeleteArticle = async () => {
   } finally {
     deletingArticle.value = false;
   }
+};
+
+const handleReportArticle = () => {
+  if (!post.value?.id) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  reportDialog.open({ targetType: "article", targetId: post.value.id, targetLabel: "帖子" });
+};
+
+const handleReportComment = (comment: Comment) => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  reportDialog.open({ targetType: "comment", targetId: comment.id, targetLabel: "评论" });
+};
+
+const handleReportReply = (reply: Comment["replies"][number]) => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  reportDialog.open({ targetType: "comment", targetId: reply.id, targetLabel: "回复" });
 };
 
 const favoriting = ref(false);
@@ -711,6 +737,10 @@ onBeforeUnmount(() => {
 
               <!-- 正文 -->
               <div class="ik-page__detail">
+                <div v-if="post.isHidden" class="ik-page__hidden-banner" role="alert">
+                  <EyeSlashIcon class="ik-page__hidden-icon" aria-hidden="true" />
+                  <span>该帖子因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
+                </div>
                 <h1 class="ik-page__title">
                   <span v-if="post.category" class="ik-page__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
                 </h1>
@@ -762,6 +792,8 @@ onBeforeUnmount(() => {
                   @reply-to-reply="startReplyToReply"
                   @delete-comment="handleDeleteComment"
                   @delete-reply="handleDeleteReply"
+                  @report-comment="handleReportComment"
+                  @report-reply="handleReportReply"
                 />
                 <div v-if="commentsHasNext" class="ik-page__load-more">
                   <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>
@@ -889,6 +921,15 @@ onBeforeUnmount(() => {
                         @click="handleDeleteArticle"
                       >
                         <TrashIcon class="ik-engage-icon" aria-hidden="true" />
+                      </button>
+                      <button
+                        v-else
+                        type="button"
+                        class="ik-engage-bar__action ik-engage-bar__action--danger"
+                        title="举报帖子"
+                        @click="handleReportArticle"
+                      >
+                        <FlagIcon class="ik-engage-icon" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -1255,6 +1296,26 @@ onBeforeUnmount(() => {
 /* 正文 */
 .ik-page__detail {
   padding: 0 16px 32px;
+}
+
+.ik-page__hidden-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 170, 0, 0.4);
+  border-radius: 0 10px 10px 10px;
+  background: rgba(255, 170, 0, 0.08);
+  color: #ffaa00;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ik-page__hidden-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .ik-page__title-cat {
