@@ -1257,8 +1257,8 @@ onBeforeUnmount(() => {
                                 <EllipsisVerticalIcon class="ik-engage-icon" aria-hidden="true" />
                               </button>
                               <template #dropdown>
-                                <z-dropdown-item v-if="isOwner" command="delete" :disabled="deletingArticle">删除帖子</z-dropdown-item>
-                                <z-dropdown-item v-else command="report">举报帖子</z-dropdown-item>
+                                <z-dropdown-item command="report" :disabled="isOwner">举报帖子</z-dropdown-item>
+                                <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除帖子</z-dropdown-item>
                               </template>
                             </z-dropdown>
                           </div>
@@ -1551,7 +1551,9 @@ onBeforeUnmount(() => {
   bottom: auto;
   top: -8px;
   transform-origin: bottom;
-  transform: translateY(-100%) scaleY(0);
+  transform: translateY(-100%) scaleY(0.6);
+  transition: opacity 0.18s ease,
+              transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ik-engage-bar__more.is-visible :deep(.z-dropdown__content) {
