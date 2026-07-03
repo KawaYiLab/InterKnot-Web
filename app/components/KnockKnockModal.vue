@@ -355,6 +355,8 @@ const bubbleText = (msg: DmMessage): BubbleRender => {
   const content = msg.content ?? "";
   // 普通消息含 sticker token → 走 CommentBody 内联渲染表情
   if (msg.kind === "text" && parseStickerTokens(content).length > 0) {
+    // 同时含链接时保留链接分段渲染路径（链接可点击优先），表情降级为 [表情]
+    if (hasBubbleLinks(content)) return stripStickersToPlain(content);
     return { mode: "rich", content };
   }
   return content;
