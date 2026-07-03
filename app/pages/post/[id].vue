@@ -330,9 +330,16 @@ const handleDeleteArticle = async () => {
   }
 };
 
+const handleEditArticle = () => {
+  if (!post.value?.id || !isOwner.value) return;
+  navigateTo(`/create?edit=${post.value.id}`);
+};
+
 const handleArticleMenuCommand = (command: string | number) => {
   if (command === "delete") {
     handleDeleteArticle();
+  } else if (command === "edit") {
+    handleEditArticle();
   } else if (command === "report") {
     handleReportArticle();
   }
@@ -932,6 +939,7 @@ onBeforeUnmount(() => {
                         </button>
                         <template #dropdown>
                           <z-dropdown-item command="report" :disabled="isOwner">举报帖子</z-dropdown-item>
+                          <z-dropdown-item command="edit" :disabled="!isOwner">编辑帖子</z-dropdown-item>
                           <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除帖子</z-dropdown-item>
                         </template>
                       </z-dropdown>
