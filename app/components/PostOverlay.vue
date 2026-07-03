@@ -630,9 +630,10 @@ const handleDeleteArticle = async () => {
 
 const handleEditArticle = () => {
   if (!post.value?.id || !isOwner.value) return;
-  const editId = post.value.id;
-  emit("close");
-  navigateTo(`/create?edit=${editId}`);
+  // 不能先 emit("close")：postModal.close() 会 history.back()，
+  // 随后的 popstate 会取消 navigateTo。路径变化时 app.vue 的
+  // beforeEach 守卫会自动 teardown 弹窗。
+  navigateTo(`/create?edit=${post.value.id}`);
 };
 
 const handleArticleMenuCommand = (command: string | number) => {
