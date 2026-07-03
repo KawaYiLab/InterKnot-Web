@@ -520,7 +520,8 @@ function onMobileSelectCategory(slug: string) {
 function onMenuChange(name: string | number) {
   const key = String(name);
   if (key === EDITING_KEY) {
-    if (documentId.value) newDraft();
+    // 编辑已发布帖子时该项即当前项，点击不应重置编辑器
+    if (documentId.value && !isEditingPublished.value) newDraft();
     return;
   }
   const draft = drafts.value.find((d) => d.documentId === key);
