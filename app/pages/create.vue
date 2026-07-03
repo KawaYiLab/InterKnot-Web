@@ -33,6 +33,7 @@ const AUTO_SAVE_DELAY = 800;
 const api = useApi();
 const auth = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const message = useMessage();
@@ -56,7 +57,10 @@ const documentId = ref<string | null>(null);
 const isSavingDraft = ref(false);
 const isPublishing = ref(false);
 const isDeletingDraft = ref(false);
+const isDiscardingChanges = ref(false);
 const hasUnsavedChanges = ref(false);
+// 编辑已发布帖子模式：自动保存仍写 draft 版本，点「更新帖子」后重新发布。
+const isEditingPublished = ref(false);
 const isAnonymous = ref(false);
 const showImagePickerModal = ref(false);
 
@@ -202,8 +206,8 @@ const performSaveDraft = async (force = false) => {
       documentId.value = result.documentId;
     }
 
-    // 同步左侧草稿列表
-    if (result.documentId) {
+    // 同步左侧草稿列表（已发布帖子的 draft 版本不进草稿箱）
+    if (result.documentId && !isEditingPublished.value) {
       const idx = drafts.value.findIndex(
         (d) => d.documentId === result.documentId,
       );
@@ -396,6 +400,14 @@ async function publish() {
 
     await api.publishArticleDraft(documentId.value);
 
+    if (isEditingPublished.value) {
+      // 编辑重发：回到帖子详情页查看更新后的内容。
+      const editedId = documentId.value;
+      message.success("帖子已更新");
+      router.replace(`/post/${editedId}`);
+      return;
+    }
+
     // 乐观插入：fire-and-forget 拉取刚发布的帖子详情塞进 pending 队列，
     // 不阻塞跳转——usePendingPost 是响应式 ref，首页 watch 队列即可消费
     // 迟到的 push（可能晚于 onMounted 才到达）。拉取失败时首页正常列表加载兜底。
@@ -407,9 +419,33 @@ async function publish() {
 
     router.replace("/");
   } catch (err) {
-    message.error(resolveErrorMessage(err, "发布失败"));
+    message.error(resolveErrorMessage(err, isEditingPublished.value ? "更新失败" : "发布失败"));
   } finally {
     isPublishing.value = false;
+  }
+}
+
+/* ── Discard changes (editing published post) ───── */
+async function discardChanges() {
+  if (!documentId.value || !isEditingPublished.value) return;
+  const ok = await confirmDialog.open({
+    title: "放弃修改",
+    message: "确定放弃未发布的修改吗？内容将恢复为线上版本。",
+    confirmText: "放弃修改",
+    danger: true,
+  });
+  if (!ok) return;
+
+  isDiscardingChanges.value = true;
+  try {
+    await api.discardArticleDraft(documentId.value);
+    const detail = await api.getMyDraftDetail(documentId.value);
+    applyDraftToEditor(detail);
+    message.success("已恢复为线上版本");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "放弃修改失败"));
+  } finally {
+    isDiscardingChanges.value = false;
   }
 }
 
@@ -447,7 +483,7 @@ const editorTitleCount = computed(() => title.value.length);
 
 const EDITING_KEY = "__editing__";
 const activeMenuKey = computed<string>(
-  () => documentId.value || EDITING_KEY,
+  () => (isEditingPublished.value ? EDITING_KEY : documentId.value || EDITING_KEY),
 );
 
 /* ── Mobile sheet handlers ────────────────────────── */
@@ -469,6 +505,11 @@ function onMobileSelectDraft(draft: DraftArticle) {
 async function onMobileDeleteDraft() {
   isMobileSettingsOpen.value = false;
   await deleteDraft();
+}
+
+async function onMobileDiscardChanges() {
+  isMobileSettingsOpen.value = false;
+  await discardChanges();
 }
 
 function onMobileSelectCategory(slug: string) {
@@ -546,6 +587,7 @@ function applyDraftToEditor(draft: DraftArticle) {
   suppressTracking.value = true;
   try {
     documentId.value = draft.documentId;
+    isEditingPublished.value = !!draft.hasPublishedVersion;
     title.value = draft.title;
     body.value = draft.text;
     isAnonymous.value = !!draft.isAnonymous;
@@ -588,6 +630,7 @@ function resetEditor() {
     }
     uploadTasks.value = [];
     isAnonymous.value = false;
+    isEditingPublished.value = false;
     selectedCategory.value = DEFAULT_CATEGORY_SLUG;
     lastSavedSnapshot.value = "";
     hasUnsavedChanges.value = false;
@@ -749,8 +792,22 @@ async function loadCategories() {
   }
 }
 
+/* ── Edit mode entry (?edit=<documentId>) ──────── */
+async function loadEditTarget(id: string) {
+  try {
+    const detail = await api.getMyDraftDetail(id);
+    applyDraftToEditor(detail);
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "加载帖子失败"));
+  }
+}
+
 if (import.meta.client && auth.isLogin) {
   ensureDraftsLoaded();
+  const editId = route.query.edit;
+  if (typeof editId === "string" && editId) {
+    loadEditTarget(editId);
+  }
 }
 if (import.meta.client) {
   loadCategories();
@@ -797,9 +854,10 @@ if (import.meta.client) {
             <div class="ik-nav-item__content">
               <span class="ik-nav-item__title">
                 <span class="ik-nav-item__editing-arrow">▶</span>
-                {{ documentId ? "编辑新委托" : (title.trim() || "编辑委托") }}
+                {{ isEditingPublished ? (title.trim() || "编辑帖子") : documentId ? "编辑新委托" : (title.trim() || "编辑委托") }}
               </span>
-              <span v-if="documentId" class="ik-nav-item__meta">点击开始编辑新委托</span>
+              <span v-if="isEditingPublished" class="ik-nav-item__meta">正在编辑已发布的帖子</span>
+              <span v-else-if="documentId" class="ik-nav-item__meta">点击开始编辑新委托</span>
             </div>
           </z-menu-item>
 
@@ -977,7 +1035,16 @@ if (import.meta.client) {
             <z-switch v-model="isAnonymous" @change="markDirty()" />
           </label>
           <z-button
-            v-if="documentId"
+            v-if="documentId && isEditingPublished"
+            class="ik-create-delete"
+            :loading="isDiscardingChanges"
+            :disabled="isDiscardingChanges"
+            @click="discardChanges"
+          >
+            放弃修改
+          </z-button>
+          <z-button
+            v-else-if="documentId"
             class="ik-create-delete"
             :loading="isDeletingDraft"
             :disabled="isDeletingDraft"
@@ -992,7 +1059,7 @@ if (import.meta.client) {
             :disabled="!canPublish"
             @click="publish"
           >
-            {{ isPublishing ? "发布中..." : "发布委托" }}
+            {{ isPublishing ? (isEditingPublished ? "更新中..." : "发布中...") : isEditingPublished ? "更新帖子" : "发布委托" }}
           </z-button>
         </div>
       </div>
@@ -1146,7 +1213,7 @@ if (import.meta.client) {
         @click="publish"
       >
         <span v-if="isPublishing" class="ik-mobile-footer__spinner" aria-hidden="true"></span>
-        {{ isPublishing ? "发布中..." : isSavingDraft ? "正在保存" : "发布" }}
+        {{ isPublishing ? (isEditingPublished ? "更新中..." : "发布中...") : isSavingDraft ? "正在保存" : isEditingPublished ? "更新" : "发布" }}
       </button>
     </div>
 
@@ -1260,7 +1327,18 @@ if (import.meta.client) {
                 <z-switch v-model="isAnonymous" @change="markDirty()" />
               </label>
               <button
-                v-if="documentId"
+                v-if="documentId && isEditingPublished"
+                type="button"
+                class="ik-mobile-settings-row ik-mobile-settings-row--danger"
+                :disabled="isDiscardingChanges"
+                @click="onMobileDiscardChanges"
+              >
+                <TrashIcon class="ik-mobile-settings-row__icon" />
+                <span class="ik-mobile-settings-row__title">放弃修改</span>
+                <ChevronRightIcon class="ik-mobile-settings-row__chevron" />
+              </button>
+              <button
+                v-else-if="documentId"
                 type="button"
                 class="ik-mobile-settings-row ik-mobile-settings-row--danger"
                 :disabled="isDeletingDraft"

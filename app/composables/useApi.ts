@@ -1224,6 +1224,14 @@ export function useApi() {
     invalidate(["profile"]);
   };
 
+  const discardArticleDraft = async (id: string): Promise<void> => {
+    await $api(`/api/articles/${id}/discard-draft`, {
+      method: "POST",
+      body: {},
+    });
+    invalidate(qk.me.draft(id));
+  };
+
   const deleteArticle = async (id: string): Promise<void> => {
     await $api(`/api/articles/${id}`, {
       method: "DELETE",
@@ -1784,6 +1792,7 @@ export function useApi() {
     createArticleDraft,
     updateArticleDraft,
     publishArticleDraft,
+    discardArticleDraft,
     deleteArticle,
     getMyDrafts,
     getMyDraftDetail,
