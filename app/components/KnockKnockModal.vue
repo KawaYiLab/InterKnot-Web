@@ -7,10 +7,11 @@ import {
   ChatBubbleLeftIcon,
   PaperAirplaneIcon,
 } from "@heroicons/vue/24/solid";
-import { DocumentTextIcon, ChevronLeftIcon, ArrowPathIcon } from "@heroicons/vue/24/outline";
-import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
+import { DocumentTextIcon, ChevronLeftIcon, ArrowPathIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
+import type { AiRoleCard, DmConversationSummary, DmMessage, StickerItem } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import { resolveErrorMessage } from "~/utils/api-error";
+import { buildStickerToken, parseStickerTokens, stripStickersToPlain } from "~/utils/sticker";
 
 const {
   visible,
@@ -351,7 +352,12 @@ const bubbleText = (msg: DmMessage): BubbleRender => {
     }
     // 互动类（like / favorite / denny / system）→ 走后端预渲染的 plain content
   }
-  return msg.content ?? "";
+  const content = msg.content ?? "";
+  // 普通消息含 sticker token → 走 CommentBody 内联渲染表情
+  if (msg.kind === "text" && parseStickerTokens(content).length > 0) {
+    return { mode: "rich", content };
+  }
+  return content;
 };
 
 /** 与官方 AI 私聊（通话 Tab 绑定的 fairy 等） */
@@ -457,7 +463,7 @@ const quoteLabel = (msg: DmMessage): string => {
 
 /** quote 卡右侧主标题：like-on-comment 引用评论原文，其余引用帖子标题 */
 const quoteTitle = (msg: DmMessage): string => {
-  if (isLikeOnComment(msg)) return msg.comment?.content ?? "";
+  if (isLikeOnComment(msg)) return stripStickersToPlain(msg.comment?.content ?? "");
   return msg.article?.title ?? "";
 };
 
@@ -486,7 +492,8 @@ const conversationPreview = (conv: DmConversationSummary): string => {
   if (last.kind === "image") return "[图片]";
   if (last.kind === "system") return last.content || "";
   // notification 走后端预渲染的 content（"赞了你的评论" / 评论正文 等）
-  return last.content || "";
+  // sticker token 降级为 [表情]
+  return stripStickersToPlain(last.content || "");
 };
 
 /** 消息流容器，用于切换会话时自动滚到底部 */
@@ -735,6 +742,21 @@ watch(aiRevealTick, () => {
 // ── 输入 / 发送 / 编辑 / 撤回 ───────────────────────────
 const draft = ref("");
 const sending = ref(false);
+
+// 表情选择器：选中后把 token 追加到草稿末尾
+const stickers = useStickers();
+const stickerPickerOpen = ref(false);
+const insertSticker = (sticker: StickerItem) => {
+  stickerPickerOpen.value = false;
+  stickers.recordRecent(sticker.documentId);
+  const token = buildStickerToken(sticker.documentId);
+  if (editingMessageId.value) {
+    editingDraft.value = `${editingDraft.value}${token}`;
+  } else {
+    draft.value = `${draft.value}${token}`;
+  }
+  composerRef.value?.focus();
+};
 const sendError = ref<string | null>(null);
 const composerRef = ref<HTMLTextAreaElement | null>(null);
 
@@ -1344,6 +1366,24 @@ const handleMobileBack = () => {
                           @keydown="onComposerKeyDown"
                           @input="onComposerInput"
                         />
+                        <div class="ik-knock__composer-sticker-wrap">
+                          <button
+                            type="button"
+                            class="ik-knock__composer-sticker"
+                            :disabled="composerDisabled"
+                            aria-label="插入表情"
+                            title="插入表情"
+                            @click.stop="stickerPickerOpen = !stickerPickerOpen"
+                          >
+                            <FaceSmileIcon class="ik-knock__composer-sticker-icon" aria-hidden="true" />
+                          </button>
+                          <StickerPicker
+                            v-if="stickerPickerOpen"
+                            class="ik-knock__composer-sticker-picker"
+                            @select="insertSticker"
+                            @close="stickerPickerOpen = false"
+                          />
+                        </div>
                         <button
                           type="button"
                           class="ik-knock__composer-send"
@@ -2508,6 +2548,39 @@ const handleMobileBack = () => {
   color: #ff8080;
   font-size: 12px;
   font-weight: 600;
+}
+
+.ik-knock__composer-sticker-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ik-knock__composer-sticker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 4px;
+  color: #888;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.ik-knock__composer-sticker:hover {
+  color: #ddd;
+}
+
+.ik-knock__composer-sticker-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.ik-knock__composer-sticker-picker {
+  bottom: calc(100% + 8px);
+  right: 0;
 }
 
 .ik-knock__composer-row {

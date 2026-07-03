@@ -17,6 +17,8 @@
  */
 import { computed, type ComputedRef, type Ref } from "vue";
 import type { ApiClientError } from "~/types/api";
+import { normalizeStickerMapUrls } from "~/composables/useApi";
+import { mergeStickerMap } from "~/composables/useStickers";
 import type {
   DmConversationSummary,
   DmMessage,
@@ -58,6 +60,8 @@ interface MessagesResponse {
   /** 后端按 createdAt desc 返回；前端反转后存为 asc */
   data: DmMessage[];
   meta?: { hasMore?: boolean; nextCursor?: string | null };
+  /** 正文 sticker token → 图片元信息（后端批量解析） */
+  stickerMap?: unknown;
 }
 
 interface SendMessageResponse {
@@ -174,6 +178,7 @@ export function useDmConversations(): UseDmConversations {
   const { $api } = useNuxtApp();
   const auth = useAuthStore();
   const stream = useDmStream();
+  const apiBaseUrl = String(useRuntimeConfig().public.apiBaseUrl || "").replace(/\/+$/, "");
 
   const selfUserId = computed<number | null>(() => {
     const id = auth.user?.id;
@@ -371,10 +376,14 @@ export function useDmConversations(): UseDmConversations {
   async function fetchMessagesPage(id: string, before: string | null): Promise<MessagesResponse> {
     const query: Record<string, string> = { limit: "50" };
     if (before) query.before = before;
-    return $api<MessagesResponse>(
+    const resp = await $api<MessagesResponse>(
       `/api/dm/conversations/${encodeURIComponent(id)}/messages`,
       { query },
     );
+    if (resp?.stickerMap) {
+      mergeStickerMap(normalizeStickerMapUrls(resp.stickerMap, apiBaseUrl));
+    }
+    return resp;
   }
 
   /** 把后端 desc 数组反转为 asc */

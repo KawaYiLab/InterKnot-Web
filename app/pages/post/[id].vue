@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMessage } from "zenless-ui";
-import type { Comment, Post } from "~/types/entities";
+import type { Comment, Post, StickerItem } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
+import { buildStickerToken } from "~/utils/sticker";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 
@@ -62,6 +63,23 @@ const mention = useMentionInput({
   search: api.searchAuthors,
 });
 const commentImages = useCommentImages();
+
+// 表情选择器：选中后把 token 追加到正文末尾（避免打乱 mention range）
+const stickers = useStickers();
+const stickerPickerOpen = ref(false);
+const toggleStickerPicker = () => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  stickerPickerOpen.value = !stickerPickerOpen.value;
+};
+const insertSticker = (sticker: StickerItem) => {
+  stickerPickerOpen.value = false;
+  stickers.recordRecent(sticker.documentId);
+  newComment.value = `${newComment.value}${buildStickerToken(sticker.documentId)}`;
+  void syncCommentInputHeight();
+};
 
 const postId = computed(() => String(route.params.id || ""));
 
@@ -973,6 +991,24 @@ onBeforeUnmount(() => {
                       >
                         <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                       </button>
+                      <div class="ik-engage-bar__sticker-wrap">
+                        <button
+                          type="button"
+                          class="ik-engage-bar__tool"
+                          :class="{ 'ik-engage-bar__tool--active': stickerPickerOpen }"
+                          aria-label="插入表情"
+                          title="插入表情"
+                          @click.stop="toggleStickerPicker"
+                        >
+                          <FaceSmileIcon class="ik-engage-icon" aria-hidden="true" />
+                        </button>
+                        <StickerPicker
+                          v-if="stickerPickerOpen"
+                          class="ik-engage-bar__sticker-picker"
+                          @select="insertSticker"
+                          @close="stickerPickerOpen = false"
+                        />
+                      </div>
                       <button
                         type="button"
                         class="ik-engage-bar__tool"
@@ -1502,6 +1538,16 @@ onBeforeUnmount(() => {
 
 .ik-page__actions--active .ik-engage-bar__content-edit {
   flex-basis: 100%;
+}
+
+.ik-engage-bar__sticker-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.ik-engage-bar__sticker-picker {
+  bottom: calc(100% + 8px);
+  left: 0;
 }
 
 .ik-engage-bar__textarea {

@@ -143,6 +143,30 @@ export interface Post {
   author: Author;
 }
 
+export interface StickerItem {
+  documentId: string;
+  name: string;
+  url: string;
+  width?: number;
+  height?: number;
+}
+
+export interface StickerPack {
+  documentId: string;
+  name: string;
+  cover?: string;
+  stickers: StickerItem[];
+}
+
+/** 评论的单种表情回应聚合：sticker 为表情 documentId */
+export interface CommentReaction {
+  sticker: string;
+  name?: string | null;
+  url: string;
+  count: number;
+  reacted: boolean;
+}
+
 export interface CommentReply {
   id: string;
   content: string;
@@ -151,6 +175,7 @@ export interface CommentReply {
   likesCount?: number;
   createdAt?: string;
   author: Author;
+  reactions?: CommentReaction[];
 }
 
 export interface Comment {
@@ -164,6 +189,7 @@ export interface Comment {
   replies: CommentReply[];
   articleId?: string;
   articleTitle?: string;
+  reactions?: CommentReaction[];
 }
 
 export interface ProfileStats {

@@ -21,7 +21,11 @@ import type {
   Profile,
   SignedUploadResult,
   UploadedFile,
+  StickerItem,
+  StickerPack,
+  CommentReaction,
 } from "~/types/entities";
+import { mergeStickerMap } from "~/composables/useStickers";
 import {
   buildPagination,
   type BackendPaginationMeta,
@@ -45,6 +49,9 @@ const qk = {
   },
   categories: {
     list: ["categories", "list"] as QueryKey,
+  },
+  stickers: {
+    catalog: ["stickers", "catalog"] as QueryKey,
   },
   articles: {
     search: (query: string, category: string, start: number, limit: number) =>
@@ -481,6 +488,37 @@ function getImageDimensions(file: File): Promise<{ width: number; height: number
   });
 }
 
+function toReactions(raw: unknown, apiBaseUrl: string): CommentReaction[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): CommentReaction | null => {
+      const r = (item || {}) as Record<string, unknown>;
+      const sticker = String(r.sticker || "");
+      const url = normalizeMediaUrl(r.url, apiBaseUrl);
+      if (!sticker || !url) return null;
+      return {
+        sticker,
+        name: typeof r.name === "string" ? r.name : null,
+        url,
+        count: Number(r.count ?? 0),
+        reacted: r.reacted === true,
+      };
+    })
+    .filter((r): r is CommentReaction => !!r);
+}
+
+/** 把后端下发的 stickerMap 里的相对 URL 补全为绝对 URL */
+export function normalizeStickerMapUrls(raw: unknown, apiBaseUrl: string): Record<string, unknown> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, unknown> = {};
+  for (const [id, entry] of Object.entries(raw as Record<string, unknown>)) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    out[id] = { ...e, url: normalizeMediaUrl(e.url, apiBaseUrl) };
+  }
+  return out;
+}
+
 function toComment(raw: unknown, apiBaseUrl: string): Comment {
   const data = (raw || {}) as Record<string, unknown>;
   const repliesRaw = Array.isArray(data.replies) ? data.replies : [];
@@ -493,6 +531,7 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
     likesCount: Number(data.likesCount ?? 0),
     createdAt: data.createdAt as string | undefined,
     author: toAuthor(data.author, apiBaseUrl),
+    reactions: toReactions(data.reactions, apiBaseUrl),
     replies: repliesRaw.map((item) => {
       const reply = item as Record<string, unknown>;
       return {
@@ -503,6 +542,7 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
         likesCount: Number(reply.likesCount ?? 0),
         createdAt: reply.createdAt as string | undefined,
         author: toAuthor(reply.author, apiBaseUrl),
+        reactions: toReactions(reply.reactions, apiBaseUrl),
       };
     }),
     articleId: articleRaw ? String(articleRaw.documentId || "") : undefined,
@@ -797,12 +837,63 @@ export function useApi() {
             limit: String(DEFAULT_PAGE_SIZE),
           },
         });
+        mergeStickerMap(normalizeStickerMapUrls((response as Record<string, unknown>).stickerMap, apiBaseUrl));
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
         return buildPagination(data.map((item) => toComment(item, apiBaseUrl)), start, meta);
       },
       STALE_LIST,
     );
+  };
+
+  /** GET /api/stickers/catalog —— 系统表情包目录（全员免费） */
+  const getStickerCatalog = async (): Promise<StickerPack[]> => {
+    return cachedRead(
+      qk.stickers.catalog,
+      async () => {
+        const response = await $api("/api/stickers/catalog");
+        const data = unwrapData<unknown[]>(response) || [];
+        return data.map((item) => {
+          const pack = (item || {}) as Record<string, unknown>;
+          const stickersRaw = Array.isArray(pack.stickers) ? pack.stickers : [];
+          return {
+            documentId: String(pack.documentId || ""),
+            name: String(pack.name || ""),
+            cover: extractMediaMeta(pack.cover, apiBaseUrl)?.url,
+            stickers: stickersRaw
+              .map((s): StickerItem | null => {
+                const raw = (s || {}) as Record<string, unknown>;
+                const image = extractMediaMeta(raw.image, apiBaseUrl);
+                if (!image?.url) return null;
+                return {
+                  documentId: String(raw.documentId || ""),
+                  name: String(raw.name || ""),
+                  url: image.url,
+                  width: image.width,
+                  height: image.height,
+                } satisfies StickerItem;
+              })
+              .filter((s): s is StickerItem => !!s && !!s.documentId),
+          } satisfies StickerPack;
+        });
+      },
+      STALE_DETAIL,
+    );
+  };
+
+  /** POST /api/comment-reactions/toggle —— 对评论贴/取消表情回应 */
+  const toggleCommentReaction = async (
+    commentId: string,
+    stickerId: string,
+  ): Promise<CommentReaction[]> => {
+    const response = await $api("/api/comment-reactions/toggle", {
+      method: "POST",
+      body: { comment: commentId, sticker: stickerId },
+    });
+    const data = unwrapData<Record<string, unknown>>(response);
+    // 评论列表缓存里的 reactions 已旧，保守失效
+    invalidate(["articles", "comments"]);
+    return toReactions(data?.reactions, apiBaseUrl);
   };
 
   const addPostComment = async ({
@@ -1775,6 +1866,8 @@ export function useApi() {
     getPost,
     recordArticleView,
     getComments,
+    getStickerCatalog,
+    toggleCommentReaction,
     addPostComment,
     deleteComment,
     toggleLike,

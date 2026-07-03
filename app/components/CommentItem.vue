@@ -6,6 +6,7 @@ import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid
 
 import UserHoverCard from "./UserHoverCard.vue";
 import CommentBody from "./CommentBody.vue";
+import CommentReactionBar from "./CommentReactionBar.vue";
 
 const { openGallery } = useLightGallery();
 
@@ -105,6 +106,12 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
         </button>
       </div>
 
+      <CommentReactionBar
+        :comment-id="comment.id"
+        :reactions="comment.reactions"
+        @update="comment.reactions = $event"
+      />
+
       <!-- Footer: date left · interactions right -->
       <div class="ik-comment__footer">
         <div class="ik-comment__meta">
@@ -189,6 +196,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                 />
               </button>
             </div>
+            <CommentReactionBar
+              :comment-id="reply.id"
+              :reactions="reply.reactions"
+              @update="reply.reactions = $event"
+            />
             <div class="ik-comment__footer">
               <div class="ik-comment__meta">
                 <span class="ik-comment__time">{{ formatTime(reply.createdAt) }}</span>
