@@ -349,10 +349,20 @@ useHead({ title: "入站考试 - 绳网" });
 <style scoped>
 .ik-exam-page {
   position: relative;
-  min-height: 100vh;
+  /* 减去 header 高度(78px)和底部导航高度(64px)，确保内容在可视区域内居中 */
+  min-height: calc(100vh - var(--ik-header-height, 78px) - var(--ik-bottom-nav-height, 64px));
   padding: 96px 16px 64px;
   display: flex;
   justify-content: center;
+  align-items: center;
+}
+
+.ik-exam-page__inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 760px;
+  flex-shrink: 0;
 }
 
 /* 与发帖页一致的 45° 斜线纹理背景 */
@@ -369,13 +379,6 @@ useHead({ title: "入站考试 - 绳网" });
     rgba(255, 255, 255, 0.09) 7.5px,
     transparent 8.5px
   );
-}
-
-.ik-exam-page__inner {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 760px;
 }
 
 .ik-exam-panel {
@@ -570,6 +573,8 @@ useHead({ title: "入站考试 - 绳网" });
 /* ── 移动端优化 ── */
 @media (max-width: 768px) {
   .ik-exam-page {
+    /* 移动端 header 高度为 66px */
+    min-height: calc(100vh - var(--ik-header-height, 66px) - var(--ik-bottom-nav-height, 64px));
     padding: 72px 12px 48px;
   }
 
