@@ -404,7 +404,7 @@ const handleRefresh = async () => {
   refreshing.value = false;
 };
 
-// ── 后台静默轮询：只比对最新一页第一条 id 与本地 list 的差集 ────
+// ── 后台静默轮询：比对最新一页与本地 list 的差集，检测有无新帖 ────
 const pollLatestArticles = async () => {
   // 仅在推荐流（无搜索词、非关注/收藏）下做轮询
   if (feedMode.value !== "recommend") return;
@@ -426,9 +426,11 @@ const pollLatestArticles = async () => {
     const fresh: string[] = [];
     for (const node of page.nodes) {
       if (!node.id) continue;
-      // 第一页中第一个已知 id 之前的都是"新增"
-      if (knownIds.has(node.id)) break;
-      fresh.push(node.id);
+      // 收集第一页中所有本地未知的 id。
+      // 不能在遇到第一个已知 id 时 break：推荐流顶部会注入热门帖（按热度排序，
+      // 非时间序），这些热门帖已在初始加载时进入 list，若 break 会导致新帖
+      // （排在热门帖之后的普通区）永远检测不到。
+      if (!knownIds.has(node.id)) fresh.push(node.id);
     }
     if (fresh.length) {
       // 取并集，避免短时间内多次轮询重复计数
