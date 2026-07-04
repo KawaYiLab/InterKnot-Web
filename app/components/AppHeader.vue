@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+﻿﻿<script setup lang="ts">
 import { useEventListener } from "@vueuse/core";
 import { BellIcon } from "@heroicons/vue/24/solid";
 import { ClockIcon, XMarkIcon } from "@heroicons/vue/24/outline";
@@ -524,7 +524,7 @@ watch(
             ref="searchInputRef"
             v-model="searchKeyword"
             class="ik-search-input"
-            placeholder="全站搜索"
+            placeholder="搜索​一下  \(￣︶￣*\))"
             @keydown.enter.prevent="handleSearchEnter"
           >
             <template #suffix>
