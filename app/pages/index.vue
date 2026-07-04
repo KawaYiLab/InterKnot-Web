@@ -72,7 +72,7 @@ const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
 const POST_CARD_BODY_PADDING_X = 16;
 
 const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
-// 频道筛选：空串 = 全部（推荐流）。Tab 选中后随 list/缓存键一起隔离。
+// 频道筛选：空串 = 最新（推荐流）。Tab 选中后随 list/缓存键一起隔离。
 const categories = ref<Category[]>([]);
 const selectedCategory = ref<string>("");
 
@@ -831,7 +831,7 @@ onBeforeUnmount(() => {
 
     <!-- 顶部工具条：左侧频道分类，右侧 feed 切换（推荐/关注/收藏），两组错开。 -->
     <div class="ik-home-toolbar">
-      <!-- 频道 Tab 条：按 order 展示，「全部」恒在最前。
+      <!-- 频道 Tab 条：按 order 展示，「最新」恒在最前。
            恒渲染（不随 categories 异步加载出现/消失），为分类栏预留固定高度，
            避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
       <nav class="ik-category-tabs" aria-label="帖子频道">
@@ -841,7 +841,7 @@ onBeforeUnmount(() => {
           :class="{ 'ik-category-tab--active': selectedCategory === '' }"
           @click="selectCategory('')"
         >
-          全部
+          最新
         </button>
         <button
           v-for="cat in categories"
