@@ -35,6 +35,8 @@ interface ConversationMessageState {
   nextCursor: string | null;
   /** 是否已经首屏加载过；进入会话时跳过重复请求 */
   hydrated: boolean;
+  /** 加载期间收到 force=true 请求时标记，加载完成后自动触发一次 force-reload */
+  pendingForceReload: boolean;
 }
 
 const emptyMessageState = (): ConversationMessageState => ({
@@ -43,6 +45,7 @@ const emptyMessageState = (): ConversationMessageState => ({
   hasMore: false,
   nextCursor: null,
   hydrated: false,
+  pendingForceReload: false,
 });
 
 interface ConversationListResponse {
@@ -387,31 +390,42 @@ export function useDmConversations(): UseDmConversations {
   async function ensureMessages(id: string, force = false): Promise<void> {
     const bucket = ensureMessageBucket(id);
     if (bucket.hydrated && !force) return;
-    if (bucket.loading) return;
+    if (bucket.loading) {
+      // 正在加载中时收到 force=true（如 SSE/WS 推送触发的 force-reload）：
+      // 标记 pendingForceReload，当前加载完成后自动触发一次 force-reload
+      // 拿到包含新消息的最新数据。
+      if (force) patchMessageState(id, { pendingForceReload: true });
+      return;
+    }
 
-    patchMessageState(id, { loading: true });
+    patchMessageState(id, { loading: true, pendingForceReload: false });
     try {
       const resp = await fetchMessagesPage(id, null);
       const incoming = toAsc(resp?.data ?? []);
 
-      const nextItems = bucket.hydrated && force
-        ? mergeMessages(bucket.items, incoming)
-        : incoming;
+      // await 后重新读取最新 bucket：loading 期间 WS 事件可能已写入新消息，
+      // 旧的 bucket 快照看不到它们。始终用 mergeMessages 合并，确保 WS
+      // 消息不丢失（按 documentId 去重，incoming 覆盖同 id 拿到服务端权威版本）。
+      const freshBucket = messagesById.value[id] ?? emptyMessageState();
+      const nextItems = mergeMessages(freshBucket.items, incoming);
 
       patchMessageState(id, {
         items: nextItems,
-        hasMore: bucket.hydrated && force
-          ? bucket.hasMore || !!resp?.meta?.hasMore
-          : !!resp?.meta?.hasMore,
-        nextCursor: bucket.hydrated && force
-          ? bucket.nextCursor ?? resp?.meta?.nextCursor ?? null
-          : resp?.meta?.nextCursor ?? null,
+        hasMore: freshBucket.hasMore || !!resp?.meta?.hasMore,
+        nextCursor: freshBucket.nextCursor ?? resp?.meta?.nextCursor ?? null,
         hydrated: true,
         loading: false,
+        pendingForceReload: false,
       });
     } catch (err) {
       patchMessageState(id, { loading: false });
       throw err;
+    }
+
+    // 加载期间有 force 请求被延迟了，现在自动触发一次 force-reload
+    if (messagesById.value[id]?.pendingForceReload) {
+      patchMessageState(id, { pendingForceReload: false });
+      void ensureMessages(id, true);
     }
   }
 
@@ -422,8 +436,11 @@ export function useDmConversations(): UseDmConversations {
     try {
       const resp = await fetchMessagesPage(id, bucket.nextCursor);
       const olderAsc = toAsc(resp?.data ?? []);
+      // await 后重新读取最新 bucket：loading 期间 WS 事件可能已写入新消息，
+      // 旧的 bucket.items 快照看不到它们。用 mergeMessages 合并确保不丢失。
+      const freshBucket = messagesById.value[id] ?? emptyMessageState();
       patchMessageState(id, {
-        items: [...olderAsc, ...bucket.items],
+        items: mergeMessages(freshBucket.items, olderAsc),
         hasMore: !!resp?.meta?.hasMore,
         nextCursor: resp?.meta?.nextCursor ?? null,
         loading: false,
@@ -461,12 +478,13 @@ export function useDmConversations(): UseDmConversations {
     if (!created?.documentId) throw new Error("send returned no message");
 
     // 立即写入本地缓存（WS message.created 到达时会按 documentId dedup）
-    const bucket = ensureMessageBucket(actualId);
-    if (bucket.hydrated) {
-      patchMessageState(actualId, {
-        items: mergeMessages(bucket.items, [created]),
-      });
-    }
+    // 无条件写入：即使 bucket 尚未 hydrated（pseudo 实质化时 ensureMessages
+    // 可能还在加载中），也要把消息写入 items。ensureMessages 完成时会用
+    // mergeMessages 合并，不会丢失此消息。
+    const bucket = messagesById.value[actualId] ?? emptyMessageState();
+    patchMessageState(actualId, {
+      items: mergeMessages(bucket.items, [created]),
+    });
 
     // 同步会话列表预览
     patchConversation(actualId, {
@@ -653,13 +671,14 @@ export function useDmConversations(): UseDmConversations {
     }
 
     // 写入消息缓存（dedup by documentId）
-    // 注意：上面 pseudo 迁移可能已经更新过 messagesById[cid]，所以这里重新读 bucket
-    const bucket = messagesById.value[cid];
-    if (bucket?.hydrated) {
-      patchMessageState(cid, {
-        items: mergeMessages(bucket.items, [msg]),
-      });
-    }
+    // 无条件写入：即使 bucket 尚未 hydrated（首次加载正在进行中），也要把
+    // WS 消息写入 items，避免"侧边栏显示新消息但聊天栏不显示"的竞态。
+    // ensureMessages 完成时会用 mergeMessages 合并，不会丢失此消息。
+    // 注意：上面 pseudo 迁移可能已经更新过 messagesById[cid]，所以这里重新读 bucket。
+    const bucket = messagesById.value[cid] ?? emptyMessageState();
+    patchMessageState(cid, {
+      items: mergeMessages(bucket.items, [msg]),
+    });
 
     // 更新会话列表预览 + 未读
     const conv = conversations.value.find((c) => c.documentId === cid);
@@ -855,6 +874,17 @@ export function useDmConversations(): UseDmConversations {
     for (const t of typingTimers.values()) clearTimeout(t);
     typingTimers.clear();
     typing.value = {};
+
+    // WS 断开后缓存可能过期（关闭弹窗期间对方发的消息前端收不到）。
+    // 将所有 bucket 的 hydrated 设为 false，下次进入会话时 ensureMessages
+    // 会重新拉取。保留 items 数据避免白屏，HTTP 返回后通过 mergeMessages
+    // 合并为最新数据。同时清除 pendingForceReload 避免残留。
+    const stale = messagesById.value;
+    const invalidated: Record<string, ConversationMessageState> = {};
+    for (const [id, bucket] of Object.entries(stale)) {
+      invalidated[id] = { ...bucket, hydrated: false, pendingForceReload: false };
+    }
+    messagesById.value = invalidated;
   };
 
   const reset = () => {
