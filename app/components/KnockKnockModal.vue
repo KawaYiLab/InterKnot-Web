@@ -172,20 +172,19 @@ const isActiveAiConversation = computed<boolean>(() => {
   return conv.peer?.isAiAgent === true || (typeof uid === "number" && aiPeerUserIds.value.has(uid));
 });
 
-/** 当前会话对端是否可跳转个人主页（非 AI、有 authorDocumentId） */
-const canClickPeerProfile = computed<boolean>(() => {
-  const peer = activeConversation.value?.peer;
-  if (!peer?.authorDocumentId) return false;
-  if (peer.isAiAgent) return false;
-  return true;
-});
-
-/** 对端个人主页 URL（不可跳转时为 null） */
+/**
+ * 对端个人主页 URL（不可跳转时为 null）。
+ * 判断条件（非 AI、有 authorDocumentId）在此唯一维护，
+ * canClickPeerProfile 从它派生，避免两处重复判断逻辑不同步。
+ */
 const peerProfileUrl = computed<string | null>(() => {
   const peer = activeConversation.value?.peer;
   if (!peer?.authorDocumentId || peer.isAiAgent) return null;
   return `/profile/${peer.authorDocumentId}`;
 });
+
+/** 当前会话对端是否可跳转个人主页——从 peerProfileUrl 派生 */
+const canClickPeerProfile = computed<boolean>(() => peerProfileUrl.value !== null);
 
 const resettingContext = ref(false);
 
@@ -498,8 +497,11 @@ const goPost = (msg: DmMessage) => {
  * 跳转个人主页。
  * navigateTo 触发路由变化 → app.vue 的 router.beforeEach 守卫自动
  * 调用 knockModal.teardown() 关闭弹窗，无需手动 close()。
+ *
+ * 接受 string | null，内部做空值守卫，调用方无需 ! 断言。
  */
-const goToProfile = (profileUrl: string) => {
+const goToProfile = (profileUrl: string | null) => {
+  if (!profileUrl) return;
   navigateTo(profileUrl);
 };
 
@@ -582,24 +584,28 @@ const enrichedMessages = computed<EnrichedMessage[]>(() => {
   const list = activeMessages.value;
   const known = knownMessageIds.value;
   void aiRevealTick.value;
-  return list.map((msg, idx) => ({
-    msg,
-    isMine: isMine(msg),
-    isNew: !known.has(msg.documentId),
-    showTime: shouldShowTime(idx),
-    rendered: bubbleTextForDisplay(msg),
-    quote: shouldShowQuote(msg) && msg.article
-      ? {
-          label: quoteLabel(msg),
-          title: quoteTitle(msg),
-          article: msg.article,
-        }
-      : null,
-    avatarClickable: canClickAvatar(msg),
-    profileUrl: msg.sender?.authorDocumentId
-      ? `/profile/${msg.sender.authorDocumentId}`
-      : null,
-  }));
+  return list.map((msg, idx) => {
+    const avatarClickable = canClickAvatar(msg);
+    return {
+      msg,
+      isMine: isMine(msg),
+      isNew: !known.has(msg.documentId),
+      showTime: shouldShowTime(idx),
+      rendered: bubbleTextForDisplay(msg),
+      quote: shouldShowQuote(msg) && msg.article
+        ? {
+            label: quoteLabel(msg),
+            title: quoteTitle(msg),
+            article: msg.article,
+          }
+        : null,
+      avatarClickable,
+      // avatarClickable 为 true 时 canClickAvatar 已保证 authorDocumentId 存在
+      profileUrl: avatarClickable
+        ? `/profile/${msg.sender!.authorDocumentId}`
+        : null,
+    };
+  });
 });
 
 /** 5 分钟内自己发的、未撤回的文本消息可以编辑/撤回 */
@@ -1214,8 +1220,8 @@ const handleMobileBack = () => {
                       :role="canClickPeerProfile ? 'button' : undefined"
                       :tabindex="canClickPeerProfile ? 0 : undefined"
                       :aria-label="canClickPeerProfile ? `查看${activeConversation?.peer?.name || '用户'}的主页` : undefined"
-                      @click="canClickPeerProfile && goToProfile(peerProfileUrl!)"
-                      @keydown.enter="canClickPeerProfile && goToProfile(peerProfileUrl!)"
+                      @click="goToProfile(peerProfileUrl)"
+                      @keydown.enter="goToProfile(peerProfileUrl)"
                     >
                       <span class="ik-knock__main-title">
                         {{ activeConversation?.peer?.name || activeConversation?.title || "NoData" }}
@@ -1284,9 +1290,10 @@ const handleMobileBack = () => {
                             :class="{ 'is-clickable': entry.avatarClickable }"
                             :role="entry.avatarClickable ? 'button' : undefined"
                             :tabindex="entry.avatarClickable ? 0 : undefined"
+                            :aria-hidden="entry.avatarClickable ? undefined : 'true'"
                             :aria-label="entry.avatarClickable ? `查看${entry.msg.sender?.name || '用户'}的主页` : undefined"
-                            @click="entry.avatarClickable && goToProfile(entry.profileUrl!)"
-                            @keydown.enter="entry.avatarClickable && goToProfile(entry.profileUrl!)"
+                            @click="goToProfile(entry.profileUrl)"
+                            @keydown.enter="goToProfile(entry.profileUrl)"
                           >
                             <img
                               v-if="entry.msg.sender?.avatar"
@@ -1931,7 +1938,7 @@ const handleMobileBack = () => {
   transition: opacity 140ms ease;
 }
 
-.ik-knock__main-title-wrap.is-clickable:hover .ik-knock__main-title {
+.ik-knock__main-title-wrap.is-clickable:hover {
   opacity: 0.8;
 }
 
