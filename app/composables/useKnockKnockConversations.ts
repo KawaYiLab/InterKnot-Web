@@ -43,6 +43,8 @@ interface ConversationMessageState {
   nextCursor: string | null;
   /** 标记是否首次加载过，避免重复发起首屏请求 */
   hydrated: boolean;
+  /** 加载期间收到 force=true 请求时标记，加载完成后自动触发一次 force-reload */
+  pendingForceReload: boolean;
 }
 
 const TOKEN_KEY = "access_token";
@@ -53,6 +55,7 @@ const emptyMessageState = (): ConversationMessageState => ({
   hasMore: false,
   nextCursor: null,
   hydrated: false,
+  pendingForceReload: false,
 });
 
 interface UseKnockKnockConversations {
@@ -176,37 +179,41 @@ export function useKnockKnockConversations(): UseKnockKnockConversations {
   async function ensureMessages(id: string, force = false): Promise<void> {
     const bucket = ensureMessageBucket(id);
     if (bucket.hydrated && !force) return;
-    if (bucket.loading) return;
+    if (bucket.loading) {
+      // 正在加载中时收到 force=true（如 SSE 推送触发的 force-reload）：
+      // 标记 pendingForceReload，当前加载完成后自动触发一次 force-reload
+      // 拿到包含新消息的最新数据。
+      if (force) patchMessageState(id, { pendingForceReload: true });
+      return;
+    }
 
-    patchMessageState(id, { loading: true });
+    patchMessageState(id, { loading: true, pendingForceReload: false });
     try {
       const resp = await fetchMessagesPage(id, null);
       const incoming = resp?.data ?? [];
 
-      // hydrated + force=true：合并而不是替换，避免丢失用户已加载的历史（loadMoreMessages）。
-      // 按 documentId 去重，incoming 覆盖现有同 id 项（拿到最新的 isRead 等状态），
-      // 再按 createdAt 升序排序确保前端展示顺序稳定。
-      const nextItems = bucket.hydrated && force
-        ? mergeMessages(bucket.items, incoming)
-        : incoming;
+      // await 后重新读取最新 bucket：loading 期间可能有其他写入，
+      // 旧的 bucket 快照看不到它们。始终用 mergeMessages 合并，确保不丢失。
+      const freshBucket = messagesById.value[id] ?? emptyMessageState();
+      const nextItems = mergeMessages(freshBucket.items, incoming);
 
       patchMessageState(id, {
         items: nextItems,
-        // 首屏 reload 时 nextCursor 是「最新 50 之外还有更老的」；
-        // 合并模式下，如果原本 hasMore 是 true 就保留 true（用户还能继续往上滚）；
-        // 否则用后端返回的（避免把已经滚到顶的状态错误地重置）
-        hasMore: bucket.hydrated && force
-          ? bucket.hasMore || !!resp?.meta?.hasMore
-          : !!resp?.meta?.hasMore,
-        nextCursor: bucket.hydrated && force
-          ? bucket.nextCursor ?? resp?.meta?.nextCursor ?? null
-          : resp?.meta?.nextCursor ?? null,
+        hasMore: freshBucket.hasMore || !!resp?.meta?.hasMore,
+        nextCursor: freshBucket.nextCursor ?? resp?.meta?.nextCursor ?? null,
         hydrated: true,
         loading: false,
+        pendingForceReload: false,
       });
     } catch (err) {
       patchMessageState(id, { loading: false });
       throw err;
+    }
+
+    // 加载期间有 force 请求被延迟了，现在自动触发一次 force-reload
+    if (messagesById.value[id]?.pendingForceReload) {
+      patchMessageState(id, { pendingForceReload: false });
+      void ensureMessages(id, true);
     }
   }
 
@@ -238,9 +245,11 @@ export function useKnockKnockConversations(): UseKnockKnockConversations {
     try {
       const resp = await fetchMessagesPage(id, bucket.nextCursor);
       const incoming = resp?.data ?? [];
-      // 后端按 createdAt ASC 返回；历史更早的应当 prepend 到当前 items 之前
+      // await 后重新读取最新 bucket：loading 期间可能有其他写入，
+      // 旧的 bucket.items 快照看不到它们。用 mergeMessages 合并确保不丢失。
+      const freshBucket = messagesById.value[id] ?? emptyMessageState();
       patchMessageState(id, {
-        items: [...incoming, ...bucket.items],
+        items: mergeMessages(freshBucket.items, incoming),
         hasMore: !!resp?.meta?.hasMore,
         nextCursor: resp?.meta?.nextCursor ?? null,
         loading: false,
