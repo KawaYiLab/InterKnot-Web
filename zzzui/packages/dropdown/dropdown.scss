@@ -9,6 +9,7 @@
     .z-dropdown {
       &__content {
         opacity: 1;
+        pointer-events: auto;
         transform: translateY(100%) scaleY(1);
       }
     }
@@ -66,6 +67,7 @@
     min-width: max-content;
     transform-origin: top;
     opacity: 0;
+    pointer-events: none;
     transform: translateY(100%) scaleY(0);
     background: #323232;
     padding: 4px;
