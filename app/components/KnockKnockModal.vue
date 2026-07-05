@@ -172,6 +172,21 @@ const isActiveAiConversation = computed<boolean>(() => {
   return conv.peer?.isAiAgent === true || (typeof uid === "number" && aiPeerUserIds.value.has(uid));
 });
 
+/** 当前会话对端是否可跳转个人主页（非 AI、有 authorDocumentId） */
+const canClickPeerProfile = computed<boolean>(() => {
+  const peer = activeConversation.value?.peer;
+  if (!peer?.authorDocumentId) return false;
+  if (peer.isAiAgent) return false;
+  return true;
+});
+
+/** 对端个人主页 URL（不可跳转时为 null） */
+const peerProfileUrl = computed<string | null>(() => {
+  const peer = activeConversation.value?.peer;
+  if (!peer?.authorDocumentId || peer.isAiAgent) return null;
+  return `/profile/${peer.authorDocumentId}`;
+});
+
 const resettingContext = ref(false);
 
 /** 重置 AI 对话上下文（3.3.4）：清空记忆开新话题；服务端会广播 system 分界消息。 */
@@ -479,6 +494,15 @@ const goPost = (msg: DmMessage) => {
   });
 };
 
+/**
+ * 跳转个人主页。
+ * navigateTo 触发路由变化 → app.vue 的 router.beforeEach 守卫自动
+ * 调用 knockModal.teardown() 关闭弹窗，无需手动 close()。
+ */
+const goToProfile = (profileUrl: string) => {
+  navigateTo(profileUrl);
+};
+
 /** 列表预览文案：撤回 / 图片 / 系统 / 通知 / 正常 */
 const conversationPreview = (conv: DmConversationSummary): string => {
   const last = conv.lastMessage;
@@ -519,6 +543,18 @@ const shouldShowTime = (index: number): boolean => {
 };
 
 /**
+ * 消息头像是否可点击跳转个人主页：
+ * - 有 sender 且 sender 有 authorDocumentId（匿名通知 / 系统消息无）
+ * - 非 AI 代理（AI 角色无个人主页）
+ */
+const canClickAvatar = (msg: DmMessage): boolean => {
+  if (!msg.sender) return false;
+  if (!msg.sender.authorDocumentId) return false;
+  if (msg.sender.isAiAgent) return false;
+  return true;
+};
+
+/**
  * 一次性把每条消息的派生信息算好——避免 template v-for 内重复调用
  * isMine / bubbleText / shouldShowQuote / quoteLabel / quoteTitle 等
  * 函数。100 条消息每次 re-render 节省 ~1000 次函数调用。
@@ -536,6 +572,10 @@ interface EnrichedMessage {
     title: string;
     article: NonNullable<DmMessage["article"]>;
   } | null;
+  /** 头像是否可点击跳转个人主页 */
+  avatarClickable: boolean;
+  /** 个人主页 URL（avatarClickable 为 false 时为 null） */
+  profileUrl: string | null;
 }
 
 const enrichedMessages = computed<EnrichedMessage[]>(() => {
@@ -554,6 +594,10 @@ const enrichedMessages = computed<EnrichedMessage[]>(() => {
           title: quoteTitle(msg),
           article: msg.article,
         }
+      : null,
+    avatarClickable: canClickAvatar(msg),
+    profileUrl: msg.sender?.authorDocumentId
+      ? `/profile/${msg.sender.authorDocumentId}`
       : null,
   }));
 });
@@ -1164,7 +1208,15 @@ const handleMobileBack = () => {
                       class="ik-knock__main-icon"
                       aria-hidden="true"
                     />
-                    <div class="ik-knock__main-title-wrap">
+                    <div
+                      class="ik-knock__main-title-wrap"
+                      :class="{ 'is-clickable': canClickPeerProfile }"
+                      :role="canClickPeerProfile ? 'button' : undefined"
+                      :tabindex="canClickPeerProfile ? 0 : undefined"
+                      :aria-label="canClickPeerProfile ? `查看${activeConversation?.peer?.name || '用户'}的主页` : undefined"
+                      @click="canClickPeerProfile && goToProfile(peerProfileUrl!)"
+                      @keydown.enter="canClickPeerProfile && goToProfile(peerProfileUrl!)"
+                    >
                       <span class="ik-knock__main-title">
                         {{ activeConversation?.peer?.name || activeConversation?.title || "NoData" }}
                       </span>
@@ -1227,7 +1279,15 @@ const handleMobileBack = () => {
                           }"
                           @contextmenu="showContextMenu($event, entry.msg)"
                         >
-                          <div class="ik-knock__msg-avatar" aria-hidden="true">
+                          <div
+                            class="ik-knock__msg-avatar"
+                            :class="{ 'is-clickable': entry.avatarClickable }"
+                            :role="entry.avatarClickable ? 'button' : undefined"
+                            :tabindex="entry.avatarClickable ? 0 : undefined"
+                            :aria-label="entry.avatarClickable ? `查看${entry.msg.sender?.name || '用户'}的主页` : undefined"
+                            @click="entry.avatarClickable && goToProfile(entry.profileUrl!)"
+                            @keydown.enter="entry.avatarClickable && goToProfile(entry.profileUrl!)"
+                          >
                             <img
                               v-if="entry.msg.sender?.avatar"
                               :src="entry.msg.sender.avatar"
@@ -1864,6 +1924,22 @@ const handleMobileBack = () => {
   min-width: 0;
 }
 
+/* 会话标题栏：对端可跳转个人主页时的可点击态 */
+.ik-knock__main-title-wrap.is-clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: opacity 140ms ease;
+}
+
+.ik-knock__main-title-wrap.is-clickable:hover .ik-knock__main-title {
+  opacity: 0.8;
+}
+
+.ik-knock__main-title-wrap.is-clickable:focus-visible {
+  outline: 2px solid #fbfe00;
+  outline-offset: 2px;
+}
+
 /* 重置对话按钮（3.3.4）：靠右对齐 */
 .ik-knock__reset {
   margin-left: auto;
@@ -2059,6 +2135,21 @@ const handleMobileBack = () => {
   background: rgba(255, 255, 255, 0.05);
   color: #4a4a4a;
   overflow: hidden;
+}
+
+/* 消息头像可点击跳转个人主页 */
+.ik-knock__msg-avatar.is-clickable {
+  cursor: pointer;
+  transition: opacity 140ms ease;
+}
+
+.ik-knock__msg-avatar.is-clickable:hover {
+  opacity: 0.8;
+}
+
+.ik-knock__msg-avatar.is-clickable:focus-visible {
+  outline: 2px solid #fbfe00;
+  outline-offset: 2px;
 }
 
 .ik-knock__msg-avatar-img {
