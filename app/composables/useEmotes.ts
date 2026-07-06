@@ -51,7 +51,8 @@ export function useEmotes() {
   const query = useQuery<Emote[]>({
     queryKey: EMOTE_MANIFEST_KEY as unknown as readonly unknown[],
     queryFn: async () => {
-      const response = await $api("/api/emotes/manifest");
+      // cache: "no-cache" 强制走条件请求，避免旧的浏览器 HTTP 缓存把清单钉住
+      const response = await $api("/api/emotes/manifest", { cache: "no-cache" });
       const data = (response || {}) as ManifestResponse;
       const list = Array.isArray(data.emotes) ? data.emotes : [];
       return list.map((e) => ({ ...e, url: normalizeEmoteUrl(e.url, apiBaseUrl) }));
