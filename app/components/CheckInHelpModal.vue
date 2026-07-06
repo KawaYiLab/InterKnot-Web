@@ -92,7 +92,7 @@ onBeforeUnmount(() => {
                   <li>连签加成：每多连续 1 天额外 <strong>+1 绳网信用</strong>，最多额外 <strong>+4 绳网信用</strong>（即连签 5 天起均为 <strong>10 绳网信用</strong>）</li>
                   <li>当日名次：按签到时间先后排名，越早签到名次越靠前</li>
                 </ul>
-                <p class="ik-checkin-help__muted">其他主动行为：发帖 +4、评论 +3、点赞 +1（均计入上述 50 绳网信用日上限）。他人与你互动还可获得绳网信用（如被点赞 +1、被评论 +1、被收藏 +2），该部分日上限为 1000 绳网信用。</p>
+                <p class="ik-checkin-help__muted">其他主动行为：发帖 +4、评论 +3、点赞 +1（均为<strong>每日仅首次</strong>获得经验，并计入上述 50 绳网信用日上限）。他人与你互动还可获得绳网信用（如被点赞 +1、被评论 +1、被收藏 +2），该部分日上限为 1000 绳网信用。</p>
               </section>
 
               <section class="ik-checkin-help__block">
