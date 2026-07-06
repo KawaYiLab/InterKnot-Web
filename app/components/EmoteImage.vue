@@ -19,7 +19,7 @@ const { emoteMap } = useEmotes();
 
 const resolved = computed(() => emoteMap.value.get(props.code));
 
-const fallbackText = computed(() => `:ik-${props.code}:`);
+const fallbackText = computed(() => `:${props.code}:`);
 </script>
 
 <template>

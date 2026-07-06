@@ -9,7 +9,7 @@
  * 两端独立维护避免跨仓引用；改动时务必同步两侧。
  */
 
-import { MENTION_REGEX, parseMentions, type ContentSegment } from "~/utils/mention";
+import { parseMentions, type ContentSegment } from "~/utils/mention";
 
 /**
  * 表情 token 的匹配正则。与后端 emote.ts 必须一字不差。
@@ -152,4 +152,3 @@ export function splitContent(content: string): UnifiedSegment[] {
 
 // 保持与 mention.ts 的 ContentSegment 类型兼容（re-export）
 export type { ContentSegment } from "~/utils/mention";
-export { MENTION_REGEX } from "~/utils/mention";

@@ -8,7 +8,7 @@
  * 显示态/真值态分离——serializeForSend 对它透传即可。
  */
 
-import { nextTick, type Ref } from "vue";
+import { computed, nextTick, type Ref } from "vue";
 import { buildEmoteToken } from "~/utils/emote";
 
 export interface UseEmoteInsertOptions {
@@ -35,9 +35,8 @@ export function useEmoteInsert(opts: UseEmoteInsertOptions) {
     return matches ? matches.length : 0;
   }
 
-  function isAtLimit(): boolean {
-    return countEmotes() >= maxEmotes;
-  }
+  /** 当前是否已达表情上限。computed 以便模板里用 .value 访问。 */
+  const isAtLimit = computed(() => countEmotes() >= maxEmotes);
 
   /**
    * 在光标处插入一个表情 token。
