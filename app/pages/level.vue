@@ -292,16 +292,16 @@ useHead({ title: "绳网等级" });
               <h3 class="ik-lv__rule-heading">主动行为<span class="ik-lv__rule-cap">上限 50/天</span></h3>
               <div class="ik-lv__rule-items">
                 <div class="ik-lv__rule-item">
-                  <span>签到</span><span class="ik-lv__rule-val">+6 ~ +10</span>
+                  <span class="ik-lv__rule-name">签到<em class="ik-lv__rule-once">每日</em></span><span class="ik-lv__rule-val">+6 ~ +10</span>
                 </div>
                 <div class="ik-lv__rule-item">
-                  <span>发帖</span><span class="ik-lv__rule-val">+4</span>
+                  <span class="ik-lv__rule-name">发帖<em class="ik-lv__rule-once">每日首次</em></span><span class="ik-lv__rule-val">+4</span>
                 </div>
                 <div class="ik-lv__rule-item">
-                  <span>评论</span><span class="ik-lv__rule-val">+3</span>
+                  <span class="ik-lv__rule-name">评论<em class="ik-lv__rule-once">每日首次</em></span><span class="ik-lv__rule-val">+3</span>
                 </div>
                 <div class="ik-lv__rule-item">
-                  <span>点赞</span><span class="ik-lv__rule-val">+1</span>
+                  <span class="ik-lv__rule-name">点赞<em class="ik-lv__rule-once">每日首次</em></span><span class="ik-lv__rule-val">+1</span>
                 </div>
               </div>
             </div>
@@ -697,6 +697,23 @@ useHead({ title: "绳网等级" });
 
 .ik-lv__rule-item:last-child {
   border-bottom: none;
+}
+
+.ik-lv__rule-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ik-lv__rule-once {
+  font-size: 10px;
+  font-weight: 500;
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.3);
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .ik-lv__rule-val {
