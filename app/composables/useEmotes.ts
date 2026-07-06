@@ -1,8 +1,9 @@
 /**
  * useEmotes —— 表情清单（manifest）的拉取与缓存。
  *
- * 使用 TanStack Vue Query 在全局缓存 manifest，staleTime 设为 30 分钟——
- * 表情集合变化频率极低，无需频繁重拉。
+ * 使用 TanStack Vue Query 在全局缓存 manifest，staleTime 60s：
+ * 同一页面内反复渲染不重拉，但后台增删表情后能很快被前端感知
+ * （EmotePicker 每次打开时调 refreshIfStale 重拉过期清单）。
  *
  * 暴露：
  * - emotes: Ref<Emote[]>（扁平列表，按 group 分区由调用方处理）
@@ -29,7 +30,7 @@ interface ManifestResponse {
   emotes: Emote[];
 }
 
-const EMOTE_STALE_TIME = 30 * 60 * 1000; // 30 min
+const EMOTE_STALE_TIME = 60 * 1000; // 60s
 
 /** 全局 queryKey，确保所有调用方共享同一份缓存 */
 const EMOTE_MANIFEST_KEY = ["emotes", "manifest"] as const;
@@ -85,10 +86,16 @@ export function useEmotes() {
     return groups;
   });
 
+  /** 清单已过期时重拉一次（EmotePicker 打开时调用） */
+  function refreshIfStale() {
+    if (query.isStale.value) void query.refetch();
+  }
+
   return {
     emotes,
     emoteMap,
     groupedEmotes,
     loading: computed(() => query.isLoading.value),
+    refreshIfStale,
   };
 }

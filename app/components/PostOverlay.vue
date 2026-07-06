@@ -418,14 +418,14 @@ const sendComment = async () => {
     message.warning("有图片上传失败，请重试或移除后再发送");
     return;
   }
-  if (!newComment.value.trim()) return;
+  if (!newComment.value.trim() && !emoteInsert.hasEmotes.value) return;
 
   sendingComment.value = true;
   const isReply = !!replyTarget.value;
   try {
-    // serializeForSend 把显示串里的 `@<name>` 段还原成 `@[name](docId)` token；
-    // 没有任何 mention 时等价于原 newComment.value
-    const serialized = mention.serializeForSend().trim();
+    // serializeWith 把显示串里的 mention 段还原成 `@[name](docId)` token，
+    // 表情占位符还原成 `:ik-xxx:` token
+    const serialized = emoteInsert.serializeWith(mention.mentions.value).trim();
     const parentId = replyTarget.value?.id;
     const res = await api.addPostComment({
       postId: props.postId,
@@ -481,6 +481,7 @@ const sendComment = async () => {
     }
     newComment.value = "";
     mention.reset();
+    emoteInsert.reset();
     commentImages.clearUploads();
     commentInputFocused.value = false;
     replyTarget.value = null;
@@ -603,6 +604,7 @@ const cancelComment = () => {
   }
   newComment.value = "";
   mention.reset();
+  emoteInsert.reset();
   commentImages.clearUploads();
   commentInputFocused.value = false;
   replyTarget.value = null;
@@ -862,9 +864,18 @@ const attachMentionToTextarea = () => {
   teardownMentionListeners?.();
   commentTextareaRef.value = ta;
 
-  const onInput = () => mention.refresh();
-  const onKeyDownMention = (e: KeyboardEvent) => mention.onKeyDown(e);
-  const onSelect = (e: Event) => mention.refresh(e);
+  const onInput = () => {
+    mention.refresh();
+    emoteInsert.refresh();
+  };
+  const onKeyDownMention = (e: KeyboardEvent) => {
+    mention.onKeyDown(e);
+    emoteInsert.onKeyDown(e);
+  };
+  const onSelect = (e: Event) => {
+    mention.refresh(e);
+    emoteInsert.refresh();
+  };
 
   ta.addEventListener("input", onInput);
   ta.addEventListener("keydown", onKeyDownMention);
@@ -1235,12 +1246,13 @@ onBeforeUnmount(() => {
                             :target="commentTextareaRef"
                             :text="newComment"
                             :mentions="mention.mentions.value"
+                            :emotes="emoteInsert.emotes.value"
                           />
                           <div v-if="replyTarget && isCommentEditorActive" class="ik-engage-bar__reply-hint">
                             <span>回复 {{ replyTarget.authorName }}</span>
                             <button type="button" class="ik-engage-bar__reply-close" @click="replyTarget = null">✕</button>
                           </div>
-                          <div v-if="!isCommentEditorActive && !newComment.trim()" class="ik-engage-bar__placeholder">
+                          <div v-if="!isCommentEditorActive && !newComment.trim() && !emoteInsert.hasEmotes.value" class="ik-engage-bar__placeholder">
                             <img
                               :src="auth.user?.avatar || '/images/default-avatar.webp'"
                               alt=""
@@ -1368,7 +1380,7 @@ onBeforeUnmount(() => {
                             <button
                               type="button"
                               class="ik-engage-bar__submit"
-                              :disabled="sendingComment || commentImages.hasPendingUploads.value || commentImages.hasErroredUploads.value || !newComment.trim()"
+                              :disabled="sendingComment || commentImages.hasPendingUploads.value || commentImages.hasErroredUploads.value || (!newComment.trim() && !emoteInsert.hasEmotes.value)"
                               @click="sendComment"
                             >
                               {{ sendingComment ? "发送中" : "发送" }}

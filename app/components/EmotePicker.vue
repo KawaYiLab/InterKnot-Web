@@ -23,7 +23,7 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-const { groupedEmotes, loading, emotes } = useEmotes();
+const { groupedEmotes, loading, emotes, refreshIfStale } = useEmotes();
 
 const PICKER_W = 320;
 const PICKER_MAX_H = 280;
@@ -142,6 +142,8 @@ watch(
       return;
     }
     if (typeof window === "undefined") return;
+    // 每次打开时重拉过期清单，后台增删表情能尽快生效
+    refreshIfStale();
     await nextTick();
     const el = pickerRootRef.value;
     if (!el) return;
@@ -319,7 +321,7 @@ const GROUP_LABELS: Record<string, string> = {
 
 .ik-emote-picker__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
   gap: 2px;
 }
 
@@ -327,8 +329,8 @@ const GROUP_LABELS: Record<string, string> = {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   border: none;
   background: transparent;
@@ -347,8 +349,8 @@ const GROUP_LABELS: Record<string, string> = {
 }
 
 .ik-emote-picker__item img {
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
