@@ -6,9 +6,10 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
+import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
@@ -17,6 +18,7 @@ import IkZzzMarquee from "./IkZzzMarquee.vue";
 import CommentItem from "./CommentItem.vue";
 import MentionHighlightOverlay from "./MentionHighlightOverlay.vue";
 import MentionPicker from "./MentionPicker.vue";
+import EmotePicker from "./EmotePicker.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -82,6 +84,33 @@ const mention = useMentionInput({
   textareaRef: commentTextareaRef,
   search: api.searchAuthors,
 });
+
+const emoteInsert = useEmoteInsert({
+  text: newComment,
+  textareaRef: commentTextareaRef,
+});
+const emotePickerVisible = ref(false);
+const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);
+
+const toggleEmotePicker = (e: MouseEvent) => {
+  if (emotePickerVisible.value) {
+    emotePickerVisible.value = false;
+    return;
+  }
+  const target = e.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  emotePickerAnchor.value = { top: rect.top, left: rect.left, height: rect.height };
+  emotePickerVisible.value = true;
+};
+
+const onEmoteSelect = async (emote: { code: string }) => {
+  const ok = await emoteInsert.insertEmote(emote.code);
+  if (!ok) {
+    message.warning("表情数量已达上限");
+  }
+  emotePickerVisible.value = false;
+};
+
 const commentImages = useCommentImages();
 
 const scrollRef = ref<HTMLElement | null>(null);
@@ -1302,6 +1331,18 @@ onBeforeUnmount(() => {
                             >
                               <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                             </button>
+                            <!-- 表情按钮：点击弹出 EmotePicker 浮层 -->
+                            <button
+                              type="button"
+                              class="ik-engage-bar__tool"
+                              :class="{ 'ik-engage-bar__tool--active': emotePickerVisible }"
+                              aria-label="表情"
+                              :disabled="emoteInsert.isAtLimit.value"
+                              :title="emoteInsert.isAtLimit.value ? '表情数量已达上限' : '插入表情'"
+                              @click.stop="toggleEmotePicker"
+                            >
+                              <FaceSmileIcon class="ik-engage-icon" aria-hidden="true" />
+                            </button>
                             <button
                               type="button"
                               class="ik-engage-bar__tool"
@@ -1348,6 +1389,12 @@ onBeforeUnmount(() => {
         :anchor="mention.pickerAnchor.value"
         @select="mention.selectCandidate"
         @hover="(idx: number) => (mention.pickerActiveIndex.value = idx)"
+      />
+
+      <EmotePicker
+        :visible="emotePickerVisible"
+        :anchor="emotePickerAnchor"
+        @select="onEmoteSelect"
       />
 
       <Teleport to="body">

@@ -5,9 +5,10 @@ import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
+import { useEmoteInsert } from "~/composables/useEmoteInsert";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -61,6 +62,33 @@ const mention = useMentionInput({
   textareaRef: commentTextareaRef,
   search: api.searchAuthors,
 });
+
+const emoteInsert = useEmoteInsert({
+  text: newComment,
+  textareaRef: commentTextareaRef,
+});
+const emotePickerVisible = ref(false);
+const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);
+
+const toggleEmotePicker = (e: MouseEvent) => {
+  if (emotePickerVisible.value) {
+    emotePickerVisible.value = false;
+    return;
+  }
+  const target = e.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  emotePickerAnchor.value = { top: rect.top, left: rect.left, height: rect.height };
+  emotePickerVisible.value = true;
+};
+
+const onEmoteSelect = async (emote: { code: string }) => {
+  const ok = await emoteInsert.insertEmote(emote.code);
+  if (!ok) {
+    message.warning("表情数量已达上限");
+  }
+  emotePickerVisible.value = false;
+};
+
 const commentImages = useCommentImages();
 
 const postId = computed(() => String(route.params.id || ""));
@@ -973,6 +1001,18 @@ onBeforeUnmount(() => {
                       >
                         <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                       </button>
+                      <!-- 表情按钮：点击弹出 EmotePicker 浮层 -->
+                      <button
+                        type="button"
+                        class="ik-engage-bar__tool"
+                        :class="{ 'ik-engage-bar__tool--active': emotePickerVisible }"
+                        aria-label="表情"
+                        :disabled="emoteInsert.isAtLimit.value"
+                        :title="emoteInsert.isAtLimit.value ? '表情数量已达上限' : '插入表情'"
+                        @click.stop="toggleEmotePicker"
+                      >
+                        <FaceSmileIcon class="ik-engage-icon" aria-hidden="true" />
+                      </button>
                       <button
                         type="button"
                         class="ik-engage-bar__tool"
@@ -1021,6 +1061,13 @@ onBeforeUnmount(() => {
         />
       </Transition>
     </Teleport>
+
+    <!-- 表情面板：组件内部 Teleport 到 body -->
+    <EmotePicker
+      :visible="emotePickerVisible"
+      :anchor="emotePickerAnchor"
+      @select="onEmoteSelect"
+    />
 
     <!-- @ 提及候选下拉：组件内部 Teleport 到 body，避免父级 overflow 截断 -->
     <MentionPicker
