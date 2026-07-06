@@ -149,6 +149,3 @@ export function splitContent(content: string): UnifiedSegment[] {
 
   return segments;
 }
-
-// 保持与 mention.ts 的 ContentSegment 类型兼容（re-export）
-export type { ContentSegment } from "~/utils/mention";
