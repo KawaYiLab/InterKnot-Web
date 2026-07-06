@@ -7,6 +7,7 @@
  * - 按 group 分区展示表情网格
  * - mousedown + preventDefault 避免 textarea 失焦
  * - 最近使用（localStorage，最多 12 个）
+ * - 点击外部 / 按 ESC 自动关闭（emit close）
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useEmotes, type Emote } from "~/composables/useEmotes";
@@ -19,6 +20,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [emote: Emote];
+  close: [];
 }>();
 
 const { groupedEmotes, loading, emotes } = useEmotes();
@@ -105,11 +107,37 @@ const teardownObserver = () => {
   resizeObserver = null;
 };
 
+/**
+ * 点击外部关闭：mousedown 冒泡到 document 时检查 target 是否落在 picker 内部。
+ * 触发按钮在父组件用 @mousedown.stop 阻止冒泡，因此点击按钮不会触发此逻辑——
+ * 避免了「mousedown 关闭 → click 又重新打开」的竞态。
+ */
+const onDocMouseDown = (e: MouseEvent) => {
+  const el = pickerRootRef.value;
+  if (el && !el.contains(e.target as Node)) {
+    emit("close");
+  }
+};
+
+/** ESC 关闭：与 ConfirmDialog / ReportModal 的 keydown(Capture) 模式一致 */
+const onDocKeyDown = (e: KeyboardEvent) => {
+  if (e.key === "Escape") {
+    e.stopImmediatePropagation();
+    emit("close");
+  }
+};
+
+const teardownListeners = () => {
+  document.removeEventListener("mousedown", onDocMouseDown);
+  window.removeEventListener("keydown", onDocKeyDown, true);
+};
+
 watch(
   () => props.visible,
   async (vis) => {
     if (!vis) {
       teardownObserver();
+      teardownListeners();
       actualH.value = PICKER_MAX_H;
       return;
     }
@@ -126,11 +154,20 @@ watch(
       if (next > 0) actualH.value = next;
     });
     resizeObserver.observe(el);
+    // 延迟一帧注册 mousedown，避免打开 picker 的那一次点击余波触发 close
+    requestAnimationFrame(() => {
+      if (!props.visible) return;
+      document.addEventListener("mousedown", onDocMouseDown);
+      window.addEventListener("keydown", onDocKeyDown, true);
+    });
   },
   { immediate: true },
 );
 
-onBeforeUnmount(teardownObserver);
+onBeforeUnmount(() => {
+  teardownObserver();
+  teardownListeners();
+});
 
 const onItemMouseDown = (e: MouseEvent, emote: Emote) => {
   e.preventDefault();

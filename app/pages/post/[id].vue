@@ -1001,7 +1001,9 @@ onBeforeUnmount(() => {
                       >
                         <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                       </button>
-                      <!-- 表情按钮：点击弹出 EmotePicker 浮层 -->
+                      <!-- 表情按钮：点击弹出 EmotePicker 浮层。
+                           @mousedown.stop 阻止冒泡到 document，避免 EmotePicker
+                           的 click-outside 在点击按钮时误触发 close。 -->
                       <button
                         type="button"
                         class="ik-engage-bar__tool"
@@ -1010,6 +1012,7 @@ onBeforeUnmount(() => {
                         :disabled="emoteInsert.isAtLimit.value"
                         :title="emoteInsert.isAtLimit.value ? '表情数量已达上限' : '插入表情'"
                         @click.stop="toggleEmotePicker"
+                        @mousedown.stop
                       >
                         <FaceSmileIcon class="ik-engage-icon" aria-hidden="true" />
                       </button>
@@ -1067,6 +1070,7 @@ onBeforeUnmount(() => {
       :visible="emotePickerVisible"
       :anchor="emotePickerAnchor"
       @select="onEmoteSelect"
+      @close="emotePickerVisible = false"
     />
 
     <!-- @ 提及候选下拉：组件内部 Teleport 到 body，避免父级 overflow 截断 -->
