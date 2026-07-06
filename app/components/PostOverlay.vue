@@ -88,6 +88,13 @@ const mention = useMentionInput({
 const emoteInsert = useEmoteInsert({
   text: newComment,
   textareaRef: commentTextareaRef,
+  // 插入表情后同步平移 mention range，避免下标错位导致 mention 被丢弃
+  onInsert: (start, end, insertedLength) => {
+    const delta = insertedLength - (end - start);
+    mention.mentions.value = mention.mentions.value
+      .filter((m) => m.end <= start || m.start >= end)
+      .map((m) => (m.start >= end ? { ...m, start: m.start + delta, end: m.end + delta } : m));
+  },
 });
 const emotePickerVisible = ref(false);
 const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);

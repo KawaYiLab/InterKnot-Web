@@ -18,12 +18,18 @@ export interface UseEmoteInsertOptions {
   textareaRef: Ref<HTMLTextAreaElement | null>;
   /** 表情数量上限，默认 20（与后端一致） */
   maxEmotes?: number;
+  /**
+   * 插入完成后回调：(被替换选区起点, 被替换选区终点, 实际插入长度)。
+   * 供调用方同步其它基于下标的状态（如 useMentionInput 的 mention range）——
+   * 程序化改 text 不会触发 textarea 的 input 事件，range 不会自动重校。
+   */
+  onInsert?: (start: number, end: number, insertedLength: number) => void;
 }
 
 const DEFAULT_MAX_EMOTES = 20;
 
 export function useEmoteInsert(opts: UseEmoteInsertOptions) {
-  const { text, textareaRef, maxEmotes = DEFAULT_MAX_EMOTES } = opts;
+  const { text, textareaRef, maxEmotes = DEFAULT_MAX_EMOTES, onInsert } = opts;
 
   /**
    * 统计当前正文里已有多少个表情 token。
@@ -60,6 +66,8 @@ export function useEmoteInsert(opts: UseEmoteInsertOptions) {
 
     const newText = text.value.slice(0, start) + insertion + text.value.slice(end);
     text.value = newText;
+
+    onInsert?.(start, end, insertion.length);
 
     await nextTick();
     if (textareaRef.value) {

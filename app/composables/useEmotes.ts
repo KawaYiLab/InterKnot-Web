@@ -14,7 +14,7 @@
 
 import { computed, type Ref } from "vue";
 import { useQuery } from "@tanstack/vue-query";
-import { useNuxtApp } from "#app";
+import { useNuxtApp, useRuntimeConfig } from "#app";
 
 export interface Emote {
   code: string;
@@ -34,15 +34,26 @@ const EMOTE_STALE_TIME = 30 * 60 * 1000; // 30 min
 /** 全局 queryKey，确保所有调用方共享同一份缓存 */
 const EMOTE_MANIFEST_KEY = ["emotes", "manifest"] as const;
 
+/** 相对路径（本地 upload provider）补上 API 域名；绝对 URL（S3/CDN）原样返回 */
+function normalizeEmoteUrl(url: string, apiBaseUrl: string): string {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url) || url.startsWith("//")) return url;
+  if (url.startsWith("/")) return `${apiBaseUrl}${url}`;
+  return `${apiBaseUrl}/${url}`;
+}
+
 export function useEmotes() {
   const { $api } = useNuxtApp();
+  const config = useRuntimeConfig();
+  const apiBaseUrl = String(config.public.apiBaseUrl || "");
 
   const query = useQuery<Emote[]>({
     queryKey: EMOTE_MANIFEST_KEY as unknown as readonly unknown[],
     queryFn: async () => {
       const response = await $api("/api/emotes/manifest");
       const data = (response || {}) as ManifestResponse;
-      return Array.isArray(data.emotes) ? data.emotes : [];
+      const list = Array.isArray(data.emotes) ? data.emotes : [];
+      return list.map((e) => ({ ...e, url: normalizeEmoteUrl(e.url, apiBaseUrl) }));
     },
     staleTime: EMOTE_STALE_TIME,
     gcTime: 60 * 60 * 1000, // 1 hour gc
