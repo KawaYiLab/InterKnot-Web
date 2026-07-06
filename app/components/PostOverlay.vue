@@ -2553,6 +2553,11 @@ onBeforeUnmount(() => {
     background: #0a0a0a;
     border-top: 1px solid #202020;
   }
+
+  /* 小屏直接隐藏"说点什么..."文字，避免与评论数 badge 重叠 */
+  .ik-engage-bar__placeholder span {
+    display: none;
+  }
 }
 
 @media (max-width: 500px) {
