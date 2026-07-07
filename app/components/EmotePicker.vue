@@ -104,12 +104,12 @@ const tabs = computed<PickerTab[]>(() => {
   if (recentEmotes.value.length) {
     list.push({ key: "recent", iconChar: "\uD83D\uDD52", title: "最近使用", emotes: recentEmotes.value });
   }
+  list.push({ key: "emoji", iconChar: "\uD83D\uDE00", title: "emoji", isEmoji: true });
   for (const [group, groupList] of groupedEmotes.value) {
     const first = groupList[0];
     if (!first) continue;
     list.push({ key: `g:${group}`, iconUrl: first.url, title: group, emotes: groupList });
   }
-  list.push({ key: "emoji", iconChar: "\uD83D\uDE00", title: "emoji", isEmoji: true });
   return list;
 });
 
