@@ -6,9 +6,10 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
+import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
+import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
@@ -17,6 +18,7 @@ import IkZzzMarquee from "./IkZzzMarquee.vue";
 import CommentItem from "./CommentItem.vue";
 import MentionHighlightOverlay from "./MentionHighlightOverlay.vue";
 import MentionPicker from "./MentionPicker.vue";
+import EmotePicker from "./EmotePicker.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -82,6 +84,45 @@ const mention = useMentionInput({
   textareaRef: commentTextareaRef,
   search: api.searchAuthors,
 });
+
+const emoteInsert = useEmoteInsert({
+  text: newComment,
+  textareaRef: commentTextareaRef,
+  // 插入表情后同步平移 mention range，避免下标错位导致 mention 被丢弃
+  onInsert: (start, end, insertedLength) => {
+    const delta = insertedLength - (end - start);
+    mention.mentions.value = mention.mentions.value
+      .filter((m) => m.end <= start || m.start >= end)
+      .map((m) => (m.start >= end ? { ...m, start: m.start + delta, end: m.end + delta } : m));
+  },
+});
+const emotePickerVisible = ref(false);
+const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);
+
+const toggleEmotePicker = (e: MouseEvent) => {
+  if (emotePickerVisible.value) {
+    emotePickerVisible.value = false;
+    return;
+  }
+  const target = e.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  emotePickerAnchor.value = { top: rect.top, left: rect.left, height: rect.height };
+  emotePickerVisible.value = true;
+};
+
+const onEmoteSelect = async (emote: { code: string }) => {
+  const ok = await emoteInsert.insertEmote(emote.code);
+  if (!ok) {
+    message.warning("表情数量已达上限");
+  }
+  emotePickerVisible.value = false;
+};
+
+const onEmojiSelect = async (emoji: string) => {
+  await emoteInsert.insertText(emoji);
+  emotePickerVisible.value = false;
+};
+
 const commentImages = useCommentImages();
 
 const scrollRef = ref<HTMLElement | null>(null);
@@ -382,14 +423,14 @@ const sendComment = async () => {
     message.warning("有图片上传失败，请重试或移除后再发送");
     return;
   }
-  if (!newComment.value.trim()) return;
+  if (!newComment.value.trim() && !emoteInsert.hasEmotes.value) return;
 
   sendingComment.value = true;
   const isReply = !!replyTarget.value;
   try {
-    // serializeForSend 把显示串里的 `@<name>` 段还原成 `@[name](docId)` token；
-    // 没有任何 mention 时等价于原 newComment.value
-    const serialized = mention.serializeForSend().trim();
+    // serializeWith 把显示串里的 mention 段还原成 `@[name](docId)` token，
+    // 表情占位符还原成 `:ik-xxx:` token
+    const serialized = emoteInsert.serializeWith(mention.mentions.value).trim();
     const parentId = replyTarget.value?.id;
     const res = await api.addPostComment({
       postId: props.postId,
@@ -445,6 +486,7 @@ const sendComment = async () => {
     }
     newComment.value = "";
     mention.reset();
+    emoteInsert.reset();
     commentImages.clearUploads();
     commentInputFocused.value = false;
     replyTarget.value = null;
@@ -567,6 +609,7 @@ const cancelComment = () => {
   }
   newComment.value = "";
   mention.reset();
+  emoteInsert.reset();
   commentImages.clearUploads();
   commentInputFocused.value = false;
   replyTarget.value = null;
@@ -826,9 +869,18 @@ const attachMentionToTextarea = () => {
   teardownMentionListeners?.();
   commentTextareaRef.value = ta;
 
-  const onInput = () => mention.refresh();
-  const onKeyDownMention = (e: KeyboardEvent) => mention.onKeyDown(e);
-  const onSelect = (e: Event) => mention.refresh(e);
+  const onInput = () => {
+    mention.refresh();
+    emoteInsert.refresh();
+  };
+  const onKeyDownMention = (e: KeyboardEvent) => {
+    mention.onKeyDown(e);
+    emoteInsert.onKeyDown(e);
+  };
+  const onSelect = (e: Event) => {
+    mention.refresh(e);
+    emoteInsert.refresh();
+  };
 
   ta.addEventListener("input", onInput);
   ta.addEventListener("keydown", onKeyDownMention);
@@ -1199,12 +1251,13 @@ onBeforeUnmount(() => {
                             :target="commentTextareaRef"
                             :text="newComment"
                             :mentions="mention.mentions.value"
+                            :emotes="emoteInsert.emotes.value"
                           />
                           <div v-if="replyTarget && isCommentEditorActive" class="ik-engage-bar__reply-hint">
                             <span>回复 {{ replyTarget.authorName }}</span>
                             <button type="button" class="ik-engage-bar__reply-close" @click="replyTarget = null">✕</button>
                           </div>
-                          <div v-if="!isCommentEditorActive && !newComment.trim()" class="ik-engage-bar__placeholder">
+                          <div v-if="!isCommentEditorActive && !newComment.trim() && !emoteInsert.hasEmotes.value" class="ik-engage-bar__placeholder">
                             <img
                               :src="auth.user?.avatar || '/images/default-avatar.webp'"
                               alt=""
@@ -1302,6 +1355,21 @@ onBeforeUnmount(() => {
                             >
                               <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                             </button>
+                            <!-- 表情按钮：点击弹出 EmotePicker 浮层。
+                                 @mousedown.stop 阻止冒泡到 document，避免 EmotePicker
+                                 的 click-outside 在点击按钮时误触发 close。 -->
+                            <button
+                              type="button"
+                              class="ik-engage-bar__tool"
+                              :class="{ 'ik-engage-bar__tool--active': emotePickerVisible }"
+                              aria-label="表情"
+                              :disabled="emoteInsert.isAtLimit.value"
+                              :title="emoteInsert.isAtLimit.value ? '表情数量已达上限' : '插入表情'"
+                              @click.stop="toggleEmotePicker"
+                              @mousedown.stop
+                            >
+                              <FaceSmileIcon class="ik-engage-icon" aria-hidden="true" />
+                            </button>
                             <button
                               type="button"
                               class="ik-engage-bar__tool"
@@ -1317,7 +1385,7 @@ onBeforeUnmount(() => {
                             <button
                               type="button"
                               class="ik-engage-bar__submit"
-                              :disabled="sendingComment || commentImages.hasPendingUploads.value || commentImages.hasErroredUploads.value || !newComment.trim()"
+                              :disabled="sendingComment || commentImages.hasPendingUploads.value || commentImages.hasErroredUploads.value || (!newComment.trim() && !emoteInsert.hasEmotes.value)"
                               @click="sendComment"
                             >
                               {{ sendingComment ? "发送中" : "发送" }}
@@ -1348,6 +1416,14 @@ onBeforeUnmount(() => {
         :anchor="mention.pickerAnchor.value"
         @select="mention.selectCandidate"
         @hover="(idx: number) => (mention.pickerActiveIndex.value = idx)"
+      />
+
+      <EmotePicker
+        :visible="emotePickerVisible"
+        :anchor="emotePickerAnchor"
+        @select="onEmoteSelect"
+        @select-emoji="onEmojiSelect"
+        @close="emotePickerVisible = false"
       />
 
       <Teleport to="body">

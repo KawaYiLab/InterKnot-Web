@@ -19,6 +19,8 @@
  */
 import { onBeforeUnmount, onMounted, ref, watch, nextTick, computed } from "vue";
 import type { MentionRange } from "~/composables/useMentionInput";
+import type { EmoteRange } from "~/composables/useEmoteInsert";
+import { useEmotes } from "~/composables/useEmotes";
 
 const props = defineProps<{
   /** 目标 textarea 元素；为空时不渲染 */
@@ -27,7 +29,11 @@ const props = defineProps<{
   text: string;
   /** 当前已确认的 mention 真值表 */
   mentions: MentionRange[];
+  /** 当前已插入的表情占位区间（可选） */
+  emotes?: EmoteRange[];
 }>();
+
+const { emoteMap } = useEmotes();
 
 // 用 string-keyed Record 而非具名 interface：tabSize / wordWrap 等在 Vue 的 StyleValue
 // 类型里有时不识别，会让 :style 绑定的类型推断失败。
@@ -88,20 +94,25 @@ function syncScroll() {
  */
 const segments = computed(() => {
   const text = props.text || "";
-  const ranges = props.mentions || [];
+  const ranges: Array<{ start: number; end: number; type: "mention" | "emote"; code?: string }> = [
+    ...(props.mentions || []).map((m) => ({ start: m.start, end: m.end, type: "mention" as const })),
+    ...(props.emotes || []).map((r) => ({ start: r.start, end: r.end, type: "emote" as const, code: r.code })),
+  ];
   if (!ranges.length) return [{ type: "text" as const, value: text }];
-  const sorted = [...ranges].sort((a, b) => a.start - b.start);
-  const out: Array<{ type: "text" | "mention"; value: string }> = [];
+  const sorted = ranges.sort((a, b) => a.start - b.start);
+  const out: Array<{ type: "text" | "mention" | "emote"; value: string; code?: string }> = [];
   let cursor = 0;
   for (const m of sorted) {
     if (m.start < cursor) continue;
     if (m.start > cursor) out.push({ type: "text", value: text.slice(cursor, m.start) });
-    out.push({ type: "mention", value: text.slice(m.start, m.end) });
+    out.push({ type: m.type, value: text.slice(m.start, m.end), code: m.code });
     cursor = m.end;
   }
   if (cursor < text.length) out.push({ type: "text", value: text.slice(cursor) });
   return out;
 });
+
+const emoteUrl = (code?: string) => (code ? emoteMap.value.get(code)?.url : undefined);
 
 const teleportTarget = computed(() => props.target?.parentElement ?? null);
 
@@ -178,6 +189,15 @@ watch(
       >
         <template v-for="(seg, i) in segments" :key="i">
           <span v-if="seg.type === 'mention'" class="ik-mention-overlay__hit">{{ seg.value }}</span>
+          <!-- 表情占位区间：textarea 里是两个 EM SPACE（不可见），
+               这里在同一区间上绝对定位画出表情图片 -->
+          <span v-else-if="seg.type === 'emote'" class="ik-mention-overlay__emote">{{ seg.value }}<img
+            v-if="emoteUrl(seg.code)"
+            :src="emoteUrl(seg.code)"
+            alt=""
+            class="ik-mention-overlay__emote-img"
+            draggable="false"
+          /></span>
           <template v-else>{{ seg.value }}</template>
         </template>
       </div>
@@ -211,6 +231,23 @@ watch(
   width: 100%;
   /* white-space 等继承自父级 inline style；这里只控制 box */
   will-change: transform;
+}
+
+.ik-mention-overlay__emote {
+  position: relative;
+  display: inline;
+}
+
+.ik-mention-overlay__emote-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1.9em;
+  height: 1.9em;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .ik-mention-overlay__hit {
