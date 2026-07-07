@@ -11,6 +11,8 @@ import { DocumentTextIcon, ChevronLeftIcon, ArrowPathIcon } from "@heroicons/vue
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import { resolveErrorMessage } from "~/utils/api-error";
+import { stripMentionsToPlain } from "~/utils/mention";
+import { stripEmotesToPlain } from "~/utils/emote";
 
 const {
   visible,
@@ -471,7 +473,10 @@ const quoteLabel = (msg: DmMessage): string => {
 
 /** quote 卡右侧主标题：like-on-comment 引用评论原文，其余引用帖子标题 */
 const quoteTitle = (msg: DmMessage): string => {
-  if (isLikeOnComment(msg)) return msg.comment?.content ?? "";
+  // quote 卡是纯文本单行预览：mention/emote token 降级为可读文案
+  if (isLikeOnComment(msg)) {
+    return stripEmotesToPlain(stripMentionsToPlain(msg.comment?.content ?? ""));
+  }
   return msg.article?.title ?? "";
 };
 
