@@ -1286,7 +1286,7 @@ onBeforeUnmount(() => {
                             >
                               <HandThumbUpIconSolid v-if="post.liked" class="ik-engage-icon" aria-hidden="true" />
                               <HandThumbUpIcon v-else class="ik-engage-icon" aria-hidden="true" />
-                              <IkRollingDigit :value="postLikeCount" fallback="点赞" />
+                              <IkRollingDigit :value="postLikeCount" />
                             </button>
                             <button
                               type="button"
@@ -1297,7 +1297,7 @@ onBeforeUnmount(() => {
                               @click="giveDenny"
                             >
                               <img src="/images/materials/dennies_v2.webp" class="ik-engage-icon ik-engage-icon--denny" alt="投币" />
-                              <IkRollingDigit :value="post.dennyCount ?? 0" fallback="投币" />
+                              <IkRollingDigit :value="post.dennyCount ?? 0" />
                             </button>
                             <button
                               type="button"
@@ -1308,7 +1308,7 @@ onBeforeUnmount(() => {
                             >
                               <StarIconSolid v-if="post.favorited" class="ik-engage-icon" aria-hidden="true" />
                               <StarIcon v-else class="ik-engage-icon" aria-hidden="true" />
-                              <IkRollingDigit :value="post.favoritesCount ?? 0" fallback="收藏" />
+                              <IkRollingDigit :value="post.favoritesCount ?? 0" />
                             </button>
                             <z-dropdown
                               trigger="click"
