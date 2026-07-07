@@ -333,7 +333,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 }
 
 .ik-emote-picker__content {
-  max-height: 224px;
+  height: 224px;
   overflow-y: auto;
 }
 
@@ -353,7 +353,10 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 }
 
 .ik-emote-picker__hint {
-  padding: 24px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 224px;
   text-align: center;
   font-size: 13px;
   color: #888;
