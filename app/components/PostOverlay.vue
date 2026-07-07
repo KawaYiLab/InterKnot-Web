@@ -118,6 +118,11 @@ const onEmoteSelect = async (emote: { code: string }) => {
   emotePickerVisible.value = false;
 };
 
+const onEmojiSelect = async (emoji: string) => {
+  await emoteInsert.insertText(emoji);
+  emotePickerVisible.value = false;
+};
+
 const commentImages = useCommentImages();
 
 const scrollRef = ref<HTMLElement | null>(null);
@@ -1417,6 +1422,7 @@ onBeforeUnmount(() => {
         :visible="emotePickerVisible"
         :anchor="emotePickerAnchor"
         @select="onEmoteSelect"
+        @select-emoji="onEmojiSelect"
         @close="emotePickerVisible = false"
       />
 

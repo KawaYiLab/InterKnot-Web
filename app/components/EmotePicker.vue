@@ -4,7 +4,7 @@
  *
  * - Teleport 到 body，fixed 定位避免父级 overflow 截断
  * - 按锚点按钮位置自动翻转（下方空间不够就翻到上方）
- * - 按 group 分区展示表情网格
+ * - 底部横向分类 tab（B 站式）：最近 / 各后台分组（用首个表情作图标，不显示分类名）/ emoji
  * - mousedown + preventDefault 避免 textarea 失焦
  * - 最近使用（localStorage，最多 12 个）
  * - 点击外部 / 按 ESC 自动关闭（emit close）
@@ -20,8 +20,21 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [emote: Emote];
+  selectEmoji: [emoji: string];
   close: [];
 }>();
+
+/** 默认 emoji（纯 Unicode 字符，与表情包图片无关） */
+const EMOJI_LIST = [
+  "😀", "😁", "😂", "🤣", "😅", "😊", "😇", "🙂", "🙃", "😉",
+  "😍", "🥰", "😘", "😋", "😛", "😜", "🤪", "🤗", "🤔", "🤨",
+  "😐", "😶", "🙄", "😏", "😣", "😥", "😮", "😪", "😫", "😴",
+  "😌", "😒", "😔", "😕", "🙁", "😖", "😞", "😤", "😢", "😭",
+  "😨", "😩", "🤯", "😬", "😰", "😱", "🥵", "🥶", "😳", "🥴",
+  "😵", "🤠", "🥳", "😎", "🤓", "🧐", "😷", "🤒", "🤕", "🤢",
+  "👍", "👎", "👌", "✌️", "🤝", "👏", "🙏", "💪", "🤙", "👋",
+  "❤️", "💔", "✨", "🔥", "🎉", "🌟", "💤", "💦", "💀", "🌺",
+];
 
 const { groupedEmotes, loading, emotes, refreshIfStale } = useEmotes();
 
@@ -75,6 +88,42 @@ const recentEmotes = computed<Emote[]>(() => {
     .map((code) => map.get(code))
     .filter((e): e is Emote => !!e);
 });
+
+interface PickerTab {
+  key: string;
+  /** tab 图标：图片 url（分组首个表情）或 emoji 字符 */
+  iconUrl?: string;
+  iconChar?: string;
+  title: string;
+  emotes?: Emote[];
+  isEmoji?: boolean;
+}
+
+const tabs = computed<PickerTab[]>(() => {
+  const list: PickerTab[] = [];
+  if (recentEmotes.value.length) {
+    list.push({ key: "recent", iconChar: "\uD83D\uDD52", title: "最近使用", emotes: recentEmotes.value });
+  }
+  for (const [group, groupList] of groupedEmotes.value) {
+    const first = groupList[0];
+    if (!first) continue;
+    list.push({ key: `g:${group}`, iconUrl: first.url, title: group, emotes: groupList });
+  }
+  list.push({ key: "emoji", iconChar: "\uD83D\uDE00", title: "emoji", isEmoji: true });
+  return list;
+});
+
+const activeTabKey = ref<string>("");
+
+const activeTab = computed<PickerTab | null>(() => {
+  const found = tabs.value.find((t) => t.key === activeTabKey.value);
+  return found ?? tabs.value[0] ?? null;
+});
+
+const onTabMouseDown = (e: MouseEvent, tab: PickerTab) => {
+  e.preventDefault();
+  activeTabKey.value = tab.key;
+};
 
 const styleObj = computed(() => {
   if (!props.anchor) return { display: "none" } as Record<string, string>;
@@ -144,6 +193,8 @@ watch(
     if (typeof window === "undefined") return;
     // 每次打开时重拉过期清单，后台增删表情能尽快生效
     refreshIfStale();
+    // 每次打开回到第一个 tab
+    activeTabKey.value = tabs.value[0]?.key ?? "";
     await nextTick();
     const el = pickerRootRef.value;
     if (!el) return;
@@ -177,6 +228,11 @@ const onItemMouseDown = (e: MouseEvent, emote: Emote) => {
   emit("select", emote);
 };
 
+const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
+  e.preventDefault();
+  emit("selectEmoji", emoji);
+};
+
 </script>
 
 <template>
@@ -194,46 +250,25 @@ const onItemMouseDown = (e: MouseEvent, emote: Emote) => {
         <div v-if="loading && !emotes.length" class="ik-emote-picker__hint">
           加载中…
         </div>
-        <!-- empty -->
-        <div v-else-if="!emotes.length" class="ik-emote-picker__hint">
-          暂无表情
-        </div>
-        <!-- grid -->
+        <!-- 当前 tab 的表情/emoji 网格（无表情包时仍有 emoji tab 可用） -->
         <template v-else>
-          <!-- 最近使用 -->
-          <div v-if="recentEmotes.length" class="ik-emote-picker__section">
-            <div class="ik-emote-picker__section-label">最近</div>
-            <div class="ik-emote-picker__grid">
+          <div class="ik-emote-picker__content">
+            <!-- emoji tab -->
+            <div v-if="activeTab?.isEmoji" class="ik-emote-picker__grid ik-emote-picker__grid--emoji">
               <button
-                v-for="emote in recentEmotes"
-                :key="`recent-${emote.code}`"
+                v-for="emoji in EMOJI_LIST"
+                :key="emoji"
                 type="button"
-                class="ik-emote-picker__item"
-                :title="emote.name"
-                @mousedown="onItemMouseDown($event, emote)"
+                class="ik-emote-picker__item ik-emote-picker__item--emoji"
+                @mousedown="onEmojiMouseDown($event, emoji)"
               >
-                <img
-                  :src="emote.url"
-                  :alt="emote.name"
-                  loading="lazy"
-                  decoding="async"
-                  draggable="false"
-                />
+                {{ emoji }}
               </button>
             </div>
-          </div>
-          <!-- 按分组分区（分组名与顺序由后台维护） -->
-          <div
-            v-for="[group, list] in groupedEmotes"
-            :key="group"
-            class="ik-emote-picker__section"
-          >
-            <div class="ik-emote-picker__section-label">
-              {{ group }}
-            </div>
-            <div class="ik-emote-picker__grid">
+            <!-- 表情包 tab -->
+            <div v-else class="ik-emote-picker__grid">
               <button
-                v-for="emote in list"
+                v-for="emote in activeTab?.emotes ?? []"
                 :key="emote.code"
                 type="button"
                 class="ik-emote-picker__item"
@@ -249,6 +284,26 @@ const onItemMouseDown = (e: MouseEvent, emote: Emote) => {
                 />
               </button>
             </div>
+          </div>
+          <!-- 底部横向分类 tab（不显示分类名，图标 + title 提示） -->
+          <div class="ik-emote-picker__tabs">
+            <button
+              v-for="tab in tabs"
+              :key="tab.key"
+              type="button"
+              class="ik-emote-picker__tab"
+              :class="{ 'ik-emote-picker__tab--active': tab.key === activeTab?.key }"
+              :title="tab.title"
+              @mousedown="onTabMouseDown($event, tab)"
+            >
+              <img
+                v-if="tab.iconUrl"
+                :src="tab.iconUrl"
+                :alt="tab.title"
+                draggable="false"
+              />
+              <span v-else>{{ tab.iconChar }}</span>
+            </button>
           </div>
         </template>
       </div>
@@ -272,24 +327,27 @@ const onItemMouseDown = (e: MouseEvent, emote: Emote) => {
   background: #050505 url("/images/tab-bg-point.webp") repeat;
   border-radius: 10px;
   padding: 6px;
-  max-height: 274px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
-.ik-emote-picker__inner::-webkit-scrollbar {
+.ik-emote-picker__content {
+  max-height: 224px;
+  overflow-y: auto;
+}
+
+.ik-emote-picker__content::-webkit-scrollbar {
   width: 4px;
 }
-.ik-emote-picker__inner::-webkit-scrollbar-track {
+.ik-emote-picker__content::-webkit-scrollbar-track {
   background: transparent;
 }
-.ik-emote-picker__inner::-webkit-scrollbar-thumb {
+.ik-emote-picker__content::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.18);
   border-radius: 2px;
 }
-.ik-emote-picker__inner {
+.ik-emote-picker__content {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
@@ -301,18 +359,6 @@ const onItemMouseDown = (e: MouseEvent, emote: Emote) => {
   color: #888;
 }
 
-.ik-emote-picker__section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.ik-emote-picker__section-label {
-  font-size: 11px;
-  color: #777;
-  padding: 0 4px;
-  user-select: none;
-}
 
 .ik-emote-picker__grid {
   display: grid;
@@ -346,6 +392,64 @@ const onItemMouseDown = (e: MouseEvent, emote: Emote) => {
 .ik-emote-picker__item img {
   width: 40px;
   height: 40px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.ik-emote-picker__item--emoji {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.ik-emote-picker__tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.ik-emote-picker__tabs::-webkit-scrollbar {
+  height: 4px;
+}
+.ik-emote-picker__tabs::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+}
+
+.ik-emote-picker__tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 34px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  transition: background-color 120ms ease;
+}
+
+.ik-emote-picker__tab:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.ik-emote-picker__tab--active {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.ik-emote-picker__tab img {
+  width: 26px;
+  height: 26px;
   object-fit: contain;
   pointer-events: none;
   user-select: none;

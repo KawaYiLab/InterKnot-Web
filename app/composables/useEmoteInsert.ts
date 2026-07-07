@@ -179,6 +179,40 @@ export function useEmoteInsert(opts: UseEmoteInsertOptions) {
   }
 
   /**
+   * 在光标处插入一段普通文本（如 emoji 字符），平移其后的表情 range，
+   * 并通过 onInsert 让调用方同步 mention range。
+   */
+  async function insertText(insertion: string): Promise<void> {
+    if (!insertion) return;
+
+    const el = textareaRef.value;
+    const start = el?.selectionStart ?? text.value.length;
+    const end = el?.selectionEnd ?? start;
+
+    const newText = text.value.slice(0, start) + insertion + text.value.slice(end);
+    const delta = insertion.length - (end - start);
+
+    emotes.value = emotes.value
+      .filter((r) => r.end <= start || r.start >= end)
+      .map((r) =>
+        r.start >= end ? { ...r, start: r.start + delta, end: r.end + delta } : r,
+      );
+
+    text.value = newText;
+    lastText = newText;
+
+    onInsert?.(start, end, insertion.length);
+
+    await nextTick();
+    if (textareaRef.value) {
+      const newCaret = start + insertion.length;
+      textareaRef.value.selectionStart = newCaret;
+      textareaRef.value.selectionEnd = newCaret;
+      textareaRef.value.focus();
+    }
+  }
+
+  /**
    * 把显示串序列化为后端真值串：
    * mention range → `@[name](docId)`，emote range → `:ik-xxx:`。
    * 两类 range 均基于同一显示串下标且互不重叠，合并排序后一次遍历完成。
@@ -219,6 +253,7 @@ export function useEmoteInsert(opts: UseEmoteInsertOptions) {
   return {
     emotes,
     insertEmote,
+    insertText,
     refresh,
     onKeyDown,
     serializeWith,
