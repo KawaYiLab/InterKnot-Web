@@ -177,11 +177,6 @@ const onItemMouseDown = (e: MouseEvent, emote: Emote) => {
   emit("select", emote);
 };
 
-const GROUP_LABELS: Record<string, string> = {
-  general: "通用",
-  interknot: "绳网",
-  event: "活动",
-};
 </script>
 
 <template>
@@ -227,14 +222,14 @@ const GROUP_LABELS: Record<string, string> = {
               </button>
             </div>
           </div>
-          <!-- 按 group 分区 -->
+          <!-- 按分组分区（分组名与顺序由后台维护） -->
           <div
             v-for="[group, list] in groupedEmotes"
             :key="group"
             class="ik-emote-picker__section"
           >
             <div class="ik-emote-picker__section-label">
-              {{ GROUP_LABELS[group] || group }}
+              {{ group }}
             </div>
             <div class="ik-emote-picker__grid">
               <button

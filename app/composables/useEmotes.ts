@@ -6,7 +6,8 @@
  * （EmotePicker 每次打开时调 refreshIfStale 重拉过期清单）。
  *
  * 暴露：
- * - emotes: Ref<Emote[]>（扁平列表，按 group 分区由调用方处理）
+ * - emotes: Ref<Emote[]>（扁平列表）
+ * - groupedEmotes: 按后台分组（名称 + order）分区排序
  * - emoteMap: Ref<Map<string, Emote>>（code → Emote，供 EmoteImage 快速查找）
  * - loading: Ref<boolean>
  *
@@ -20,13 +21,25 @@ import { useNuxtApp, useRuntimeConfig } from "#app";
 export interface Emote {
   code: string;
   name: string;
+  /** 分组名称（后台维护，未分组时为「通用」） */
   group: string;
   url: string;
   width: number | null;
   height: number | null;
 }
 
+export interface EmoteGroup {
+  name: string;
+  order: number;
+}
+
 interface ManifestResponse {
+  groups?: EmoteGroup[];
+  emotes: Emote[];
+}
+
+interface ManifestData {
+  groups: EmoteGroup[];
   emotes: Emote[];
 }
 
@@ -48,20 +61,24 @@ export function useEmotes() {
   const config = useRuntimeConfig();
   const apiBaseUrl = String(config.public.apiBaseUrl || "");
 
-  const query = useQuery<Emote[]>({
+  const query = useQuery<ManifestData>({
     queryKey: EMOTE_MANIFEST_KEY as unknown as readonly unknown[],
     queryFn: async () => {
       // cache: "no-cache" 强制走条件请求，避免旧的浏览器 HTTP 缓存把清单钉住
       const response = await $api("/api/emotes/manifest", { cache: "no-cache" });
       const data = (response || {}) as ManifestResponse;
       const list = Array.isArray(data.emotes) ? data.emotes : [];
-      return list.map((e) => ({ ...e, url: normalizeEmoteUrl(e.url, apiBaseUrl) }));
+      return {
+        groups: Array.isArray(data.groups) ? data.groups : [],
+        emotes: list.map((e) => ({ ...e, url: normalizeEmoteUrl(e.url, apiBaseUrl) })),
+      };
     },
     staleTime: EMOTE_STALE_TIME,
     gcTime: 60 * 60 * 1000, // 1 hour gc
   });
 
-  const emotes: Ref<Emote[]> = computed(() => query.data.value ?? []);
+  const emotes: Ref<Emote[]> = computed(() => query.data.value?.emotes ?? []);
+  const emoteGroups: Ref<EmoteGroup[]> = computed(() => query.data.value?.groups ?? []);
 
   /** code → Emote 快速查找表 */
   const emoteMap: Ref<Map<string, Emote>> = computed(() => {
@@ -72,17 +89,24 @@ export function useEmotes() {
     return map;
   });
 
-  /** 按 group 分区返回，保持原始顺序 */
+  /** 按分组名分区，分组顺序跟随 manifest.groups（未知分组追加在后） */
   const groupedEmotes = computed(() => {
     const groups = new Map<string, Emote[]>();
+    for (const g of emoteGroups.value) {
+      groups.set(g.name, []);
+    }
     for (const e of emotes.value) {
-      const g = e.group || "general";
-      let arr = groups.get(g);
+      const name = e.group || "通用";
+      let arr = groups.get(name);
       if (!arr) {
         arr = [];
-        groups.set(g, arr);
+        groups.set(name, arr);
       }
       arr.push(e);
+    }
+    // 去掉没有任何表情的空分组
+    for (const [name, arr] of groups) {
+      if (arr.length === 0) groups.delete(name);
     }
     return groups;
   });
@@ -94,6 +118,7 @@ export function useEmotes() {
 
   return {
     emotes,
+    emoteGroups,
     emoteMap,
     groupedEmotes,
     loading: computed(() => query.isLoading.value),
