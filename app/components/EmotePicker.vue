@@ -4,7 +4,7 @@
  *
  * - Teleport 到 body，fixed 定位避免父级 overflow 截断
  * - 按锚点按钮位置自动翻转（下方空间不够就翻到上方）
- * - 底部横向分类 tab（B 站式）：最近 / 各后台分组（用首个表情作图标，不显示分类名）/ emoji
+ * - 底部横向分类 tab：最近 / 各后台分组（用分组自定义图标，未设置时降级用首个表情，不显示分类名）/ emoji
  * - mousedown + preventDefault 避免 textarea 失焦
  * - 最近使用（localStorage，最多 12 个）
  * - 点击外部 / 按 ESC 自动关闭（emit close）
@@ -36,7 +36,7 @@ const EMOJI_LIST = [
   "❤️", "💔", "✨", "🔥", "🎉", "🌟", "💤", "💦", "💀", "🌺",
 ];
 
-const { groupedEmotes, loading, emotes, refreshIfStale } = useEmotes();
+const { groupedEmotes, emoteGroups, loading, emotes, refreshIfStale } = useEmotes();
 
 const PICKER_W = 320;
 const PICKER_MAX_H = 280;
@@ -91,7 +91,7 @@ const recentEmotes = computed<Emote[]>(() => {
 
 interface PickerTab {
   key: string;
-  /** tab 图标：图片 url（分组首个表情）或 emoji 字符 */
+  /** tab 图标：图片 url（分组自定义图标或首个表情）或 emoji 字符 */
   iconUrl?: string;
   iconChar?: string;
   title: string;
@@ -100,6 +100,12 @@ interface PickerTab {
 }
 
 const tabs = computed<PickerTab[]>(() => {
+  // 分组名 → 自定义图标 URL 的查找表
+  const groupIconMap = new Map<string, string | null>();
+  for (const g of emoteGroups.value) {
+    groupIconMap.set(g.name, g.iconUrl);
+  }
+
   const list: PickerTab[] = [];
   if (recentEmotes.value.length) {
     list.push({ key: "recent", iconChar: "\uD83D\uDD52", title: "最近使用", emotes: recentEmotes.value });
@@ -108,7 +114,9 @@ const tabs = computed<PickerTab[]>(() => {
   for (const [group, groupList] of groupedEmotes.value) {
     const first = groupList[0];
     if (!first) continue;
-    list.push({ key: `g:${group}`, iconUrl: first.url, title: group, emotes: groupList });
+    // 优先使用分组自定义图标，未设置则降级用首个表情图片
+    const iconUrl = groupIconMap.get(group) || first.url;
+    list.push({ key: `g:${group}`, iconUrl, title: group, emotes: groupList });
   }
   return list;
 });

@@ -31,6 +31,8 @@ export interface Emote {
 export interface EmoteGroup {
   name: string;
   order: number;
+  /** 分组自定义图标 URL（后台维护），未设置时为 null，前端降级用首个表情 */
+  iconUrl: string | null;
 }
 
 interface ManifestResponse {
@@ -69,7 +71,10 @@ export function useEmotes() {
       const data = (response || {}) as ManifestResponse;
       const list = Array.isArray(data.emotes) ? data.emotes : [];
       return {
-        groups: Array.isArray(data.groups) ? data.groups : [],
+        groups: (Array.isArray(data.groups) ? data.groups : []).map((g) => ({
+          ...g,
+          iconUrl: g.iconUrl ? normalizeEmoteUrl(g.iconUrl, apiBaseUrl) : null,
+        })),
         emotes: list.map((e) => ({ ...e, url: normalizeEmoteUrl(e.url, apiBaseUrl) })),
       };
     },
