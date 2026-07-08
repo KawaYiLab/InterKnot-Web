@@ -14,13 +14,18 @@ const { isActive: showProgress, progress: progressValue, isClaimed, start: start
 
 // 敲敲未读：登录态由 knock-auth-bridge 插件在登录后自动启动 stream + refresh，
 // 所以此处只需要订阅 totalUnread 即可——未登录时一直为 0，不显示 badge。
-const { totalUnread: knockUnread } = useDmConversations();
+const { totalUnread: knockUnread, markAllAsRead } = useDmConversations();
 /** badge 文案：>99 显示 "99+"，否则原数字 */
 const knockUnreadLabel = computed(() => {
   const n = knockUnread.value;
   if (n <= 0) return "";
   return n > 99 ? "99+" : String(n);
 });
+
+/** QQ 风格红点拖拽脱离松手 → 全部已读清零 */
+const handleKnockClear = () => {
+  void markAllAsRead();
+};
 
 // Auto-hide header on mobile when scrolling down, reveal on scroll up.
 // Only the CSS targets the mobile breakpoint; the JS state is harmless on
@@ -627,11 +632,13 @@ watch(
           @click="handleTabChange('notification')"
         >
           <BellIcon class="ik-header__knock-icon" aria-hidden="true" />
-          <span
+          <KnockDragBadge
             v-if="knockUnreadLabel"
             class="ik-header__knock-badge"
+            :label="knockUnreadLabel"
             aria-hidden="true"
-          >{{ knockUnreadLabel }}</span>
+            @clear="handleKnockClear"
+          />
         </button>
 
         <div class="ik-header-tabs" role="tablist" aria-label="顶部导航">
@@ -669,11 +676,13 @@ watch(
             </svg>
             <span class="ik-header-tab__content">
               敲敲
-              <span
+              <KnockDragBadge
                 v-if="knockUnreadLabel"
                 class="ik-header-tab__badge"
+                :label="knockUnreadLabel"
                 aria-hidden="true"
-              >{{ knockUnreadLabel }}</span>
+                @clear="handleKnockClear"
+              />
             </span>
           </button>
 
@@ -1142,7 +1151,7 @@ watch(
   font-weight: 700;
   line-height: 1;
   box-shadow: 0 0 0 2px #000;
-  pointer-events: none;
+  pointer-events: auto;
   white-space: nowrap;
 }
 
@@ -1314,7 +1323,7 @@ watch(
   letter-spacing: 0;
   line-height: 1;
   box-shadow: 0 0 0 2px #000;
-  pointer-events: none;
+  pointer-events: auto;
   white-space: nowrap;
 }
 
