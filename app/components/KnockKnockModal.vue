@@ -52,6 +52,8 @@ const {
   ensureMessages,
   messageStateOf,
   markConversationAsRead,
+  markAllAsRead,
+  totalUnread,
   sendMessage,
   editMessage,
   withdrawMessage,
@@ -928,6 +930,17 @@ const handleClose = () => {
   close();
 };
 
+const markingAllRead = ref(false);
+const handleMarkAllRead = async () => {
+  if (markingAllRead.value) return;
+  markingAllRead.value = true;
+  try {
+    await markAllAsRead();
+  } finally {
+    markingAllRead.value = false;
+  }
+};
+
 const handleBackdropMouseDown = (e: MouseEvent) => {
   if (e.target === e.currentTarget) handleClose();
 };
@@ -1029,6 +1042,16 @@ const handleMobileBack = () => {
                   </span>
                   <span class="ik-knock__brand-text">knock knock</span>
                 </div>
+                <button
+                  v-if="totalUnread > 0"
+                  type="button"
+                  class="ik-knock__mark-all"
+                  :disabled="markingAllRead"
+                  aria-label="全部已读"
+                  @click="handleMarkAllRead"
+                >
+                  全部已读
+                </button>
                 <button
                   class="ik-dialog__close"
                   aria-label="关闭"
@@ -1576,6 +1599,35 @@ const handleMobileBack = () => {
   color: #fff;
   letter-spacing: -0.4px;
   line-height: 1;
+}
+
+.ik-knock__mark-all {
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-right: 12px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: opacity 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.ik-knock__mark-all:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ik-knock__mark-all:active {
+  transform: scale(0.96);
+}
+
+.ik-knock__mark-all:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .ik-dialog__close {

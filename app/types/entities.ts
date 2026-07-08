@@ -554,6 +554,7 @@ export type DmWsEventType =
   | "message.delta"
   | "message.deleted"
   | "conversation.read"
+  | "conversation.read.all"
   | "conversation.updated"
   | "conversation.member.removed"
   | "typing"
