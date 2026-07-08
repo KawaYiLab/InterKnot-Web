@@ -232,35 +232,34 @@ onBeforeUnmount(() => {
     class="knock-drag-badge"
     :class="{ 'is-hidden': hidden }"
     @pointerdown="onPointerDown"
-    >{{ label }}</span
+    >{{ label
+    }}<Teleport v-if="active" to="body">
+      <div class="knock-drag-layer" aria-hidden="true">
+        <svg
+          v-if="showTether"
+          class="knock-drag-svg"
+          :width="vw"
+          :height="vh"
+          :viewBox="`0 0 ${vw} ${vh}`"
+        >
+          <path :d="tetherPath" fill="#ff3838" />
+          <circle
+            v-if="originR > 0.5"
+            :cx="origin.x"
+            :cy="origin.y"
+            :r="originR"
+            fill="#ff3838"
+          />
+        </svg>
+        <span
+          class="knock-drag-bubble"
+          :class="{ 'is-burst': bursting }"
+          :style="bubbleStyle"
+          >{{ label }}</span
+        >
+      </div>
+    </Teleport></span
   >
-
-  <Teleport v-if="active" to="body">
-    <div class="knock-drag-layer" aria-hidden="true">
-      <svg
-        v-if="showTether"
-        class="knock-drag-svg"
-        :width="vw"
-        :height="vh"
-        :viewBox="`0 0 ${vw} ${vh}`"
-      >
-        <path :d="tetherPath" fill="#ff3838" />
-        <circle
-          v-if="originR > 0.5"
-          :cx="origin.x"
-          :cy="origin.y"
-          :r="originR"
-          fill="#ff3838"
-        />
-      </svg>
-      <span
-        class="knock-drag-bubble"
-        :class="{ 'is-burst': bursting }"
-        :style="bubbleStyle"
-        >{{ label }}</span
-      >
-    </div>
-  </Teleport>
 </template>
 
 <style scoped>
