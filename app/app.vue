@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import PostOverlay from "~/components/PostOverlay.vue";
-import { OVERLAY_KNOCK_KEY } from "~/utils/overlay-history";
+import { OVERLAY_KNOCK_KEY, overlayHistoryState } from "~/utils/overlay-history";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -14,7 +14,7 @@ if (import.meta.client) {
   const fallbackPath = url.searchParams.get("p");
   if (fallbackPath) {
     url.searchParams.delete("p");
-    window.history.replaceState({}, "", url.toString());
+    window.history.replaceState(overlayHistoryState({}), "", url.toString());
     router.replace(decodeURIComponent(fallbackPath)).catch(() => undefined);
   }
 

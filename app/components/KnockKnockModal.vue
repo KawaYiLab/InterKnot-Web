@@ -17,6 +17,7 @@ import { stripEmotesToPlain } from "~/utils/emote";
 const {
   visible,
   close,
+  clearHistoryPushed,
   consumePendingDmConversationId,
   consumePendingKnockTab,
   updateUrl,
@@ -500,14 +501,15 @@ const goPost = (msg: DmMessage) => {
 
 /**
  * 跳转个人主页。
+ * 敲敲用原生 pushState 占了一条 history，replace 掉 overlay 条目再导航，
+ * 避免 navigateTo push 与 overlay 栈错位导致进度条挂起或拼出错误地址。
  * navigateTo 触发路由变化 → app.vue 的 router.beforeEach 守卫自动
  * 调用 knockModal.teardown() 关闭弹窗，无需手动 close()。
- *
- * 接受 string | null，内部做空值守卫，调用方无需 ! 断言。
  */
 const goToProfile = (profileUrl: string | null) => {
   if (!profileUrl) return;
-  navigateTo(profileUrl);
+  clearHistoryPushed();
+  void navigateTo(profileUrl, { replace: true });
 };
 
 /** 列表预览文案：撤回 / 图片 / 系统 / 通知 / 正常 */

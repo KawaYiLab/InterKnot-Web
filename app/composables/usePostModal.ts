@@ -8,6 +8,7 @@
  * 敲敲弹窗使用 query（ik_knock），与本 composable 分离。
  */
 import type { Author } from "~/types/entities";
+import { overlayHistoryState } from "~/utils/overlay-history";
 
 // 模块级单例，确保所有 usePostModal() 实例共享同一份标记
 let _historyPushed = false;
@@ -50,7 +51,7 @@ export function usePostModal() {
     _savedTitle = document.title;
     acquire(SCROLL_LOCK_TOKEN);
     window.history.pushState(
-      { __postModal: true, postId: id },
+      overlayHistoryState({ __postModal: true, postId: id }),
       "",
       `/post/${id}`,
     );
