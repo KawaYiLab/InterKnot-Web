@@ -5,8 +5,8 @@ import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
-import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
+import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
+import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 
@@ -447,6 +447,54 @@ const likeArticle = async () => {
     message.success(result.liked ? "已点赞（￣︶￣）↗　" : "已取消点赞(；′⌒`)");
   } catch (err) {
     message.error(resolveErrorMessage(err, "点赞失败"));
+  }
+};
+
+const tripling = ref(false);
+const tripleCharge = ref({ progress: 0, active: false });
+const onTripleCharge = (payload: { progress: number; active: boolean }) => {
+  tripleCharge.value = payload;
+};
+
+const handleTriple = async () => {
+  if (!post.value) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (tripling.value) return;
+  tripling.value = true;
+
+  // 仅当确有可能投币时才乐观 -1，避免无谓的余额回弹
+  const willCoin =
+    !post.value.hasGivenDenny &&
+    !isOwner.value &&
+    !post.value.isAnonymous;
+  if (willCoin) window.dispatchEvent(new CustomEvent("ik:denny-decrement"));
+
+  try {
+    const result = await api.tripleAction(post.value.id);
+    post.value.liked = result.liked;
+    post.value.likesCount = result.likesCount;
+    post.value.favorited = result.favorited;
+    post.value.favoritesCount = result.favoritesCount;
+    post.value.dennyCount = result.dennyCount;
+    if (result.coinGiven) post.value.hasGivenDenny = true;
+
+    if (typeof result.newBalance === "number")
+      window.dispatchEvent(
+        new CustomEvent("ik:denny-updated", { detail: result.newBalance }),
+      );
+    else
+      // 未真正投币 → 回滚乐观 -1
+      window.dispatchEvent(new CustomEvent("ik:denny-updated"));
+
+    message.success("三连成功！(￣︶￣)↗");
+  } catch (err) {
+    window.dispatchEvent(new CustomEvent("ik:denny-updated"));
+    message.error(resolveErrorMessage(err, "三连失败"));
+  } finally {
+    tripling.value = false;
   }
 };
 
@@ -949,16 +997,16 @@ onBeforeUnmount(() => {
 
                   <div class="ik-engage-bar__interact-container">
                     <div class="ik-engage-bar__buttons">
-                      <button
-                        type="button"
-                        class="ik-engage-bar__action"
-                        :class="{ 'ik-engage-bar__action--active': post.liked }"
-                        @click="likeArticle"
-                      >
-                        <HandThumbUpIconSolid v-if="post.liked" class="ik-engage-icon" aria-hidden="true" />
-                        <HandThumbUpIcon v-else class="ik-engage-icon" aria-hidden="true" />
-                        <IkRollingDigit :value="postLikeCount" fallback="点赞" />
-                      </button>
+                      <TripleActionButton
+                        :liked="post.liked"
+                        :likes-count="postLikeCount"
+                        :can-triple="auth.isLogin && !isOwner"
+                        :busy="tripling"
+                        fallback="点赞"
+                        @like="likeArticle"
+                        @triple="handleTriple"
+                        @charge="onTripleCharge"
+                      />
                       <button
                         type="button"
                         class="ik-engage-bar__action"
@@ -967,7 +1015,10 @@ onBeforeUnmount(() => {
                         :title="isOwner ? '不能给自己的帖子投币' : post.isAnonymous ? '匿名帖子无法投币' : '给作者投喂丁尼'"
                         @click="giveDenny"
                       >
-                        <img src="/images/materials/dennies_v2.webp" class="ik-engage-icon ik-engage-icon--denny" alt="投币" />
+                        <span class="ik-triple__icon-shell">
+                          <img src="/images/materials/dennies_v2.webp" class="ik-engage-icon ik-engage-icon--denny" alt="投币" />
+                          <TripleChargeRing :progress="tripleCharge.progress" :show="tripleCharge.active" />
+                        </span>
                         <IkRollingDigit :value="post.dennyCount ?? 0" fallback="投币" />
                       </button>
                       <button
@@ -977,8 +1028,11 @@ onBeforeUnmount(() => {
                         :disabled="favoriting"
                         @click="favoriteArticle"
                       >
-                        <StarIconSolid v-if="post.favorited" class="ik-engage-icon" aria-hidden="true" />
-                        <StarIcon v-else class="ik-engage-icon" aria-hidden="true" />
+                        <span class="ik-triple__icon-shell">
+                          <StarIconSolid v-if="post.favorited" class="ik-engage-icon" aria-hidden="true" />
+                          <StarIcon v-else class="ik-engage-icon" aria-hidden="true" />
+                          <TripleChargeRing :progress="tripleCharge.progress" :show="tripleCharge.active" />
+                        </span>
                         <IkRollingDigit :value="post.favoritesCount ?? 0" fallback="收藏" />
                       </button>
                       <z-dropdown
@@ -1812,6 +1866,16 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.ik-triple__icon-shell {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
 }
 
 .ik-engage-icon {
