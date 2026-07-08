@@ -11,7 +11,7 @@
  * open() 支持选参 { dmConversationId? }：当传入时弹窗会自动定位到该
  * DM 私聊会话（用于 UserHoverCard 的「私信」按钮跳转场景）。
  */
-import { knockHistoryUrl } from "~/utils/overlay-history";
+import { knockHistoryUrl, overlayHistoryState } from "~/utils/overlay-history";
 const knockKnockVisible = ref(false);
 /** 弹窗一开就要定位到的目标 DM 会话；contacts tab 监听这个值后清空 */
 const pendingDmConversationId = ref<string | null>(null);
@@ -47,7 +47,7 @@ export function useKnockKnockModal() {
     _savedTitle = document.title;
     acquire(SCROLL_LOCK_TOKEN);
     window.history.pushState(
-      { __knockKnockModal: true },
+      overlayHistoryState({ __knockKnockModal: true }),
       "",
       knockHistoryUrl("contacts"),
     );
@@ -59,8 +59,9 @@ export function useKnockKnockModal() {
    */
   const close = () => {
     if (!knockKnockVisible.value) return;
+    const shouldBack = _historyPushed;
     teardown();
-    if (_historyPushed) {
+    if (shouldBack) {
       _historyPushed = false;
       window.history.back();
     }
@@ -98,7 +99,7 @@ export function useKnockKnockModal() {
   function updateUrl(tab: string, conversationId?: string | null) {
     if (!import.meta.client || !knockKnockVisible.value) return;
     window.history.replaceState(
-      { __knockKnockModal: true },
+      overlayHistoryState({ __knockKnockModal: true }),
       "",
       knockHistoryUrl(tab, conversationId),
     );
@@ -117,6 +118,11 @@ export function useKnockKnockModal() {
     return next;
   };
 
+  /** 路由跳转离开敲敲时调用，避免 close() 误触发 history.back() */
+  function clearHistoryPushed() {
+    _historyPushed = false;
+  }
+
   return {
     visible: knockKnockVisible,
     pendingDmConversationId,
@@ -130,5 +136,6 @@ export function useKnockKnockModal() {
     updateUrl,
     consumePendingDmConversationId,
     consumePendingKnockTab,
+    clearHistoryPushed,
   };
 }

@@ -18,6 +18,22 @@ export function serializeHistoryUrl(url: URL): string {
   return url.pathname + url.search + url.hash;
 }
 
+/**
+ * 原生 pushState / replaceState 时合并 overlay 标记，保留 Vue Router 的 history.state。
+ *
+ * 若整对象覆盖 router 状态（back / current / position 等），后续 router.push
+ * 会读到 current === undefined，拼出错误地址（如 https://interk.netundefined/）。
+ */
+export function overlayHistoryState(
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  const prev = window.history.state;
+  if (!prev || typeof prev !== "object") {
+    return { ...extra };
+  }
+  return { ...prev, ...extra };
+}
+
 /** 敲敲弹窗：在当前 URL 上写入 ik_knock* 参数 */
 export function knockHistoryUrl(
   tab: string,
