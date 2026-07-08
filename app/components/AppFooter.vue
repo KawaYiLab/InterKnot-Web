@@ -52,6 +52,15 @@
                 提瓦特服务器
               </a>
             </li>
+            <li>
+              <a
+                href="https://zlb.ink/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                壁吧专楼吧
+              </a>
+            </li>
           </ul>
         </div>
       </div>
