@@ -25,7 +25,7 @@ const emit = defineEmits<{
 /** 开始判定为拖拽的位移阈值（px） */
 const SLOP = 6;
 /** 拖尾断裂距离（px）：超过即视为「已脱离」，松手将清除 */
-const BREAK = 82;
+const BREAK = 56;
 /** 吸附弹回动画时长（ms） */
 const SPRING_MS = 380;
 /** 炸裂动画时长（ms），需与 CSS keyframes 对齐 */
@@ -36,6 +36,7 @@ const prefersReducedMotion =
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 const anchorEl = ref<HTMLElement | null>(null);
+const bubbleEl = ref<HTMLElement | null>(null);
 
 const active = ref(false); // 拖拽层是否挂载
 const dragging = ref(false); // 已越过 SLOP，进入拖拽
@@ -49,10 +50,18 @@ const vw = ref(0);
 const vh = ref(0);
 const bubbleR = ref(9);
 
+/** burst 期间的文案快照：防止动画播放中 WS 推送新消息导致数字跳变 */
+const burstSnapshot = ref("");
+/** 实际渲染文案：burst 时冻结，其余时刻跟随 props.label */
+const displayLabel = computed(() =>
+  bursting.value ? burstSnapshot.value : props.label,
+);
+
 let pointerId: number | null = null;
 let startX = 0;
 let startY = 0;
 let springRAF: number | null = null;
+let burstTimer: ReturnType<typeof setTimeout> | null = null;
 
 const distance = computed(() =>
   Math.hypot(pos.x - origin.x, pos.y - origin.y),
@@ -151,21 +160,26 @@ function onPointerUp(e: PointerEvent) {
     return;
   }
   dragging.value = false;
-  // 拖拽结束：抑制紧随其后的 click，避免误触打开敲敲
-  suppressNextClick();
+  // 拖拽结束：抑制紧随其后的 click，避免误触打开敲敲。
+  // 时长按动画路径分别覆盖：burst（炸裂）需覆盖 BURST_MS，springBack（吸附）需覆盖 SPRING_MS，
+  // 否则动画收尾的窗口期内点击会穿透打开敲敲弹窗，与红点消失视觉冲突。
+  suppressNextClick(broken.value ? BURST_MS + 60 : SPRING_MS + 30);
 
   if (broken.value) burst();
   else springBack();
 }
 
-function suppressNextClick() {
+function suppressNextClick(duration: number) {
   const handler = (ev: MouseEvent) => {
     ev.stopPropagation();
     ev.preventDefault();
     window.removeEventListener("click", handler, true);
   };
   window.addEventListener("click", handler, true);
-  window.setTimeout(() => window.removeEventListener("click", handler, true), 400);
+  window.setTimeout(
+    () => window.removeEventListener("click", handler, true),
+    duration,
+  );
 }
 
 function springBack() {
@@ -203,11 +217,44 @@ function burst() {
     reset();
     return;
   }
+  // 冻结文案：炸裂期间 WS 推送新消息不应让气泡数字跳变
+  burstSnapshot.value = props.label;
   bursting.value = true;
-  window.setTimeout(() => {
+
+  // 动画真正结束才清零数据：用 animationend 驱动而非 setTimeout 估算，
+  // 消除「setTimeout 先于 CSS animation 结束 → 组件被父级 v-if 卸载 →
+  // 动画被腰斩、红点瞬间消失」的时序漂移。
+  // finished 标志防止兜底定时器与 animationend 竞态下重复 emit("clear")。
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    if (burstTimer !== null) {
+      clearTimeout(burstTimer);
+      burstTimer = null;
+    }
+    // 先 emit clear：父级 markAllAsRead 同步清零 totalUnread → label 变空 →
+    // 组件将在下一 tick 卸载。此时动画已播完，卸载不会切断视觉。
     emit("clear");
-    reset();
-  }, BURST_MS);
+    // 兜底：若父级未因 clear 卸载本组件（label 仍有效，例如 totalUnread
+    // 已被多端同步清零导致 markAllAsRead 早退），恢复原位红点显示。
+    // 不立即 reset 是为了让 bursting 保持 true，bubble 维持 forwards 终态
+    // （opacity:0），避免在卸载/恢复之间出现原位红点闪现。
+    nextTick(() => {
+      if (props.label && bursting.value) reset();
+    });
+  };
+
+  const el = bubbleEl.value;
+  if (el) {
+    const onEnd = () => {
+      el.removeEventListener("animationend", onEnd);
+      finish();
+    };
+    el.addEventListener("animationend", onEnd);
+  }
+  // 兜底：animationend 异常未触发时（如动画被取消）强制收尾，+120ms 容差
+  burstTimer = setTimeout(finish, BURST_MS + 120);
 }
 
 function reset() {
@@ -223,6 +270,10 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointerup", onPointerUp);
   window.removeEventListener("pointercancel", onPointerUp);
   if (springRAF !== null) cancelAnimationFrame(springRAF);
+  if (burstTimer !== null) {
+    clearTimeout(burstTimer);
+    burstTimer = null;
+  }
 });
 </script>
 
@@ -232,7 +283,7 @@ onBeforeUnmount(() => {
     class="knock-drag-badge"
     :class="{ 'is-hidden': hidden }"
     @pointerdown="onPointerDown"
-    >{{ label
+    >{{ displayLabel
     }}<Teleport v-if="active" to="body">
       <div class="knock-drag-layer" aria-hidden="true">
         <svg
@@ -252,10 +303,11 @@ onBeforeUnmount(() => {
           />
         </svg>
         <span
+          ref="bubbleEl"
           class="knock-drag-bubble"
           :class="{ 'is-burst': bursting }"
           :style="bubbleStyle"
-          >{{ label }}</span
+          >{{ displayLabel }}</span
         >
       </div>
     </Teleport></span
