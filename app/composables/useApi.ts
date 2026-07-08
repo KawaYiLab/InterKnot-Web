@@ -1678,6 +1678,39 @@ export function useApi() {
     };
   };
 
+  /**
+   * 一键三连：点赞 + 收藏（幂等） + 投币（软失败）
+   * 后端原子接口，一次返回三态；投币失败不影响点赞+收藏。
+   */
+  const tripleAction = async (
+    articleId: string,
+  ): Promise<{
+    liked: boolean;
+    likesCount: number;
+    favorited: boolean;
+    favoritesCount: number;
+    coinGiven: boolean;
+    coinReason: string;
+    dennyCount: number;
+    newBalance: number | null;
+  }> => {
+    const response = await $api("/api/articles/triple", {
+      method: "POST",
+      body: { articleId },
+    });
+    const d = response as Record<string, unknown>;
+    return {
+      liked: d.liked === true,
+      likesCount: Number(d.likesCount || 0),
+      favorited: d.favorited === true,
+      favoritesCount: Number(d.favoritesCount || 0),
+      coinGiven: d.coinGiven === true,
+      coinReason: String(d.coinReason || "FAILED"),
+      dennyCount: Number(d.dennyCount || 0),
+      newBalance: typeof d.newBalance === "number" ? d.newBalance : null,
+    };
+  };
+
   // ── 签到系统 ──────────────────────────────────────────
 
   /**
@@ -1815,6 +1848,7 @@ export function useApi() {
     // 丁尼系统
     getMyDenny,
     giveDennyToArticle,
+    tripleAction,
     // 签到系统
     getCheckInStatus,
     checkIn,
