@@ -113,6 +113,8 @@ interface UseDmConversations {
   isStreamingMessage: (documentId: string) => boolean;
 
   markConversationAsRead: (id: string, opts?: { force?: boolean }) => Promise<void>;
+  /** 一键已读：清零所有会话（真实 DM + 通知聚合的 pseudo 会话）的未读 */
+  markAllAsRead: () => Promise<void>;
   /** 设置 muted/pinned；title 仅群聊可用 */
   updateConversation: (
     id: string,
@@ -564,6 +566,23 @@ export function useDmConversations(): UseDmConversations {
     }
   }
 
+  /**
+   * 一键已读：把列表里所有会话（真实 DM + 通知聚合 pseudo）的 unreadCount 清零。
+   * 乐观本地清零 → 调 /api/dm/read-all；失败静默 refresh 自我修复。
+   */
+  async function markAllAsRead(): Promise<void> {
+    if (totalUnread.value === 0) return;
+    conversations.value = conversations.value.map((c) =>
+      c.unreadCount ? { ...c, unreadCount: 0 } : c,
+    );
+    try {
+      await $api("/api/dm/read-all", { method: "POST" });
+    } catch {
+      // 静默失败：拉一次权威列表自我修复
+      void refresh({ silent: true });
+    }
+  }
+
   async function updateConversation(
     id: string,
     patch: { muted?: boolean; pinned?: boolean; title?: string },
@@ -797,6 +816,13 @@ export function useDmConversations(): UseDmConversations {
     });
   };
 
+  const onConversationReadAll = () => {
+    // 服务端一键已读的多端同步：本地所有会话未读清零。
+    conversations.value = conversations.value.map((c) =>
+      c.unreadCount ? { ...c, unreadCount: 0 } : c,
+    );
+  };
+
   const onConversationUpdated = (event: DmWsEvent<ConversationUpdatedData>) => {
     const cid = event.conversationId;
     const data = event.data;
@@ -857,6 +883,7 @@ export function useDmConversations(): UseDmConversations {
     unsubscribeAll.push(stream.on<{ content: string }>("message.delta", onMessageDelta));
     unsubscribeAll.push(stream.on<MessageDeletedData>("message.deleted", onMessageDeleted));
     unsubscribeAll.push(stream.on<ConversationReadData>("conversation.read", onConversationRead));
+    unsubscribeAll.push(stream.on("conversation.read.all", onConversationReadAll));
     unsubscribeAll.push(stream.on<ConversationUpdatedData>("conversation.updated", onConversationUpdated));
     unsubscribeAll.push(stream.on<ConversationMemberRemovedData>("conversation.member.removed", onConversationMemberRemoved));
     unsubscribeAll.push(stream.on<TypingData>("typing", onTyping));
@@ -924,6 +951,7 @@ export function useDmConversations(): UseDmConversations {
     editMessage,
     withdrawMessage,
     markConversationAsRead,
+    markAllAsRead,
     updateConversation,
     leaveConversation,
     resetContext,
