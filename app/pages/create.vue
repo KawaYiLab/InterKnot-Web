@@ -24,6 +24,7 @@ import {
   InboxIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
+import { toThumbUrl } from "~/utils/image";
 
 const MAX_COVER_IMAGES = 9;
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
@@ -162,14 +163,6 @@ function syncSnapshot() {
 function isAllowedImage(filename: string): boolean {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
   return ALLOWED_EXTENSIONS.has(ext);
-}
-
-// 封面缩略图 URL：本地 blob/data 预览不动，远程 URL 拼接七牛云的 -small.webp。
-// 避免在草稿网格里加载原图（30MB+ 大图会浪费带宽和解码时间）。
-function toCoverThumbUrl(url: string): string {
-  if (!url) return url;
-  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
-  return `${url}-small.webp`;
 }
 
 /* ── Auto-save ────────────────────────────────────── */
@@ -982,7 +975,7 @@ if (import.meta.client) {
                 @click="openCoverPreview(idx)"
               >
                 <img
-                  :src="toCoverThumbUrl(task.previewUrl)"
+                  :src="toThumbUrl(task.previewUrl)"
                   :alt="task.filename"
                   class="ik-cover-thumb__img"
                   decoding="async"
@@ -1098,7 +1091,7 @@ if (import.meta.client) {
           @click="task.status === 'done' && openCoverPreview(idx)"
         >
           <img
-            :src="toCoverThumbUrl(task.previewUrl)"
+            :src="toThumbUrl(task.previewUrl)"
             :alt="task.filename"
             class="ik-mobile-cover-tile__img"
             decoding="async"

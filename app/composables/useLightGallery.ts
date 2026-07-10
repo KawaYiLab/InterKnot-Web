@@ -1,4 +1,5 @@
 import type { LightGallery } from "lightgallery/lightgallery";
+import { toThumbUrl } from "~/utils/image";
 
 let cssLoaded: Promise<void[]> | null = null;
 
@@ -116,7 +117,7 @@ export function useLightGallery() {
       dynamic: true,
       dynamicEl: images.map((img) => ({
         src: img.src,
-        thumb: img.thumb || `${img.src}-small.webp`,
+        thumb: img.thumb || toThumbUrl(img.src),
       })),
       plugins: [lgZoom, lgThumbnail, lgFullscreen, lgRotate, lgAutoplay],
 
