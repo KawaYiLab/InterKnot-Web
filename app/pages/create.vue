@@ -25,10 +25,9 @@ import {
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
+import { isAllowedImage, MAX_IMAGE_SIZE } from "~/utils/upload";
 
 const MAX_COVER_IMAGES = 9;
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp"]);
 const AUTO_SAVE_DELAY = 800;
 
 const api = useApi();
@@ -160,10 +159,7 @@ function syncSnapshot() {
   hasUnsavedChanges.value = false;
 }
 
-function isAllowedImage(filename: string): boolean {
-  const ext = filename.split(".").pop()?.toLowerCase() || "";
-  return ALLOWED_EXTENSIONS.has(ext);
-}
+
 
 /* ── Auto-save ────────────────────────────────────── */
 const performSaveDraft = async (force = false) => {
@@ -322,10 +318,10 @@ function handleFileSelect(files: FileList | File[]) {
 
   const valid = fileArray.filter((f) => {
     if (!isAllowedImage(f.name)) {
-      message.error("仅支持 JPG、PNG、GIF、WEBP 格式");
+      message.error("仅支持 JPG、PNG、GIF、WEBP、AVIF 格式");
       return false;
     }
-    if (f.size > MAX_IMAGE_BYTES) {
+    if (f.size > MAX_IMAGE_SIZE) {
       message.error(`图片 ${f.name} 超过 10MB`);
       return false;
     }
@@ -1067,7 +1063,7 @@ if (import.meta.client) {
       <!-- Hidden file input for "封面" setting row -->
       <input
         type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp"
+        accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
         multiple
         hidden
         @change="onCoverFileInput"

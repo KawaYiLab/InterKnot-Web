@@ -1,5 +1,6 @@
 import DOMPurify from "isomorphic-dompurify";
 import MarkdownIt from "markdown-it";
+import { toCanonicalUrl } from "~/utils/image";
 
 // 帖子正文的安全渲染。
 // - bodyText 路径：用户敲的 markdown 会被解析渲染（CommonMark + 自动链接化 + 单换行=<br>）；
@@ -66,6 +67,8 @@ const SANITIZE_CONFIG = {
     "colspan", "rowspan",
     "open", // <details open>
     "style", // 内联样式：危险值由下面的 uponSanitizeAttribute 钩子兜底过滤。
+    "loading",
+    "decoding",
   ],
 };
 
@@ -85,13 +88,20 @@ DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
 
 // 给所有 target=_blank 的链接强制补 rel="noopener nofollow noreferrer"，防止反向 tabnabbing。
 // markdown 语法的链接已经在上面的 link_open 钩子里加过；这里覆盖用户写的裸 <a> 标签。
+// 同时把正文里的 <img> 地址迁移到新图床，并默认开启懒加载/异步解码。
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
-  if (
-    node.nodeType === 1 /* Element */ &&
-    (node as Element).tagName === "A" &&
-    (node as Element).getAttribute("target") === "_blank"
-  ) {
-    (node as Element).setAttribute("rel", "noopener nofollow noreferrer");
+  if (node.nodeType !== 1 /* Element */) return;
+  const el = node as Element;
+  if (el.tagName === "A" && el.getAttribute("target") === "_blank") {
+    el.setAttribute("rel", "noopener nofollow noreferrer");
+  }
+  if (el.tagName === "IMG") {
+    const src = el.getAttribute("src");
+    if (src) {
+      el.setAttribute("src", toCanonicalUrl(src));
+    }
+    el.setAttribute("loading", "lazy");
+    el.setAttribute("decoding", "async");
   }
 });
 

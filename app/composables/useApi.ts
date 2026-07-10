@@ -29,6 +29,7 @@ import {
   parseStart,
 } from "~/utils/pagination";
 import type { MentionCandidate } from "~/composables/useMentionInput";
+import { toMediaUrl } from "~/utils/image";
 
 // ── 集中定义 queryKey，便于写接口精准 invalidate ─────────────
 const qk = {
@@ -157,18 +158,23 @@ interface MediaMeta {
   height?: number;
 }
 
-function normalizeMediaUrl(input: unknown, apiBaseUrl: string): string {
+function normalizeMediaUrl(input: unknown, _apiBaseUrl: string): string {
   if (typeof input !== "string" || !input.trim()) {
     return "";
   }
   const url = input.trim();
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url;
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("blob:") ||
+    url.startsWith("data:")
+  ) {
+    return toMediaUrl(url);
   }
   if (url.startsWith("/")) {
-    return `${apiBaseUrl}${url}`;
+    return `https://im.tiwat.cn${url}`;
   }
-  return `${apiBaseUrl}/${url}`;
+  return `https://im.tiwat.cn/${url}`;
 }
 
 function parsePositiveNumber(input: unknown): number | undefined {
@@ -313,7 +319,7 @@ function toAuthor(raw: unknown, apiBaseUrl: string): Author {
   const data = (raw || {}) as Record<string, unknown>;
   const authorRelation = data.author && typeof data.author === "object" ? data.author as Record<string, unknown> : null;
   const avatar = typeof data.avatar === "string"
-    ? data.avatar
+    ? normalizeMediaUrl(data.avatar, apiBaseUrl)
     : extractMediaMeta(data.avatar, apiBaseUrl)?.url
       || (authorRelation ? extractMediaMeta(authorRelation.avatar, apiBaseUrl)?.url : "")
       || "";
@@ -360,7 +366,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
   let coverH: number | undefined;
 
   if (typeof data.cover === "string" || data.cover === null || data.cover === undefined) {
-    coverUrl = (typeof data.cover === "string" ? data.cover : "");
+    coverUrl = (typeof data.cover === "string" ? toMediaUrl(data.cover) : "");
     coverW = typeof data.coverWidth === "number" ? data.coverWidth : undefined;
     coverH = typeof data.coverHeight === "number" ? data.coverHeight : undefined;
     covers = coverUrl ? [{ url: coverUrl, width: coverW, height: coverH }] : [];
@@ -409,7 +415,7 @@ function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
   const coverRaw = raw.cover;
   const covers: { documentId?: string; url: string; width?: number; height?: number }[] = [];
   const parseCover = (c: Record<string, unknown>) => {
-    const url = String(c.url || "");
+    const url = normalizeMediaUrl(c.url, "");
     if (url) {
       covers.push({
         documentId: typeof c.documentId === "string" ? c.documentId : undefined,

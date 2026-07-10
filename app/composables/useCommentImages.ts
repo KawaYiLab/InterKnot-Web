@@ -2,15 +2,9 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import { useMessage } from "zenless-ui";
 import type { UploadedFile, UploadStatus, UploadTask } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
+import { isAllowedImage, MAX_IMAGE_SIZE } from "~/utils/upload";
 
 const MAX_COMMENT_IMAGES = 9;
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp"]);
-
-const isAllowedImage = (filename: string): boolean => {
-  const ext = filename.split(".").pop()?.toLowerCase() || "";
-  return ALLOWED_EXTENSIONS.has(ext);
-};
 
 const createUploadTask = (file: File): UploadTask => ({
   localId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -135,10 +129,10 @@ export function useCommentImages() {
 
     const valid = fileArray.filter((file) => {
       if (!isAllowedImage(file.name)) {
-        message.error("仅支持 JPG、PNG、GIF、WEBP 格式");
+        message.error("仅支持 JPG、PNG、GIF、WEBP、AVIF 格式");
         return false;
       }
-      if (file.size > MAX_IMAGE_BYTES) {
+      if (file.size > MAX_IMAGE_SIZE) {
         message.error(`图片 ${file.name} 超过 10MB`);
         return false;
       }
