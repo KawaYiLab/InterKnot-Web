@@ -41,7 +41,7 @@ const hasBackendCoverSize = computed(() =>
 );
 
 const coverAspectRatio = computed(() => {
-  // 只要后端提供了原图尺寸，就始终按原比例占位；即便缩略图加载失败（如七牛云对 30MB+
+  // 只要后端提供了原图尺寸，就始终按原比例占位；即便缩略图加载失败（如七牛云对 10MB+
   // 大图返回 "File too large"），也保持容器尺寸不变，避免瀑布流重排引发列表跳动。
   // 仅当后端完全没有尺寸信息时，才回落到默认占位图的原生比例。
   if (hasBackendCoverSize.value) {

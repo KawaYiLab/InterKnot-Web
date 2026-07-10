@@ -3,6 +3,7 @@ import type { Comment, CommentReply } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import { HandThumbUpIcon, ChatBubbleLeftIcon, TrashIcon, FlagIcon } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
+import { toThumbUrl } from "~/utils/image";
 
 import UserHoverCard from "./UserHoverCard.vue";
 import CommentBody from "./CommentBody.vue";
@@ -36,11 +37,6 @@ const isOwnReply = (reply: CommentReply) =>
 const floorLabel = computed(() =>
   props.index != null ? `F${props.index + 1}` : "",
 );
-
-const toThumbUrl = (url: string): string => {
-  if (!url || url.startsWith("blob:") || url.startsWith("data:")) return url;
-  return `${url}-small.webp`;
-};
 
 const openCommentImages = (images?: Comment["images"], index = 0) => {
   if (!images?.length) return;

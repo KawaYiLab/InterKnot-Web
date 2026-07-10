@@ -3,6 +3,7 @@ import { CheckIcon } from "@heroicons/vue/24/outline";
 import { useMessage } from "zenless-ui";
 import type { UploadedFile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
+import { toThumbUrl } from "~/utils/image";
 
 const props = withDefaults(defineProps<{
   existingIds?: string[];
@@ -34,11 +35,6 @@ const selectedUploads = computed(() => {
   const selected = selectedIdSet.value;
   return uploads.value.filter((upload) => selected.has(upload.documentId));
 });
-
-const toThumbUrl = (url: string): string => {
-  if (!url || url.startsWith("blob:") || url.startsWith("data:")) return url;
-  return `${url}-small.webp`;
-};
 
 const triggerFileInput = () => {
   if (remainingCount.value <= 0) {
