@@ -29,7 +29,7 @@ export default defineNuxtConfig({
         // 以及 #__nuxt::before 背景图未就绪出现的"黑屏"过渡。
         { rel: "preload", as: "image", href: "/images/loading.gif", fetchpriority: "high" },
         { rel: "preload", as: "image", href: "/images/main.avif", fetchpriority: "high" },
-        { rel: "preconnect", href: "https://image.tiwat.cn" },
+        { rel: "preconnect", href: "https://im.tiwat.cn" },
       ],
       htmlAttrs: {
         lang: "zh-CN",

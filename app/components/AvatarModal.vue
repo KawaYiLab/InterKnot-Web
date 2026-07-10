@@ -4,6 +4,7 @@ import { Cropper, CircleStencil } from "vue-advanced-cropper";
 import "vue-advanced-cropper/dist/style.css";
 import type { Avatar, AvatarType, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
+import { toThumbUrl } from "~/utils/image";
 
 const props = defineProps<{
   profile: Profile;
@@ -36,15 +37,6 @@ const tabs: { key: TabKey; label: string }[] = [
 const filteredAvatars = computed(() =>
   activeTab.value === "all" ? avatars.value : avatars.value.filter((a) => a.type === activeTab.value),
 );
-
-// 网格缩略图：拼接七牛云 -small.webp，避免列表里加载原图。
-// 预览区保留原 URL。
-const toThumbUrl = (url: string | undefined): string => {
-  if (!url) return "";
-  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
-  if (url.endsWith("-small.webp")) return url;
-  return `${url}-small.webp`;
-};
 
 const previewAvatar = computed(
   () => selectedAvatar.value ?? avatars.value.find((a) => a.documentId === equippedId.value) ?? null,

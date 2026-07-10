@@ -4,7 +4,7 @@ import type { UploadedFile, UploadStatus, UploadTask } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 
 const MAX_COMMENT_IMAGES = 9;
-const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp"]);
 
 const isAllowedImage = (filename: string): boolean => {
@@ -139,7 +139,7 @@ export function useCommentImages() {
         return false;
       }
       if (file.size > MAX_IMAGE_BYTES) {
-        message.error(`图片 ${file.name} 超过 30MB`);
+        message.error(`图片 ${file.name} 超过 10MB`);
         return false;
       }
       return true;
