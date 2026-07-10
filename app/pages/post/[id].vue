@@ -37,6 +37,9 @@ const commentsHasNext = ref(true);
 const commentsLoading = ref(false);
 const commentsInitialLoading = ref(true);
 
+// 组件卸载时阻止继续加载评论
+let isCommentLoadingCancelled = false;
+
 const newComment = ref("");
 const sendingComment = ref(false);
 const commentInputBoxRef = ref<HTMLElement | null>(null);
@@ -158,18 +161,22 @@ const loadPost = async () => {
 };
 
 const loadComments = async () => {
-  if (commentsLoading.value || !commentsHasNext.value) return;
+  if (isCommentLoadingCancelled || commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
   try {
     const page = await api.getComments(postId.value, commentsCursor.value);
+    if (isCommentLoadingCancelled) return;
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
   } catch (err) {
+    if (isCommentLoadingCancelled) return;
     message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
-    commentsLoading.value = false;
-    commentsInitialLoading.value = false;
+    if (!isCommentLoadingCancelled) {
+      commentsLoading.value = false;
+      commentsInitialLoading.value = false;
+    }
   }
 };
 
@@ -715,6 +722,9 @@ watch(commentInputFocused, () => {
 });
 
 onBeforeUnmount(() => {
+  isCommentLoadingCancelled = true;
+  commentsLoading.value = false;
+  commentsHasNext.value = false;
   destroyPreview();
   teardownMentionListeners?.();
   teardownMentionListeners = null;

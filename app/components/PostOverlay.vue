@@ -69,6 +69,8 @@ const commentsLoaded = ref(false);
 
 // 用于在 postId 切换时废弃旧的评论请求，避免旧数据污染新帖子
 let currentCommentLoadId = 0;
+// 组件卸载时阻止继续加载评论
+let isCommentLoadingCancelled = false;
 
 const newComment = ref("");
 const sendingComment = ref(false);
@@ -374,17 +376,17 @@ const loadPost = async () => {
 };
 
 const loadComments = async () => {
-  if (commentsLoading.value || !commentsHasNext.value) return;
+  if (isCommentLoadingCancelled || commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
   const loadId = ++currentCommentLoadId;
   try {
     const page = await api.getComments(props.postId, commentsCursor.value);
-    if (loadId !== currentCommentLoadId) return;
+    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
   } catch (err) {
-    if (loadId !== currentCommentLoadId) return;
+    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
     message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
     if (loadId === currentCommentLoadId) {
@@ -993,6 +995,10 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  isCommentLoadingCancelled = true;
+  currentCommentLoadId++;
+  commentsLoading.value = false;
+  commentsHasNext.value = false;
   window.removeEventListener("keydown", onKeyDown);
   destroyPreview();
   if (coverSettleTimer !== null) {
