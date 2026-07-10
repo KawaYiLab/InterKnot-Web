@@ -11,6 +11,7 @@ import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
+import { useCommentSeek } from "~/composables/useCommentSeek";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import UserHoverCard from "./UserHoverCard.vue";
@@ -28,6 +29,7 @@ const props = defineProps<{
   postId: string;
   coverHint?: number | null;
   preview?: PostPreview | null;
+  targetCommentId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -384,11 +386,20 @@ const loadComments = async () => {
   }
 };
 
-/** 正文渲染后再拉评论，避免与入场动画、骨架屏切换抢主线程 */
-const scheduleLoadComments = () => {
+const targetCommentId = computed(() => props.targetCommentId ?? null);
+
+const { seek, highlightedCommentId } = useCommentSeek({
+  targetCommentId,
+  comments,
+  commentsHasNext,
+  loadComments,
+});
+
+/** 正文渲染后再拉评论 / 定位目标评论，避免与入场动画、骨架屏切换抢主线程 */
+const scheduleSeek = () => {
   if (!import.meta.client) return;
   const run = () => {
-    void loadComments();
+    void seek();
   };
   requestAnimationFrame(() => {
     if (typeof requestIdleCallback !== "undefined") {
@@ -884,7 +895,7 @@ const resetAndLoad = async () => {
   loading.value = false;
   void recordView();
   if (!loadError.value) {
-    scheduleLoadComments();
+    scheduleSeek();
   }
 };
 
@@ -958,7 +969,7 @@ onMounted(async () => {
   void recordView();
   await nextTick();
   if (!loadError.value) {
-    scheduleLoadComments();
+    scheduleSeek();
   }
   await nextTick();
   attachMentionToTextarea();
@@ -1228,6 +1239,7 @@ onBeforeUnmount(() => {
                         :comment="comment"
                         :index="idx"
                         :current-user-author-id="auth.user?.authorId"
+                        :highlighted-comment-id="highlightedCommentId"
                         @like-comment="likeComment"
                         @like-reply="likeReply"
                         @reply-comment="startReply"

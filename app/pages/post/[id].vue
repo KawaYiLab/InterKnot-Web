@@ -9,6 +9,7 @@ import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, El
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
+import { useCommentSeek } from "~/composables/useCommentSeek";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -105,6 +106,11 @@ const commentImages = useCommentImages();
 
 const postId = computed(() => String(route.params.id || ""));
 
+const targetCommentId = computed(() => {
+  const c = route.query.comment;
+  return typeof c === "string" && c ? c : null;
+});
+
 
 
 const covers = computed(() => post.value?.covers ?? []);
@@ -166,6 +172,13 @@ const loadComments = async () => {
     commentsInitialLoading.value = false;
   }
 };
+
+const { seek, highlightedCommentId } = useCommentSeek({
+  targetCommentId,
+  comments,
+  commentsHasNext,
+  loadComments,
+});
 
 
 
@@ -683,7 +696,7 @@ onMounted(async () => {
   pageDataLoading.claim();
   try {
     await loadPost();
-    await Promise.all([recordView(), loadComments()]);
+    await Promise.all([recordView(), seek()]);
   } finally {
     pageDataLoading.finish();
   }
@@ -901,6 +914,7 @@ onBeforeUnmount(() => {
                   :comment="comment"
                   :index="idx"
                   :current-user-author-id="auth.user?.authorId"
+                  :highlighted-comment-id="highlightedCommentId"
                   @like-comment="likeComment"
                   @like-reply="likeReply"
                   @reply-comment="startReply"

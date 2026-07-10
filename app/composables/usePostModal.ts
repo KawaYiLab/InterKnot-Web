@@ -31,6 +31,7 @@ export function usePostModal() {
   const postId = useState<string | null>("pm:id", () => null);
   const coverHint = useState<number | null>("pm:coverHint", () => null);
   const preview = useState<PostPreview | null>("pm:preview", () => null);
+  const targetCommentId = useState<string | null>("pm:targetCommentId", () => null);
   const { acquire, release } = useBodyScrollLock();
 
   function open(
@@ -38,6 +39,7 @@ export function usePostModal() {
     opts?: {
       coverAspectRatio?: number;
       preview?: PostPreview;
+      commentId?: string;
     },
   ) {
     if (!import.meta.client) return;
@@ -45,15 +47,20 @@ export function usePostModal() {
     postId.value = id;
     coverHint.value = opts?.coverAspectRatio ?? null;
     preview.value = opts?.preview ?? null;
+    targetCommentId.value = opts?.commentId ?? null;
     isOpen.value = true;
     _historyPushed = true;
 
     _savedTitle = document.title;
     acquire(SCROLL_LOCK_TOKEN);
+
+    const url = opts?.commentId
+      ? `/post/${id}?comment=${encodeURIComponent(opts.commentId)}`
+      : `/post/${id}`;
     window.history.pushState(
-      overlayHistoryState({ __postModal: true, postId: id }),
+      overlayHistoryState({ __postModal: true, postId: id, commentId: opts?.commentId ?? null }),
       "",
-      `/post/${id}`,
+      url,
     );
 
     // 预热帖子详情与首屏评论，减少 PostOverlay 挂载后的等待与布局抖动
@@ -93,6 +100,7 @@ export function usePostModal() {
   function clearAfterLeave() {
     postId.value = null;
     preview.value = null;
+    targetCommentId.value = null;
   }
 
   /**
@@ -118,6 +126,7 @@ export function usePostModal() {
     postId: readonly(postId),
     coverHint: readonly(coverHint),
     preview: readonly(preview),
+    targetCommentId: readonly(targetCommentId),
     open,
     close,
     setTitle,

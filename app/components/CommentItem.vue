@@ -14,6 +14,7 @@ const props = defineProps<{
   comment: Comment;
   index?: number;
   currentUserAuthorId?: string;
+  highlightedCommentId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -53,7 +54,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 </script>
 
 <template>
-  <div class="ik-comment">
+  <div
+    class="ik-comment"
+    :class="{ 'ik-comment--target': comment.id === highlightedCommentId }"
+    :data-comment-id="comment.id"
+  >
     <div class="ik-comment__avatar-col">
       <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
         <img
@@ -143,6 +148,8 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
           v-for="reply in comment.replies"
           :key="reply.id"
           class="ik-comment__reply"
+          :class="{ 'ik-comment__reply--target': reply.id === highlightedCommentId }"
+          :data-comment-id="reply.id"
         >
           <div class="ik-comment__reply-avatar-col">
             <UserHoverCard :author-id="reply.author?.documentId" :clickable="!!reply.author?.documentId">
@@ -239,6 +246,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 .ik-comment + .ik-comment {
   border-top: 3px solid #1e1e1e;
+}
+
+.ik-comment--target {
+  background: rgba(191, 255, 9, 0.06);
+  box-shadow: inset 3px 0 0 0 #BFFF09;
 }
 
 /* ── Avatar column ────────────────────────────── */
@@ -439,6 +451,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 .ik-comment__reply + .ik-comment__reply {
   border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.ik-comment__reply--target {
+  background: rgba(191, 255, 9, 0.06);
+  box-shadow: inset 3px 0 0 0 #BFFF09;
 }
 
 .ik-comment__reply-avatar-col {
