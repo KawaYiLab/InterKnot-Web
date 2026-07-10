@@ -5,6 +5,7 @@ import "vue-advanced-cropper/dist/style.css";
 import type { Avatar, AvatarType, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
+import { MAX_IMAGE_SIZE } from "~/utils/upload";
 
 const props = defineProps<{
   profile: Profile;
@@ -104,7 +105,7 @@ const onFileSelected = (e: Event) => {
     message.warning("请选择图片文件");
     return;
   }
-  if (file.size > 10 * 1024 * 1024) {
+  if (file.size > MAX_IMAGE_SIZE) {
     message.warning("图片大小不能超过 10MB");
     return;
   }

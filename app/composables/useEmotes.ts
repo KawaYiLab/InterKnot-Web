@@ -16,7 +16,8 @@
 
 import { computed, type Ref } from "vue";
 import { useQuery } from "@tanstack/vue-query";
-import { useNuxtApp, useRuntimeConfig } from "#app";
+import { useNuxtApp } from "#app";
+import { toMediaUrl } from "~/utils/image";
 
 export interface Emote {
   code: string;
@@ -50,18 +51,13 @@ const EMOTE_STALE_TIME = 60 * 1000; // 60s
 /** 全局 queryKey，确保所有调用方共享同一份缓存 */
 const EMOTE_MANIFEST_KEY = ["emotes", "manifest"] as const;
 
-/** 相对路径（本地 upload provider）补上 API 域名；绝对 URL（S3/CDN）原样返回 */
-function normalizeEmoteUrl(url: string, apiBaseUrl: string): string {
-  if (!url) return url;
-  if (/^https?:\/\//i.test(url) || url.startsWith("//")) return url;
-  if (url.startsWith("/")) return `${apiBaseUrl}${url}`;
-  return `${apiBaseUrl}/${url}`;
+/** 把表情 URL 迁移到当前图片 CDN：相对路径补齐为 im.tiwat.cn，旧七牛云域名重写。 */
+function normalizeEmoteUrl(url: string): string {
+  return toMediaUrl(url);
 }
 
 export function useEmotes() {
   const { $api } = useNuxtApp();
-  const config = useRuntimeConfig();
-  const apiBaseUrl = String(config.public.apiBaseUrl || "");
 
   const query = useQuery<ManifestData>({
     queryKey: EMOTE_MANIFEST_KEY as unknown as readonly unknown[],
@@ -73,9 +69,9 @@ export function useEmotes() {
       return {
         groups: (Array.isArray(data.groups) ? data.groups : []).map((g) => ({
           ...g,
-          iconUrl: g.iconUrl ? normalizeEmoteUrl(g.iconUrl, apiBaseUrl) : null,
+          iconUrl: g.iconUrl ? normalizeEmoteUrl(g.iconUrl) : null,
         })),
-        emotes: list.map((e) => ({ ...e, url: normalizeEmoteUrl(e.url, apiBaseUrl) })),
+        emotes: list.map((e) => ({ ...e, url: normalizeEmoteUrl(e.url) })),
       };
     },
     staleTime: EMOTE_STALE_TIME,
