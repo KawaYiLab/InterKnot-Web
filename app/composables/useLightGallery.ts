@@ -130,7 +130,7 @@ export function useLightGallery() {
       loop: multiImage,
       hideControlOnEnd: false,
       zoomFromOrigin: false,
-      // 默认 fit-screen，避免大图（如 30MB+ 高分辨率原图）以原始像素铺到 DOM 引发 GPU 显存爆炸 / 主线程长任务卡顿
+      // 默认 fit-screen，避免大图（如 10MB+ 高分辨率原图）以原始像素铺到 DOM 引发 GPU 显存爆炸 / 主线程长任务卡顿
       // 用户仍可通过 + 按钮或滚轮缩放至原始尺寸查看细节
       actualSize: false,
       showZoomInOutIcons: true,

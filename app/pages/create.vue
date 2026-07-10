@@ -27,7 +27,7 @@ import { resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
 
 const MAX_COVER_IMAGES = 9;
-const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp"]);
 const AUTO_SAVE_DELAY = 800;
 
@@ -326,7 +326,7 @@ function handleFileSelect(files: FileList | File[]) {
       return false;
     }
     if (f.size > MAX_IMAGE_BYTES) {
-      message.error(`图片 ${f.name} 超过 30MB`);
+      message.error(`图片 ${f.name} 超过 10MB`);
       return false;
     }
     return true;
