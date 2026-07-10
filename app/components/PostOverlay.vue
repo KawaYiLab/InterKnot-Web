@@ -67,6 +67,9 @@ const commentsLoading = ref(false);
 // 用此标记把「尚未加载」与「加载完确实为空」区分开：未加载完一律显示骨架。
 const commentsLoaded = ref(false);
 
+// 用于在 postId 切换时废弃旧的评论请求，避免旧数据污染新帖子
+let currentCommentLoadId = 0;
+
 const newComment = ref("");
 const sendingComment = ref(false);
 const commentInputBoxRef = ref<HTMLElement | null>(null);
@@ -373,16 +376,21 @@ const loadPost = async () => {
 const loadComments = async () => {
   if (commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
+  const loadId = ++currentCommentLoadId;
   try {
     const page = await api.getComments(props.postId, commentsCursor.value);
+    if (loadId !== currentCommentLoadId) return;
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
   } catch (err) {
+    if (loadId !== currentCommentLoadId) return;
     message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
-    commentsLoading.value = false;
-    commentsLoaded.value = true;
+    if (loadId === currentCommentLoadId) {
+      commentsLoading.value = false;
+      commentsLoaded.value = true;
+    }
   }
 };
 
@@ -393,6 +401,13 @@ const { seek, highlightedCommentId } = useCommentSeek({
   comments,
   commentsHasNext,
   loadComments,
+});
+
+// 同帖子切换 commentId（如从通知再打开同一篇帖子的另一条评论）时重新定位
+watch(targetCommentId, () => {
+  if (targetCommentId.value && post.value) {
+    void seek();
+  }
 });
 
 /** 正文渲染后再拉评论 / 定位目标评论，避免与入场动画、骨架屏切换抢主线程 */
@@ -881,6 +896,8 @@ const resetAndLoad = async () => {
   commentsCursor.value = "";
   commentsHasNext.value = true;
   commentsLoaded.value = false;
+  commentsLoading.value = false;
+  currentCommentLoadId++;
   loadError.value = false;
   newComment.value = "";
   commentImages.clearUploads();

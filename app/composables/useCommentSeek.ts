@@ -1,4 +1,4 @@
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type { Ref } from "vue";
 import type { Comment } from "~/types/entities";
 
@@ -21,12 +21,20 @@ export function useCommentSeek({
 }: UseCommentSeekOptions) {
   const targetFound = ref(false);
   const seeking = ref(false);
+  // 标记已检查过的顶层评论数量，避免每次 findComment 都全量扫描
+  const checkedTopLevelCount = ref(0);
 
   const findComment = (id: string, list: Comment[]): boolean => {
-    for (const c of list) {
+    if (list.length < checkedTopLevelCount.value) {
+      // 评论列表被重置，需要重新扫描
+      checkedTopLevelCount.value = 0;
+    }
+    for (let i = checkedTopLevelCount.value; i < list.length; i++) {
+      const c = list[i]!;
       if (c.id === id) return true;
       if (c.replies?.some((r) => r.id === id)) return true;
     }
+    checkedTopLevelCount.value = list.length;
     return false;
   };
 
@@ -37,8 +45,9 @@ export function useCommentSeek({
   const scrollToTarget = async () => {
     if (!targetCommentId.value || !targetFound.value) return;
     await nextTick();
+    const id = targetCommentId.value;
     const el = document.querySelector(
-      `[data-comment-id="${targetCommentId.value}"]`,
+      `[data-comment-id="${CSS.escape(id)}"]`,
     ) as HTMLElement | null;
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -46,11 +55,15 @@ export function useCommentSeek({
 
   const seek = async () => {
     if (!targetCommentId.value) {
+      targetFound.value = false;
+      checkedTopLevelCount.value = 0;
       await loadComments();
       return;
     }
     if (seeking.value) return;
     seeking.value = true;
+    targetFound.value = false;
+    checkedTopLevelCount.value = 0;
     try {
       let prevLength = comments.value.length;
       while (true) {
@@ -69,6 +82,16 @@ export function useCommentSeek({
       seeking.value = false;
     }
   };
+
+  // 目标评论切换时清除高亮状态，避免旧 target 残留
+  watch(
+    targetCommentId,
+    () => {
+      targetFound.value = false;
+      checkedTopLevelCount.value = 0;
+    },
+    { immediate: true },
+  );
 
   return { seek, targetFound, seeking, highlightedCommentId };
 }

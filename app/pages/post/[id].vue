@@ -180,9 +180,12 @@ const { seek, highlightedCommentId } = useCommentSeek({
   loadComments,
 });
 
-
-
-
+// 路由 query 中的 comment 参数变化时重新定位
+watch(targetCommentId, () => {
+  if (targetCommentId.value && post.value) {
+    void seek();
+  }
+});
 
 const recordView = async () => {
   if (!post.value?.id) return;
