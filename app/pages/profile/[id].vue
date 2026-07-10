@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
-import type { Avatar, BusinessCard, Post, Profile } from "~/types/entities";
+import type { Avatar, BusinessCard, DailyExpStatus, Post, Profile } from "~/types/entities";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 
@@ -85,6 +85,7 @@ const checkInStatus = ref({
   rank: 0,
   nextEligibleAt: null as string | null,
 });
+const dailyExpStatus = ref<DailyExpStatus | null>(null);
 const checkInLoading = ref(false);
 const showCheckInHelpModal = ref(false);
 
@@ -104,6 +105,12 @@ const loadCheckInStatus = async () => {
       rank: status.rank ?? 0,
       nextEligibleAt: status.nextEligibleAt || null,
     };
+
+    try {
+      dailyExpStatus.value = await api.getDailyExpStatus();
+    } catch {
+      // 每日经验状态接口失败不应影响签到状态展示
+    }
   } catch (err) {
     // 静默处理
   }
@@ -141,6 +148,11 @@ const doCheckIn = async () => {
         ? `，累计${checkInStatus.value.totalDays}天`
         : "";
     message.success(`签到成功！${rewardParts.join("，")}${daysText}${rankText}`);
+
+    if (dailyExpStatus.value) {
+      dailyExpStatus.value.sources.checkIn = { done: true, exp: result.reward };
+      dailyExpStatus.value.todaySelfGained += result.reward;
+    }
   } catch (err: any) {
     if (err?.data?.error?.code === 'CHECK_IN_ALREADY_TODAY') {
       message.warning("今日已签到");
@@ -623,6 +635,7 @@ onBeforeUnmount(() => {
               :consecutive-days="checkInStatus.consecutiveDays"
               :rank="checkInStatus.rank"
               :can-check-in="checkInStatus.canCheckIn"
+              :daily-exp-status="dailyExpStatus"
               @close="showCheckInHelpModal = false"
             />
           </Transition>
