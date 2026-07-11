@@ -159,8 +159,8 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
               <z-dropdown-item :command="comment.isPinned ? 'unpin' : 'pin'" :disabled="!canPin">
                 {{ comment.isPinned ? '取消置顶' : '置顶评论' }}
               </z-dropdown-item>
-              <z-dropdown-item command="delete" :disabled="!isOwnComment">删除</z-dropdown-item>
-              <z-dropdown-item command="report" :disabled="isOwnComment">举报</z-dropdown-item>
+              <z-dropdown-item command="delete" :disabled="!isOwnComment">删除评论</z-dropdown-item>
+              <z-dropdown-item command="report" :disabled="isOwnComment">举报评论</z-dropdown-item>
             </template>
           </z-dropdown>
         </div>
