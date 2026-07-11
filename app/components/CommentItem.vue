@@ -250,25 +250,43 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 .ik-comment--target,
 .ik-comment__reply--target {
-  background: rgba(191, 255, 9, 0.1);
-  box-shadow: inset 4px 0 0 0 rgba(191, 255, 9, 0.8);
+  position: relative;
+  padding: 16px 12px 20px 12px;
+}
+
+/* 进入视口时先用主题色背景给出明显反馈，随后背景渐隐恢复正常，只保留左侧强调线 */
+.ik-comment--target::before,
+.ik-comment__reply--target::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--ik-primary);
+  opacity: 0.1;
+  pointer-events: none;
   animation: ik-comment-target-flash 1.2s ease-out forwards;
 }
 
-/* 进入视口时先给出明显反馈，随后背景渐隐恢复正常，只保留左侧强调线 */
-@keyframes ik-comment-target-flash {
-  0% {
-    background: rgba(191, 255, 9, 0.1);
-    box-shadow: inset 4px 0 0 0 rgba(191, 255, 9, 0.8);
-  }
-  100% {
-    background: transparent;
-    box-shadow: inset 4px 0 0 0 rgba(191, 255, 9, 0.8);
-  }
+.ik-comment--target::after,
+.ik-comment__reply--target::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--ik-primary);
+  opacity: 0.8;
+  pointer-events: none;
 }
 
-.ik-comment--target {
-  padding: 16px 12px 20px 12px;
+@keyframes ik-comment-target-flash {
+  0% {
+    opacity: 0.1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 .ik-comment__reply--target {
