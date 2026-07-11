@@ -404,6 +404,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     hasGivenDenny: data.hasGivenDenny === true,
     isAnonymous: data.isAnonymous === true,
     isHidden: data.isHidden === true,
+    isOwner: data.isOwner === true,
     category: toPostCategory(data.category),
     createdAt: data.createdAt as string | undefined,
     updatedAt: data.updatedAt as string | undefined,
@@ -513,6 +514,9 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
     }),
     articleId: articleRaw ? String(articleRaw.documentId || "") : undefined,
     articleTitle: articleRaw ? String(articleRaw.title || "") : undefined,
+    isPinned: data.isPinned === true,
+    pinnedAt: data.pinnedAt as string | undefined,
+    floor: typeof data.floor === "number" ? data.floor : undefined,
   };
 }
 
@@ -805,7 +809,11 @@ export function useApi() {
         });
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
-        return buildPagination(data.map((item) => toComment(item, apiBaseUrl)), start, meta);
+        const pinnedRaw = (response as Record<string, unknown>).pinned;
+        const pinned = start === 0 && pinnedRaw ? toComment(pinnedRaw, apiBaseUrl) : null;
+        const nodes = data.map((item) => toComment(item, apiBaseUrl));
+        if (pinned) nodes.unshift(pinned);
+        return buildPagination(nodes, start, meta);
       },
       STALE_LIST,
     );
@@ -846,6 +854,22 @@ export function useApi() {
     invalidate(["articles", "comments"]);
     invalidate(["articles", "detail"]);
     invalidate(["profile"]);
+  };
+
+  const pinComment = async (commentId: string, postId: string): Promise<void> => {
+    await $api(`/api/comments/${commentId}/pin`, {
+      method: "POST",
+    });
+    invalidate(qk.articles.commentsOf(postId));
+    invalidate(qk.articles.detail(postId));
+  };
+
+  const unpinComment = async (commentId: string, postId: string): Promise<void> => {
+    await $api(`/api/comments/${commentId}/unpin`, {
+      method: "POST",
+    });
+    invalidate(qk.articles.commentsOf(postId));
+    invalidate(qk.articles.detail(postId));
   };
 
   const toggleLike = async (
@@ -1816,6 +1840,8 @@ export function useApi() {
     getComments,
     addPostComment,
     deleteComment,
+    pinComment,
+    unpinComment,
     toggleLike,
     batchCheckLikes,
     toggleFavorite,

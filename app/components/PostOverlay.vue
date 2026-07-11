@@ -468,7 +468,9 @@ const sendComment = async () => {
         });
       }
     } else {
-      comments.value.unshift({
+      const pinnedIndex = comments.value.findIndex((c) => c.isPinned);
+      const insertIndex = pinnedIndex >= 0 ? pinnedIndex + 1 : 0;
+      comments.value.splice(insertIndex, 0, {
         id: localId,
         content: serialized,
         liked: false,
@@ -477,7 +479,15 @@ const sendComment = async () => {
         author: localAuthor,
         images: localImages,
         replies: [],
+        isPinned: false,
+        floor: 1,
       });
+      for (let i = insertIndex + 1; i < comments.value.length; i++) {
+        const c = comments.value[i];
+        if (c && typeof c.floor === "number") {
+          c.floor!++;
+        }
+      }
     }
     const el = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLTextAreaElement | null;
     if (el) {
@@ -692,10 +702,8 @@ const startReplyToReply = (reply: Comment["replies"][number], parentComment: Com
   focusCommentInput();
 };
 
-const isOwner = computed(() => {
-  if (!auth.isLogin || !post.value?.author?.documentId) return false;
-  return auth.user?.authorId === post.value.author.documentId;
-});
+const isOwner = computed(() => post.value?.isOwner === true);
+const canPin = computed(() => auth.isLogin && (isOwner.value || auth.user?.isAdmin === true));
 
 const deletingArticle = ref(false);
 
@@ -837,6 +845,26 @@ const handleDeleteReply = async (reply: Comment["replies"][number], parentCommen
     message.success("回复已删除");
   } catch (err) {
     message.error(resolveErrorMessage(err, "删除回复失败"));
+  }
+};
+
+const handlePinComment = async (comment: Comment) => {
+  if (!props.postId) return;
+  try {
+    await api.pinComment(comment.id, props.postId);
+    message.success("评论已置顶");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "置顶失败"));
+  }
+};
+
+const handleUnpinComment = async (comment: Comment) => {
+  if (!props.postId) return;
+  try {
+    await api.unpinComment(comment.id, props.postId);
+    message.success("评论已取消置顶");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "取消置顶失败"));
   }
 };
 
@@ -1228,6 +1256,7 @@ onBeforeUnmount(() => {
                         :comment="comment"
                         :index="idx"
                         :current-user-author-id="auth.user?.authorId"
+                        :can-pin="canPin"
                         @like-comment="likeComment"
                         @like-reply="likeReply"
                         @reply-comment="startReply"
@@ -1236,6 +1265,8 @@ onBeforeUnmount(() => {
                         @delete-reply="handleDeleteReply"
                         @report-comment="handleReportComment"
                         @report-reply="handleReportReply"
+                        @pin-comment="handlePinComment"
+                        @unpin-comment="handleUnpinComment"
                       />
                       <div v-if="commentsHasNext && comments.length" class="ik-dialog__load-more">
                         <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>

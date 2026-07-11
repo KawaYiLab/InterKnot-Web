@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import type { Comment, CommentReply } from "~/types/entities";
 import { formatTime } from "~/utils/time";
-import { HandThumbUpIcon, ChatBubbleLeftIcon, TrashIcon, FlagIcon } from "@heroicons/vue/24/outline";
+import {
+  HandThumbUpIcon,
+  ChatBubbleLeftIcon,
+  TrashIcon,
+  FlagIcon,
+  ArrowUpCircleIcon,
+  ArrowDownCircleIcon,
+} from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
 import { toThumbUrl } from "~/utils/image";
 
@@ -14,6 +21,7 @@ const props = defineProps<{
   comment: Comment;
   index?: number;
   currentUserAuthorId?: string;
+  canPin?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -25,6 +33,8 @@ const emit = defineEmits<{
   deleteReply: [reply: CommentReply, parentComment: Comment];
   reportComment: [comment: Comment];
   reportReply: [reply: CommentReply, parentComment: Comment];
+  pinComment: [comment: Comment];
+  unpinComment: [comment: Comment];
 }>();
 
 const isOwnComment = computed(() =>
@@ -34,9 +44,12 @@ const isOwnComment = computed(() =>
 const isOwnReply = (reply: CommentReply) =>
   !!props.currentUserAuthorId && reply.author?.documentId === props.currentUserAuthorId;
 
-const floorLabel = computed(() =>
-  props.index != null ? `F${props.index + 1}` : "",
-);
+const floorLabel = computed(() => {
+  if (props.comment.isPinned) return "";
+  if (typeof props.comment.floor === "number") return `F${props.comment.floor}`;
+  if (props.index != null) return `F${props.index + 1}`;
+  return "";
+});
 
 const openCommentImages = (images?: Comment["images"], index = 0) => {
   if (!images?.length) return;
@@ -53,7 +66,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 </script>
 
 <template>
-  <div class="ik-comment">
+  <div class="ik-comment" :class="{ 'ik-comment--pinned': comment.isPinned }">
     <div class="ik-comment__avatar-col">
       <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
         <img
@@ -77,6 +90,10 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
           Lv.{{ comment.author.level }}
         </span>
         <span v-if="comment.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
+        <span v-if="comment.isPinned" class="ik-comment__pinned-badge">
+          <ArrowUpCircleIcon class="ik-comment__pinned-icon" />
+          置顶
+        </span>
         <span v-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
       </div>
 
@@ -118,6 +135,22 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
           </button>
           <button class="ik-comment__action-btn" @click="emit('replyComment', comment)">
             <ChatBubbleLeftIcon class="ik-comment__icon" />
+          </button>
+          <button
+            v-if="canPin && !comment.isPinned"
+            class="ik-comment__action-btn"
+            title="置顶评论"
+            @click="emit('pinComment', comment)"
+          >
+            <ArrowUpCircleIcon class="ik-comment__icon" />
+          </button>
+          <button
+            v-if="canPin && comment.isPinned"
+            class="ik-comment__action-btn ik-comment__action-btn--active"
+            title="取消置顶"
+            @click="emit('unpinComment', comment)"
+          >
+            <ArrowDownCircleIcon class="ik-comment__icon" />
           </button>
           <button
             v-if="isOwnComment"
@@ -311,6 +344,31 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   font-weight: 700;
   color: #999;
   line-height: 1.5;
+}
+
+.ik-comment__pinned-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 0 6px 6px 6px;
+  background: #3a4a1a;
+  font-size: 11px;
+  font-weight: 700;
+  color: #BFFF09;
+  line-height: 1.5;
+}
+
+.ik-comment__pinned-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.ik-comment--pinned {
+  border-left: 3px solid #BFFF09;
+  padding-left: 10px;
 }
 
 /* ── Body ──────────────────────────────────────── */
