@@ -1129,7 +1129,7 @@ onBeforeUnmount(() => {
                           alt=""
                           class="ik-dialog__cover-preview-image"
                           aria-hidden="true"
-                          decoding="async"
+                          decoding="sync"
                         />
                       </div>
                       <div v-else class="ik-skel ik-dialog__cover-skel" aria-hidden="true"></div>
@@ -1190,7 +1190,7 @@ onBeforeUnmount(() => {
                               alt=""
                               class="ik-dialog__cover-preview-image"
                               aria-hidden="true"
-                              decoding="async"
+                              decoding="sync"
                             />
                           </div>
                           <img
@@ -1236,7 +1236,7 @@ onBeforeUnmount(() => {
                                   alt=""
                                   class="ik-dialog__cover-preview-image"
                                   aria-hidden="true"
-                                  decoding="async"
+                                  decoding="sync"
                                 />
                               </div>
                               <img
