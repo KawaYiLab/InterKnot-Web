@@ -148,6 +148,10 @@ const syncCommentInputHeight = async () => {
 };
 
 const firstCover = computed(() => covers.value[0] ?? null);
+const previewCover = computed(() => {
+  const cover = props.preview?.cover?.trim();
+  return cover || null;
+});
 
 // 真实图片解码完成的索引集合：用于在解码完成前继续显示骨架屏，
 // 避免"骨架结束 → 黑色封面框 → 图片淡入"的中间黑屏。
@@ -1119,7 +1123,16 @@ onBeforeUnmount(() => {
                       class="ik-dialog__cover-border"
                       :style="props.coverHint ? { aspectRatio: String(props.coverHint) } : {}"
                     >
-                      <div class="ik-skel ik-dialog__cover-skel" aria-hidden="true"></div>
+                      <div v-if="previewCover" class="ik-dialog__cover-preview">
+                        <img
+                          :src="previewCover"
+                          alt=""
+                          class="ik-dialog__cover-preview-image"
+                          aria-hidden="true"
+                          decoding="async"
+                        />
+                      </div>
+                      <div v-else class="ik-skel ik-dialog__cover-skel" aria-hidden="true"></div>
                     </div>
                   </div>
                   <div class="ik-dialog__detail">
@@ -1168,6 +1181,19 @@ onBeforeUnmount(() => {
                       >
                         <!-- 单张封面 -->
                         <template v-if="!hasCovers || covers.length === 1">
+                          <div
+                            v-if="previewCover"
+                            class="ik-dialog__cover-preview"
+                            :class="{ 'ik-dialog__cover-preview--hidden': isCoverImageLoaded(0) }"
+                          >
+                            <img
+                              :src="previewCover"
+                              alt=""
+                              class="ik-dialog__cover-preview-image"
+                              aria-hidden="true"
+                              decoding="async"
+                            />
+                          </div>
                           <img
                             :src="firstCover?.url || DEFAULT_COVER_IMAGE"
                             :alt="hasCovers ? post.title : 'default cover'"
@@ -1178,7 +1204,7 @@ onBeforeUnmount(() => {
                             @error="onCoverImageLoad(0); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                           />
                           <div
-                            v-if="!isCoverImageLoaded(0)"
+                            v-if="!isCoverImageLoaded(0) && !previewCover"
                             class="ik-skel ik-dialog__cover-skel"
                             aria-hidden="true"
                           ></div>
@@ -1202,6 +1228,19 @@ onBeforeUnmount(() => {
                               :key="c.url + i"
                               class="ik-dialog__cover-slide"
                             >
+                              <div
+                                v-if="i === 0 && previewCover"
+                                class="ik-dialog__cover-preview"
+                                :class="{ 'ik-dialog__cover-preview--hidden': isCoverImageLoaded(0) }"
+                              >
+                                <img
+                                  :src="previewCover"
+                                  alt=""
+                                  class="ik-dialog__cover-preview-image"
+                                  aria-hidden="true"
+                                  decoding="async"
+                                />
+                              </div>
                               <img
                                 :src="isCoverNearby(i) ? c.url : undefined"
                                 :alt="`${post.title} - ${i + 1}`"
@@ -1214,7 +1253,7 @@ onBeforeUnmount(() => {
                                 @error="onCoverImageLoad(i); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                               />
                               <div
-                                v-if="!isCoverImageLoaded(i)"
+                                v-if="!isCoverImageLoaded(i) && !(i === 0 && previewCover)"
                                 class="ik-skel ik-dialog__cover-skel"
                                 aria-hidden="true"
                               ></div>
@@ -1924,7 +1963,32 @@ onBeforeUnmount(() => {
   z-index: 1;
 }
 
+.ik-dialog__cover-preview {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 1;
+  transition: opacity 300ms ease;
+}
+
+.ik-dialog__cover-preview--hidden {
+  opacity: 0;
+}
+
+.ik-dialog__cover-preview-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(16px);
+  transform: scale(1.05);
+}
+
 .ik-dialog__cover {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
