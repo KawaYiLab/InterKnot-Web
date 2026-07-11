@@ -80,103 +80,105 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   <div
     class="ik-comment"
     :class="{
-      'ik-comment--pinned': comment.isPinned,
       'ik-comment--target': comment.id === highlightedCommentId,
     }"
     :data-comment-id="comment.id"
   >
-    <div class="ik-comment__avatar-col">
-      <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
-        <img
-          :src="comment.author?.avatar || '/images/default-avatar.webp'"
-          :alt="comment.author?.name || ''"
-          class="ik-comment__avatar"
-          @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-        />
-      </UserHoverCard>
+    <div class="ik-comment__main" :class="{ 'ik-comment__main--pinned': comment.isPinned }">
+      <div class="ik-comment__avatar-col">
+        <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
+          <img
+            :src="comment.author?.avatar || '/images/default-avatar.webp'"
+            :alt="comment.author?.name || ''"
+            class="ik-comment__avatar"
+            @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+          />
+        </UserHoverCard>
+      </div>
+
+      <div class="ik-comment__content-col">
+        <!-- Author -->
+        <div class="ik-comment__author-row">
+          <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
+            <span class="ik-comment__name">
+              {{ comment.author?.name || "匿名用户" }}
+            </span>
+          </UserHoverCard>
+          <span v-if="comment.author?.level && comment.author?.documentId" class="ik-comment__level">
+            Lv.{{ comment.author.level }}
+          </span>
+          <span v-if="comment.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
+          <span v-if="comment.isPinned" class="ik-comment__pinned-badge">
+            <ArrowUpCircleIcon class="ik-comment__pinned-icon" />
+            置顶
+          </span>
+          <span v-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
+        </div>
+
+        <!-- Body -->
+        <div class="ik-comment__body">
+          <CommentBody :content="comment.content" />
+        </div>
+
+        <div v-if="comment.images?.length" class="ik-comment__media-grid">
+          <button
+            v-for="(image, imageIndex) in comment.images"
+            :key="`${comment.id}-image-${imageIndex}`"
+            type="button"
+            class="ik-comment__media-item"
+            @click="openCommentImages(comment.images, imageIndex)"
+          >
+            <img
+              :src="toThumbUrl(image.url)"
+              :alt="comment.author?.name || '评论图片'"
+              class="ik-comment__media-thumb"
+            />
+          </button>
+        </div>
+
+        <!-- Footer: date left · interactions right -->
+        <div class="ik-comment__footer">
+          <div class="ik-comment__meta">
+            <span class="ik-comment__time">{{ formatTime(comment.createdAt) }}</span>
+          </div>
+          <div class="ik-comment__actions">
+            <button
+              class="ik-comment__action-btn"
+              :class="{ 'ik-comment__action-btn--active': comment.liked }"
+              @click="emit('likeComment', comment)"
+            >
+              <HandThumbUpIconSolid v-if="comment.liked" class="ik-comment__icon" />
+              <HandThumbUpIcon v-else class="ik-comment__icon" />
+              <span v-if="comment.likesCount" class="ik-comment__action-count">{{ comment.likesCount }}</span>
+            </button>
+            <button class="ik-comment__action-btn" @click="emit('replyComment', comment)">
+              <ChatBubbleLeftIcon class="ik-comment__icon" />
+            </button>
+            <z-dropdown
+              trigger="click"
+              size="small"
+              class="ik-comment__more"
+              direction="auto"
+              @command="handleCommentMenuCommand"
+            >
+              <button type="button" class="ik-comment__action-btn" title="更多操作">
+                <EllipsisVerticalIcon class="ik-comment__icon" aria-hidden="true" />
+              </button>
+              <template #dropdown>
+                <z-dropdown-item command="report" :disabled="isOwnComment">举报评论</z-dropdown-item>
+                <z-dropdown-item :command="comment.isPinned ? 'unpin' : 'pin'" :disabled="!canPin">
+                  {{ comment.isPinned ? '取消置顶' : '置顶评论' }}
+                </z-dropdown-item>
+                <z-dropdown-item command="delete" :disabled="!isOwnComment">删除评论</z-dropdown-item>
+              </template>
+            </z-dropdown>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="ik-comment__content-col">
-      <!-- Author -->
-      <div class="ik-comment__author-row">
-        <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
-          <span class="ik-comment__name">
-            {{ comment.author?.name || "匿名用户" }}
-          </span>
-        </UserHoverCard>
-        <span v-if="comment.author?.level && comment.author?.documentId" class="ik-comment__level">
-          Lv.{{ comment.author.level }}
-        </span>
-        <span v-if="comment.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
-        <span v-if="comment.isPinned" class="ik-comment__pinned-badge">
-          <ArrowUpCircleIcon class="ik-comment__pinned-icon" />
-          置顶
-        </span>
-        <span v-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
-      </div>
-
-      <!-- Body -->
-      <div class="ik-comment__body">
-        <CommentBody :content="comment.content" />
-      </div>
-
-      <div v-if="comment.images?.length" class="ik-comment__media-grid">
-        <button
-          v-for="(image, imageIndex) in comment.images"
-          :key="`${comment.id}-image-${imageIndex}`"
-          type="button"
-          class="ik-comment__media-item"
-          @click="openCommentImages(comment.images, imageIndex)"
-        >
-          <img
-            :src="toThumbUrl(image.url)"
-            :alt="comment.author?.name || '评论图片'"
-            class="ik-comment__media-thumb"
-          />
-        </button>
-      </div>
-
-      <!-- Footer: date left · interactions right -->
-      <div class="ik-comment__footer">
-        <div class="ik-comment__meta">
-          <span class="ik-comment__time">{{ formatTime(comment.createdAt) }}</span>
-        </div>
-        <div class="ik-comment__actions">
-          <button
-            class="ik-comment__action-btn"
-            :class="{ 'ik-comment__action-btn--active': comment.liked }"
-            @click="emit('likeComment', comment)"
-          >
-            <HandThumbUpIconSolid v-if="comment.liked" class="ik-comment__icon" />
-            <HandThumbUpIcon v-else class="ik-comment__icon" />
-            <span v-if="comment.likesCount" class="ik-comment__action-count">{{ comment.likesCount }}</span>
-          </button>
-          <button class="ik-comment__action-btn" @click="emit('replyComment', comment)">
-            <ChatBubbleLeftIcon class="ik-comment__icon" />
-          </button>
-          <z-dropdown
-            trigger="click"
-            size="small"
-            class="ik-comment__more"
-            direction="auto"
-            @command="handleCommentMenuCommand"
-          >
-            <button type="button" class="ik-comment__action-btn" title="更多操作">
-              <EllipsisVerticalIcon class="ik-comment__icon" aria-hidden="true" />
-            </button>
-            <template #dropdown>
-              <z-dropdown-item command="report" :disabled="isOwnComment">举报评论</z-dropdown-item>
-              <z-dropdown-item :command="comment.isPinned ? 'unpin' : 'pin'" :disabled="!canPin">
-                {{ comment.isPinned ? '取消置顶' : '置顶评论' }}
-              </z-dropdown-item>
-              <z-dropdown-item command="delete" :disabled="!isOwnComment">删除评论</z-dropdown-item>
-            </template>
-          </z-dropdown>
-        </div>
-      </div>
-
-      <!-- ── Replies ─────────────────────────── -->
-      <div v-if="comment.replies?.length" class="ik-comment__replies">
+    <!-- ── Replies ─────────────────────────── -->
+    <div v-if="comment.replies?.length" class="ik-comment__replies">
         <div
           v-for="reply in comment.replies"
           :key="reply.id"
@@ -261,7 +263,6 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
             </div>
           </div>
         </div>
-      </div>
     </div>
   </div>
 </template>
@@ -270,15 +271,18 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 /* ═══════════════════════════════════════════════
    ═══════════════════════════════════════════════ */
 
-/* ── Root: two-column flex row ────────────────── */
+/* ── Root ─────────────────────────────────────── */
 .ik-comment {
-  display: flex;
-  gap: 12px;
   padding: 14px 0;
 }
 
 .ik-comment + .ik-comment {
   border-top: 3px solid #1e1e1e;
+}
+
+.ik-comment__main {
+  display: flex;
+  gap: 12px;
 }
 
 .ik-comment--target,
@@ -418,7 +422,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   height: 12px;
 }
 
-.ik-comment--pinned {
+.ik-comment__main--pinned {
   border-left: 3px solid var(--ik-primary);
   padding-left: 10px;
 }
@@ -549,6 +553,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 /* ── Replies ───────────────────────────────────── */
 .ik-comment__replies {
+  margin-left: 48px;
   margin-top: 10px;
   padding: 4px 0 0;
   display: flex;
@@ -577,8 +582,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 /* ── Mobile ────────────────────────────────────── */
 @media (max-width: 800px) {
   .ik-comment {
-    gap: 10px;
     padding: 12px 0;
+  }
+
+  .ik-comment__main {
+    gap: 10px;
   }
 
   .ik-comment.ik-comment--target {
@@ -593,6 +601,10 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   .ik-comment__avatar--sm {
     width: 24px;
     height: 24px;
+  }
+
+  .ik-comment__replies {
+    margin-left: 42px;
   }
 }
 </style>
