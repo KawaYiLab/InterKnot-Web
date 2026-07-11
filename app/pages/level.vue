@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
+import type { DailyExpStatus } from "~/types/entities";
 import {
   LEVEL_THRESHOLDS,
   LEVEL_TITLES,
@@ -67,6 +68,9 @@ const checkInStatus = ref({
 const checkInLoading = ref(false);
 const dataLoaded = ref(false);
 
+// -- 每日经验获取状态 --
+const dailyExpStatus = ref<DailyExpStatus | null>(null);
+
 const checkInReward = computed(() => {
   const consecutive = checkInStatus.value.consecutiveDays;
   return Math.min(6 + consecutive, 10);
@@ -91,6 +95,12 @@ const loadData = async () => {
       rank: statusData.rank,
     };
     dataLoaded.value = true;
+
+    try {
+      dailyExpStatus.value = await api.getDailyExpStatus();
+    } catch {
+      // 每日经验状态接口失败不应影响丁尼/签到基础数据展示
+    }
   } catch {
     // silent
   } finally {
@@ -124,6 +134,11 @@ const doCheckIn = async () => {
     if (result.reward > 0) parts.push(`绳网信用+${result.reward}`);
     const rankText = result.rank > 0 ? `，今日第${result.rank}名` : "";
     message.success(`签到成功！${parts.join("，")}${rankText}`);
+
+    if (dailyExpStatus.value) {
+      dailyExpStatus.value.sources.checkIn = { done: true, exp: result.reward };
+      dailyExpStatus.value.todaySelfGained += result.reward;
+    }
   } catch (err: any) {
     if (err?.data?.error?.code === "CHECK_IN_ALREADY_TODAY") {
       message.warning("今日已签到");
@@ -292,16 +307,16 @@ useHead({ title: "绳网等级" });
               <h3 class="ik-lv__rule-heading">主动行为<span class="ik-lv__rule-cap">上限 50/天</span></h3>
               <div class="ik-lv__rule-items">
                 <div class="ik-lv__rule-item">
-                  <span class="ik-lv__rule-name">签到<em class="ik-lv__rule-once">每日</em></span><span class="ik-lv__rule-val">+6 ~ +10</span>
+                  <span class="ik-lv__rule-name">签到<em class="ik-lv__rule-once">每日</em><em v-if="dailyExpStatus?.sources?.checkIn?.done" class="ik-lv__rule-done">已获取</em></span><span class="ik-lv__rule-val">+6 ~ +10</span>
                 </div>
                 <div class="ik-lv__rule-item">
-                  <span class="ik-lv__rule-name">发帖<em class="ik-lv__rule-once">每日首次</em></span><span class="ik-lv__rule-val">+4</span>
+                  <span class="ik-lv__rule-name">发帖<em class="ik-lv__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createArticle?.done" class="ik-lv__rule-done">已获取</em></span><span class="ik-lv__rule-val">+4</span>
                 </div>
                 <div class="ik-lv__rule-item">
-                  <span class="ik-lv__rule-name">评论<em class="ik-lv__rule-once">每日首次</em></span><span class="ik-lv__rule-val">+3</span>
+                  <span class="ik-lv__rule-name">评论<em class="ik-lv__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createComment?.done" class="ik-lv__rule-done">已获取</em></span><span class="ik-lv__rule-val">+3</span>
                 </div>
                 <div class="ik-lv__rule-item">
-                  <span class="ik-lv__rule-name">点赞<em class="ik-lv__rule-once">每日首次</em></span><span class="ik-lv__rule-val">+1</span>
+                  <span class="ik-lv__rule-name">点赞<em class="ik-lv__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.likeGive?.done" class="ik-lv__rule-done">已获取</em></span><span class="ik-lv__rule-val">+1</span>
                 </div>
               </div>
             </div>
@@ -712,6 +727,17 @@ useHead({ title: "绳网等级" });
   color: rgba(255, 255, 255, 0.3);
   padding: 1px 6px;
   background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.ik-lv__rule-done {
+  font-size: 10px;
+  font-weight: 600;
+  font-style: normal;
+  color: #bfff09;
+  padding: 1px 6px;
+  background: rgba(191, 255, 9, 0.12);
   border-radius: 999px;
   white-space: nowrap;
 }

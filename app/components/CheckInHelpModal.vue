@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DailyExpStatus } from "~/types/entities";
 import {
   LEVEL_THRESHOLDS,
   LEVEL_TITLES,
@@ -11,6 +12,7 @@ defineProps<{
   consecutiveDays?: number;
   rank?: number;
   canCheckIn?: boolean;
+  dailyExpStatus?: DailyExpStatus | null;
 }>();
 
 const formatExp = (n: number) => n.toLocaleString("zh-CN");
@@ -92,7 +94,21 @@ onBeforeUnmount(() => {
                   <li>连签加成：每多连续 1 天额外 <strong>+1 绳网信用</strong>，最多额外 <strong>+4 绳网信用</strong>（即连签 5 天起均为 <strong>10 绳网信用</strong>）</li>
                   <li>当日名次：按签到时间先后排名，越早签到名次越靠前</li>
                 </ul>
-                <p class="ik-checkin-help__muted">其他主动行为：发帖 +4、评论 +3、点赞 +1（均为<strong>每日仅首次</strong>获得经验，并计入上述 50 绳网信用日上限）。他人与你互动还可获得绳网信用（如被点赞 +1、被评论 +1、被收藏 +2），该部分日上限为 1000 绳网信用。</p>
+                <div class="ik-checkin-help__rule-list">
+                  <div class="ik-checkin-help__rule-item">
+                    <span>签到<em class="ik-checkin-help__rule-once">每日</em><em v-if="dailyExpStatus?.sources?.checkIn?.done" class="ik-checkin-help__rule-done">已获取</em></span><strong>+6 ~ +10</strong>
+                  </div>
+                  <div class="ik-checkin-help__rule-item">
+                    <span>发帖<em class="ik-checkin-help__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createArticle?.done" class="ik-checkin-help__rule-done">已获取</em></span><strong>+4</strong>
+                  </div>
+                  <div class="ik-checkin-help__rule-item">
+                    <span>评论<em class="ik-checkin-help__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createComment?.done" class="ik-checkin-help__rule-done">已获取</em></span><strong>+3</strong>
+                  </div>
+                  <div class="ik-checkin-help__rule-item">
+                    <span>点赞<em class="ik-checkin-help__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.likeGive?.done" class="ik-checkin-help__rule-done">已获取</em></span><strong>+1</strong>
+                  </div>
+                </div>
+                <p class="ik-checkin-help__muted">上表所列行为均为<strong>每日仅首次</strong>获得经验，并计入「主动行为」50 绳网信用日上限。他人与你互动还可获得绳网信用（如被点赞 +1、被评论 +1、被收藏 +2），该部分日上限为 1000 绳网信用。</p>
               </section>
 
               <section class="ik-checkin-help__block">
@@ -332,6 +348,58 @@ onBeforeUnmount(() => {
 
 .ik-checkin-help__list--levels li {
   line-height: 1.5;
+}
+
+.ik-checkin-help__rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ik-checkin-help__rule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.ik-checkin-help__rule-item span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ik-checkin-help__rule-item strong {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+.ik-checkin-help__rule-once {
+  font-size: 10px;
+  font-weight: 500;
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.3);
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.ik-checkin-help__rule-done {
+  font-size: 10px;
+  font-weight: 600;
+  font-style: normal;
+  color: #bfff09;
+  padding: 1px 6px;
+  background: rgba(191, 255, 9, 0.12);
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .ik-checkin-help__muted {
