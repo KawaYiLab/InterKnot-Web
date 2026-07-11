@@ -248,9 +248,22 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   border-top: 3px solid #1e1e1e;
 }
 
-.ik-comment--target {
+.ik-comment--target,
+.ik-comment__reply--target {
   background: rgba(191, 255, 9, 0.06);
   box-shadow: inset 3px 0 0 0 #BFFF09;
+  animation: ik-comment-target-pulse 2.5s ease-out forwards;
+}
+
+@keyframes ik-comment-target-pulse {
+  0% {
+    background: rgba(191, 255, 9, 0.14);
+    box-shadow: inset 4px 0 0 0 #BFFF09;
+  }
+  100% {
+    background: rgba(191, 255, 9, 0.06);
+    box-shadow: inset 3px 0 0 0 #BFFF09;
+  }
 }
 
 /* ── Avatar column ────────────────────────────── */
@@ -451,11 +464,6 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 .ik-comment__reply + .ik-comment__reply {
   border-top: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.ik-comment__reply--target {
-  background: rgba(191, 255, 9, 0.06);
-  box-shadow: inset 3px 0 0 0 #BFFF09;
 }
 
 .ik-comment__reply-avatar-col {
