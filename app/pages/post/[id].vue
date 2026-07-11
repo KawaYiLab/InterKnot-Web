@@ -167,6 +167,13 @@ const loadComments = async () => {
   }
 };
 
+const refreshComments = async () => {
+  comments.value = [];
+  commentsCursor.value = "";
+  commentsHasNext.value = true;
+  await loadComments();
+};
+
 
 
 
@@ -623,6 +630,7 @@ const handlePinComment = async (comment: Comment) => {
   if (!post.value?.id) return;
   try {
     await api.pinComment(comment.id, post.value.id);
+    await refreshComments();
     message.success("评论已置顶");
   } catch (err) {
     message.error(resolveErrorMessage(err, "置顶失败"));
@@ -633,6 +641,7 @@ const handleUnpinComment = async (comment: Comment) => {
   if (!post.value?.id) return;
   try {
     await api.unpinComment(comment.id, post.value.id);
+    await refreshComments();
     message.success("评论已取消置顶");
   } catch (err) {
     message.error(resolveErrorMessage(err, "取消置顶失败"));
