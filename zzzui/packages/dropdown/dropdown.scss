@@ -14,6 +14,27 @@
       }
     }
   }
+  &--direction-up {
+    &.is-visible {
+      .z-dropdown {
+        &__content {
+          transform: scaleY(1);
+        }
+      }
+    }
+    .z-dropdown {
+      &__content {
+        bottom: calc(100% + 8px);
+        top: auto;
+        transform-origin: bottom;
+        transform: scaleY(0);
+        &::before {
+          top: 0;
+          bottom: -8px;
+        }
+      }
+    }
+  }
   &--extra {
     .z-dropdown {
       &__content {
