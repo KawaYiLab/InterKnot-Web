@@ -104,14 +104,29 @@ const resolveDirection = () => {
   currentDirection.value = spaceAbove < menuHeight + 8 ? 'down' : 'up'
 }
 
+const open = () => {
+  const prevDirection = currentDirection.value
+  resolveDirection()
+  const newDirection = currentDirection.value
+  const root = rootRef.value
+  const content = contentRef.value
+  if (root && content && prevDirection !== newDirection) {
+    content.style.transition = 'none'
+    root.classList.remove(`z-dropdown--direction-${prevDirection}`)
+    root.classList.add(`z-dropdown--direction-${newDirection}`)
+    content.offsetHeight
+    content.style.transition = ''
+  }
+  closeAllDropdownsExcept(onHideMenu)
+  visible.value = true
+  emits('trigger', visible.value)
+}
+
 const onHoverHandler = () => {
   if (props.disabled) return
   if (props.trigger !== 'hover') return
   if (visible.value) return
-  resolveDirection()
-  closeAllDropdownsExcept(onHideMenu)
-  visible.value = true
-  emits('trigger', visible.value)
+  open()
 }
 const onLeaveHandler = () => {
   if (props.disabled) return
@@ -125,10 +140,7 @@ const onClickHandler = () => {
     onHideMenu()
     return
   }
-  resolveDirection()
-  closeAllDropdownsExcept(onHideMenu)
-  visible.value = true
-  emits('trigger', visible.value)
+  open()
   document.addEventListener('mousedown', onHideMenu)
 }
 const handleItemClick = (command) => {
