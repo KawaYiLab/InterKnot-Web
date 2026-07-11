@@ -9,6 +9,7 @@ import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, El
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
+import { useCommentSeek } from "~/composables/useCommentSeek";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -35,6 +36,9 @@ const commentsCursor = ref("");
 const commentsHasNext = ref(true);
 const commentsLoading = ref(false);
 const commentsInitialLoading = ref(true);
+
+// 组件卸载时阻止继续加载评论
+let isCommentLoadingCancelled = false;
 
 const newComment = ref("");
 const sendingComment = ref(false);
@@ -105,6 +109,11 @@ const commentImages = useCommentImages();
 
 const postId = computed(() => String(route.params.id || ""));
 
+const targetCommentId = computed(() => {
+  const c = route.query.comment;
+  return typeof c === "string" && c ? c : null;
+});
+
 
 
 const covers = computed(() => post.value?.covers ?? []);
@@ -152,24 +161,38 @@ const loadPost = async () => {
 };
 
 const loadComments = async () => {
-  if (commentsLoading.value || !commentsHasNext.value) return;
+  if (isCommentLoadingCancelled || commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
   try {
     const page = await api.getComments(postId.value, commentsCursor.value);
+    if (isCommentLoadingCancelled) return;
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
   } catch (err) {
+    if (isCommentLoadingCancelled) return;
     message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
-    commentsLoading.value = false;
-    commentsInitialLoading.value = false;
+    if (!isCommentLoadingCancelled) {
+      commentsLoading.value = false;
+      commentsInitialLoading.value = false;
+    }
   }
 };
 
+const { seek, highlightedCommentId } = useCommentSeek({
+  targetCommentId,
+  comments,
+  commentsHasNext,
+  loadComments,
+});
 
-
-
+// 路由 query 中的 comment 参数变化时重新定位
+watch(targetCommentId, () => {
+  if (targetCommentId.value && post.value) {
+    void seek();
+  }
+});
 
 const recordView = async () => {
   if (!post.value?.id) return;
@@ -683,7 +706,7 @@ onMounted(async () => {
   pageDataLoading.claim();
   try {
     await loadPost();
-    await Promise.all([recordView(), loadComments()]);
+    await Promise.all([recordView(), seek()]);
   } finally {
     pageDataLoading.finish();
   }
@@ -699,6 +722,9 @@ watch(commentInputFocused, () => {
 });
 
 onBeforeUnmount(() => {
+  isCommentLoadingCancelled = true;
+  commentsLoading.value = false;
+  commentsHasNext.value = false;
   destroyPreview();
   teardownMentionListeners?.();
   teardownMentionListeners = null;
@@ -901,6 +927,7 @@ onBeforeUnmount(() => {
                   :comment="comment"
                   :index="idx"
                   :current-user-author-id="auth.user?.authorId"
+                  :highlighted-comment-id="highlightedCommentId"
                   @like-comment="likeComment"
                   @like-reply="likeReply"
                   @reply-comment="startReply"
