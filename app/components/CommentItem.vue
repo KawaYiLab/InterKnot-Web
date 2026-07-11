@@ -4,10 +4,8 @@ import { formatTime } from "~/utils/time";
 import {
   HandThumbUpIcon,
   ChatBubbleLeftIcon,
-  TrashIcon,
-  FlagIcon,
   ArrowUpCircleIcon,
-  ArrowDownCircleIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
 import { toThumbUrl } from "~/utils/image";
@@ -43,6 +41,18 @@ const isOwnComment = computed(() =>
 
 const isOwnReply = (reply: CommentReply) =>
   !!props.currentUserAuthorId && reply.author?.documentId === props.currentUserAuthorId;
+
+const handleCommentMenuCommand = (command: string | number) => {
+  if (command === "pin") emit("pinComment", props.comment);
+  else if (command === "unpin") emit("unpinComment", props.comment);
+  else if (command === "delete") emit("deleteComment", props.comment);
+  else if (command === "report") emit("reportComment", props.comment);
+};
+
+const handleReplyMenuCommand = (reply: CommentReply, command: string | number) => {
+  if (command === "delete") emit("deleteReply", reply, props.comment);
+  else if (command === "report") emit("reportReply", reply, props.comment);
+};
 
 const floorLabel = computed(() => {
   if (props.comment.isPinned) return "";
@@ -136,37 +146,22 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
           <button class="ik-comment__action-btn" @click="emit('replyComment', comment)">
             <ChatBubbleLeftIcon class="ik-comment__icon" />
           </button>
-          <button
-            v-if="canPin && !comment.isPinned"
-            class="ik-comment__action-btn"
-            title="置顶评论"
-            @click="emit('pinComment', comment)"
+          <z-dropdown
+            trigger="click"
+            size="small"
+            class="ik-comment__more"
+            @command="handleCommentMenuCommand"
           >
-            <ArrowUpCircleIcon class="ik-comment__icon" />
-          </button>
-          <button
-            v-if="canPin && comment.isPinned"
-            class="ik-comment__action-btn ik-comment__action-btn--active"
-            title="取消置顶"
-            @click="emit('unpinComment', comment)"
-          >
-            <ArrowDownCircleIcon class="ik-comment__icon" />
-          </button>
-          <button
-            v-if="isOwnComment"
-            class="ik-comment__action-btn ik-comment__action-btn--delete"
-            @click="emit('deleteComment', comment)"
-          >
-            <TrashIcon class="ik-comment__icon" />
-          </button>
-          <button
-            v-else
-            class="ik-comment__action-btn ik-comment__action-btn--delete"
-            title="举报评论"
-            @click="emit('reportComment', comment)"
-          >
-            <FlagIcon class="ik-comment__icon" />
-          </button>
+            <button type="button" class="ik-comment__action-btn" title="更多操作">
+              <EllipsisVerticalIcon class="ik-comment__icon" aria-hidden="true" />
+            </button>
+            <template #dropdown>
+              <z-dropdown-item v-if="canPin && !comment.isPinned" command="pin">置顶评论</z-dropdown-item>
+              <z-dropdown-item v-if="canPin && comment.isPinned" command="unpin">取消置顶</z-dropdown-item>
+              <z-dropdown-item v-if="isOwnComment" command="delete">删除</z-dropdown-item>
+              <z-dropdown-item v-else command="report">举报</z-dropdown-item>
+            </template>
+          </z-dropdown>
         </div>
       </div>
 
@@ -235,21 +230,20 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                 <button class="ik-comment__action-btn" @click="emit('replyToReply', reply, comment)">
                   <ChatBubbleLeftIcon class="ik-comment__icon" />
                 </button>
-                <button
-                  v-if="isOwnReply(reply)"
-                  class="ik-comment__action-btn ik-comment__action-btn--delete"
-                  @click="emit('deleteReply', reply, comment)"
+                <z-dropdown
+                  trigger="click"
+                  size="small"
+                  class="ik-comment__more"
+                  @command="(command: string | number) => handleReplyMenuCommand(reply, command)"
                 >
-                  <TrashIcon class="ik-comment__icon" />
-                </button>
-                <button
-                  v-else
-                  class="ik-comment__action-btn ik-comment__action-btn--delete"
-                  title="举报回复"
-                  @click="emit('reportReply', reply, comment)"
-                >
-                  <FlagIcon class="ik-comment__icon" />
-                </button>
+                  <button type="button" class="ik-comment__action-btn" title="更多操作">
+                    <EllipsisVerticalIcon class="ik-comment__icon" aria-hidden="true" />
+                  </button>
+                  <template #dropdown>
+                    <z-dropdown-item v-if="isOwnReply(reply)" command="delete">删除</z-dropdown-item>
+                    <z-dropdown-item v-else command="report">举报</z-dropdown-item>
+                  </template>
+                </z-dropdown>
               </div>
             </div>
           </div>
@@ -479,6 +473,29 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 .ik-comment__action-count {
   font-size: 12px;
   font-weight: 500;
+}
+
+/* ── 更多操作上拉菜单：z-dropdown 默认向下展开，这里改为向上 ── */
+.ik-comment__more {
+  margin-left: 0;
+  z-index: 5;
+}
+
+.ik-comment__more :deep(.z-dropdown__content) {
+  bottom: auto;
+  top: -8px;
+  transform-origin: bottom;
+  transform: translateY(-100%) scaleY(0.6);
+  transition: opacity 0.18s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ik-comment__more.is-visible :deep(.z-dropdown__content) {
+  transform: translateY(-100%) scaleY(1);
+}
+
+.ik-comment__more :deep(.z-dropdown__content)::before {
+  top: 0;
+  bottom: -8px;
 }
 
 /* ── Replies ───────────────────────────────────── */
