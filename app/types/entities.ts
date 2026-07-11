@@ -153,6 +153,8 @@ export interface Post {
   isAnonymous?: boolean;
   /** 仅作者本人可见：内容因举报被隐藏（他人访问详情直接 404） */
   isHidden?: boolean;
+  /** 当前登录用户是否为该帖子作者（解决匿名帖 author.documentId 为 null 的问题）。 */
+  isOwner?: boolean;
   category?: PostCategory | null;
   createdAt?: string;
   updatedAt?: string;
@@ -180,6 +182,12 @@ export interface Comment {
   replies: CommentReply[];
   articleId?: string;
   articleTitle?: string;
+  /** 是否被置顶（仅顶层评论可能为 true）。 */
+  isPinned?: boolean;
+  /** 置顶时间（ISO 8601）。 */
+  pinnedAt?: string;
+  /** 展示楼层号（列表接口按 desc 顺序返回），置顶评论无楼层号。 */
+  floor?: number;
 }
 
 export interface ProfileStats {

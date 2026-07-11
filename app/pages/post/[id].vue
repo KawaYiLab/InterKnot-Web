@@ -180,6 +180,14 @@ const loadComments = async () => {
   }
 };
 
+const refreshComments = async () => {
+  comments.value = [];
+  commentsCursor.value = "";
+  commentsHasNext.value = true;
+  commentsInitialLoading.value = true;
+  await loadComments();
+};
+
 const { seek, highlightedCommentId } = useCommentSeek({
   targetCommentId,
   comments,
@@ -263,7 +271,9 @@ const sendComment = async () => {
         });
       }
     } else {
-      comments.value.unshift({
+      const pinnedIndex = comments.value.findIndex((c) => c.isPinned);
+      const insertIndex = pinnedIndex >= 0 ? pinnedIndex + 1 : 0;
+      comments.value.splice(insertIndex, 0, {
         id: localId,
         content: serialized,
         liked: false,
@@ -272,7 +282,15 @@ const sendComment = async () => {
         author: localAuthor,
         images: localImages,
         replies: [],
+        isPinned: false,
+        floor: 1,
       });
+      for (let i = insertIndex + 1; i < comments.value.length; i++) {
+        const c = comments.value[i];
+        if (c && typeof c.floor === "number") {
+          c.floor!++;
+        }
+      }
     }
     const el = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLTextAreaElement | null;
     if (el) {
@@ -370,10 +388,8 @@ const startReplyToReply = (reply: Comment["replies"][number], parentComment: Com
   focusCommentInput();
 };
 
-const isOwner = computed(() => {
-  if (!auth.isLogin || !post.value?.author?.documentId) return false;
-  return auth.user?.authorId === post.value.author.documentId;
-});
+const isOwner = computed(() => post.value?.isOwner === true);
+const canPin = computed(() => auth.isLogin && (isOwner.value || auth.user?.isAdmin === true));
 
 const deletingArticle = ref(false);
 
@@ -631,6 +647,28 @@ const handleDeleteReply = async (reply: Comment["replies"][number], parentCommen
     message.success("回复已删除");
   } catch (err) {
     message.error(resolveErrorMessage(err, "删除回复失败"));
+  }
+};
+
+const handlePinComment = async (comment: Comment) => {
+  if (!post.value?.id) return;
+  try {
+    await api.pinComment(comment.id, post.value.id);
+    await refreshComments();
+    message.success("评论已置顶");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "置顶失败"));
+  }
+};
+
+const handleUnpinComment = async (comment: Comment) => {
+  if (!post.value?.id) return;
+  try {
+    await api.unpinComment(comment.id, post.value.id);
+    await refreshComments();
+    message.success("评论已取消置顶");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "取消置顶失败"));
   }
 };
 
@@ -927,6 +965,7 @@ onBeforeUnmount(() => {
                   :comment="comment"
                   :index="idx"
                   :current-user-author-id="auth.user?.authorId"
+                  :can-pin="canPin"
                   :highlighted-comment-id="highlightedCommentId"
                   @like-comment="likeComment"
                   @like-reply="likeReply"
@@ -936,6 +975,8 @@ onBeforeUnmount(() => {
                   @delete-reply="handleDeleteReply"
                   @report-comment="handleReportComment"
                   @report-reply="handleReportReply"
+                  @pin-comment="handlePinComment"
+                  @unpin-comment="handleUnpinComment"
                 />
                 <div v-if="commentsHasNext" class="ik-page__load-more">
                   <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>
@@ -1975,16 +2016,16 @@ onBeforeUnmount(() => {
 }
 
 .ik-engage-bar__more :deep(.z-dropdown__content) {
-  bottom: auto;
-  top: -8px;
+  bottom: calc(100% + 8px);
+  top: auto;
   transform-origin: bottom;
-  transform: translateY(-100%) scaleY(0.6);
+  transform: scaleY(0.6);
   transition: opacity 0.18s ease,
               transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ik-engage-bar__more.is-visible :deep(.z-dropdown__content) {
-  transform: translateY(-100%) scaleY(1);
+  transform: scaleY(1);
 }
 
 .ik-engage-bar__more :deep(.z-dropdown__content)::before {
