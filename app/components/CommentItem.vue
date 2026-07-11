@@ -509,6 +509,10 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
     padding: 12px 0;
   }
 
+  .ik-comment.ik-comment--target {
+    padding: 12px 12px 16px 12px;
+  }
+
   .ik-comment__avatar {
     width: 32px;
     height: 32px;
