@@ -262,7 +262,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   inset: 0;
   z-index: -1;
   background: var(--ik-primary);
-  opacity: 0.1;
+  opacity: 0.2;
   pointer-events: none;
   animation: ik-comment-target-flash 1.2s ease-out forwards;
 }
@@ -282,7 +282,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 @keyframes ik-comment-target-flash {
   0% {
-    opacity: 0.1;
+    opacity: 0.2;
   }
   100% {
     opacity: 0;
