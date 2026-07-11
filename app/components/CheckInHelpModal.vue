@@ -108,7 +108,7 @@ onBeforeUnmount(() => {
                     <span>点赞<em class="ik-checkin-help__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.likeGive?.done" class="ik-checkin-help__rule-done">已获取</em></span><strong>+1</strong>
                   </div>
                 </div>
-                <p class="ik-checkin-help__muted">上表所列行为均为<strong>每日仅首次</strong>获得经验，并计入「主动行为」50 绳网信用日上限。他人与你互动还可获得绳网信用（如被点赞 +1、被评论 +1、被收藏 +2），该部分日上限为 1000 绳网信用。</p>
+                <p class="ik-checkin-help__muted">上表所列行为均为<strong>每日仅首次</strong>获得经验，并计入「主动行为」50 绳网信用日上限。你获得的投币也可转化为绳网信用：每被投 1 币获得 +1 绳网信用，该部分日上限为 1,000 绳网信用。</p>
               </section>
 
               <section class="ik-checkin-help__block">

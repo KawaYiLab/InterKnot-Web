@@ -324,13 +324,7 @@ useHead({ title: "绳网等级" });
               <h3 class="ik-lv__rule-heading">被动收入<span class="ik-lv__rule-cap">上限 1,000/天</span></h3>
               <div class="ik-lv__rule-items">
                 <div class="ik-lv__rule-item">
-                  <span>被点赞</span><span class="ik-lv__rule-val">+1</span>
-                </div>
-                <div class="ik-lv__rule-item">
-                  <span>被评论</span><span class="ik-lv__rule-val">+1</span>
-                </div>
-                <div class="ik-lv__rule-item">
-                  <span>被收藏</span><span class="ik-lv__rule-val">+2</span>
+                  <span>被投币</span><span class="ik-lv__rule-val">+1/币</span>
                 </div>
               </div>
             </div>
