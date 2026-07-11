@@ -20,6 +20,7 @@ const props = defineProps<{
   index?: number;
   currentUserAuthorId?: string;
   canPin?: boolean;
+  highlightedCommentId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -76,7 +77,14 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 </script>
 
 <template>
-  <div class="ik-comment" :class="{ 'ik-comment--pinned': comment.isPinned }">
+  <div
+    class="ik-comment"
+    :class="{
+      'ik-comment--pinned': comment.isPinned,
+      'ik-comment--target': comment.id === highlightedCommentId,
+    }"
+    :data-comment-id="comment.id"
+  >
     <div class="ik-comment__avatar-col">
       <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
         <img
@@ -173,6 +181,8 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
           v-for="reply in comment.replies"
           :key="reply.id"
           class="ik-comment__reply"
+          :class="{ 'ik-comment__reply--target': reply.id === highlightedCommentId }"
+          :data-comment-id="reply.id"
         >
           <div class="ik-comment__reply-avatar-col">
             <UserHoverCard :author-id="reply.author?.documentId" :clickable="!!reply.author?.documentId">
@@ -271,6 +281,51 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   border-top: 3px solid #1e1e1e;
 }
 
+.ik-comment--target,
+.ik-comment__reply--target {
+  position: relative;
+  padding: 16px 12px 20px 12px;
+}
+
+/* 进入视口时先用主题色背景给出明显反馈，随后背景渐隐恢复正常，只保留左侧强调线 */
+.ik-comment--target::before,
+.ik-comment__reply--target::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--ik-primary);
+  opacity: 0.2;
+  pointer-events: none;
+  animation: ik-comment-target-flash 1.2s ease-out forwards;
+}
+
+.ik-comment--target::after,
+.ik-comment__reply--target::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--ik-primary);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+@keyframes ik-comment-target-flash {
+  0% {
+    opacity: 0.2;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.ik-comment__reply--target {
+  padding: 12px 12px 16px 12px;
+}
+
 /* ── Avatar column ────────────────────────────── */
 .ik-comment__avatar-col {
   flex-shrink: 0;
@@ -336,9 +391,9 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   margin-left: auto;
   padding: 1px 8px;
   border-radius: 0 6px 6px 6px;
-  background: #333;
+  background: rgba(255, 255, 255, 0.06);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 500;
   color: #999;
   line-height: 1.5;
 }
@@ -529,6 +584,10 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   .ik-comment {
     gap: 10px;
     padding: 12px 0;
+  }
+
+  .ik-comment.ik-comment--target {
+    padding: 12px 12px 16px 12px;
   }
 
   .ik-comment__avatar {

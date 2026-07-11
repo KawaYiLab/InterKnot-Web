@@ -8,6 +8,7 @@ import type {
   BusinessCardType,
   Category,
   Comment,
+  DailyExpStatus,
   DraftArticle,
   ExamStartResult,
   ExamStatus,
@@ -1800,6 +1801,40 @@ export function useApi() {
     };
   };
 
+  /**
+   * 获取每日主动行为经验获取状态
+   */
+  const getDailyExpStatus = async (): Promise<DailyExpStatus> => {
+    const response = await $api("/api/me/exp/daily", {
+      method: "GET",
+    });
+    const data = response as Record<string, unknown>;
+    const sources = data.sources as
+      | Record<string, { done?: boolean; exp?: number } | undefined>
+      | undefined;
+
+    const source = (
+      key: "checkIn" | "createArticle" | "createComment" | "likeGive",
+    ) => {
+      const s = sources?.[key];
+      return {
+        done: s?.done === true,
+        exp: typeof s?.exp === "number" ? s.exp : 0,
+      };
+    };
+
+    return {
+      todaySelfGained: typeof data.todaySelfGained === "number" ? data.todaySelfGained : 0,
+      todaySelfCap: typeof data.todaySelfCap === "number" ? data.todaySelfCap : 50,
+      sources: {
+        checkIn: source("checkIn"),
+        createArticle: source("createArticle"),
+        createComment: source("createComment"),
+        likeGive: source("likeGive"),
+      },
+    };
+  };
+
   // ── 入站考试 ──────────────────────────────────────────────
   const getExamStatus = async (): Promise<ExamStatus> => {
     const response = await $api("/api/exam/status");
@@ -1884,6 +1919,7 @@ export function useApi() {
     // 签到系统
     getCheckInStatus,
     checkIn,
+    getDailyExpStatus,
     // 入站考试
     getExamStatus,
     startExam,
