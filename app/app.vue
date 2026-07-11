@@ -152,6 +152,7 @@ const overlayOpen = computed(
             :post-id="postModal.postId.value || ''"
             :cover-hint="postModal.coverHint.value"
             :preview="postModal.preview.value"
+            :target-comment-id="postModal.targetCommentId.value"
             @close="handleOverlayClose"
           />
         </Transition>

@@ -11,6 +11,7 @@ import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
+import { useCommentSeek } from "~/composables/useCommentSeek";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import UserHoverCard from "./UserHoverCard.vue";
@@ -28,6 +29,7 @@ const props = defineProps<{
   postId: string;
   coverHint?: number | null;
   preview?: PostPreview | null;
+  targetCommentId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -64,6 +66,11 @@ const commentsLoading = ref(false);
 // 若此时就按「无评论」显示空提示，会出现「空提示 → 骨架 → 评论」的闪烁。
 // 用此标记把「尚未加载」与「加载完确实为空」区分开：未加载完一律显示骨架。
 const commentsLoaded = ref(false);
+
+// 用于在 postId 切换时废弃旧的评论请求，避免旧数据污染新帖子
+let currentCommentLoadId = 0;
+// 组件卸载时阻止继续加载评论
+let isCommentLoadingCancelled = false;
 
 const newComment = ref("");
 const sendingComment = ref(false);
@@ -369,26 +376,47 @@ const loadPost = async () => {
 };
 
 const loadComments = async () => {
-  if (commentsLoading.value || !commentsHasNext.value) return;
+  if (isCommentLoadingCancelled || commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
+  const loadId = ++currentCommentLoadId;
   try {
     const page = await api.getComments(props.postId, commentsCursor.value);
+    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
   } catch (err) {
+    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
     message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
-    commentsLoading.value = false;
-    commentsLoaded.value = true;
+    if (loadId === currentCommentLoadId) {
+      commentsLoading.value = false;
+      commentsLoaded.value = true;
+    }
   }
 };
 
-/** 正文渲染后再拉评论，避免与入场动画、骨架屏切换抢主线程 */
-const scheduleLoadComments = () => {
+const targetCommentId = computed(() => props.targetCommentId ?? null);
+
+const { seek, highlightedCommentId } = useCommentSeek({
+  targetCommentId,
+  comments,
+  commentsHasNext,
+  loadComments,
+});
+
+// 同帖子切换 commentId（如从通知再打开同一篇帖子的另一条评论）时重新定位
+watch(targetCommentId, () => {
+  if (targetCommentId.value && post.value) {
+    void seek();
+  }
+});
+
+/** 正文渲染后再拉评论 / 定位目标评论，避免与入场动画、骨架屏切换抢主线程 */
+const scheduleSeek = () => {
   if (!import.meta.client) return;
   const run = () => {
-    void loadComments();
+    void seek();
   };
   requestAnimationFrame(() => {
     if (typeof requestIdleCallback !== "undefined") {
@@ -870,6 +898,8 @@ const resetAndLoad = async () => {
   commentsCursor.value = "";
   commentsHasNext.value = true;
   commentsLoaded.value = false;
+  commentsLoading.value = false;
+  currentCommentLoadId++;
   loadError.value = false;
   newComment.value = "";
   commentImages.clearUploads();
@@ -884,7 +914,7 @@ const resetAndLoad = async () => {
   loading.value = false;
   void recordView();
   if (!loadError.value) {
-    scheduleLoadComments();
+    scheduleSeek();
   }
 };
 
@@ -958,13 +988,17 @@ onMounted(async () => {
   void recordView();
   await nextTick();
   if (!loadError.value) {
-    scheduleLoadComments();
+    scheduleSeek();
   }
   await nextTick();
   attachMentionToTextarea();
 });
 
 onBeforeUnmount(() => {
+  isCommentLoadingCancelled = true;
+  currentCommentLoadId++;
+  commentsLoading.value = false;
+  commentsHasNext.value = false;
   window.removeEventListener("keydown", onKeyDown);
   destroyPreview();
   if (coverSettleTimer !== null) {
@@ -1228,6 +1262,7 @@ onBeforeUnmount(() => {
                         :comment="comment"
                         :index="idx"
                         :current-user-author-id="auth.user?.authorId"
+                        :highlighted-comment-id="highlightedCommentId"
                         @like-comment="likeComment"
                         @like-reply="likeReply"
                         @reply-comment="startReply"

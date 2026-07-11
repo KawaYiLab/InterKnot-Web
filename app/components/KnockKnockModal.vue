@@ -496,6 +496,7 @@ const goPost = (msg: DmMessage) => {
   postModal.open(msg.article.documentId, {
     coverAspectRatio: msg.article.coverAspectRatio ?? undefined,
     preview: { title: msg.article.title },
+    commentId: msg.comment?.documentId,
   });
 };
 
