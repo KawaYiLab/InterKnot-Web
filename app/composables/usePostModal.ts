@@ -23,6 +23,7 @@ export interface PostPreview {
   author?: Author;
   createdAt?: string;
   category?: { name: string; slug: string } | null;
+  cover?: string;
 }
 
 export function usePostModal() {

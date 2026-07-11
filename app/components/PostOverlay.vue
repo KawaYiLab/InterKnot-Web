@@ -148,6 +148,11 @@ const syncCommentInputHeight = async () => {
 };
 
 const firstCover = computed(() => covers.value[0] ?? null);
+const previewCover = computed(() => {
+  const cover = props.preview?.cover?.trim();
+  return cover || null;
+});
+const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
 
 // 真实图片解码完成的索引集合：用于在解码完成前继续显示骨架屏，
 // 避免"骨架结束 → 黑色封面框 → 图片淡入"的中间黑屏。
@@ -373,6 +378,23 @@ const loadPost = async () => {
     loadError.value = true;
     message.error(resolveErrorMessage(err, "获取帖子详情失败"));
   }
+};
+
+const waitForLoadedPreview = async (postId: string) => {
+  await nextTick();
+  if (props.postId !== postId) return false;
+  if (!previewCover.value) return true;
+
+  const image = loadedPreviewImageRef.value;
+  if (image) {
+    await image.decode().catch(() => {});
+  }
+  if (props.postId !== postId) return false;
+
+  if (import.meta.client) {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+  return props.postId === postId;
 };
 
 const loadComments = async () => {
@@ -933,6 +955,7 @@ const onKeyDown = (e: KeyboardEvent) => {
 
 /* ── 当 postId 变化时重新加载 ─────────────── */
 const resetAndLoad = async () => {
+  const requestedPostId = props.postId;
   post.value = null;
   comments.value = [];
   commentsCursor.value = "";
@@ -950,6 +973,8 @@ const resetAndLoad = async () => {
     scrollRef.value.scrollTop = 0;
   }
   await loadPost();
+  if (props.postId !== requestedPostId) return;
+  if (!loadError.value && !(await waitForLoadedPreview(requestedPostId))) return;
   // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
   void recordView();
@@ -1022,7 +1047,10 @@ onMounted(async () => {
   // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
   // 让只看文字、不点图的用户不必下载这套资源。
   loading.value = true;
+  const requestedPostId = props.postId;
   await loadPost();
+  if (props.postId !== requestedPostId) return;
+  if (!loadError.value && !(await waitForLoadedPreview(requestedPostId))) return;
   // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
   void recordView();
@@ -1110,7 +1138,7 @@ onBeforeUnmount(() => {
             <div class="ik-dialog__main">
               <IkZzzMarquee />
 
-            <div v-if="loading" class="ik-dialog__body">
+            <div v-show="loading" class="ik-dialog__body">
               <!-- 骨架屏：左栏 -->
               <div class="ik-dialog__left">
                 <div class="ik-dialog__left-scroll">
@@ -1119,7 +1147,16 @@ onBeforeUnmount(() => {
                       class="ik-dialog__cover-border"
                       :style="props.coverHint ? { aspectRatio: String(props.coverHint) } : {}"
                     >
-                      <div class="ik-skel ik-dialog__cover-skel" aria-hidden="true"></div>
+                      <div v-if="previewCover" class="ik-dialog__cover-preview">
+                        <img
+                          :src="previewCover"
+                          alt=""
+                          class="ik-dialog__cover-preview-image"
+                          aria-hidden="true"
+                          decoding="sync"
+                        />
+                      </div>
+                      <div v-else class="ik-skel ik-dialog__cover-skel" aria-hidden="true"></div>
                     </div>
                   </div>
                   <div class="ik-dialog__detail">
@@ -1150,13 +1187,13 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div v-else-if="loadError" class="ik-dialog__error">
+            <div v-if="!loading && loadError" class="ik-dialog__error">
               加载失败，请关闭后重试
             </div>
 
-            <template v-else-if="post">
+            <template v-if="post">
               <!-- 桌面端：双栏布局 -->
-              <div class="ik-dialog__body">
+              <div v-show="!loading" class="ik-dialog__body">
                 <!-- 左栏：封面 + 正文 -->
                 <div class="ik-dialog__left">
                   <div class="ik-dialog__left-scroll" ref="scrollRef">
@@ -1168,6 +1205,16 @@ onBeforeUnmount(() => {
                       >
                         <!-- 单张封面 -->
                         <template v-if="!hasCovers || covers.length === 1">
+                          <div v-if="previewCover" class="ik-dialog__cover-preview">
+                            <img
+                              ref="loadedPreviewImageRef"
+                              :src="previewCover"
+                              alt=""
+                              class="ik-dialog__cover-preview-image"
+                              aria-hidden="true"
+                              decoding="sync"
+                            />
+                          </div>
                           <img
                             :src="firstCover?.url || DEFAULT_COVER_IMAGE"
                             :alt="hasCovers ? post.title : 'default cover'"
@@ -1178,7 +1225,7 @@ onBeforeUnmount(() => {
                             @error="onCoverImageLoad(0); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                           />
                           <div
-                            v-if="!isCoverImageLoaded(0)"
+                            v-if="!isCoverImageLoaded(0) && !previewCover"
                             class="ik-skel ik-dialog__cover-skel"
                             aria-hidden="true"
                           ></div>
@@ -1202,6 +1249,19 @@ onBeforeUnmount(() => {
                               :key="c.url + i"
                               class="ik-dialog__cover-slide"
                             >
+                              <div
+                                v-if="i === 0 && previewCover"
+                                class="ik-dialog__cover-preview"
+                              >
+                                <img
+                                  ref="loadedPreviewImageRef"
+                                  :src="previewCover"
+                                  alt=""
+                                  class="ik-dialog__cover-preview-image"
+                                  aria-hidden="true"
+                                  decoding="sync"
+                                />
+                              </div>
                               <img
                                 :src="isCoverNearby(i) ? c.url : undefined"
                                 :alt="`${post.title} - ${i + 1}`"
@@ -1214,7 +1274,7 @@ onBeforeUnmount(() => {
                                 @error="onCoverImageLoad(i); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                               />
                               <div
-                                v-if="!isCoverImageLoaded(i)"
+                                v-if="!isCoverImageLoaded(i) && !(i === 0 && previewCover)"
                                 class="ik-skel ik-dialog__cover-skel"
                                 aria-hidden="true"
                               ></div>
@@ -1924,7 +1984,26 @@ onBeforeUnmount(() => {
   z-index: 1;
 }
 
+.ik-dialog__cover-preview {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ik-dialog__cover-preview-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(16px);
+  transform: scale(1.05);
+}
+
 .ik-dialog__cover {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
