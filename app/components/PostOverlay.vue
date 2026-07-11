@@ -1205,10 +1205,7 @@ onBeforeUnmount(() => {
                       >
                         <!-- 单张封面 -->
                         <template v-if="!hasCovers || covers.length === 1">
-                          <div
-                            v-if="previewCover"
-                            class="ik-dialog__cover-preview"
-                          >
+                          <div v-if="previewCover" class="ik-dialog__cover-preview">
                             <img
                               ref="loadedPreviewImageRef"
                               :src="previewCover"
@@ -1993,7 +1990,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
-  opacity: 1;
 }
 
 .ik-dialog__cover-preview-image {
