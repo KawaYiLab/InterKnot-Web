@@ -449,6 +449,10 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   font-size: 12px;
   cursor: pointer;
   transition: color 140ms ease;
+  /* 让 icon 始终位于按钮右边缘，数字在左，
+     这样三个图标的间距只由外层 gap 决定，不会受点赞数宽度影响 */
+  flex-direction: row-reverse;
+  justify-content: flex-end;
 }
 
 .ik-comment__icon {
