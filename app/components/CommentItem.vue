@@ -318,7 +318,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   font-size: 11px;
   font-weight: 700;
   font-style: italic;
-  color: #BFFF09;
+  color: var(--ik-primary);
   flex-shrink: 0;
 }
 
@@ -329,7 +329,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   font-weight: 800;
   line-height: 1.4;
   color: #111;
-  background: #BFFF09;
+  background: var(--ik-primary);
   border: 1px solid #111;
   border-radius: 4px;
 }
@@ -357,7 +357,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   background: #3a4a1a;
   font-size: 11px;
   font-weight: 700;
-  color: #BFFF09;
+  color: var(--ik-primary);
   line-height: 1.5;
 }
 
@@ -367,7 +367,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 }
 
 .ik-comment--pinned {
-  border-left: 3px solid #BFFF09;
+  border-left: 3px solid var(--ik-primary);
   padding-left: 10px;
 }
 
@@ -465,11 +465,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 }
 
 .ik-comment__action-btn--active {
-  color: #BFFF09;
+  color: var(--ik-primary);
 }
 
 .ik-comment__action-btn--active:hover {
-  color: #BFFF09;
+  color: var(--ik-primary);
 }
 
 .ik-comment__action-btn--delete:hover {
