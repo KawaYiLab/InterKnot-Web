@@ -69,8 +69,8 @@ const sizeHeights = {
 const getMenuHeight = () => {
   const content = contentRef.value
   if (!content) return 0
-  const scrollHeight = content.scrollHeight
-  if (scrollHeight) return scrollHeight
+  const renderedHeight = content.offsetHeight || content.clientHeight
+  if (renderedHeight) return renderedHeight
   const items = content.querySelectorAll('.z-dropdown-item')
   const itemHeight = sizeHeights[props.size] || sizeHeights.default
   const count = items.length || 1

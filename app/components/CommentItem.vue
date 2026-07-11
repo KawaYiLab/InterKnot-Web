@@ -547,11 +547,6 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   transition: opacity 0.18s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.ik-comment__more :deep(.z-dropdown__content)::before {
-  top: -8px;
-  bottom: -8px;
-}
-
 /* ── Replies ───────────────────────────────────── */
 .ik-comment__replies {
   margin-top: 10px;
