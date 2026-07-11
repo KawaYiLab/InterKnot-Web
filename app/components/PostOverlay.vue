@@ -508,6 +508,12 @@ const sendComment = async () => {
     } else {
       const pinnedIndex = comments.value.findIndex((c) => c.isPinned);
       const insertIndex = pinnedIndex >= 0 ? pinnedIndex + 1 : 0;
+      let maxFloor = 0;
+      for (const comment of comments.value) {
+        if (!comment.isPinned && typeof comment.floor === "number") {
+          maxFloor = Math.max(maxFloor, comment.floor);
+        }
+      }
       comments.value.splice(insertIndex, 0, {
         id: localId,
         content: serialized,
@@ -518,14 +524,8 @@ const sendComment = async () => {
         images: localImages,
         replies: [],
         isPinned: false,
-        floor: 1,
+        floor: maxFloor + 1,
       });
-      for (let i = insertIndex + 1; i < comments.value.length; i++) {
-        const c = comments.value[i];
-        if (c && typeof c.floor === "number") {
-          c.floor!++;
-        }
-      }
     }
     const el = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLTextAreaElement | null;
     if (el) {
