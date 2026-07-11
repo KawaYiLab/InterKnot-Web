@@ -18,10 +18,11 @@
 </template>
 
 <script setup>
-import { ref, provide, onBeforeUnmount } from 'vue'
+import { ref, provide, onMounted, onBeforeUnmount } from 'vue'
 import { useZenless } from 'zenless-ui/index'
 import { zenlessSizes } from 'zenless-ui/constants'
 import { dropdownTriggers, dropdownContextKey } from './constants'
+import { registerDropdown, closeAllDropdownsExcept } from './manager'
 
 defineOptions({
   name: 'ZDropdown'
@@ -47,18 +48,6 @@ const props = defineProps({
 const visible = ref(false)
 const emits = defineEmits(['command', 'trigger'])
 
-const onHoverHandler = () => {
-  if (props.disabled) return
-  if (props.trigger !== 'hover') return
-  visible.value = true
-  emits('trigger', visible.value)
-}
-const onLeaveHandler = () => {
-  if (props.disabled) return
-  if (props.trigger !== 'hover') return
-  visible.value = false
-  emits('trigger', visible.value)
-}
 const onHideMenu = () => {
   if (props.disabled) return
   if (!visible.value) return
@@ -66,10 +55,28 @@ const onHideMenu = () => {
   emits('trigger', visible.value)
   document.removeEventListener('mousedown', onHideMenu)
 }
+
+const onHoverHandler = () => {
+  if (props.disabled) return
+  if (props.trigger !== 'hover') return
+  if (visible.value) return
+  closeAllDropdownsExcept(onHideMenu)
+  visible.value = true
+  emits('trigger', visible.value)
+}
+const onLeaveHandler = () => {
+  if (props.disabled) return
+  if (props.trigger !== 'hover') return
+  onHideMenu()
+}
 const onClickHandler = () => {
   if (props.disabled) return
   if (props.trigger !== 'click') return
-  if (visible.value) return
+  if (visible.value) {
+    onHideMenu()
+    return
+  }
+  closeAllDropdownsExcept(onHideMenu)
   visible.value = true
   emits('trigger', visible.value)
   document.addEventListener('mousedown', onHideMenu)
@@ -82,7 +89,12 @@ const handleItemClick = (command) => {
   emits('command', command)
 }
 
+let unregisterDropdown = null
+onMounted(() => {
+  unregisterDropdown = registerDropdown(onHideMenu)
+})
 onBeforeUnmount(() => {
+  if (unregisterDropdown) unregisterDropdown()
   document.removeEventListener('mousedown', onHideMenu)
 })
 
