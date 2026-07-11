@@ -150,6 +150,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
             trigger="click"
             size="small"
             class="ik-comment__more"
+            direction="auto"
             @command="handleCommentMenuCommand"
           >
             <button type="button" class="ik-comment__action-btn" title="更多操作">
@@ -235,6 +236,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                   trigger="click"
                   size="small"
                   class="ik-comment__more"
+                  direction="auto"
                   @command="(command: string | number) => handleReplyMenuCommand(reply, command)"
                 >
                   <button type="button" class="ik-comment__action-btn" title="更多操作">
@@ -476,26 +478,18 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   font-weight: 500;
 }
 
-/* ── 更多操作上拉菜单：z-dropdown 默认向下展开，这里改为向上 ── */
+/* ── 更多操作上拉菜单：自适应方向，避免被父级 overflow 截断 ── */
 .ik-comment__more {
   margin-left: 0;
   z-index: 5;
 }
 
 .ik-comment__more :deep(.z-dropdown__content) {
-  bottom: auto;
-  top: -8px;
-  transform-origin: bottom;
-  transform: translateY(-100%) scaleY(0.6);
   transition: opacity 0.18s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.ik-comment__more.is-visible :deep(.z-dropdown__content) {
-  transform: translateY(-100%) scaleY(1);
-}
-
 .ik-comment__more :deep(.z-dropdown__content)::before {
-  top: 0;
+  top: -8px;
   bottom: -8px;
 }
 
