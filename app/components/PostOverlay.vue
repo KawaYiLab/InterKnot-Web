@@ -1184,7 +1184,6 @@ onBeforeUnmount(() => {
                           <div
                             v-if="previewCover"
                             class="ik-dialog__cover-preview"
-                            :class="{ 'ik-dialog__cover-preview--hidden': isCoverImageLoaded(0) }"
                           >
                             <img
                               :src="previewCover"
@@ -1231,7 +1230,6 @@ onBeforeUnmount(() => {
                               <div
                                 v-if="i === 0 && previewCover"
                                 class="ik-dialog__cover-preview"
-                                :class="{ 'ik-dialog__cover-preview--hidden': isCoverImageLoaded(0) }"
                               >
                                 <img
                                   :src="previewCover"
@@ -1970,11 +1968,6 @@ onBeforeUnmount(() => {
   pointer-events: none;
   z-index: 0;
   opacity: 1;
-  transition: opacity 300ms ease;
-}
-
-.ik-dialog__cover-preview--hidden {
-  opacity: 0;
 }
 
 .ik-dialog__cover-preview-image {
