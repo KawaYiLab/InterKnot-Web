@@ -1566,7 +1566,6 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </div>
-              </div>
             </template>
             </div><!-- /.ik-dialog__main -->
           </div>
