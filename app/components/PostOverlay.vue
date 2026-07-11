@@ -1087,8 +1087,9 @@ onBeforeUnmount(() => {
                       Lv.{{ headerAuthor.level }}
                     </span>
                   </div>
-                  <span v-if="headerCreatedAt" class="ik-dialog__time">
-                    {{ formatTime(headerCreatedAt) }}
+                  <span v-if="headerCreatedAt || post?.editedAt" class="ik-dialog__time">
+                    <template v-if="headerCreatedAt">{{ formatTime(headerCreatedAt) }}</template>
+                    <template v-if="post?.editedAt"> · 编辑于 {{ formatTime(post.editedAt) }}</template>
                   </span>
                   <div v-else class="ik-skel" style="width:60px;height:16px;border-radius:3px"></div>
                 </div>
