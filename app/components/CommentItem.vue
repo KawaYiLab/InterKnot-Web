@@ -250,20 +250,29 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 .ik-comment--target,
 .ik-comment__reply--target {
-  background: rgba(191, 255, 9, 0.06);
-  box-shadow: inset 3px 0 0 0 #BFFF09;
-  animation: ik-comment-target-pulse 2.5s ease-out forwards;
+  background: rgba(191, 255, 9, 0.1);
+  box-shadow: inset 4px 0 0 0 rgba(191, 255, 9, 0.8);
+  animation: ik-comment-target-flash 1.2s ease-out forwards;
 }
 
-@keyframes ik-comment-target-pulse {
+/* 进入视口时先给出明显反馈，随后背景渐隐恢复正常，只保留左侧强调线 */
+@keyframes ik-comment-target-flash {
   0% {
-    background: rgba(191, 255, 9, 0.14);
-    box-shadow: inset 4px 0 0 0 #BFFF09;
+    background: rgba(191, 255, 9, 0.1);
+    box-shadow: inset 4px 0 0 0 rgba(191, 255, 9, 0.8);
   }
   100% {
-    background: rgba(191, 255, 9, 0.06);
-    box-shadow: inset 3px 0 0 0 #BFFF09;
+    background: transparent;
+    box-shadow: inset 4px 0 0 0 rgba(191, 255, 9, 0.8);
   }
+}
+
+.ik-comment--target {
+  padding: 16px 12px 20px 12px;
+}
+
+.ik-comment__reply--target {
+  padding: 12px 12px 16px 12px;
 }
 
 /* ── Avatar column ────────────────────────────── */
@@ -331,9 +340,9 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   margin-left: auto;
   padding: 1px 8px;
   border-radius: 0 6px 6px 6px;
-  background: #333;
+  background: rgba(255, 255, 255, 0.06);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 500;
   color: #999;
   line-height: 1.5;
 }
