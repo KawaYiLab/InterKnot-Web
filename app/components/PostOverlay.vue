@@ -1764,16 +1764,16 @@ onBeforeUnmount(() => {
 }
 
 .ik-engage-bar__more :deep(.z-dropdown__content) {
-  bottom: auto;
-  top: -8px;
+  bottom: calc(100% + 8px);
+  top: auto;
   transform-origin: bottom;
-  transform: translateY(-100%) scaleY(0.6);
+  transform: scaleY(0.6);
   transition: opacity 0.18s ease,
               transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ik-engage-bar__more.is-visible :deep(.z-dropdown__content) {
-  transform: translateY(-100%) scaleY(1);
+  transform: scaleY(1);
 }
 
 .ik-engage-bar__more :deep(.z-dropdown__content)::before {
