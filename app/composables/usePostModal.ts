@@ -23,6 +23,8 @@ export interface PostPreview {
   author?: Author;
   createdAt?: string;
   category?: { name: string; slug: string } | null;
+  /** 首页 / 个人主页卡片传入的缩略图 URL（w_360 webp），用于弹窗骨架屏无缝占位 */
+  cover?: string | null;
 }
 
 export function usePostModal() {

@@ -343,6 +343,7 @@ const goPost = (post: Post, event: MouseEvent) => {
       author: post.author,
       createdAt: post.createdAt,
       category: post.category ?? null,
+      cover: post.cover,
     },
   });
 
