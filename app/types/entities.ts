@@ -16,6 +16,22 @@ export interface Author {
   examPassed?: boolean;
 }
 
+export interface DailyExpSource {
+  done: boolean;
+  exp: number;
+}
+
+export interface DailyExpStatus {
+  todaySelfGained: number;
+  todaySelfCap: number;
+  sources: {
+    checkIn: DailyExpSource;
+    createArticle: DailyExpSource;
+    createComment: DailyExpSource;
+    likeGive: DailyExpSource;
+  };
+}
+
 /** 入站考试题目选项 */
 export interface ExamOption {
   key: string;
