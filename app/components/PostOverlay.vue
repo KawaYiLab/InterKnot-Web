@@ -1114,7 +1114,7 @@ onBeforeUnmount(() => {
             <div class="ik-dialog__main">
               <IkZzzMarquee />
 
-            <div v-if="loading" class="ik-dialog__body">
+            <div v-show="loading" class="ik-dialog__body">
               <!-- 骨架屏：左栏 -->
               <div class="ik-dialog__left">
                 <div class="ik-dialog__left-scroll">
@@ -1163,13 +1163,13 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div v-else-if="loadError" class="ik-dialog__error">
+            <div v-if="!loading && loadError" class="ik-dialog__error">
               加载失败，请关闭后重试
             </div>
 
-            <template v-else-if="post">
+            <template v-if="post">
               <!-- 桌面端：双栏布局 -->
-              <div class="ik-dialog__body">
+              <div v-show="!loading" class="ik-dialog__body">
                 <!-- 左栏：封面 + 正文 -->
                 <div class="ik-dialog__left">
                   <div class="ik-dialog__left-scroll" ref="scrollRef">
@@ -1565,6 +1565,7 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                 </div>
+              </div>
               </div>
             </template>
             </div><!-- /.ik-dialog__main -->
