@@ -458,7 +458,7 @@ img:not(.ik-card__cover).ik-img-revealed {
   }
 }
 
-/* 当页面上有任何包含 .ik-overlay 类名的弹窗（包括帖子详情、敲敲私聊、名片修改、头像修改、更多操作、签到帮助等）处于激活/显示状态时，暂停全局背景跑马灯动画以最大化释放 GPU 渲染开销 */
+/* 当页面上有任何包含 .ik-overlay 类名的弹窗（包括委托详情、敲敲私聊、名片修改、头像修改、更多操作、签到帮助等）处于激活/显示状态时，暂停全局背景跑马灯动画以最大化释放 GPU 渲染开销 */
 body:has(.ik-overlay, .ik-img-overlay) .ik-global-marquee .ik-zzz-marquee__track {
   animation-play-state: paused !important;
 }

@@ -1,8 +1,8 @@
 /**
  * usePostModal – 路由级弹窗 composable
  *
- * 从首页点击帖子时，通过 history.pushState 改变 URL（不走 Vue Router），
- * 帖子内容以全屏弹窗渲染，首页保持 mounted。
+ * 从首页点击委托时，通过 history.pushState 改变 URL（不走 Vue Router），
+ * 委托内容以全屏弹窗渲染，首页保持 mounted。
  * URL 使用 /post/:id；直接访问 /post/:id 时走正常的页面路由（post/[id].vue）。
  *
  * 敲敲弹窗使用 query（ik_knock），与本 composable 分离。
@@ -64,7 +64,7 @@ export function usePostModal() {
       url,
     );
 
-    // 预热帖子详情与首屏评论，减少 PostOverlay 挂载后的等待与布局抖动
+    // 预热委托详情与首屏评论，减少 PostOverlay 挂载后的等待与布局抖动
     void api.getPost(id).catch(() => {});
     void api.getComments(id, "").catch(() => {});
   }
@@ -109,7 +109,7 @@ export function usePostModal() {
    */
   function handlePopState() {
     if (isOpen.value) {
-      // 如果是回退到自身的 history 条目（如从敲敲弹窗返回帖子弹窗），不关闭
+      // 如果是回退到自身的 history 条目（如从敲敲弹窗返回委托弹窗），不关闭
       if (window.history.state?.__postModal) return;
       _historyPushed = false;
       teardown();

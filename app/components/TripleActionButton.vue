@@ -8,7 +8,7 @@ import { HandThumbUpIcon as HandThumbUpIconSolid, StarIcon as StarIconSolid } fr
  * 职责：仅做手势识别 + 蓄力/迸发动画，不发请求。
  * - 短按（松手时未达 HOLD_MS 且未越过 SLOP）→ emit('like')：父级走原 toggleLike。
  * - 长按（按住 HOLD_MS，圆环填满）→ emit('triple') + 迸发动画：父级走 tripleAction。
- * - canTriple=false（本人帖 / 未登录）时禁用长按，短按照常（父级内部再判登录）。
+ * - canTriple=false（本人委托 / 未登录）时禁用长按，短按照常（父级内部再判登录）。
  *
  * 指针 / suppressNextClick / prefers-reduced-motion 的处理与 KnockDragBadge 同范式。
  */

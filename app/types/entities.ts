@@ -115,17 +115,17 @@ export interface CoverImage {
   height?: number;
 }
 
-/** 帖子分类（频道）。GET /api/categories/list 返回完整列表。 */
+/** 委托分类（频道）。GET /api/categories/list 返回完整列表。 */
 export interface Category {
   documentId?: string;
   name: string;
   slug: string;
   order?: number;
-  /** 该分区是否仅管理员可发帖（发帖分类选择器据此对非管理员隐藏）。 */
+  /** 该分区是否仅管理员可发布委托（发布委托分类选择器据此对非管理员隐藏）。 */
   adminOnly?: boolean;
 }
 
-/** 帖子上附带的精简分类信息（接口随文章一并返回）。 */
+/** 委托上附带的精简分类信息（接口随文章一并返回）。 */
 export interface PostCategory {
   name: string;
   slug: string;
@@ -153,7 +153,7 @@ export interface Post {
   isAnonymous?: boolean;
   /** 仅作者本人可见：内容因举报被隐藏（他人访问详情直接 404） */
   isHidden?: boolean;
-  /** 当前登录用户是否为该帖子作者（解决匿名帖 author.documentId 为 null 的问题）。 */
+  /** 当前登录用户是否为该委托作者（解决匿名委托 author.documentId 为 null 的问题）。 */
   isOwner?: boolean;
   category?: PostCategory | null;
   createdAt?: string;
@@ -454,8 +454,8 @@ export type DmPseudoConversationId =
 
 /** 私聊会话里的对端简要信息（仅 direct 会话非空） */
 export interface DmPeer {
-  userId: number;
-  authorDocumentId: string;
+  userId: number | null;
+  authorDocumentId: string | null;
   name: string;
   avatar: string | null;
   level: number | null;
@@ -507,7 +507,7 @@ export interface DmConversationSummary {
 
 /** 单条消息的 sender 简要信息（撤回后仍保留发送者，便于灰条占位） */
 export interface DmMessageSender {
-  userId: number;
+  userId: number | null;
   authorDocumentId: string | null;
   name: string;
   avatar: string | null;
@@ -522,7 +522,7 @@ export interface DmMessageReplyTo {
   senderUserId: number | null;
 }
 
-/** kind === "notification" 时的引用帖子简要信息 */
+/** kind === "notification" 时的引用委托简要信息 */
 export interface DmNotificationArticleRef {
   documentId: string;
   title: string;
@@ -564,7 +564,7 @@ export interface DmMessage {
   notificationDocumentId?: string;
   /** 通知是否已读（与该消息所在会话的 unreadCount 是相互独立的字段） */
   notificationRead?: boolean;
-  /** 通知关联的帖子；点击 quote 卡可跳转 */
+  /** 通知关联的委托；点击 quote 卡可跳转 */
   article?: DmNotificationArticleRef | null;
   /** 通知关联的评论；like-on-comment 时存在 */
   comment?: DmNotificationCommentRef | null;

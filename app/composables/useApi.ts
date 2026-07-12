@@ -76,7 +76,7 @@ const STALE_LIST = 1 * 60 * 1000; // 1 min
 const STALE_ME = 2 * 60 * 1000; // 2 min
 
 // 客户端累积的「乐观已读」文章 id 集合。列表/搜索/个人页接口现已对登录用户内联
-// isRead（服务端权威态）；但点开帖子时的乐观标记请求可能尚未落库，此时若切分类
+// isRead（服务端权威态）；但点开委托时的乐观标记请求可能尚未落库，此时若切分类
 // 强制重拉，服务端可能仍返回 isRead=false，导致「已读 → 闪回未读」跳动。这里把
 // 乐观已读 id 跨频道/分页保留，构造列表时同步补齐，消除该窗口内的闪烁。
 // 已读单调（不会变回未读），仅在客户端维护；登录/登出时随 clearAllCache 清空。
@@ -852,7 +852,7 @@ export function useApi() {
     await $api(`/api/comments/${commentId}`, {
       method: "DELETE",
     });
-    // 不知道 postId，保守批量失效所有评论列表 & 帖子详情（评论数） & profile 评论
+    // 不知道 postId，保守批量失效所有评论列表 & 委托详情（评论数） & profile 评论
     invalidate(["articles", "comments"]);
     invalidate(["articles", "detail"]);
     invalidate(["profile"]);
@@ -1688,7 +1688,7 @@ export function useApi() {
   };
 
   /**
-   * 给帖子投币
+   * 给委托投币
    */
   const giveDennyToArticle = async (
     articleId: string,

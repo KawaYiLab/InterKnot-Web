@@ -9,7 +9,7 @@
  * 1. 导航到首页 /
  * 2. 打开敲敲弹窗并恢复 URL 中的会话状态
  *
- * 兼容旧栈：从帖子弹窗 history.back() 落到 /knock 且敲敲仍打开时，
+ * 兼容旧栈：从委托弹窗 history.back() 落到 /knock 且敲敲仍打开时，
  * 仅 replace 回 /，避免再次 open() 或触发首页数据重拉。
  */
 definePageMeta({ layout: false });

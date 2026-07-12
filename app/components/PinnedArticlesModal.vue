@@ -131,7 +131,7 @@ onBeforeUnmount(() => {
       <div class="ik-dialog__outer">
         <div class="ik-dialog__inner">
           <div class="ik-dialog__header">
-            <span class="ik-dialog__title">修改帖子展示</span>
+            <span class="ik-dialog__title">修改委托展示</span>
             <button class="ik-dialog__close" aria-label="关闭" @click="handleClose">
               <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
             </button>
@@ -147,13 +147,13 @@ onBeforeUnmount(() => {
                 <div class="ik-pin__head-text">
                   <template v-if="!Array.isArray(draft)">
                     <strong>当前：默认展示</strong>
-                    <span class="ik-pin__hint">点击下方帖子卡片即可开始自定义展示顺序。</span>
+                    <span class="ik-pin__hint">点击下方委托卡片即可开始自定义展示顺序。</span>
                   </template>
                   <template v-else>
                     <strong>已选 {{ draftCount }} / {{ max }}</strong>
                     <span class="ik-pin__hint">
-                      <template v-if="draftCount === 0">点击下方帖子卡片，按点击顺序决定展示顺序。</template>
-                      <template v-else>再次点击已选帖子可取消选中。</template>
+                      <template v-if="draftCount === 0">点击下方委托卡片，按点击顺序决定展示顺序。</template>
+                      <template v-else>再次点击已选委托可取消选中。</template>
                     </span>
                   </template>
                 </div>
@@ -162,7 +162,7 @@ onBeforeUnmount(() => {
               <!-- 卡片网格 -->
               <div class="ik-pin__grid-wrap">
                 <div v-if="!candidates.length" class="ik-pin__empty">
-                  你还没有发布任何帖子。
+                  你还没有发布任何委托。
                 </div>
                 <z-scrollbar v-else class="ik-pin__grid-scroll">
                 <div class="ik-pin__grid">
@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* ═══════════════════════════════════════════════
-   Overlay — 与帖子弹窗 / 登录弹窗完全一致
+   Overlay — 与委托弹窗 / 登录弹窗完全一致
    ═══════════════════════════════════════════════ */
 .ik-overlay {
   position: fixed;

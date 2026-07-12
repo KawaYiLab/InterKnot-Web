@@ -1,7 +1,7 @@
 import { computed, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
 
-// 帖子正文渲染依赖 markdown-it + DOMPurify（合计较大）。这两个库只在真正展示
-// 帖子正文时才需要，而非首页 feed / 登录等首屏路径。这里通过动态 import 把
+// 委托正文渲染依赖 markdown-it + DOMPurify（合计较大）。这两个库只在真正展示
+// 委托正文时才需要，而非首页 feed / 登录等首屏路径。这里通过动态 import 把
 // utils/format-body 整块（含 markdown-it / dompurify）切成按需加载的异步 chunk，
 // 不进首屏 entry chunk。详见 utils/format-body.ts。
 
@@ -26,7 +26,7 @@ interface BodySource {
 }
 
 /**
- * 把帖子的 body / bodyText 异步渲染为安全 HTML。
+ * 把委托的 body / bodyText 异步渲染为安全 HTML。
  * - `bodyHtml`：渲染后的 HTML（格式化库加载完成前为空字符串）。
  * - `hasContent`：是否有正文内容（用于区分「加载中/有正文」与「确实没有正文」，
  *   避免在 chunk 加载期间误闪「啥都木有」占位）。
