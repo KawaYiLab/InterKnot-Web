@@ -882,6 +882,7 @@ onBeforeUnmount(() => {
               </div>
               <span class="ik-page__time">
                 {{ formatTime(post.createdAt) }}
+                <template v-if="post.editedAt"> · 编辑于 {{ formatTime(post.editedAt) }}</template>
                 <template v-if="post.views"> · {{ post.views }} 阅读</template>
               </span>
             </div>

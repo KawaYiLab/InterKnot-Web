@@ -158,6 +158,7 @@ export interface Post {
   category?: PostCategory | null;
   createdAt?: string;
   updatedAt?: string;
+  editedAt?: string;
   author: Author;
 }
 
