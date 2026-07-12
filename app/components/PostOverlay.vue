@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import type { ComponentPublicInstance } from "vue";
 import { useMessage } from "zenless-ui";
 import type { Author, Comment, Post } from "~/types/entities";
 import type { PostPreview } from "~/composables/usePostModal";
@@ -153,6 +154,9 @@ const previewCover = computed(() => {
   return cover || null;
 });
 const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
+const setLoadedPreviewImage = (el: Element | ComponentPublicInstance | null) => {
+  loadedPreviewImageRef.value = el instanceof HTMLImageElement ? el : null;
+};
 
 // 真实图片解码完成的索引集合：用于在解码完成前继续显示骨架屏，
 // 避免"骨架结束 → 黑色封面框 → 图片淡入"的中间黑屏。
@@ -387,7 +391,10 @@ const waitForLoadedPreview = async (postId: string) => {
 
   const image = loadedPreviewImageRef.value;
   if (image) {
-    await image.decode().catch(() => {});
+    try {
+      await image.decode();
+    } catch {
+    }
   }
   if (props.postId !== postId) return false;
 
@@ -1207,7 +1214,7 @@ onBeforeUnmount(() => {
                         <template v-if="!hasCovers || covers.length === 1">
                           <div v-if="previewCover" class="ik-dialog__cover-preview">
                             <img
-                              ref="loadedPreviewImageRef"
+                              :ref="setLoadedPreviewImage"
                               :src="previewCover"
                               alt=""
                               class="ik-dialog__cover-preview-image"
@@ -1254,7 +1261,7 @@ onBeforeUnmount(() => {
                                 class="ik-dialog__cover-preview"
                               >
                                 <img
-                                  ref="loadedPreviewImageRef"
+                                  :ref="setLoadedPreviewImage"
                                   :src="previewCover"
                                   alt=""
                                   class="ik-dialog__cover-preview-image"
