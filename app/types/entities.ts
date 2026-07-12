@@ -453,8 +453,8 @@ export type DmPseudoConversationId =
 
 /** 私聊会话里的对端简要信息（仅 direct 会话非空） */
 export interface DmPeer {
-  userId: number;
-  authorDocumentId: string;
+  userId: number | null;
+  authorDocumentId: string | null;
   name: string;
   avatar: string | null;
   level: number | null;
@@ -506,7 +506,7 @@ export interface DmConversationSummary {
 
 /** 单条消息的 sender 简要信息（撤回后仍保留发送者，便于灰条占位） */
 export interface DmMessageSender {
-  userId: number;
+  userId: number | null;
   authorDocumentId: string | null;
   name: string;
   avatar: string | null;
