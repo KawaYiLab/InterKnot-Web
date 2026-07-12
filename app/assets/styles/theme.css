@@ -477,14 +477,14 @@ body.is-page-blurred .ik-header-tab.is-active .ik-tab-highlight {
 /* ═══════════════════════════════════════════════
    Mobile Overlay Performance —— 移动端弹窗专项降级
    ───────────────────────────────────────────────
-   移动端 GPU 对全屏 backdrop-filter blur 计算能力有限，
+   移动端/平板 GPU 对全屏 backdrop-filter blur 计算能力有限，
    在弹窗 200ms 入场/离场动画期间持续重算模糊会导致掉帧。
    这里统一为所有使用 .ik-overlay 的弹窗做降级：
    - 取消 backdrop-filter，改用更深的纯半透明背景
    - 弹窗内图片直接显示，不播放全局 280ms opacity 淡入
    视觉差异：遮罩更深（0.88 黑），无毛玻璃；文字/边框对比度反而更高。
    ═══════════════════════════════════════════════ */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   /* 用 body 前缀提高优先级，覆盖各组件 scoped style 中的 .ik-overlay 声明 */
   body .ik-overlay {
     backdrop-filter: none;
