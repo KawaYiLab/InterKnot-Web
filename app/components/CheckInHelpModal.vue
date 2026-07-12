@@ -99,7 +99,7 @@ onBeforeUnmount(() => {
                     <span>签到<em class="ik-checkin-help__rule-once">每日</em><em v-if="dailyExpStatus?.sources?.checkIn?.done" class="ik-checkin-help__rule-done">已获取</em></span><strong>+6 ~ +10</strong>
                   </div>
                   <div class="ik-checkin-help__rule-item">
-                    <span>发布委托<em class="ik-checkin-help__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createArticle?.done" class="ik-checkin-help__rule-done">已获取</em></span><strong>+4</strong>
+                    <span>委托<em class="ik-checkin-help__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createArticle?.done" class="ik-checkin-help__rule-done">已获取</em></span><strong>+4</strong>
                   </div>
                   <div class="ik-checkin-help__rule-item">
                     <span>评论<em class="ik-checkin-help__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createComment?.done" class="ik-checkin-help__rule-done">已获取</em></span><strong>+3</strong>
