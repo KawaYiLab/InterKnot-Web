@@ -409,6 +409,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     category: toPostCategory(data.category),
     createdAt: data.createdAt as string | undefined,
     updatedAt: data.updatedAt as string | undefined,
+    editedAt: data.editedAt as string | undefined,
     author: toAuthor(data.author, apiBaseUrl),
   };
 }
