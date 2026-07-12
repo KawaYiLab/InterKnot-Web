@@ -2,7 +2,7 @@
  * useKnockKnockModal —— "敲敲" 消息通知弹窗（私聊 / 群聊入口）
  *
  * 模式：仿 usePostModal 的路由级弹窗单例，
- * 外壳动画复用帖子弹窗的 .ik-overlay / .ik-dialog 样式。
+ * 外壳动画复用委托弹窗的 .ik-overlay / .ik-dialog 样式。
  *
  * open() 通过 history.pushState 在当前页 path 上追加 ik_knock query（不走 Vue Router），
  * tab 切换 / 选中会话时通过 history.replaceState 更新 URL，
@@ -85,7 +85,7 @@ export function useKnockKnockModal() {
    */
   function handlePopState() {
     if (knockKnockVisible.value) {
-      // 如果是回退到自身的 history 条目（如从帖子弹窗返回敲敲），不关闭
+      // 如果是回退到自身的 history 条目（如从委托弹窗返回敲敲），不关闭
       if (window.history.state?.__knockKnockModal) return;
       _historyPushed = false;
       teardown();

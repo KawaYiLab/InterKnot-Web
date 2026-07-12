@@ -44,7 +44,7 @@ const handleHomeTap = async () => {
     lastHomeTap.value = null;
     if (import.meta.client) {
       window.dispatchEvent(new CustomEvent("ik:home-refresh"));
-      message({ message: "正在刷新帖子...", duration: 1000 });
+      message({ message: "正在刷新委托...", duration: 1000 });
     }
     return;
   }
@@ -130,7 +130,7 @@ const handleLevelClick = () => {
       <button
         type="button"
         class="ik-mobile-nav__create-btn"
-        aria-label="发帖"
+        aria-label="发布委托"
         @click="handleCreatePost"
       >
         <PlusIcon class="ik-mobile-nav__create-icon" aria-hidden="true" />

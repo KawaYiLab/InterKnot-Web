@@ -26,7 +26,7 @@ export interface GalleryImage {
 let modulesPromise: Promise<any[]> | null = null;
 
 // 模块级共享计数：任意一个 gallery 实例打开都会 +1。
-// 用于让宿主组件（如帖子弹窗）判断「当前是否有大图预览打开」，
+// 用于让宿主组件（如委托弹窗）判断「当前是否有大图预览打开」，
 // 避免 ESC 在关闭大图的同时把宿主弹窗也一起关掉。
 const _openGalleryCount = ref(0);
 export const isAnyGalleryOpen = computed(() => _openGalleryCount.value > 0);

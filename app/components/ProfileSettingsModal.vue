@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
               <z-button @click="openEditName">修改用户名</z-button>
               <z-button disabled>隐藏生日信息</z-button>
               <z-button @click="openEditBio">修改签名</z-button>
-              <z-button @click="openPinned">修改帖子展示</z-button>
+              <z-button @click="openPinned">修改委托展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
               <z-button @click="openLogout">退出登录</z-button>
             </div>
@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
                       <div class="ik-social__text">
                         <span class="ik-social__label">公开个人资料</span>
                         <span class="ik-social__desc">
-                          关闭后，其他用户访问你的主页将无法看到签名、统计数据、名片和发过的帖子/评论。
+                          关闭后，其他用户访问你的主页将无法看到签名、统计数据、名片和发过的委托/评论。
                         </span>
                       </div>
                       <z-switch
@@ -495,7 +495,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* ═══════════════════════════════════════════════
-   Overlay — 与帖子弹窗 / 登录弹窗完全一致
+   Overlay — 与委托弹窗 / 登录弹窗完全一致
    ═══════════════════════════════════════════════ */
 .ik-overlay {
   position: fixed;

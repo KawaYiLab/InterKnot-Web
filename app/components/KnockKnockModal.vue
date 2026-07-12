@@ -310,7 +310,7 @@ const composerPlaceholder = computed<string>(() => {
   const conv = activeConversation.value;
   if (!conv) return "";
   if (conv.pseudoKind === "anonymous") return "匿名用户的通知不可回复";
-  if (conv.pseudoKind === "system") return "系统通知不可回复";
+  if (conv.pseudoKind === "system") return conv.peer?.name ? `${conv.peer.name} 不可回复` : "系统通知不可回复";
   if (conv.pseudoKind === "user") return "发送将开启与该用户的私聊";
   return "输入消息，Enter 发送，Shift+Enter 换行";
 });
@@ -442,8 +442,8 @@ const parseBubbleSegments = (text: string): BubbleSegment[] => {
       // markdown link: [text](url)
       segments.push({ type: "link", text: match[1], href: match[2] });
     } else if (match[3]) {
-      // bare /post/id path → 显示为"查看帖子"标签
-      segments.push({ type: "link", text: "查看帖子", href: `/post/${match[3]}` });
+      // bare /post/id path → 显示为"查看委托"标签
+      segments.push({ type: "link", text: "查看委托", href: `/post/${match[3]}` });
     }
     lastIndex = regex.lastIndex;
   }
@@ -461,18 +461,19 @@ const handleBubbleLink = (href: string, e: Event) => {
   }
 };
 
-/** like-on-comment：通知关联帖子+评论时，quote 卡引用「评论原文」而不是帖子标题 */
+/** like-on-comment：通知关联委托+评论时，quote 卡引用「评论原文」而不是委托标题 */
 const isLikeOnComment = (msg: DmMessage): boolean =>
   msg.notificationKind === "like" && !!msg.comment;
 
 /** quote 卡左侧 label */
 const quoteLabel = (msg: DmMessage): string => {
   if (isLikeOnComment(msg)) return "评论";
-  if (msg.notificationKind === "like" || msg.notificationKind === "favorite" || msg.notificationKind === "denny") return "帖子";
-  return "评论帖子"; // comment / reply / mention：引用所在帖子
+  if (msg.notificationKind === "like" || msg.notificationKind === "favorite" || msg.notificationKind === "denny") return "委托";
+  if (msg.notificationKind === "system") return "委托";
+  return "评论委托"; // comment / reply / mention：引用所在委托
 };
 
-/** quote 卡右侧主标题：like-on-comment 引用评论原文，其余引用帖子标题 */
+/** quote 卡右侧主标题：like-on-comment 引用评论原文，其余引用委托标题 */
 const quoteTitle = (msg: DmMessage): string => {
   // quote 卡是纯文本单行预览：mention/emote token 降级为可读文案
   if (isLikeOnComment(msg)) {
@@ -486,7 +487,7 @@ const shouldShowQuote = (msg: DmMessage): boolean => {
   if (msg.kind !== "notification") return false;
   // 有 article 引用就有卡片可点
   if (!msg.article && !msg.comment) return false;
-  // comment/reply/mention：主气泡已是评论正文，再放 quote 帖子卡
+  // comment/reply/mention：主气泡已是评论正文，再放 quote 委托卡
   // like / favorite / like-on-comment 都需要卡
   return true;
 };
@@ -903,7 +904,7 @@ const onComposerKeyDown = (e: KeyboardEvent) => {
 /** ESC 优先关闭：上下文菜单 → 编辑模式 → 弹窗本体 */
 const onKeyDown = (e: KeyboardEvent) => {
   if (e.key !== "Escape" || !visible.value) return;
-  // 如果有更上层的弹窗（如帖子详情 overlay）处于打开状态，不关闭敲敲
+  // 如果有更上层的弹窗（如委托详情 overlay）处于打开状态，不关闭敲敲
   // 敲敲自身也是 .ik-overlay，所以检查数量 > 1
   if (document.querySelectorAll(".ik-overlay").length > 1) return;
   if (contextMenuMessageId.value) {
@@ -972,7 +973,7 @@ const handleMobileBack = () => {
         class="ik-overlay"
         @mousedown.self="handleBackdropMouseDown"
       >
-        <!-- 斜线纹理背景（与帖子弹窗一致） -->
+        <!-- 斜线纹理背景（与委托弹窗一致） -->
         <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
         <div
@@ -1344,7 +1345,7 @@ const handleMobileBack = () => {
                               <template v-else>{{ entry.rendered }}</template>
                               <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
                             </div>
-                            <!-- 通知 quote 卡：点击跳到关联帖子（postModal） -->
+                            <!-- 通知 quote 卡：点击跳到关联委托（postModal） -->
                             <button
                               v-if="entry.quote"
                               type="button"
@@ -1478,12 +1479,12 @@ const handleMobileBack = () => {
 
 <style scoped>
 /* ═══════════════════════════════════════════════
-   Overlay 外壳 —— 与帖子弹窗 / 登录弹窗完全一致
+   Overlay 外壳 —— 与委托弹窗 / 登录弹窗完全一致
    ═══════════════════════════════════════════════ */
 .ik-overlay {
   position: fixed;
   inset: 0;
-  /* 低于帖子弹窗 (9000)，保证点击评论帖子后帖子弹窗叠加在上方 */
+  /* 低于委托弹窗 (9000)，保证点击评论委托后委托弹窗叠加在上方 */
   z-index: 8900;
   display: flex;
   align-items: center;
@@ -2269,7 +2270,7 @@ const handleMobileBack = () => {
   animation: ik-msg-enter 300ms ease-out both;
 }
 
-/* 引用帖子卡片：与正常 DM 区分，hint 标签 + 标题 + 文档图标 */
+/* 引用委托卡片：与正常 DM 区分，hint 标签 + 标题 + 文档图标 */
 .ik-knock__msg-quote {
   display: inline-flex;
   align-items: center;
@@ -2702,7 +2703,7 @@ const handleMobileBack = () => {
 .ik-knock__context-menu-mask {
   position: fixed;
   inset: 0;
-  /* 高于弹窗主体；与帖子弹窗 9000 同级或略高 */
+  /* 高于弹窗主体；与委托弹窗 9000 同级或略高 */
   z-index: 9100;
 }
 
