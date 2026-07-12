@@ -288,7 +288,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 .ik-comment__main--target,
 .ik-comment__reply--target {
   position: relative;
-  padding: 16px 12px 20px 12px;
+}
+
+/* 与置顶竖条同样的几何：3px 竖条 + 10px 内边距，只覆盖主评论本体高度 */
+.ik-comment__main--target {
+  padding-left: 13px;
 }
 
 /* 进入视口时先用主题色背景给出明显反馈，随后背景渐隐恢复正常，只保留左侧强调线 */
@@ -311,7 +315,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   top: 0;
   left: 0;
   bottom: 0;
-  width: 4px;
+  width: 3px;
   background: var(--ik-primary);
   opacity: 0.8;
   pointer-events: none;
@@ -327,7 +331,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 }
 
 .ik-comment__reply--target {
-  padding: 12px 12px 16px 12px;
+  padding-left: 13px;
 }
 
 /* ── Avatar column ────────────────────────────── */
@@ -590,7 +594,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   }
 
   .ik-comment__main.ik-comment__main--target {
-    padding: 12px 12px 16px 12px;
+    padding-left: 13px;
   }
 
   .ik-comment__avatar {
