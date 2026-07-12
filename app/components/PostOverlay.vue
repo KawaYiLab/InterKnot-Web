@@ -161,7 +161,14 @@ const previewCover = computed(() => {
 const coverPreviewSrc = (i: number) => {
   const cover = covers.value[i];
   if (!cover) return undefined;
-  return (i === 0 && previewCover.value) || toThumbUrl(cover.url) || undefined;
+  return (i === 0 && previewCover.value) || toThumbUrl(cover.url, 360) || undefined;
+};
+
+// 移动端弹窗封面首屏直接加载原图会触发大图 decode/重绘，导致入场掉帧。
+// 对移动视图使用 800px 宽度缩略图已足够清晰，只有放大预览时才用原图。
+const coverDisplaySrc = (url: string | undefined) => {
+  if (!url) return url;
+  return isMobile.value ? toThumbUrl(url, 800) : url;
 };
 const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
 const setLoadedPreviewImage = (el: Element | ComponentPublicInstance | null) => {
@@ -1116,6 +1123,9 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="ik-overlay" @click="onBackdropClick">
+      <!-- 独立背景层：用 opacity 过渡替代 .ik-overlay 的 background-color 过渡，避免全屏 paint -->
+      <div class="ik-overlay__backdrop" aria-hidden="true"></div>
+
       <!-- ── 斜线纹理背景（ZZZ PatternPainter） ──── -->
       <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
@@ -1253,7 +1263,7 @@ onBeforeUnmount(() => {
                             />
                           </div>
                           <img
-                            :src="firstCover?.url || DEFAULT_COVER_IMAGE"
+                            :src="firstCover ? coverDisplaySrc(firstCover.url) : DEFAULT_COVER_IMAGE"
                             :alt="hasCovers ? post.title : 'default cover'"
                             class="ik-dialog__cover"
                             decoding="async"
@@ -1300,7 +1310,7 @@ onBeforeUnmount(() => {
                                 />
                               </div>
                               <img
-                                :src="isCoverNearby(i) ? c.url : undefined"
+                                :src="isCoverNearby(i) ? coverDisplaySrc(c.url) : undefined"
                                 :alt="`${post.title} - ${i + 1}`"
                                 class="ik-dialog__cover"
                                 :loading="i === 0 ? 'eager' : 'lazy'"
@@ -1674,19 +1684,28 @@ onBeforeUnmount(() => {
    ═══════════════════════════════════════════════ */
 
 /* ── Backdrop ──────────────────────────────────── */
-/* 与 Flutter showZZZDialog 完全一致：
-   - 黑遮罩 alpha 0.6
-   - BackdropFilter blur 10px */
-.ik-overlay {
+.ik-overlay.ik-overlay {
   position: fixed;
   inset: 0;
   z-index: 9000;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
+  background: transparent;
+  --ik-overlay-bg: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+/* 独立背景层：承载遮罩颜色，用 opacity 过渡替代 .ik-overlay 的 background-color 过渡。
+   移动端/桌面端颜色通过 --ik-overlay-bg 变量切换，入场时只让 opacity 变化，避免全屏 paint。 */
+.ik-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--ik-overlay-bg);
+  opacity: 1;
 }
 
 /* 斜线纹理（PatternPainter）—— web 端调优版：
@@ -2783,6 +2802,42 @@ onBeforeUnmount(() => {
 
 .ik-overlay-leave-to .ik-dialog {
   transform: scale(1.1) translateX(-5%);
+}
+
+/* 禁用 .ik-overlay 的 background-color 过渡，改用独立背景层 opacity 过渡，避免全屏 paint。 */
+.ik-overlay.ik-overlay-enter-active,
+.ik-overlay.ik-overlay-leave-active {
+  transition: background-color 0ms;
+  will-change: auto;
+}
+
+.ik-overlay.ik-overlay-enter-active .ik-overlay__backdrop {
+  transition: opacity 200ms var(--ease-out-quart);
+  will-change: opacity;
+}
+
+.ik-overlay.ik-overlay-enter-from .ik-overlay__backdrop {
+  opacity: 0;
+}
+
+.ik-overlay.ik-overlay-leave-active .ik-overlay__backdrop {
+  transition: opacity 200ms var(--ease-in-quart);
+  will-change: opacity;
+}
+
+.ik-overlay.ik-overlay-leave-to .ik-overlay__backdrop {
+  opacity: 0;
+}
+
+/* ═══════════════════════════════════════════════
+   Mobile Overlay (< 768px)
+   ═══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .ik-overlay.ik-overlay {
+    --ik-overlay-bg: rgba(0, 0, 0, 0.88);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 /* ═══════════════════════════════════════════════
