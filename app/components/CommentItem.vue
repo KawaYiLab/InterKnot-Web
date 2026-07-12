@@ -77,14 +77,14 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 </script>
 
 <template>
-  <div
-    class="ik-comment"
-    :class="{
-      'ik-comment--target': comment.id === highlightedCommentId,
-    }"
-    :data-comment-id="comment.id"
-  >
-    <div class="ik-comment__main" :class="{ 'ik-comment__main--pinned': comment.isPinned }">
+  <div class="ik-comment" :data-comment-id="comment.id">
+    <div
+      class="ik-comment__main"
+      :class="{
+        'ik-comment__main--pinned': comment.isPinned,
+        'ik-comment__main--target': comment.id === highlightedCommentId,
+      }"
+    >
       <div class="ik-comment__avatar-col">
         <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
           <img
@@ -285,14 +285,14 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   gap: 12px;
 }
 
-.ik-comment--target,
+.ik-comment__main--target,
 .ik-comment__reply--target {
   position: relative;
   padding: 16px 12px 20px 12px;
 }
 
 /* 进入视口时先用主题色背景给出明显反馈，随后背景渐隐恢复正常，只保留左侧强调线 */
-.ik-comment--target::before,
+.ik-comment__main--target::before,
 .ik-comment__reply--target::before {
   content: "";
   position: absolute;
@@ -304,7 +304,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   animation: ik-comment-target-flash 1.2s ease-out forwards;
 }
 
-.ik-comment--target::after,
+.ik-comment__main--target::after,
 .ik-comment__reply--target::after {
   content: "";
   position: absolute;
@@ -589,7 +589,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
     gap: 10px;
   }
 
-  .ik-comment.ik-comment--target {
+  .ik-comment__main.ik-comment__main--target {
     padding: 12px 12px 16px 12px;
   }
 
