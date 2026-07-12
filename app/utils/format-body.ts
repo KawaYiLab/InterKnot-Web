@@ -2,12 +2,12 @@ import DOMPurify from "isomorphic-dompurify";
 import MarkdownIt from "markdown-it";
 import { toCanonicalUrl } from "~/utils/image";
 
-// 帖子正文的安全渲染。
+// 委托正文的安全渲染。
 // - bodyText 路径：用户敲的 markdown 会被解析渲染（CommonMark + 自动链接化 + 单换行=<br>）；
 //   纯文本输入也会被等价地转成段落 + <br>。最终输出统一过 DOMPurify。
 // - body 路径：保留给将来的结构化富文本输出，同样走 DOMPurify 兜底。
 
-// html: true   → 允许帖子内嵌入 HTML 标签（加粗/上下标/details/abbr/kbd/ruby 等），
+// html: true   → 允许委托内嵌入 HTML 标签（加粗/上下标/details/abbr/kbd/ruby 等），
 //                 由下面的 DOMPurify 白名单兜底过滤危险标签与属性。
 // linkify: true → 自动把裸 URL 变成可点链接。
 // breaks: true  → 单个换行渲染为 <br>，符合论坛输入习惯。
@@ -75,8 +75,8 @@ const SANITIZE_CONFIG = {
 // DOMPurify 默认 CSS 过滤在不同环境下行为不一致，可能放行 url(javascript:)、expression() 等。
 // 这里显式扫描 style 值，命中危险关键字直接丢弃整个 style 属性（保守但安全）。
 //
-// 同时禁止 position: fixed/sticky/absolute —— 论坛帖子没有合法理由用绝对/固定定位，
-// 而它们能让恶意用户在帖子里制造全屏遮罩、隐形点击劫持等视觉骗术。
+// 同时禁止 position: fixed/sticky/absolute —— 论坛委托没有合法理由用绝对/固定定位，
+// 而它们能让恶意用户在委托里制造全屏遮罩、隐形点击劫持等视觉骗术。
 const DANGEROUS_CSS_RE =
   /javascript:|vbscript:|data:|expression\s*\(|behavior\s*:|@import\b|<\s*\/?[a-z]|position\s*:\s*(fixed|sticky|absolute)/i;
 

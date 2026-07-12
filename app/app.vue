@@ -34,11 +34,11 @@ if (import.meta.client) {
   window.addEventListener("popstate", knockModal.handlePopState);
 
   // 路由变化时收起弹窗。同 path 仅 query 变化（history.back 去掉 ik_knock）时
-  // 只关敲敲；帖子弹窗用 /post/:id，path 变化时关闭。
+  // 只关敲敲；委托弹窗用 /post/:id，path 变化时关闭。
   router.beforeEach((to, from) => {
     if (to.path !== from.path) {
       if (postModal.isOpen.value) postModal.teardown();
-      // 从帖子弹窗 back 回带 ik_knock 的页面时，敲敲仍应保留
+      // 从委托弹窗 back 回带 ik_knock 的页面时，敲敲仍应保留
       const knockStillInUrl = Boolean(to.query[OVERLAY_KNOCK_KEY]);
       if (knockModal.visible.value && !knockStillInUrl) {
         knockModal.teardown();
@@ -96,7 +96,7 @@ const showMobileBottomNav = computed(
   () => !route.path.startsWith("/create") && !route.path.startsWith("/post/"),
 );
 
-// 全屏弹窗（帖子 / 敲敲）打开时，全局背景跑马灯被完全遮住但仍在动，且处于
+// 全屏弹窗（委托 / 敲敲）打开时，全局背景跑马灯被完全遮住但仍在动，且处于
 // 弹窗 backdrop-filter 模糊之后 → 迫使模糊每帧重算。此时暂停它（弹窗自带的
 // 那份跑马灯照常显示），缓解「点开弹窗卡顿」。
 const overlayOpen = computed(
@@ -141,7 +141,7 @@ const overlayOpen = computed(
       <LazyKnockKnockModal />
     </ClientOnly>
 
-    <!-- 帖子详情弹窗（从首页点击卡片时弹出）
+    <!-- 委托详情弹窗（从首页点击卡片时弹出）
          注：必须用同步组件而非 LazyPostOverlay。<Transition> 包异步组件时，
          弱网下 chunk 加载延迟会让 enter 动画错过首帧 → 用户感知为闪烁。 -->
     <ClientOnly>
@@ -177,7 +177,7 @@ const overlayOpen = computed(
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   /* 永久性 will-change 让浏览器把这个层一直保留在 GPU 上，
-     与帖子弹窗共用 backdrop-filter 着色器管线 */
+     与委托弹窗共用 backdrop-filter 着色器管线 */
   will-change: backdrop-filter;
   contain: strict;
   z-index: -1;

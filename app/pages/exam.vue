@@ -177,7 +177,7 @@ useHead({ title: "入站考试 - 绳网" });
 
 <template>
   <section class="ik-exam-page">
-    <!-- 45° 斜线纹理背景（与发帖页一致） -->
+    <!-- 45° 斜线纹理背景（与发布委托页一致） -->
     <div class="ik-exam-page__stripe" aria-hidden="true"></div>
 
     <div class="ik-exam-page__inner">
@@ -365,7 +365,7 @@ useHead({ title: "入站考试 - 绳网" });
   flex-shrink: 0;
 }
 
-/* 与发帖页一致的 45° 斜线纹理背景 */
+/* 与发布委托页一致的 45° 斜线纹理背景 */
 .ik-exam-page__stripe {
   position: fixed;
   inset: 0;

@@ -211,7 +211,7 @@ const onItemMouseDown = (e: MouseEvent, candidate: MentionCandidate) => {
 
 <style scoped>
 /*
- * 外层：灰描边圈，与帖子弹窗 .ik-dialog__outer 同语言。
+ * 外层：灰描边圈，与委托弹窗 .ik-dialog__outer 同语言。
  * 自身只承担「定位 + 阴影 + 灰色边框背景」，内容滚动放到 __inner，
  * 这样滚动条不会糊到外圈边框上。
  */

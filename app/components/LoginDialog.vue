@@ -158,8 +158,8 @@ const submit = async () => {
       throw new Error("注册失败：未获取到 Token");
     }
     await onLoginSuccess(registerRes.token, registerRes.user);
-    // 新注册用户需通过入站考试才能发帖/评论，注册成功后直接引导去考试页
-    message.success("完成入站考试后即可解锁发帖、评论等功能");
+    // 新注册用户需通过入站考试才能发布委托/评论，注册成功后直接引导去考试页
+    message.success("完成入站考试后即可解锁发布委托、评论等功能");
     await navigateTo("/exam");
   } catch (err) {
     const label = isReset.value ? "重置失败" : isRegister.value ? "注册失败" : "登录失败";
@@ -234,7 +234,7 @@ onUnmounted(() => {
   <Teleport to="body">
     <Transition name="ik-overlay">
       <div v-if="visible" class="ik-overlay" @mousedown.self="handleClose">
-        <!-- 斜线纹理背景（与帖子弹窗一致） -->
+        <!-- 斜线纹理背景（与委托弹窗一致） -->
         <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
         <div class="ik-dialog" @click.stop>
@@ -393,7 +393,7 @@ onUnmounted(() => {
 
 <style scoped>
 /* ═══════════════════════════════════════════════
-   Overlay — 与帖子弹窗完全一致
+   Overlay — 与委托弹窗完全一致
    ═══════════════════════════════════════════════ */
 .ik-overlay {
   position: fixed;

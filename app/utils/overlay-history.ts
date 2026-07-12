@@ -4,7 +4,7 @@
  * 敲敲使用当前页 path + query（ik_knock*），避免 popstate 时 Vue Router
  * 切到独立路由页并触发整页导航。
  *
- * 帖子弹窗仍用 /post/:id（见 usePostModal），与敲敲方案分离。
+ * 委托弹窗仍用 /post/:id（见 usePostModal），与敲敲方案分离。
  */
 export const OVERLAY_KNOCK_KEY = "ik_knock";
 export const OVERLAY_KNOCK_TAB = "ik_knock_tab";

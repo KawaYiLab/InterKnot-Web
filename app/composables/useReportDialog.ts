@@ -20,7 +20,7 @@ interface ReportDialogState {
   visible: boolean;
   targetType: ReportTargetType;
   targetId: string;
-  /** 弹窗标题里展示的目标描述，如「帖子」「评论」「用户 xxx」 */
+  /** 弹窗标题里展示的目标描述，如「委托」「评论」「用户 xxx」 */
   targetLabel: string;
   resolve: ((submitted: boolean) => void) | null;
 }
@@ -45,7 +45,7 @@ export function useReportDialog() {
       state.targetLabel =
         options.targetLabel ||
         (options.targetType === "article"
-          ? "帖子"
+          ? "委托"
           : options.targetType === "comment"
             ? "评论"
             : "用户");

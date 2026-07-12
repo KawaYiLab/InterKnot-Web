@@ -150,11 +150,11 @@ const loadPost = async () => {
     post.value = await api.getPost(postId.value);
   } catch (err) {
     if (isNotFoundError(err)) {
-      showError({ statusCode: 404, message: "帖子不存在" });
+      showError({ statusCode: 404, message: "委托不存在" });
       return;
     }
     loadError.value = true;
-    message.error(resolveErrorMessage(err, "获取帖子详情失败"));
+    message.error(resolveErrorMessage(err, "获取委托详情失败"));
   } finally {
     loading.value = false;
   }
@@ -395,17 +395,17 @@ const deletingArticle = ref(false);
 
 const handleDeleteArticle = async () => {
   if (!post.value?.id) return;
-  const ok = await confirmDialog.open({ title: "删除帖子", message: "确定删除这篇帖子吗？此操作不可恢复。（10丁尼）", confirmText: "删除", danger: true });
+  const ok = await confirmDialog.open({ title: "删除委托", message: "确定删除这篇委托吗？此操作不可恢复。（10丁尼）", confirmText: "删除", danger: true });
   if (!ok) return;
   deletingArticle.value = true;
   try {
     const deletedId = post.value.id;
     await api.deleteArticle(deletedId);
-    message.success("帖子已删除");
+    message.success("委托已删除");
     window.dispatchEvent(new CustomEvent("ik:article-deleted", { detail: deletedId }));
     navigateTo("/");
   } catch (err) {
-    message.error(resolveErrorMessage(err, "删除帖子失败"));
+    message.error(resolveErrorMessage(err, "删除委托失败"));
   } finally {
     deletingArticle.value = false;
   }
@@ -432,7 +432,7 @@ const handleReportArticle = () => {
     loginDialog.open();
     return;
   }
-  reportDialog.open({ targetType: "article", targetId: post.value.id, targetLabel: "帖子" });
+  reportDialog.open({ targetType: "article", targetId: post.value.id, targetLabel: "委托" });
 };
 
 const handleReportComment = (comment: Comment) => {
@@ -546,11 +546,11 @@ const giveDenny = async () => {
     return;
   }
   if (isOwner.value) {
-    message.warning("不能给自己的帖子投币");
+    message.warning("不能给自己的委托投币");
     return;
   }
   if (post.value.isAnonymous) {
-    message.warning("匿名帖不能投币");
+    message.warning("匿名委托不能投币");
     return;
   }
   if (post.value.hasGivenDenny) {
@@ -918,7 +918,7 @@ onBeforeUnmount(() => {
               <div class="ik-page__detail">
                 <div v-if="post.isHidden" class="ik-page__hidden-banner" role="alert">
                   <EyeSlashIcon class="ik-page__hidden-icon" aria-hidden="true" />
-                  <span>该帖子因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
+                  <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
                 </div>
                 <h1 class="ik-page__title">
                   <span v-if="post.category" class="ik-page__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
@@ -1080,7 +1080,7 @@ onBeforeUnmount(() => {
                         class="ik-engage-bar__action"
                         :class="{ 'ik-engage-bar__action--active': post.hasGivenDenny }"
                         :disabled="isOwner || post.isAnonymous || givingDenny"
-                        :title="isOwner ? '不能给自己的帖子投币' : post.isAnonymous ? '匿名帖子无法投币' : '给作者投喂丁尼'"
+                        :title="isOwner ? '不能给自己的委托投币' : post.isAnonymous ? '匿名委托无法投币' : '给作者投喂丁尼'"
                         @click="giveDenny"
                       >
                         <span class="ik-triple__icon-shell">
@@ -1113,9 +1113,9 @@ onBeforeUnmount(() => {
                           <EllipsisVerticalIcon class="ik-engage-icon" aria-hidden="true" />
                         </button>
                         <template #dropdown>
-                          <z-dropdown-item command="report" :disabled="isOwner">举报帖子</z-dropdown-item>
-                          <z-dropdown-item command="edit" :disabled="!isOwner">编辑帖子</z-dropdown-item>
-                          <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除帖子</z-dropdown-item>
+                          <z-dropdown-item command="report" :disabled="isOwner">举报委托</z-dropdown-item>
+                          <z-dropdown-item command="edit" :disabled="!isOwner">编辑委托</z-dropdown-item>
+                          <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除委托</z-dropdown-item>
                         </template>
                       </z-dropdown>
                     </div>
