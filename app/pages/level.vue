@@ -310,7 +310,7 @@ useHead({ title: "绳网等级" });
                   <span class="ik-lv__rule-name">签到<em class="ik-lv__rule-once">每日</em><em v-if="dailyExpStatus?.sources?.checkIn?.done" class="ik-lv__rule-done">已获取</em></span><span class="ik-lv__rule-val">+6 ~ +10</span>
                 </div>
                 <div class="ik-lv__rule-item">
-                  <span class="ik-lv__rule-name">发布委托<em class="ik-lv__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createArticle?.done" class="ik-lv__rule-done">已获取</em></span><span class="ik-lv__rule-val">+4</span>
+                  <span class="ik-lv__rule-name">委托<em class="ik-lv__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createArticle?.done" class="ik-lv__rule-done">已获取</em></span><span class="ik-lv__rule-val">+4</span>
                 </div>
                 <div class="ik-lv__rule-item">
                   <span class="ik-lv__rule-name">评论<em class="ik-lv__rule-once">每日首次</em><em v-if="dailyExpStatus?.sources?.createComment?.done" class="ik-lv__rule-done">已获取</em></span><span class="ik-lv__rule-val">+3</span>
