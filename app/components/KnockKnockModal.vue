@@ -310,7 +310,7 @@ const composerPlaceholder = computed<string>(() => {
   const conv = activeConversation.value;
   if (!conv) return "";
   if (conv.pseudoKind === "anonymous") return "匿名用户的通知不可回复";
-  if (conv.pseudoKind === "system") return "系统通知不可回复";
+  if (conv.pseudoKind === "system") return conv.peer?.name ? `${conv.peer.name} 不可回复` : "系统通知不可回复";
   if (conv.pseudoKind === "user") return "发送将开启与该用户的私聊";
   return "输入消息，Enter 发送，Shift+Enter 换行";
 });
