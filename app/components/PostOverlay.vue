@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import type { ComponentPublicInstance } from "vue";
 import { useMessage } from "zenless-ui";
 import type { Author, Comment, Post } from "~/types/entities";
 import type { PostPreview } from "~/composables/usePostModal";
@@ -12,6 +13,7 @@ import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
+import { toThumbUrl } from "~/utils/image";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import UserHoverCard from "./UserHoverCard.vue";
@@ -152,7 +154,15 @@ const previewCover = computed(() => {
   const cover = props.preview?.cover?.trim();
   return cover || null;
 });
+const coverPreviewSrc = (i: number) => {
+  const cover = covers.value[i];
+  if (!cover) return undefined;
+  return (i === 0 && previewCover.value) || toThumbUrl(cover.url) || undefined;
+};
 const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
+const setLoadedPreviewImage = (el: Element | ComponentPublicInstance | null) => {
+  loadedPreviewImageRef.value = el instanceof HTMLImageElement ? el : null;
+};
 
 // 真实图片解码完成的索引集合：用于在解码完成前继续显示骨架屏，
 // 避免"骨架结束 → 黑色封面框 → 图片淡入"的中间黑屏。
@@ -341,6 +351,19 @@ const onCoverPointerUp = (e: PointerEvent) => {
   el.scrollTo({ left: targetIdx * w, behavior: "smooth" });
 };
 
+const cancelCoverInteractions = () => {
+  if (coverScrollRAF !== null) {
+    cancelAnimationFrame(coverScrollRAF);
+    coverScrollRAF = null;
+  }
+  if (coverSettleTimer !== null) {
+    clearTimeout(coverSettleTimer);
+    coverSettleTimer = null;
+  }
+  isDraggingCover = false;
+  coverDragMoved = false;
+};
+
 // 在 click 捕获阶段拦截：拖动后产生的 click 不应打开预览
 const onCoverClickCapture = (e: MouseEvent) => {
   if (coverDragMoved) {
@@ -387,7 +410,10 @@ const waitForLoadedPreview = async (postId: string) => {
 
   const image = loadedPreviewImageRef.value;
   if (image) {
-    await image.decode().catch(() => {});
+    try {
+      await image.decode();
+    } catch {
+    }
   }
   if (props.postId !== postId) return false;
 
@@ -932,6 +958,7 @@ const handleUnpinComment = async (comment: Comment) => {
 
 /* ── 关闭 / 键盘 ──────────────────────────────── */
 const handleClose = () => {
+  cancelCoverInteractions();
   emit("close");
 };
 
@@ -1069,10 +1096,7 @@ onBeforeUnmount(() => {
   commentsHasNext.value = false;
   window.removeEventListener("keydown", onKeyDown);
   destroyPreview();
-  if (coverSettleTimer !== null) {
-    clearTimeout(coverSettleTimer);
-    coverSettleTimer = null;
-  }
+  cancelCoverInteractions();
   teardownMentionListeners?.();
   teardownMentionListeners = null;
 });
@@ -1205,10 +1229,10 @@ onBeforeUnmount(() => {
                       >
                         <!-- 单张封面 -->
                         <template v-if="!hasCovers || covers.length === 1">
-                          <div v-if="previewCover" class="ik-dialog__cover-preview">
+                          <div v-if="coverPreviewSrc(0)" class="ik-dialog__cover-preview">
                             <img
-                              ref="loadedPreviewImageRef"
-                              :src="previewCover"
+                              :ref="setLoadedPreviewImage"
+                              :src="coverPreviewSrc(0)"
                               alt=""
                               class="ik-dialog__cover-preview-image"
                               aria-hidden="true"
@@ -1225,7 +1249,7 @@ onBeforeUnmount(() => {
                             @error="onCoverImageLoad(0); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                           />
                           <div
-                            v-if="!isCoverImageLoaded(0) && !previewCover"
+                            v-if="!isCoverImageLoaded(0) && !coverPreviewSrc(0)"
                             class="ik-skel ik-dialog__cover-skel"
                             aria-hidden="true"
                           ></div>
@@ -1250,16 +1274,16 @@ onBeforeUnmount(() => {
                               class="ik-dialog__cover-slide"
                             >
                               <div
-                                v-if="i === 0 && previewCover"
+                                v-if="coverPreviewSrc(i)"
                                 class="ik-dialog__cover-preview"
                               >
                                 <img
-                                  ref="loadedPreviewImageRef"
-                                  :src="previewCover"
+                                  :ref="i === 0 ? setLoadedPreviewImage : undefined"
+                                  :src="isCoverNearby(i) ? coverPreviewSrc(i) : undefined"
                                   alt=""
                                   class="ik-dialog__cover-preview-image"
                                   aria-hidden="true"
-                                  decoding="sync"
+                                  :decoding="i === 0 ? 'sync' : 'async'"
                                 />
                               </div>
                               <img
@@ -1274,7 +1298,7 @@ onBeforeUnmount(() => {
                                 @error="onCoverImageLoad(i); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                               />
                               <div
-                                v-if="!isCoverImageLoaded(i) && !(i === 0 && previewCover)"
+                                v-if="!isCoverImageLoaded(i) && (!isCoverNearby(i) || !coverPreviewSrc(i))"
                                 class="ik-skel ik-dialog__cover-skel"
                                 aria-hidden="true"
                               ></div>
