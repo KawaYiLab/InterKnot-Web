@@ -351,6 +351,19 @@ const onCoverPointerUp = (e: PointerEvent) => {
   el.scrollTo({ left: targetIdx * w, behavior: "smooth" });
 };
 
+const cancelCoverInteractions = () => {
+  if (coverScrollRAF !== null) {
+    cancelAnimationFrame(coverScrollRAF);
+    coverScrollRAF = null;
+  }
+  if (coverSettleTimer !== null) {
+    clearTimeout(coverSettleTimer);
+    coverSettleTimer = null;
+  }
+  isDraggingCover = false;
+  coverDragMoved = false;
+};
+
 // 在 click 捕获阶段拦截：拖动后产生的 click 不应打开预览
 const onCoverClickCapture = (e: MouseEvent) => {
   if (coverDragMoved) {
@@ -945,6 +958,7 @@ const handleUnpinComment = async (comment: Comment) => {
 
 /* ── 关闭 / 键盘 ──────────────────────────────── */
 const handleClose = () => {
+  cancelCoverInteractions();
   emit("close");
 };
 
@@ -1082,10 +1096,7 @@ onBeforeUnmount(() => {
   commentsHasNext.value = false;
   window.removeEventListener("keydown", onKeyDown);
   destroyPreview();
-  if (coverSettleTimer !== null) {
-    clearTimeout(coverSettleTimer);
-    coverSettleTimer = null;
-  }
+  cancelCoverInteractions();
   teardownMentionListeners?.();
   teardownMentionListeners = null;
 });
@@ -1272,7 +1283,7 @@ onBeforeUnmount(() => {
                                   alt=""
                                   class="ik-dialog__cover-preview-image"
                                   aria-hidden="true"
-                                  decoding="sync"
+                                  :decoding="i === 0 ? 'sync' : 'async'"
                                 />
                               </div>
                               <img
