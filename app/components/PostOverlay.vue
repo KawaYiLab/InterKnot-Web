@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Author, Comment, Post } from "~/types/entities";
 import type { PostPreview } from "~/composables/usePostModal";
@@ -45,6 +46,7 @@ const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const reportDialog = useReportDialog();
 const message = useMessage();
+const isMobile = useMediaQuery("(max-width: 768px)");
 
 const post = ref<Post | null>(null);
 const loading = ref(true);
@@ -152,7 +154,9 @@ const syncCommentInputHeight = async () => {
 const firstCover = computed(() => covers.value[0] ?? null);
 const previewCover = computed(() => {
   const cover = props.preview?.cover?.trim();
-  return cover || null;
+  // 预览图仅作为 blur-up 占位，统一走缩略图，避免首页卡片传入大原图
+  // 时 decode() 占用过多资源导致弹窗入场掉帧。
+  return cover ? toThumbUrl(cover) : null;
 });
 const coverPreviewSrc = (i: number) => {
   const cover = covers.value[i];
@@ -411,8 +415,16 @@ const waitForLoadedPreview = async (postId: string) => {
   const image = loadedPreviewImageRef.value;
   if (image) {
     try {
-      await image.decode();
+      // 移动端 GPU/CPU 同时处理弹窗入场动画与图片 decode 容易掉帧，
+      // 且 decode 可能长时间不 resolve 导致骨架屏卡死。
+      // 短超时后先解除骨架屏，让真实图片异步加载；blur-up 预览图已占位，避免黑屏。
+      const timeoutMs = isMobile.value ? 200 : 1200;
+      await Promise.race([
+        image.decode(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("decode timeout")), timeoutMs)),
+      ]);
     } catch {
+      // 解码失败或超时：继续显示 preview/骨架，让 img@load 事件最终替换
     }
   }
   if (props.postId !== postId) return false;
@@ -1178,7 +1190,7 @@ onBeforeUnmount(() => {
                           alt=""
                           class="ik-dialog__cover-preview-image"
                           aria-hidden="true"
-                          decoding="sync"
+                          decoding="async"
                         />
                       </div>
                       <div v-else class="ik-skel ik-dialog__cover-skel" aria-hidden="true"></div>
@@ -1237,7 +1249,7 @@ onBeforeUnmount(() => {
                               alt=""
                               class="ik-dialog__cover-preview-image"
                               aria-hidden="true"
-                              decoding="sync"
+                              :decoding="isMobile ? 'async' : 'sync'"
                             />
                           </div>
                           <img
@@ -1284,7 +1296,7 @@ onBeforeUnmount(() => {
                                   alt=""
                                   class="ik-dialog__cover-preview-image"
                                   aria-hidden="true"
-                                  :decoding="i === 0 ? 'sync' : 'async'"
+                                  :decoding="i === 0 && !isMobile ? 'sync' : 'async'"
                                 />
                               </div>
                               <img
@@ -2803,9 +2815,10 @@ onBeforeUnmount(() => {
     border-radius: 0;
     /* 保持透明，让 .ik-dialog__main 里的跑马灯水印透出来（与桌面端一致） */
     background: transparent;
-    /* 提升为独立合成层，避免 iOS 上 overflow:hidden 祖先导致触摸滚动卡死 */
-    will-change: scroll-position;
-    -webkit-transform: translateZ(0);
+    /* 入场动画期间避免强制提升为独立合成层，减少 GPU 层数；
+       实际滚动时浏览器会按需提升，iOS 触摸滚动不会卡死 */
+    will-change: auto;
+    -webkit-transform: none;
   }
 
   .ik-dialog__body::-webkit-scrollbar {
