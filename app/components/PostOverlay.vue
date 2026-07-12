@@ -1264,7 +1264,6 @@ onBeforeUnmount(() => {
                             >
                               <div
                                 v-if="coverPreviewSrc(i)"
-                                v-show="isCoverNearby(i) && !isCoverImageLoaded(i)"
                                 class="ik-dialog__cover-preview"
                               >
                                 <img
