@@ -13,6 +13,7 @@ import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
+import { toThumbUrl } from "~/utils/image";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import UserHoverCard from "./UserHoverCard.vue";
@@ -153,6 +154,11 @@ const previewCover = computed(() => {
   const cover = props.preview?.cover?.trim();
   return cover || null;
 });
+const coverPreviewSrc = (i: number) => {
+  const cover = covers.value[i];
+  if (!cover) return undefined;
+  return (i === 0 && previewCover.value) || toThumbUrl(cover.url) || undefined;
+};
 const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
 const setLoadedPreviewImage = (el: Element | ComponentPublicInstance | null) => {
   loadedPreviewImageRef.value = el instanceof HTMLImageElement ? el : null;
@@ -1212,10 +1218,10 @@ onBeforeUnmount(() => {
                       >
                         <!-- 单张封面 -->
                         <template v-if="!hasCovers || covers.length === 1">
-                          <div v-if="previewCover" class="ik-dialog__cover-preview">
+                          <div v-if="coverPreviewSrc(0)" class="ik-dialog__cover-preview">
                             <img
                               :ref="setLoadedPreviewImage"
-                              :src="previewCover"
+                              :src="coverPreviewSrc(0)"
                               alt=""
                               class="ik-dialog__cover-preview-image"
                               aria-hidden="true"
@@ -1232,7 +1238,7 @@ onBeforeUnmount(() => {
                             @error="onCoverImageLoad(0); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                           />
                           <div
-                            v-if="!isCoverImageLoaded(0) && !previewCover"
+                            v-if="!isCoverImageLoaded(0) && !coverPreviewSrc(0)"
                             class="ik-skel ik-dialog__cover-skel"
                             aria-hidden="true"
                           ></div>
@@ -1257,12 +1263,13 @@ onBeforeUnmount(() => {
                               class="ik-dialog__cover-slide"
                             >
                               <div
-                                v-if="i === 0 && previewCover"
+                                v-if="coverPreviewSrc(i)"
+                                v-show="isCoverNearby(i) && !isCoverImageLoaded(i)"
                                 class="ik-dialog__cover-preview"
                               >
                                 <img
-                                  :ref="setLoadedPreviewImage"
-                                  :src="previewCover"
+                                  :ref="i === 0 ? setLoadedPreviewImage : undefined"
+                                  :src="isCoverNearby(i) ? coverPreviewSrc(i) : undefined"
                                   alt=""
                                   class="ik-dialog__cover-preview-image"
                                   aria-hidden="true"
@@ -1281,7 +1288,7 @@ onBeforeUnmount(() => {
                                 @error="onCoverImageLoad(i); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                               />
                               <div
-                                v-if="!isCoverImageLoaded(i) && !(i === 0 && previewCover)"
+                                v-if="!isCoverImageLoaded(i) && (!isCoverNearby(i) || !coverPreviewSrc(i))"
                                 class="ik-skel ik-dialog__cover-skel"
                                 aria-hidden="true"
                               ></div>
