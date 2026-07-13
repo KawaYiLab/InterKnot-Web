@@ -2885,10 +2885,12 @@ onBeforeUnmount(() => {
   transform: scale(1.1) translateX(-5%);
 }
 
-/* 禁用 .ik-overlay 的 background-color 过渡，改用独立背景层 opacity 过渡，避免全屏 paint。 */
+/* 保留根元素 transition 0.2s，让 Vue 的 <Transition> 能正确计算离场时长。
+   实际用 opacity 作为无动画占位，真正的退场仍由 .ik-overlay__backdrop 的 opacity
+   与 .ik-dialog 的 transform/opacity 完成。 */
 .ik-overlay.ik-overlay-enter-active,
 .ik-overlay.ik-overlay-leave-active {
-  transition: background-color 0ms;
+  transition: opacity 0.2s;
   will-change: auto;
 }
 
