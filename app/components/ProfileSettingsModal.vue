@@ -614,7 +614,7 @@ onBeforeUnmount(() => {
                     <template v-else-if="mihoyoBinding">
                       <div class="ik-mihoyo__info">
                         <div class="ik-mihoyo__row">
-                          <span class="ik-mihoyo__label">绝区零玩家名</span>
+                          <span class="ik-mihoyo__label">名称</span>
                           <span class="ik-mihoyo__value">{{ mihoyoBinding.zzzNickname || "未获取到角色" }}</span>
                         </div>
                         <div v-if="mihoyoBinding.zzzUid" class="ik-mihoyo__row">
