@@ -1,5 +1,13 @@
 export function isPublicEndpoint(path: string, method: string): boolean {
-  if (path.startsWith("/api/auth/") && !path.startsWith("/api/auth/renew")) return true;
+  if (
+    path.startsWith("/api/auth/") &&
+    !path.startsWith("/api/auth/renew") &&
+    // 米游社接口需要带 token：binding 查询/解绑必须鉴权，
+    // qr 创建/轮询带 token 时才会进入绑定模式（而非登录模式）
+    !path.startsWith("/api/auth/mihoyo/")
+  ) {
+    return true;
+  }
 
   const upperMethod = method.toUpperCase();
   if (upperMethod !== "GET") return false;
