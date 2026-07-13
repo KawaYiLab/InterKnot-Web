@@ -91,6 +91,8 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
             :src="comment.author?.avatar || '/images/default-avatar.webp'"
             :alt="comment.author?.name || ''"
             class="ik-comment__avatar"
+            loading="lazy"
+            decoding="async"
             @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
           />
         </UserHoverCard>
@@ -132,6 +134,8 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
               :src="toThumbUrl(image.url)"
               :alt="comment.author?.name || '评论图片'"
               class="ik-comment__media-thumb"
+              loading="lazy"
+              decoding="async"
             />
           </button>
         </div>
@@ -274,9 +278,6 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 /* ── Root ─────────────────────────────────────── */
 .ik-comment {
   padding: 14px 0;
-  /* 评论列表长时跳过视口外项的渲染与 paint，只保留布局尺寸，减少长列表滚动压力 */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 150px;
 }
 
 .ik-comment + .ik-comment {
