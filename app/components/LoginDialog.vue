@@ -556,7 +556,7 @@ onUnmounted(() => {
                               {{ mihoyoStatusText }}
                             </p>
                             <p class="ik-mihoyo__hint">
-                              确认后将自动登录，首次登录会使用绝区零玩家名创建账号
+                              确认后将自动登录，新用户将自动创建绳网账号
                             </p>
                           </div>
                         </div>

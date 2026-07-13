@@ -251,7 +251,7 @@ const startMihoyoQr = async () => {
 };
 
 // 菜单按钮文案随绑定状态变化，打开设置时先拉一次绑定信息
-const mihoyoMenuLabel = computed(() => (mihoyoBinding.value ? "米游社（已绑定）" : "绑定米游社"));
+const mihoyoMenuLabel = computed(() => (mihoyoBinding.value ? "查看米游社" : "绑定米游社"));
 
 onMounted(async () => {
   try {
