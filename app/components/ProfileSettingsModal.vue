@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
+import QRCode from "qrcode";
 import { resolveErrorMessage } from "~/utils/api-error";
+import type { MihoyoBinding } from "~/types/entities";
 
 const props = defineProps<{
   currentName?: string;
@@ -29,6 +31,7 @@ const showEditBio = computed(() => modalQuery.value === 'edit-bio');
 const showPinned = computed(() => modalQuery.value === 'pinned');
 const showSocial = computed(() => modalQuery.value === 'social');
 const showLogout = computed(() => modalQuery.value === 'logout');
+const showMihoyo = computed(() => modalQuery.value === 'mihoyo');
 
 const openSub = (name: string) => {
   router.replace({ query: { ...route.query, modal: name } });
@@ -156,6 +159,135 @@ const onPinnedSaved = (pinned: string[] | null) => {
   emit("pinnedUpdated", pinned);
 };
 
+// ── 米游社绑定 ──────────────────────────────
+type MihoyoQrStatus = "loading" | "waiting" | "scanned" | "confirmed" | "expired" | "cancelled" | "error";
+
+const MIHOYO_POLL_INTERVAL_MS = 1500;
+
+const mihoyoBinding = ref<MihoyoBinding | null>(null);
+const mihoyoLoading = ref(false);
+const mihoyoUnbinding = ref(false);
+const mihoyoQrStatus = ref<MihoyoQrStatus>("loading");
+const mihoyoQrDataUrl = ref("");
+let mihoyoTicket = "";
+let mihoyoPollTimer: ReturnType<typeof setTimeout> | null = null;
+let mihoyoPolling = false;
+
+const mihoyoQrStatusText = computed(() => {
+  switch (mihoyoQrStatus.value) {
+    case "loading": return "二维码生成中…";
+    case "waiting": return "请使用米游社 App 扫码绑定";
+    case "scanned": return "已扫码，请在米游社 App 中确认";
+    case "confirmed": return "绑定中…";
+    case "expired": return "二维码已过期，点击刷新";
+    case "cancelled": return "已取消扫码，点击刷新重试";
+    case "error": return "二维码获取失败，点击刷新重试";
+  }
+});
+
+const mihoyoQrNeedRefresh = computed(() =>
+  mihoyoQrStatus.value === "expired" || mihoyoQrStatus.value === "cancelled" || mihoyoQrStatus.value === "error",
+);
+
+const stopMihoyoPolling = () => {
+  if (mihoyoPollTimer) {
+    clearTimeout(mihoyoPollTimer);
+    mihoyoPollTimer = null;
+  }
+  mihoyoPolling = false;
+};
+
+const scheduleMihoyoPoll = () => {
+  if (!mihoyoPolling) return;
+  mihoyoPollTimer = setTimeout(() => void pollMihoyoQr(), MIHOYO_POLL_INTERVAL_MS);
+};
+
+const pollMihoyoQr = async () => {
+  if (!mihoyoPolling || !mihoyoTicket) return;
+  try {
+    const res = await api.pollMihoyoQr(mihoyoTicket);
+    if (!mihoyoPolling) return;
+    if (res.status !== "confirmed") {
+      mihoyoQrStatus.value = res.status;
+      if (res.status === "expired" || res.status === "cancelled") {
+        stopMihoyoPolling();
+      } else {
+        scheduleMihoyoPoll();
+      }
+      return;
+    }
+    // confirmed（设置页内只会是 bind 模式）
+    mihoyoQrStatus.value = "confirmed";
+    stopMihoyoPolling();
+    mihoyoBinding.value = res.binding;
+    message.success("米游社账号绑定成功");
+  } catch (err) {
+    if (mihoyoQrStatus.value === "confirmed") {
+      message.error(resolveErrorMessage(err, "绑定失败"));
+      mihoyoQrStatus.value = "error";
+      return;
+    }
+    scheduleMihoyoPoll();
+  }
+};
+
+const startMihoyoQr = async () => {
+  stopMihoyoPolling();
+  mihoyoQrStatus.value = "loading";
+  mihoyoQrDataUrl.value = "";
+  mihoyoTicket = "";
+  try {
+    const res = await api.createMihoyoQr();
+    mihoyoQrDataUrl.value = await QRCode.toDataURL(res.qrUrl, { width: 200, margin: 1 });
+    if (!showMihoyo.value) return;
+    mihoyoTicket = res.ticket;
+    mihoyoQrStatus.value = "waiting";
+    mihoyoPolling = true;
+    scheduleMihoyoPoll();
+  } catch (err) {
+    mihoyoQrStatus.value = "error";
+    message.error(resolveErrorMessage(err, "获取二维码失败"));
+  }
+};
+
+const openMihoyo = async () => {
+  openSub('mihoyo');
+  mihoyoLoading.value = true;
+  mihoyoBinding.value = null;
+  try {
+    mihoyoBinding.value = await api.getMihoyoBinding();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "获取绑定信息失败"));
+  } finally {
+    mihoyoLoading.value = false;
+  }
+  if (!mihoyoBinding.value) {
+    void startMihoyoQr();
+  }
+};
+
+const closeMihoyo = () => {
+  stopMihoyoPolling();
+  mihoyoQrDataUrl.value = "";
+  mihoyoTicket = "";
+  closeSub();
+};
+
+const unbindMihoyo = async () => {
+  if (mihoyoUnbinding.value) return;
+  mihoyoUnbinding.value = true;
+  try {
+    await api.unbindMihoyo();
+    mihoyoBinding.value = null;
+    message.success("已解除米游社绑定");
+    void startMihoyoQr();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "解绑失败"));
+  } finally {
+    mihoyoUnbinding.value = false;
+  }
+};
+
 const hidden = ref(!!props.currentHidden);
 const togglingHidden = ref(false);
 
@@ -233,6 +365,8 @@ const handleKeydown = (e: KeyboardEvent) => {
     }
     if (showLogout.value) {
       closeLogout();
+    } else if (showMihoyo.value) {
+      closeMihoyo();
     } else if (showSocial.value) {
       closeSocial();
     } else if (showEditBio.value) {
@@ -268,6 +402,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown);
   release(SCROLL_LOCK_TOKEN);
+  stopMihoyoPolling();
 });
 </script>
 
@@ -301,6 +436,7 @@ onBeforeUnmount(() => {
               <z-button @click="openEditBio">修改签名</z-button>
               <z-button @click="openPinned">修改委托展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
+              <z-button @click="openMihoyo">米游社绑定</z-button>
               <z-button @click="openLogout">退出登录</z-button>
             </div>
           </div>
@@ -436,6 +572,85 @@ onBeforeUnmount(() => {
                         :disabled="togglingHidden"
                       />
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Mihoyo Binding Sub-dialog -->
+    <Teleport to="body">
+      <Transition name="ik-overlay" appear>
+        <div v-if="showMihoyo" class="ik-overlay ik-overlay--sub" @click.self="closeMihoyo">
+          <div class="ik-overlay__stripe" aria-hidden="true"></div>
+          <div class="ik-dialog ik-dialog--mihoyo" @click.stop>
+            <div class="ik-dialog__outer">
+              <div class="ik-dialog__inner">
+                <div class="ik-dialog__header">
+                  <span class="ik-dialog__title">米游社绑定</span>
+                  <button class="ik-dialog__close" aria-label="关闭" @click="closeMihoyo">
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
+                  </button>
+                </div>
+                <div class="ik-dialog__body">
+                  <IkZzzMarquee />
+                  <div class="ik-mihoyo">
+                    <template v-if="mihoyoLoading">
+                      <p class="ik-mihoyo__status">加载中…</p>
+                    </template>
+                    <template v-else-if="mihoyoBinding">
+                      <div class="ik-mihoyo__info">
+                        <div class="ik-mihoyo__row">
+                          <span class="ik-mihoyo__label">绝区零玩家名</span>
+                          <span class="ik-mihoyo__value">{{ mihoyoBinding.zzzNickname || "未获取到角色" }}</span>
+                        </div>
+                        <div v-if="mihoyoBinding.zzzUid" class="ik-mihoyo__row">
+                          <span class="ik-mihoyo__label">UID</span>
+                          <span class="ik-mihoyo__value">{{ mihoyoBinding.zzzUid }}</span>
+                        </div>
+                        <div v-if="mihoyoBinding.zzzLevel != null" class="ik-mihoyo__row">
+                          <span class="ik-mihoyo__label">等级</span>
+                          <span class="ik-mihoyo__value">Lv.{{ mihoyoBinding.zzzLevel }}</span>
+                        </div>
+                        <div v-if="mihoyoBinding.zzzRegionName" class="ik-mihoyo__row">
+                          <span class="ik-mihoyo__label">服务器</span>
+                          <span class="ik-mihoyo__value">{{ mihoyoBinding.zzzRegionName }}</span>
+                        </div>
+                      </div>
+                      <z-button
+                        :icon="{ error: '#ff4444' }"
+                        :disabled="mihoyoUnbinding"
+                        @click="unbindMihoyo"
+                      >
+                        {{ mihoyoUnbinding ? "解绑中…" : "解除绑定" }}
+                      </z-button>
+                    </template>
+                    <template v-else>
+                      <div class="ik-mihoyo__qr-box" :class="{ 'is-dimmed': mihoyoQrNeedRefresh }">
+                        <img
+                          v-if="mihoyoQrDataUrl"
+                          :src="mihoyoQrDataUrl"
+                          alt="米游社绑定二维码"
+                          class="ik-mihoyo__qr"
+                          draggable="false"
+                        />
+                        <div v-else class="ik-mihoyo__qr-placeholder" />
+                        <button
+                          v-if="mihoyoQrNeedRefresh"
+                          type="button"
+                          class="ik-mihoyo__refresh"
+                          @click="startMihoyoQr"
+                        >
+                          刷新二维码
+                        </button>
+                      </div>
+                      <p class="ik-mihoyo__status" :class="`is-${mihoyoQrStatus}`">
+                        {{ mihoyoQrStatusText }}
+                      </p>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -847,6 +1062,111 @@ onBeforeUnmount(() => {
   /* Keep the ZZZ-style 3-rounded-corner frame on mobile; sub-dialogs
      (edit name / bio / social / logout) are centered popups, not
      fullscreen sheets. */
+}
+
+/* ── 米游社绑定 ─────────────────────────────────── */
+.ik-dialog--mihoyo {
+  height: auto;
+  min-height: 300px;
+}
+
+.ik-mihoyo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  width: 100%;
+}
+
+.ik-mihoyo__qr-box {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.ik-mihoyo__qr {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.ik-mihoyo__qr-box.is-dimmed .ik-mihoyo__qr {
+  filter: blur(3px) brightness(0.5);
+}
+
+.ik-mihoyo__qr-placeholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-mihoyo__refresh {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #bfff09;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ik-mihoyo__status {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ik-mihoyo__status.is-scanned,
+.ik-mihoyo__status.is-confirmed {
+  color: #bfff09;
+}
+
+.ik-mihoyo__status.is-expired,
+.ik-mihoyo__status.is-cancelled,
+.ik-mihoyo__status.is-error {
+  color: #ff6b6b;
+}
+
+.ik-mihoyo__info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+  padding: 14px 18px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+}
+
+.ik-mihoyo__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ik-mihoyo__label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.ik-mihoyo__value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-align: right;
+  word-break: break-all;
 }
 
 /* prefers-reduced-motion 由 theme.css 全局接管 */

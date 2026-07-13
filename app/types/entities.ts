@@ -242,6 +242,27 @@ export interface Profile {
   equippedCard?: BusinessCard;
   equippedAvatar?: Avatar;
   isAiAgent?: boolean;
+  /** 绑定的绝区零角色（米游社绑定） */
+  zzz?: ZzzRoleBadge | null;
+}
+
+/** 主页展示的绝区零角色徽章 */
+export interface ZzzRoleBadge {
+  uid: string;
+  nickname?: string;
+  level?: number;
+  regionName?: string;
+}
+
+/** 当前用户的米游社绑定信息 */
+export interface MihoyoBinding {
+  aid: string;
+  zzzUid: string | null;
+  zzzNickname: string | null;
+  zzzLevel: number | null;
+  zzzRegion: string | null;
+  zzzRegionName: string | null;
+  lastSyncedAt: string | null;
 }
 
 export interface LikeToggleResult {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
+import QRCode from "qrcode";
 import { resolveErrorMessage } from "~/utils/api-error";
 
 const api = useApi();
@@ -23,10 +24,122 @@ let cooldownTimer: ReturnType<typeof setInterval> | null = null;
 
 /** 当前模式的标题 */
 const modeTitle = computed(() => {
+  if (isMihoyo.value) return "米游社登录";
   if (isReset.value) return "重置密码";
   if (isRegister.value) return "注册";
   return "登录";
 });
+
+// ── 米游社扫码登录 ──────────────────────────────
+type MihoyoQrStatus = "loading" | "waiting" | "scanned" | "confirmed" | "expired" | "cancelled" | "error";
+
+const MIHOYO_POLL_INTERVAL_MS = 1500;
+
+const isMihoyo = ref(false);
+const mihoyoStatus = ref<MihoyoQrStatus>("loading");
+const mihoyoQrDataUrl = ref("");
+let mihoyoTicket = "";
+let mihoyoPollTimer: ReturnType<typeof setTimeout> | null = null;
+let mihoyoPolling = false;
+
+const mihoyoStatusText = computed(() => {
+  switch (mihoyoStatus.value) {
+    case "loading": return "二维码生成中…";
+    case "waiting": return "请使用米游社 App 扫码登录";
+    case "scanned": return "已扫码，请在米游社 App 中确认";
+    case "confirmed": return "登录中…";
+    case "expired": return "二维码已过期，点击刷新";
+    case "cancelled": return "已取消扫码，点击刷新重试";
+    case "error": return "二维码获取失败，点击刷新重试";
+  }
+});
+
+const mihoyoNeedRefresh = computed(() =>
+  mihoyoStatus.value === "expired" || mihoyoStatus.value === "cancelled" || mihoyoStatus.value === "error",
+);
+
+const stopMihoyoPolling = () => {
+  if (mihoyoPollTimer) {
+    clearTimeout(mihoyoPollTimer);
+    mihoyoPollTimer = null;
+  }
+  mihoyoPolling = false;
+};
+
+const scheduleMihoyoPoll = () => {
+  if (!mihoyoPolling) return;
+  mihoyoPollTimer = setTimeout(() => void pollMihoyo(), MIHOYO_POLL_INTERVAL_MS);
+};
+
+const pollMihoyo = async () => {
+  if (!mihoyoPolling || !mihoyoTicket) return;
+  try {
+    const res = await api.pollMihoyoQr(mihoyoTicket);
+    if (!mihoyoPolling) return;
+    if (res.status !== "confirmed") {
+      mihoyoStatus.value = res.status;
+      if (res.status === "expired" || res.status === "cancelled") {
+        stopMihoyoPolling();
+      } else {
+        scheduleMihoyoPoll();
+      }
+      return;
+    }
+    // confirmed（登录框内只会是 login 模式）
+    mihoyoStatus.value = "confirmed";
+    stopMihoyoPolling();
+    if (res.mode === "login") {
+      if (!res.auth.token) throw new Error("登录失败：未获取到 Token");
+      const isNewUser = res.isNewUser;
+      await onLoginSuccess(res.auth.token, res.auth.user);
+      if (isNewUser) {
+        message.success("完成入站考试后即可解锁发布委托、评论等功能");
+        await navigateTo("/exam");
+      }
+    }
+  } catch (err) {
+    if (!mihoyoPolling && mihoyoStatus.value === "confirmed") {
+      message.error(resolveErrorMessage(err, "登录失败"));
+      mihoyoStatus.value = "error";
+      return;
+    }
+    // 单次轮询失败不中断，继续重试
+    scheduleMihoyoPoll();
+  }
+};
+
+const startMihoyoQr = async () => {
+  stopMihoyoPolling();
+  mihoyoStatus.value = "loading";
+  mihoyoQrDataUrl.value = "";
+  mihoyoTicket = "";
+  try {
+    const res = await api.createMihoyoQr();
+    mihoyoQrDataUrl.value = await QRCode.toDataURL(res.qrUrl, { width: 220, margin: 1 });
+    if (!isMihoyo.value || !visible.value) return;
+    mihoyoTicket = res.ticket;
+    mihoyoStatus.value = "waiting";
+    mihoyoPolling = true;
+    scheduleMihoyoPoll();
+  } catch (err) {
+    mihoyoStatus.value = "error";
+    message.error(resolveErrorMessage(err, "获取二维码失败"));
+  }
+};
+
+const enterMihoyoMode = () => {
+  isMihoyo.value = true;
+  isRegister.value = false;
+  isReset.value = false;
+  void startMihoyoQr();
+};
+
+const exitMihoyoMode = () => {
+  isMihoyo.value = false;
+  stopMihoyoPolling();
+  mihoyoQrDataUrl.value = "";
+  mihoyoTicket = "";
+};
 
 const stopCooldown = () => {
   if (cooldownTimer) {
@@ -58,6 +171,7 @@ const resetForm = () => {
   isCodeSent.value = false;
   cooldown.value = 0;
   stopCooldown();
+  exitMihoyoMode();
 };
 
 const onLoginSuccess = async (token: string, user: Awaited<ReturnType<typeof api.getSelfUser>>) => {
@@ -227,6 +341,7 @@ const handleEnterCode = () => submit();
 
 onUnmounted(() => {
   stopCooldown();
+  stopMihoyoPolling();
 });
 </script>
 
@@ -259,7 +374,40 @@ onUnmounted(() => {
               <!-- Content -->
               <div class="ik-dialog__body">
                 <IkZzzMarquee />
-                <div class="ik-login__wrapper">
+                <div v-if="isMihoyo" class="ik-login__wrapper">
+                  <div class="ik-login__inner">
+                    <div class="ik-mihoyo">
+                      <div class="ik-mihoyo__qr-box" :class="{ 'is-dimmed': mihoyoNeedRefresh }">
+                        <img
+                          v-if="mihoyoQrDataUrl"
+                          :src="mihoyoQrDataUrl"
+                          alt="米游社登录二维码"
+                          class="ik-mihoyo__qr"
+                          draggable="false"
+                        />
+                        <div v-else class="ik-mihoyo__qr-placeholder" />
+                        <button
+                          v-if="mihoyoNeedRefresh"
+                          type="button"
+                          class="ik-mihoyo__refresh"
+                          @click="startMihoyoQr"
+                        >
+                          刷新二维码
+                        </button>
+                      </div>
+                      <p class="ik-mihoyo__status" :class="`is-${mihoyoStatus}`">
+                        {{ mihoyoStatusText }}
+                      </p>
+                      <p class="ik-mihoyo__hint">
+                        确认后将自动登录，首次登录会使用绝区零玩家名创建账号
+                      </p>
+                    </div>
+                  </div>
+                  <div class="ik-login-footer">
+                    <z-button @click="exitMihoyoMode">返回邮箱登录</z-button>
+                  </div>
+                </div>
+                <div v-else class="ik-login__wrapper">
                 <div class="ik-login__inner">
                 <div class="ik-login-form">
                   <!-- 邮箱：始终可见 -->
@@ -342,6 +490,9 @@ onUnmounted(() => {
 
                 </div>
                 <div class="ik-login-footer">
+                  <z-button v-if="!isReset && !isRegister" @click="enterMihoyoMode">
+                    米游社登录
+                  </z-button>
                   <z-button @click="toggleMode">
                     {{ isReset || isRegister ? "返回登录" : "注册账号" }}
                   </z-button>
@@ -650,6 +801,81 @@ onUnmounted(() => {
   }
   /* Keep the ZZZ-style 3-rounded-corner frame on mobile; the dialog is a
      centered popup, not a fullscreen sheet. */
+}
+
+/* ── 米游社扫码 ───────────────────────── */
+.ik-mihoyo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 4px;
+}
+
+.ik-mihoyo__qr-box {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.ik-mihoyo__qr {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.ik-mihoyo__qr-box.is-dimmed .ik-mihoyo__qr {
+  filter: blur(3px) brightness(0.5);
+}
+
+.ik-mihoyo__qr-placeholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-mihoyo__refresh {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #bfff09;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ik-mihoyo__status {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ik-mihoyo__status.is-scanned,
+.ik-mihoyo__status.is-confirmed {
+  color: #bfff09;
+}
+
+.ik-mihoyo__status.is-expired,
+.ik-mihoyo__status.is-cancelled,
+.ik-mihoyo__status.is-error {
+  color: #ff6b6b;
+}
+
+.ik-mihoyo__hint {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
 }
 
 /* prefers-reduced-motion 由 theme.css 全局接管 */

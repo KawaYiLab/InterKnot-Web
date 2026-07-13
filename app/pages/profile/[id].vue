@@ -467,6 +467,9 @@ onBeforeUnmount(() => {
             <div class="ik-banner__info">
               <h1 class="ik-banner__name">{{ profile.name || profile.login || "匿名用户" }}</h1>
               <span class="ik-banner__title-tag ik-banner__title-tag--empty">暂无称号</span>
+              <span v-if="profile.zzz?.nickname" class="ik-banner__zzz-badge" :title="`绝区零 UID ${profile.zzz.uid}`">
+                绝区零 · {{ profile.zzz.nickname }}<template v-if="profile.zzz.level != null"> Lv.{{ profile.zzz.level }}</template>
+              </span>
             </div>
           </div>
 
@@ -880,6 +883,24 @@ onBeforeUnmount(() => {
   box-shadow: none;
   color: rgba(255,255,255,0.6);
   font-style: italic;
+}
+
+/* 绝区零玩家名徽章（米游社绑定） */
+.ik-banner__zzz-badge {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: #000;
+  color: #bfff09;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Hidden profile badge */
