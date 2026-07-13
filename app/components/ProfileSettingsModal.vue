@@ -432,7 +432,6 @@ onBeforeUnmount(() => {
               <z-button class="ik-settings__action--mobile" disabled>修改勋章</z-button>
               <z-button class="ik-settings__action--mobile" @click="openCardModal">修改名片</z-button>
               <z-button @click="openEditName">修改用户名</z-button>
-              <z-button disabled>隐藏生日信息</z-button>
               <z-button @click="openEditBio">修改签名</z-button>
               <z-button @click="openPinned">修改委托展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>

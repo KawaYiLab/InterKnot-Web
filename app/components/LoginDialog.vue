@@ -409,6 +409,18 @@ onUnmounted(() => {
                 </div>
                 <div v-else class="ik-login__wrapper">
                 <div class="ik-login__inner">
+                <!-- 登录方式（仅登录模式展示）：第三方登录在上，邮箱表单在「或」下 -->
+                <div v-if="!isRegister && !isReset" class="ik-login-methods">
+                  <button type="button" class="ik-login-method-btn" @click="enterMihoyoMode">
+                    <span class="ik-login-method-btn__icon" aria-hidden="true">米</span>
+                    使用米游社继续
+                  </button>
+                  <div class="ik-login-divider" role="separator">
+                    <span class="ik-login-divider__line" aria-hidden="true"></span>
+                    <span class="ik-login-divider__text">或</span>
+                    <span class="ik-login-divider__line" aria-hidden="true"></span>
+                  </div>
+                </div>
                 <div class="ik-login-form">
                   <!-- 邮箱：始终可见 -->
                   <z-input
@@ -490,9 +502,6 @@ onUnmounted(() => {
 
                 </div>
                 <div class="ik-login-footer">
-                  <z-button v-if="!isReset && !isRegister" @click="enterMihoyoMode">
-                    米游社登录
-                  </z-button>
                   <z-button @click="toggleMode">
                     {{ isReset || isRegister ? "返回登录" : "注册账号" }}
                   </z-button>
@@ -688,6 +697,70 @@ onUnmounted(() => {
   padding: 24px;
   background: rgba(0, 0, 0, 0.8);
   border-radius: 16px;
+}
+
+/* ── 登录方式（第三方登录 + 分隔线） ──────── */
+.ik-login-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.ik-login-method-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.ik-login-method-btn:hover {
+  opacity: 0.88;
+}
+
+.ik-login-method-btn:active {
+  transform: scale(0.98);
+}
+
+.ik-login-method-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #33c7fc;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ik-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ik-login-divider__line {
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ik-login-divider__text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 /* ── Form ──────────────────────────────────────── */
