@@ -250,6 +250,17 @@ const startMihoyoQr = async () => {
   }
 };
 
+// 菜单按钮文案随绑定状态变化，打开设置时先拉一次绑定信息
+const mihoyoMenuLabel = computed(() => (mihoyoBinding.value ? "米游社（已绑定）" : "绑定米游社"));
+
+onMounted(async () => {
+  try {
+    mihoyoBinding.value = await api.getMihoyoBinding();
+  } catch {
+    // 未登录/接口失败时保持未绑定文案
+  }
+});
+
 const openMihoyo = async () => {
   openSub('mihoyo');
   mihoyoLoading.value = true;
@@ -435,7 +446,7 @@ onBeforeUnmount(() => {
               <z-button @click="openEditBio">修改签名</z-button>
               <z-button @click="openPinned">修改委托展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
-              <z-button @click="openMihoyo">米游社绑定</z-button>
+              <z-button @click="openMihoyo">{{ mihoyoMenuLabel }}</z-button>
               <z-button @click="openLogout">退出登录</z-button>
             </div>
           </div>
