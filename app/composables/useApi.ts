@@ -111,19 +111,19 @@ export interface SearchSuggestion {
   isAnonymous: boolean;
 }
 
-interface AuthResult {
+export interface AuthResult {
   token: string | null;
   user: Author;
 }
 
-interface MihoyoQrCreateResult {
+export interface MihoyoQrCreateResult {
   qrUrl: string;
   ticket: string;
   expiresIn: number;
   mode: "login" | "bind";
 }
 
-type MihoyoQrPollResult =
+export type MihoyoQrPollResult =
   | { status: "waiting" | "scanned" | "expired" | "cancelled" }
   | {
       status: "confirmed";

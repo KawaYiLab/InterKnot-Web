@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
-import QRCode from "qrcode";
 import { resolveErrorMessage } from "~/utils/api-error";
 import type { MihoyoBinding } from "~/types/entities";
 
@@ -160,18 +159,26 @@ const onPinnedSaved = (pinned: string[] | null) => {
 };
 
 // ── 米游社绑定 ──────────────────────────────
-type MihoyoQrStatus = "loading" | "waiting" | "scanned" | "confirmed" | "expired" | "cancelled" | "error";
-
-const MIHOYO_POLL_INTERVAL_MS = 1500;
-
 const mihoyoBinding = ref<MihoyoBinding | null>(null);
 const mihoyoLoading = ref(false);
 const mihoyoUnbinding = ref(false);
-const mihoyoQrStatus = ref<MihoyoQrStatus>("loading");
-const mihoyoQrDataUrl = ref("");
-let mihoyoTicket = "";
-let mihoyoPollTimer: ReturnType<typeof setTimeout> | null = null;
-let mihoyoPolling = false;
+
+const mihoyo = useMihoyoQr({
+  isActive: () => showMihoyo.value,
+  width: 200,
+  onConfirmed: (res) => {
+    if (res.mode !== "bind") return;
+    mihoyoBinding.value = res.binding;
+    message.success("米游社账号绑定成功");
+  },
+  onError: (err) => {
+    message.error(resolveErrorMessage(err, "获取二维码失败"));
+  },
+});
+
+const mihoyoQrDataUrl = mihoyo.qrDataUrl;
+const mihoyoQrStatus = mihoyo.qrStatus;
+const mihoyoQrNeedRefresh = mihoyo.qrNeedRefresh;
 
 const mihoyoQrStatusText = computed(() => {
   switch (mihoyoQrStatus.value) {
@@ -185,70 +192,8 @@ const mihoyoQrStatusText = computed(() => {
   }
 });
 
-const mihoyoQrNeedRefresh = computed(() =>
-  mihoyoQrStatus.value === "expired" || mihoyoQrStatus.value === "cancelled" || mihoyoQrStatus.value === "error",
-);
-
-const stopMihoyoPolling = () => {
-  if (mihoyoPollTimer) {
-    clearTimeout(mihoyoPollTimer);
-    mihoyoPollTimer = null;
-  }
-  mihoyoPolling = false;
-};
-
-const scheduleMihoyoPoll = () => {
-  if (!mihoyoPolling) return;
-  mihoyoPollTimer = setTimeout(() => void pollMihoyoQr(), MIHOYO_POLL_INTERVAL_MS);
-};
-
-const pollMihoyoQr = async () => {
-  if (!mihoyoPolling || !mihoyoTicket) return;
-  try {
-    const res = await api.pollMihoyoQr(mihoyoTicket);
-    if (!mihoyoPolling) return;
-    if (res.status !== "confirmed") {
-      mihoyoQrStatus.value = res.status;
-      if (res.status === "expired" || res.status === "cancelled") {
-        stopMihoyoPolling();
-      } else {
-        scheduleMihoyoPoll();
-      }
-      return;
-    }
-    // confirmed（设置页内只会是 bind 模式）
-    mihoyoQrStatus.value = "confirmed";
-    stopMihoyoPolling();
-    mihoyoBinding.value = res.binding;
-    message.success("米游社账号绑定成功");
-  } catch (err) {
-    if (mihoyoQrStatus.value === "confirmed") {
-      message.error(resolveErrorMessage(err, "绑定失败"));
-      mihoyoQrStatus.value = "error";
-      return;
-    }
-    scheduleMihoyoPoll();
-  }
-};
-
-const startMihoyoQr = async () => {
-  stopMihoyoPolling();
-  mihoyoQrStatus.value = "loading";
-  mihoyoQrDataUrl.value = "";
-  mihoyoTicket = "";
-  try {
-    const res = await api.createMihoyoQr();
-    mihoyoQrDataUrl.value = await QRCode.toDataURL(res.qrUrl, { width: 200, margin: 1 });
-    if (!showMihoyo.value) return;
-    mihoyoTicket = res.ticket;
-    mihoyoQrStatus.value = "waiting";
-    mihoyoPolling = true;
-    scheduleMihoyoPoll();
-  } catch (err) {
-    mihoyoQrStatus.value = "error";
-    message.error(resolveErrorMessage(err, "获取二维码失败"));
-  }
-};
+const startMihoyoQr = mihoyo.startQr;
+const stopMihoyoPolling = mihoyo.stopQr;
 
 // 菜单按钮文案随绑定状态变化，打开设置时先拉一次绑定信息
 const mihoyoMenuLabel = computed(() => (mihoyoBinding.value ? "查看米游社" : "绑定米游社"));
@@ -279,8 +224,6 @@ const openMihoyo = async () => {
 
 const closeMihoyo = () => {
   stopMihoyoPolling();
-  mihoyoQrDataUrl.value = "";
-  mihoyoTicket = "";
   closeSub();
 };
 
