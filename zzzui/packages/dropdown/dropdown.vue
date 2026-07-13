@@ -13,14 +13,14 @@
     @click="onClickHandler"
   >
     <slot></slot>
-    <div ref="contentRef" class="z-dropdown__content">
+    <div v-if="contentVisible" ref="contentRef" class="z-dropdown__content">
       <slot name="dropdown"></slot>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, provide, onMounted, onBeforeUnmount } from 'vue'
+import { ref, provide, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useZenless } from 'zenless-ui/index'
 import { zenlessSizes } from 'zenless-ui/constants'
 import { dropdownTriggers, dropdownContextKey } from './constants'
@@ -53,6 +53,7 @@ const props = defineProps({
   }
 })
 const visible = ref(false)
+const contentVisible = ref(false)
 const currentDirection = ref('down')
 const rootRef = ref(null)
 const contentRef = ref(null)
@@ -104,7 +105,9 @@ const resolveDirection = () => {
   currentDirection.value = spaceAbove < menuHeight + 8 ? 'down' : 'up'
 }
 
-const open = () => {
+const open = async () => {
+  contentVisible.value = true
+  await nextTick()
   const prevDirection = currentDirection.value
   resolveDirection()
   const newDirection = currentDirection.value
@@ -122,25 +125,25 @@ const open = () => {
   emits('trigger', visible.value)
 }
 
-const onHoverHandler = () => {
+const onHoverHandler = async () => {
   if (props.disabled) return
   if (props.trigger !== 'hover') return
   if (visible.value) return
-  open()
+  await open()
 }
 const onLeaveHandler = () => {
   if (props.disabled) return
   if (props.trigger !== 'hover') return
   onHideMenu()
 }
-const onClickHandler = () => {
+const onClickHandler = async () => {
   if (props.disabled) return
   if (props.trigger !== 'click') return
   if (visible.value) {
     onHideMenu()
     return
   }
-  open()
+  await open()
   document.addEventListener('mousedown', onHideMenu)
 }
 const handleItemClick = (command) => {

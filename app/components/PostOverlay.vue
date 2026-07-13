@@ -76,6 +76,10 @@ const commentsLoaded = ref(false);
 // 入场动画期间延迟渲染评论列表，避免弹窗打开瞬间挂载大量 CommentItem 与 useEmotes 触发 fetch。
 const commentsVisible = ref(false);
 let showCommentsTimer: ReturnType<typeof setTimeout> | null = null;
+// 等 200ms 入场动画结束后再给滚动容器加上 will-change/translateZ(0) 提升层，
+// 既保留开场动画阶段少合成层的好处，又让后续上下滚动能复用独立层。
+const isScrollable = ref(false);
+let scrollableTimer: ReturnType<typeof setTimeout> | null = null;
 
 const showCommentsSkeleton = computed(() => {
   if (!commentsVisible.value && comments.value.length > 0) return true;
@@ -1183,6 +1187,11 @@ onMounted(async () => {
   }
   await nextTick();
   scheduleShowComments();
+  if (scrollableTimer) clearTimeout(scrollableTimer);
+  scrollableTimer = setTimeout(() => {
+    scrollableTimer = null;
+    isScrollable.value = true;
+  }, 250);
 });
 
 onBeforeUnmount(() => {
@@ -1195,6 +1204,11 @@ onBeforeUnmount(() => {
   cancelCoverInteractions();
   teardownMentionListeners?.();
   teardownMentionListeners = null;
+  if (scrollableTimer) {
+    clearTimeout(scrollableTimer);
+    scrollableTimer = null;
+  }
+  isScrollable.value = false;
 });
 </script>
 
@@ -1262,7 +1276,7 @@ onBeforeUnmount(() => {
             <div class="ik-dialog__main">
               <IkZzzMarquee />
 
-            <div v-show="loading" class="ik-dialog__body">
+            <div v-show="loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable }">
               <!-- 骨架屏：左栏 -->
               <div class="ik-dialog__left">
                 <div class="ik-dialog__left-scroll">
@@ -1317,7 +1331,7 @@ onBeforeUnmount(() => {
 
             <template v-if="post">
               <!-- 桌面端：双栏布局 -->
-              <div v-show="!loading" class="ik-dialog__body">
+              <div v-show="!loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable }">
                 <!-- 左栏：封面 + 正文 -->
                 <div class="ik-dialog__left">
                   <div class="ik-dialog__left-scroll" ref="scrollRef">
@@ -2957,6 +2971,12 @@ onBeforeUnmount(() => {
        实际滚动时浏览器会按需提升，iOS 触摸滚动不会卡死 */
     will-change: auto;
     -webkit-transform: none;
+  }
+
+  .ik-dialog__body--scrollable {
+    will-change: scroll-position;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
   }
 
   .ik-dialog__body::-webkit-scrollbar {
