@@ -13,9 +13,11 @@ import type {
   ExamStartResult,
   ExamStatus,
   ExamSubmitResult,
+  MihoyoBinding,
   Post,
   PostCategory,
   ArticleFeed,
+  ZzzRoleBadge,
   LikeToggleResult,
   FavoriteToggleResult,
   FollowToggleResult,
@@ -113,6 +115,28 @@ interface AuthResult {
   token: string | null;
   user: Author;
 }
+
+interface MihoyoQrCreateResult {
+  qrUrl: string;
+  ticket: string;
+  expiresIn: number;
+  mode: "login" | "bind";
+}
+
+type MihoyoQrPollResult =
+  | { status: "waiting" | "scanned" | "expired" | "cancelled" }
+  | {
+      status: "confirmed";
+      mode: "bind";
+      binding: MihoyoBinding | null;
+    }
+  | {
+      status: "confirmed";
+      mode: "login";
+      isNewUser: boolean;
+      binding: MihoyoBinding | null;
+      auth: AuthResult;
+    };
 
 interface SendRegisterCodeResult {
   email: string;
@@ -634,6 +658,64 @@ export function useApi() {
     return { success: data.success === true };
   };
 
+  // ── 米游社扫码登录 / 绑定 ──────────────────────────
+  // $api 会自动带上 Authorization：已登录时创建的二维码是绑定模式，
+  // 未登录（登录框）则是登录模式，由后端按会话区分。
+  const createMihoyoQr = async (): Promise<MihoyoQrCreateResult> => {
+    const response = await $api("/api/auth/mihoyo/qr", {
+      method: "POST",
+      body: {},
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      qrUrl: String(data.qrUrl || ""),
+      ticket: String(data.ticket || ""),
+      expiresIn: Number(data.expiresIn || 180),
+      mode: data.mode === "bind" ? "bind" : "login",
+    };
+  };
+
+  const pollMihoyoQr = async (ticket: string): Promise<MihoyoQrPollResult> => {
+    const response = await $api("/api/auth/mihoyo/qr/status", {
+      method: "POST",
+      body: { ticket },
+    });
+    const data = response as Record<string, unknown>;
+    const status = String(data.status || "expired");
+    if (status !== "confirmed") {
+      return { status: status as "waiting" | "scanned" | "expired" | "cancelled" };
+    }
+    const binding = (data.binding as MihoyoBinding | null) ?? null;
+    if (data.mode === "bind") {
+      return { status: "confirmed", mode: "bind", binding };
+    }
+    clearAllCache();
+    return {
+      status: "confirmed",
+      mode: "login",
+      isNewUser: data.isNewUser === true,
+      binding,
+      auth: {
+        token: (data.jwt as string | undefined) || null,
+        user: toAuthor(data.user, apiBaseUrl),
+      },
+    };
+  };
+
+  const getMihoyoBinding = async (): Promise<MihoyoBinding | null> => {
+    const response = await $api("/api/auth/mihoyo/binding");
+    const data = response as Record<string, unknown>;
+    return (data.binding as MihoyoBinding | null) ?? null;
+  };
+
+  const unbindMihoyo = async (): Promise<{ success: boolean }> => {
+    const response = await $api("/api/auth/mihoyo/binding", {
+      method: "DELETE",
+    });
+    const data = response as Record<string, unknown>;
+    return { success: data.success === true };
+  };
+
   const getSelfUser = async (): Promise<Author> => {
     return cachedRead(
       qk.me.self,
@@ -1090,6 +1172,16 @@ export function useApi() {
     const userRaw = data.user as Record<string, unknown> | null | undefined;
     const statsRaw = data.stats as Record<string, unknown> | null | undefined;
 
+    const zzzRaw = data.zzz as Record<string, unknown> | null | undefined;
+    const zzz: ZzzRoleBadge | null = zzzRaw?.uid
+      ? {
+          uid: String(zzzRaw.uid),
+          nickname: (zzzRaw.nickname as string | undefined) || undefined,
+          level: zzzRaw.level != null ? Number(zzzRaw.level) : undefined,
+          regionName: (zzzRaw.regionName as string | undefined) || undefined,
+        }
+      : null;
+
     const equippedCardRaw = data.equippedCard;
     const equippedCard = toBusinessCard(equippedCardRaw, apiBaseUrl);
 
@@ -1108,6 +1200,7 @@ export function useApi() {
       isSelf: data.isSelf === true,
       isHidden: data.isHidden === true,
       profileHidden: data.profileHidden === true,
+      zzz,
       isFollowing: data.isFollowing === true,
       followersCount: Number(data.followersCount || 0),
       followingCount: Number(data.followingCount || 0),
@@ -1925,6 +2018,11 @@ export function useApi() {
     getExamStatus,
     startExam,
     submitExam,
+    // 米游社登录 / 绑定
+    createMihoyoQr,
+    pollMihoyoQr,
+    getMihoyoBinding,
+    unbindMihoyo,
   };
 }
 
