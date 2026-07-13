@@ -283,6 +283,15 @@ img:not(.ik-card__cover).ik-img-revealed {
   opacity: 1;
 }
 
+/* 移动端/触屏：头像、正文等图片的 280ms 淡入过渡会触发持续 paint 与 Layerize，
+   瀑布流滚动时大量图片同时加载会明显增加主线程任务时间。去掉过渡，
+   .ik-img-revealed 仍会让图片直接显示，只是不再播放淡入动画。 */
+@media (hover: none) or (pointer: coarse) {
+  body img:not(.ik-card__cover) {
+    transition: none;
+  }
+}
+
 /* ── lightGallery overrides ──────────────────── */
 .lg-backdrop {
   z-index: 10000 !important;

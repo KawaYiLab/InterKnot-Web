@@ -408,13 +408,25 @@ function setItemRef(el: Element | null, key: string | number) {
     unobserveItem(existing);
     itemRefMap.delete(key);
   }
-  if (el) {
+  // 避免每次渲染都重复调用 ResizeObserver.observe，减少滚动时的 DOM API 开销。
+  if (el && existing !== el) {
     itemRefMap.set(key, el);
     observeItem(el, key);
   }
 }
 
 function cleanupRemovedRefs(activeKeys: Set<string | number>) {
+  // 可见集没有变化时跳过遍历，减少 visibleItems 每帧重新计算带来的 watch 回调开销。
+  if (itemRefMap.size === activeKeys.size) {
+    let allActive = true;
+    for (const key of itemRefMap.keys()) {
+      if (!activeKeys.has(key)) {
+        allActive = false;
+        break;
+      }
+    }
+    if (allActive) return;
+  }
   for (const [key, el] of itemRefMap) {
     if (!activeKeys.has(key)) {
       unobserveItem(el);
