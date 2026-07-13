@@ -1,7 +1,10 @@
-const THUMB_PROCESS = "image_process=resize,w_360/format,webp/quality,q_80";
 const IMAGE_HOST = "https://im.tiwat.cn";
 const LEGACY_IMAGE_HOST_RE = /^https?:\/\/image\.tiwat\.cn/;
 const LEGACY_THUMB_SUFFIX = "-small.webp";
+
+function getResizeProcess(width: number): string {
+  return `image_process=resize,w_${width}/format,webp/quality,q_80`;
+}
 
 function stripImageProcess(url: string): string {
   if (!url.includes("image_process=")) return url;
@@ -75,7 +78,7 @@ export function toCanonicalUrl(url: string | undefined): string {
  * - 将旧 image.tiwat.cn 域名迁移到新 R2 域名 im.tiwat.cn
  * - 避免重复追加 image_process
  */
-export function toThumbUrl(url: string | undefined): string {
+export function toThumbUrl(url: string | undefined, width = 360): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
 
@@ -83,5 +86,5 @@ export function toThumbUrl(url: string | undefined): string {
   if (clean.includes("image_process=")) return clean;
 
   const sep = clean.includes("?") ? "&" : "?";
-  return `${clean}${sep}${THUMB_PROCESS}`;
+  return `${clean}${sep}${getResizeProcess(width)}`;
 }
