@@ -24,7 +24,6 @@ let cooldownTimer: ReturnType<typeof setInterval> | null = null;
 
 /** 当前模式的标题 */
 const modeTitle = computed(() => {
-  if (isMihoyo.value) return "米游社登录";
   if (isReset.value) return "重置密码";
   if (isRegister.value) return "注册";
   return "登录";
@@ -36,6 +35,9 @@ type MihoyoQrStatus = "loading" | "waiting" | "scanned" | "confirmed" | "expired
 const MIHOYO_POLL_INTERVAL_MS = 1500;
 
 const isMihoyo = ref(false);
+// 进入米游社弹窗时所处的页面（登录/注册），决定弹窗标题
+const mihoyoFromRegister = ref(false);
+const mihoyoTitle = computed(() => (mihoyoFromRegister.value ? "米游社注册" : "米游社登录"));
 const mihoyoStatus = ref<MihoyoQrStatus>("loading");
 const mihoyoQrDataUrl = ref("");
 let mihoyoTicket = "";
@@ -129,8 +131,7 @@ const startMihoyoQr = async () => {
 
 const enterMihoyoMode = () => {
   isMihoyo.value = true;
-  isRegister.value = false;
-  isReset.value = false;
+  mihoyoFromRegister.value = isRegister.value;
   void startMihoyoQr();
 };
 
@@ -374,46 +375,13 @@ onUnmounted(() => {
               <!-- Content -->
               <div class="ik-dialog__body">
                 <IkZzzMarquee />
-                <div v-if="isMihoyo" class="ik-login__wrapper">
-                  <div class="ik-login__inner">
-                    <div class="ik-mihoyo">
-                      <div class="ik-mihoyo__qr-box" :class="{ 'is-dimmed': mihoyoNeedRefresh }">
-                        <img
-                          v-if="mihoyoQrDataUrl"
-                          :src="mihoyoQrDataUrl"
-                          alt="米游社登录二维码"
-                          class="ik-mihoyo__qr"
-                          draggable="false"
-                        />
-                        <div v-else class="ik-mihoyo__qr-placeholder" />
-                        <button
-                          v-if="mihoyoNeedRefresh"
-                          type="button"
-                          class="ik-mihoyo__refresh"
-                          @click="startMihoyoQr"
-                        >
-                          刷新二维码
-                        </button>
-                      </div>
-                      <p class="ik-mihoyo__status" :class="`is-${mihoyoStatus}`">
-                        {{ mihoyoStatusText }}
-                      </p>
-                      <p class="ik-mihoyo__hint">
-                        确认后将自动登录，首次登录会使用绝区零玩家名创建账号
-                      </p>
-                    </div>
-                  </div>
-                  <div class="ik-login-footer">
-                    <z-button @click="exitMihoyoMode">返回邮箱登录</z-button>
-                  </div>
-                </div>
-                <div v-else class="ik-login__wrapper">
+                <div class="ik-login__wrapper">
                 <div class="ik-login__inner">
-                <!-- 登录方式（仅登录模式展示）：第三方登录在上，邮箱表单在「或」下 -->
-                <div v-if="!isRegister && !isReset" class="ik-login-methods">
+                <!-- 登录方式：第三方登录在上，邮箱表单在「或」下（重置密码时隐藏） -->
+                <div v-if="!isReset" class="ik-login-methods">
                   <button type="button" class="ik-login-method-btn" @click="enterMihoyoMode">
-                    <span class="ik-login-method-btn__icon" aria-hidden="true">米</span>
-                    使用米游社继续
+                    <img src="/images/mihoyo-icon.webp" alt="" class="ik-login-method-btn__icon" draggable="false" />
+                    {{ isRegister ? "使用米游社注册" : "使用米游社登录" }}
                   </button>
                   <div class="ik-login-divider" role="separator">
                     <span class="ik-login-divider__line" aria-hidden="true"></span>
@@ -546,6 +514,63 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+
+        <!-- 米游社扫码子弹窗 -->
+        <Teleport to="body">
+          <Transition name="ik-overlay" appear>
+            <div v-if="isMihoyo" class="ik-overlay ik-overlay--sub" @mousedown.self="exitMihoyoMode">
+              <div class="ik-overlay__stripe" aria-hidden="true"></div>
+              <div class="ik-dialog" @click.stop>
+                <div class="ik-dialog__outer">
+                  <div class="ik-dialog__inner">
+                    <div class="ik-dialog__header">
+                      <span class="ik-dialog__title">{{ mihoyoTitle }}</span>
+                      <button class="ik-dialog__close" aria-label="关闭" @click="exitMihoyoMode">
+                        <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
+                      </button>
+                    </div>
+                    <div class="ik-dialog__body">
+                      <IkZzzMarquee />
+                      <div class="ik-login__wrapper">
+                        <div class="ik-login__inner">
+                          <div class="ik-mihoyo">
+                            <div class="ik-mihoyo__qr-box" :class="{ 'is-dimmed': mihoyoNeedRefresh }">
+                              <img
+                                v-if="mihoyoQrDataUrl"
+                                :src="mihoyoQrDataUrl"
+                                alt="米游社登录二维码"
+                                class="ik-mihoyo__qr"
+                                draggable="false"
+                              />
+                              <div v-else class="ik-mihoyo__qr-placeholder" />
+                              <button
+                                v-if="mihoyoNeedRefresh"
+                                type="button"
+                                class="ik-mihoyo__refresh"
+                                @click="startMihoyoQr"
+                              >
+                                刷新二维码
+                              </button>
+                            </div>
+                            <p class="ik-mihoyo__status" :class="`is-${mihoyoStatus}`">
+                              {{ mihoyoStatusText }}
+                            </p>
+                            <p class="ik-mihoyo__hint">
+                              确认后将自动登录，首次登录会使用绝区零玩家名创建账号
+                            </p>
+                          </div>
+                        </div>
+                        <div class="ik-login-footer">
+                          <z-button @click="exitMihoyoMode">返回</z-button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </Teleport>
       </div>
     </Transition>
   </Teleport>
@@ -565,6 +590,10 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+}
+
+.ik-overlay--sub {
+  z-index: 9200;
 }
 
 .ik-overlay__stripe {
@@ -733,17 +762,12 @@ onUnmounted(() => {
 }
 
 .ik-login-method-btn__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: #33c7fc;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .ik-login-divider {
