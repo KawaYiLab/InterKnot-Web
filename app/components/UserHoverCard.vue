@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { resolveErrorMessage } from "~/utils/api-error";
 import type { Profile } from "~/types/entities";
+import type { ComponentPublicInstance } from "vue";
+import { useHoverCapable } from "~/composables/useHoverCapable";
 
 const props = withDefaults(defineProps<{
   authorId?: string;
@@ -9,14 +11,17 @@ const props = withDefaults(defineProps<{
   clickable: false,
 });
 
-const api = useApi();
-const auth = useAuthStore();
-const loginDialog = useLoginDialog();
-const knockKnockModal = useKnockKnockModal();
-const dm = useDmConversations();
-const reportDialog = useReportDialog();
+const hoverCapable = useHoverCapable();
+// hover 用不到时（移动端/窄视口）不实例化 api，避免为每个评论/回复创建一次 cachedRead 闭包。
+const api = hoverCapable.value ? useApi() : null;
+// 移动端不需要 hover card 的私信/举报/登录弹窗，避免为每个 UserHoverCard 挂载 DM/弹窗相关状态。
+const auth = hoverCapable.value ? useAuthStore() : null;
+const loginDialog = hoverCapable.value ? useLoginDialog() : null;
+const knockKnockModal = hoverCapable.value ? useKnockKnockModal() : null;
+const dm = hoverCapable.value ? useDmConversations() : null;
+const reportDialog = hoverCapable.value ? useReportDialog() : null;
 
-const triggerRef = ref<HTMLElement | null>(null);
+const triggerRef = ref<HTMLElement | ComponentPublicInstance | null>(null);
 const cardRef = ref<HTMLElement | null>(null);
 const visible = ref(false);
 const profile = ref<Profile | null>(null);
@@ -46,12 +51,12 @@ const canReport = computed<boolean>(() => {
 const reportUser = () => {
   const target = profile.value;
   if (!target || typeof target.uid !== "number") return;
-  if (!auth.isLogin) {
-    loginDialog.open();
+  if (!auth?.isLogin) {
+    loginDialog?.open();
     return;
   }
   visible.value = false;
-  reportDialog.open({
+  reportDialog?.open({
     targetType: "user",
     targetId: String(target.uid),
     targetLabel: `用户 ${target.name || target.login || ""}`.trim(),
@@ -66,17 +71,13 @@ let hideTimer: ReturnType<typeof setTimeout> | null = null;
 const SHOW_DELAY = 400;
 const HIDE_DELAY = 250;
 
-// Skip the hover card on touch devices / narrow viewports — mouseenter can
-// still fire on iOS after a tap, which previously caused an unwanted popup.
-const isMobileEnv = () => {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(hover: none), (pointer: coarse), (max-width: 768px)").matches;
-};
+
 
 // Simple in-memory cache
 const profileCache = new Map<string, Profile>();
 
 const fetchProfile = async (id: string) => {
+  if (!api) return;
   if (profileCache.has(id)) {
     profile.value = profileCache.get(id)!;
     nextTick(() => updatePosition());
@@ -96,8 +97,14 @@ const fetchProfile = async (id: string) => {
   }
 };
 
+const getTriggerEl = () => {
+  const t = triggerRef.value;
+  if (t instanceof HTMLElement) return t;
+  return ((t as ComponentPublicInstance | null)?.$el as HTMLElement | undefined) || null;
+};
+
 const updatePosition = () => {
-  const trigger = triggerRef.value;
+  const trigger = getTriggerEl();
   if (!trigger) return;
 
   const rect = trigger.getBoundingClientRect();
@@ -135,9 +142,7 @@ const clearTimers = () => {
 };
 
 const onTriggerEnter = () => {
-  if (!props.authorId) return;
-  // Never show the hover card on touch devices / narrow viewports.
-  if (isMobileEnv()) return;
+  if (!props.authorId || !hoverCapable.value) return;
   clearTimers();
   showTimer = setTimeout(() => {
     visible.value = true;
@@ -166,10 +171,15 @@ const onCardLeave = () => {
   }, HIDE_DELAY);
 };
 
+const profileUrl = computed(() => props.authorId ? `/profile/${props.authorId}` : "");
+const triggerEvents = computed(() => hoverCapable.value
+  ? { mouseenter: onTriggerEnter, mouseleave: onTriggerLeave }
+  : {});
+
 const goProfile = () => {
   if (!props.authorId) return;
   visible.value = false;
-  navigateTo(`/profile/${props.authorId}`);
+  navigateTo(profileUrl.value);
 };
 
 /**
@@ -180,19 +190,19 @@ const goProfile = () => {
  *  4. 拿到 documentId 后打开敲敲弹窗并定位到该会话
  */
 const startDm = async () => {
-  if (!auth.isLogin) {
+  if (!auth?.isLogin) {
     visible.value = false;
-    loginDialog.open();
+    loginDialog?.open();
     return;
   }
-  if (!canSendDm.value || !profile.value || typeof profile.value.uid !== "number") return;
+  if (!canSendDm.value || !profile.value || typeof profile.value.uid !== "number" || !dm) return;
   if (dmStarting.value) return;
   dmStarting.value = true;
   dmError.value = null;
   try {
     const { summary } = await dm.openDirectConversation(profile.value.uid);
     visible.value = false;
-    knockKnockModal.open({ dmConversationId: summary.documentId });
+    knockKnockModal?.open({ dmConversationId: summary.documentId });
   } catch (err) {
     dmError.value = resolveErrorMessage(err, "无法发起私聊");
   } finally {
@@ -212,12 +222,30 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <NuxtLink
+    v-if="clickable && authorId"
+    :to="profileUrl"
+    :prefetch="false"
+    custom
+  >
+    <template #default="{ navigate }">
+      <div
+        ref="triggerRef"
+        class="ik-hovercard-trigger"
+        :class="{ 'ik-hovercard-trigger--clickable': clickable }"
+        v-on="triggerEvents"
+        @click="navigate"
+      >
+        <slot />
+      </div>
+    </template>
+  </NuxtLink>
   <div
+    v-else
     ref="triggerRef"
     class="ik-hovercard-trigger"
     :class="{ 'ik-hovercard-trigger--clickable': clickable }"
-    @mouseenter="onTriggerEnter"
-    @mouseleave="onTriggerLeave"
+    v-on="triggerEvents"
     @click="clickable && goProfile()"
   >
     <slot />
@@ -354,6 +382,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .ik-hovercard-trigger {
   display: inline-block;
+  text-decoration: none;
+  color: inherit;
 }
 
 .ik-hovercard-trigger--clickable {

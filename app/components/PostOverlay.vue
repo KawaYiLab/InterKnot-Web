@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Author, Comment, Post } from "~/types/entities";
 import type { PostPreview } from "~/composables/usePostModal";
@@ -10,7 +11,9 @@ import { formatTime } from "~/utils/time";
 import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
+import type { MentionCandidate, MentionAnchor, MentionRange, DisplaySegment } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
+import type { EmoteRange } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { toThumbUrl } from "~/utils/image";
@@ -45,6 +48,8 @@ const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const reportDialog = useReportDialog();
 const message = useMessage();
+const isMobile = useMediaQuery("(max-width: 768px)");
+const isCompact = useMediaQuery("(max-width: 1024px)");
 
 const post = ref<Post | null>(null);
 const loading = ref(true);
@@ -68,6 +73,19 @@ const commentsLoading = ref(false);
 // 若此时就按「无评论」显示空提示，会出现「空提示 → 骨架 → 评论」的闪烁。
 // 用此标记把「尚未加载」与「加载完确实为空」区分开：未加载完一律显示骨架。
 const commentsLoaded = ref(false);
+// 入场动画期间延迟渲染评论列表，避免弹窗打开瞬间挂载大量 CommentItem 与 useEmotes 触发 fetch。
+const commentsVisible = ref(false);
+let showCommentsTimer: ReturnType<typeof setTimeout> | null = null;
+// 等 200ms 入场动画结束后再给滚动容器加上 will-change/translateZ(0) 提升层，
+// 既保留开场动画阶段少合成层的好处，又让后续上下滚动能复用独立层。
+const isScrollable = ref(false);
+let scrollableTimer: ReturnType<typeof setTimeout> | null = null;
+
+const showCommentsSkeleton = computed(() => {
+  if (!commentsVisible.value && comments.value.length > 0) return true;
+  return comments.value.length === 0 && (!commentsLoaded.value || commentsLoading.value);
+});
+const showCommentsEmpty = computed(() => comments.value.length === 0 && commentsLoaded.value && !commentsLoading.value);
 
 // 用于在 postId 切换时废弃旧的评论请求，避免旧数据污染新委托
 let currentCommentLoadId = 0;
@@ -84,29 +102,64 @@ const commentAnonymous = ref(false);
 /** 真实底层 textarea：z-input 是个包装，原生 keydown / overlay 都需要它 */
 const commentTextareaRef = ref<HTMLTextAreaElement | null>(null);
 
-/**
- * 评论编辑器的 @ 提及处理。逻辑与路由页 pages/post/[id].vue 完全对称——
- * 弹窗模式只是同一编辑器的另一种呈现，没有理由维护两份分支。
- */
-const mention = useMentionInput({
-  text: newComment,
-  textareaRef: commentTextareaRef,
-  search: api.searchAuthors,
+// 评论输入框首次 focus 前不需要 @ 提及/表情插入逻辑，延迟初始化以减少弹窗打开瞬间 JS 执行。
+const mentionInputInitialized = ref(false);
+
+type MentionInputAPI = ReturnType<typeof useMentionInput>;
+type EmoteInsertAPI = ReturnType<typeof useEmoteInsert>;
+
+const mention: MentionInputAPI = shallowReactive<MentionInputAPI>({
+  pickerVisible: ref(false),
+  pickerLoading: ref(false),
+  pickerResults: ref<MentionCandidate[]>([]),
+  pickerActiveIndex: ref(0),
+  pickerAnchor: ref<MentionAnchor | null>(null),
+  refresh: () => {},
+  onKeyDown: () => {},
+  selectCandidate: () => {},
+  insertAtTrigger: () => {
+    ensureMentionInputInitialized();
+    void mention.insertAtTrigger();
+  },
+  prependMentionChip: () => {},
+  serializeForSend: () => newComment.value,
+  hydrateFromContent: () => {},
+  reset: () => {},
+  mentions: ref<MentionRange[]>([]),
+  overlaySegments: computed<DisplaySegment[]>(() => []),
+  isAtLimit: computed(() => false),
 });
 
-const emoteInsert = useEmoteInsert({
-  text: newComment,
-  textareaRef: commentTextareaRef,
-  // 插入表情后同步平移 mention range，避免下标错位导致 mention 被丢弃
-  onInsert: (start, end, insertedLength) => {
-    const delta = insertedLength - (end - start);
-    mention.mentions.value = mention.mentions.value
-      .filter((m) => m.end <= start || m.start >= end)
-      .map((m) => (m.start >= end ? { ...m, start: m.start + delta, end: m.end + delta } : m));
+const emoteInsert: EmoteInsertAPI = shallowReactive<EmoteInsertAPI>({
+  emotes: ref<EmoteRange[]>([]),
+  insertEmote: async (code: string) => {
+    ensureMentionInputInitialized();
+    return emoteInsert.insertEmote(code);
   },
+  insertText: async (text: string) => {
+    ensureMentionInputInitialized();
+    return emoteInsert.insertText(text);
+  },
+  refresh: () => {},
+  onKeyDown: () => {},
+  serializeWith: () => newComment.value,
+  reset: () => {},
+  isAtLimit: computed(() => false),
+  hasEmotes: computed(() => false),
 });
+
 const emotePickerVisible = ref(false);
 const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);
+
+// 评论列表在入场动画结束后再渲染，避免弹窗打开瞬间挂载大量 CommentItem 与 useEmotes 触发 fetch。
+function scheduleShowComments() {
+  if (showCommentsTimer) clearTimeout(showCommentsTimer);
+  commentsVisible.value = false;
+  showCommentsTimer = setTimeout(() => {
+    showCommentsTimer = null;
+    commentsVisible.value = true;
+  }, 300);
+}
 
 const toggleEmotePicker = (e: MouseEvent) => {
   if (emotePickerVisible.value) {
@@ -152,12 +205,23 @@ const syncCommentInputHeight = async () => {
 const firstCover = computed(() => covers.value[0] ?? null);
 const previewCover = computed(() => {
   const cover = props.preview?.cover?.trim();
-  return cover || null;
+  // 预览图仅作为 blur-up 占位，统一走缩略图，避免首页卡片传入大原图
+  // 时 decode() 占用过多资源导致弹窗入场掉帧。
+  return cover ? toThumbUrl(cover) : null;
 });
 const coverPreviewSrc = (i: number) => {
   const cover = covers.value[i];
   if (!cover) return undefined;
-  return (i === 0 && previewCover.value) || toThumbUrl(cover.url) || undefined;
+  return (i === 0 && previewCover.value) || toThumbUrl(cover.url, 360) || undefined;
+};
+
+// 移动端/平板弹窗封面首屏直接加载原图会触发大图 decode/重绘，导致入场掉帧。
+// 移动视图用 800px、平板视图用 1200px 宽度缩略图已足够清晰，只有放大预览时才用原图。
+const coverDisplaySrc = (url: string | undefined) => {
+  if (!url) return url;
+  if (isMobile.value) return toThumbUrl(url, 800);
+  if (isCompact.value) return toThumbUrl(url, 1200);
+  return url;
 };
 const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
 const setLoadedPreviewImage = (el: Element | ComponentPublicInstance | null) => {
@@ -411,8 +475,16 @@ const waitForLoadedPreview = async (postId: string) => {
   const image = loadedPreviewImageRef.value;
   if (image) {
     try {
-      await image.decode();
+      // 移动端/平板 GPU/CPU 同时处理弹窗入场动画与图片 decode 容易掉帧，
+      // 且 decode 可能长时间不 resolve 导致骨架屏卡死。
+      // 短超时后先解除骨架屏，让真实图片异步加载；blur-up 预览图已占位，避免黑屏。
+      const timeoutMs = isCompact.value ? 200 : 1200;
+      await Promise.race([
+        image.decode(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("decode timeout")), timeoutMs)),
+      ]);
     } catch {
+      // 解码失败或超时：继续显示 preview/骨架，让 img@load 事件最终替换
     }
   }
   if (props.postId !== postId) return false;
@@ -728,6 +800,7 @@ const focusCommentInput = () => {
     loginDialog.open();
     return;
   }
+  ensureMentionInputInitialized();
   commentInputFocused.value = true;
   const input = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLElement | null;
   input?.focus();
@@ -740,6 +813,7 @@ const handleCommentInputFocus = (e: FocusEvent) => {
     loginDialog.open();
     return;
   }
+  ensureMentionInputInitialized();
   commentInputFocused.value = true;
 };
 
@@ -992,6 +1066,8 @@ const resetAndLoad = async () => {
   currentCommentLoadId++;
   loadError.value = false;
   newComment.value = "";
+  mention.reset();
+  emoteInsert.reset();
   commentImages.clearUploads();
   commentInputFocused.value = false;
   replyTarget.value = null;
@@ -1008,6 +1084,7 @@ const resetAndLoad = async () => {
   if (!loadError.value) {
     scheduleSeek();
   }
+  scheduleShowComments();
 };
 
 watch(
@@ -1032,7 +1109,7 @@ const attachMentionToTextarea = () => {
   const root = commentInputBoxRef.value;
   if (!root) return;
   const ta = root.querySelector("textarea") as HTMLTextAreaElement | null;
-  if (!ta || ta === commentTextareaRef.value) return;
+  if (!ta) return;
 
   teardownMentionListeners?.();
   commentTextareaRef.value = ta;
@@ -1069,6 +1146,29 @@ watch(commentInputFocused, () => {
   nextTick(() => attachMentionToTextarea());
 });
 
+// 首次 focus / 点击 @ / 点击表情时实例化真实 mention/emote 逻辑，
+// 并 attach 到真实 textarea。弹窗打开时只持有无副作用的默认 stub。
+function ensureMentionInputInitialized() {
+  if (mentionInputInitialized.value) return;
+  Object.assign(mention, useMentionInput({
+    text: newComment,
+    textareaRef: commentTextareaRef,
+    search: api.searchAuthors,
+  }));
+  Object.assign(emoteInsert, useEmoteInsert({
+    text: newComment,
+    textareaRef: commentTextareaRef,
+    onInsert: (start, end, insertedLength) => {
+      const delta = insertedLength - (end - start);
+      mention.mentions.value = mention.mentions.value
+        .filter((m) => m.end <= start || m.start >= end)
+        .map((m) => (m.start >= end ? { ...m, start: m.start + delta, end: m.end + delta } : m));
+    },
+  }));
+  mentionInputInitialized.value = true;
+  attachMentionToTextarea();
+}
+
 onMounted(async () => {
   window.addEventListener("keydown", onKeyDown);
   // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
@@ -1086,7 +1186,12 @@ onMounted(async () => {
     scheduleSeek();
   }
   await nextTick();
-  attachMentionToTextarea();
+  scheduleShowComments();
+  if (scrollableTimer) clearTimeout(scrollableTimer);
+  scrollableTimer = setTimeout(() => {
+    scrollableTimer = null;
+    isScrollable.value = true;
+  }, 250);
 });
 
 onBeforeUnmount(() => {
@@ -1099,11 +1204,19 @@ onBeforeUnmount(() => {
   cancelCoverInteractions();
   teardownMentionListeners?.();
   teardownMentionListeners = null;
+  if (scrollableTimer) {
+    clearTimeout(scrollableTimer);
+    scrollableTimer = null;
+  }
+  isScrollable.value = false;
 });
 </script>
 
 <template>
   <div class="ik-overlay" @click="onBackdropClick">
+      <!-- 独立背景层：用 opacity 过渡替代 .ik-overlay 的 background-color 过渡，避免全屏 paint -->
+      <div class="ik-overlay__backdrop" aria-hidden="true"></div>
+
       <!-- ── 斜线纹理背景（ZZZ PatternPainter） ──── -->
       <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
@@ -1163,7 +1276,7 @@ onBeforeUnmount(() => {
             <div class="ik-dialog__main">
               <IkZzzMarquee />
 
-            <div v-show="loading" class="ik-dialog__body">
+            <div v-show="loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable }">
               <!-- 骨架屏：左栏 -->
               <div class="ik-dialog__left">
                 <div class="ik-dialog__left-scroll">
@@ -1178,7 +1291,7 @@ onBeforeUnmount(() => {
                           alt=""
                           class="ik-dialog__cover-preview-image"
                           aria-hidden="true"
-                          decoding="sync"
+                          decoding="async"
                         />
                       </div>
                       <div v-else class="ik-skel ik-dialog__cover-skel" aria-hidden="true"></div>
@@ -1218,7 +1331,7 @@ onBeforeUnmount(() => {
 
             <template v-if="post">
               <!-- 桌面端：双栏布局 -->
-              <div v-show="!loading" class="ik-dialog__body">
+              <div v-show="!loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable }">
                 <!-- 左栏：封面 + 正文 -->
                 <div class="ik-dialog__left">
                   <div class="ik-dialog__left-scroll" ref="scrollRef">
@@ -1237,11 +1350,11 @@ onBeforeUnmount(() => {
                               alt=""
                               class="ik-dialog__cover-preview-image"
                               aria-hidden="true"
-                              decoding="sync"
+                              :decoding="isCompact ? 'async' : 'sync'"
                             />
                           </div>
                           <img
-                            :src="firstCover?.url || DEFAULT_COVER_IMAGE"
+                            :src="firstCover ? coverDisplaySrc(firstCover.url) : DEFAULT_COVER_IMAGE"
                             :alt="hasCovers ? post.title : 'default cover'"
                             class="ik-dialog__cover"
                             decoding="async"
@@ -1284,11 +1397,11 @@ onBeforeUnmount(() => {
                                   alt=""
                                   class="ik-dialog__cover-preview-image"
                                   aria-hidden="true"
-                                  :decoding="i === 0 ? 'sync' : 'async'"
+                                  :decoding="i === 0 && !isCompact ? 'sync' : 'async'"
                                 />
                               </div>
                               <img
-                                :src="isCoverNearby(i) ? c.url : undefined"
+                                :src="isCoverNearby(i) ? coverDisplaySrc(c.url) : undefined"
                                 :alt="`${post.title} - ${i + 1}`"
                                 class="ik-dialog__cover"
                                 :loading="i === 0 ? 'eager' : 'lazy'"
@@ -1370,7 +1483,7 @@ onBeforeUnmount(() => {
                 <div class="ik-dialog__right">
                   <div class="ik-dialog__comments-scroll">
                     <div class="ik-dialog__comments-inner">
-                      <div v-if="!comments.length && (!commentsLoaded || commentsLoading)">
+                      <div v-if="showCommentsSkeleton">
                         <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
                           <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
                           <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
@@ -1380,32 +1493,34 @@ onBeforeUnmount(() => {
                           </div>
                         </div>
                       </div>
-                      <div v-else-if="!comments.length" class="ik-empty" style="padding: 40px 0">啥都木有¯\(°_o)/¯</div>
-                      <CommentItem
-                        v-for="(comment, idx) in comments"
-                        :key="comment.id"
-                        :comment="comment"
-                        :index="idx"
-                        :current-user-author-id="auth.user?.authorId"
-                        :can-pin="canPin"
-                        :highlighted-comment-id="highlightedCommentId"
-                        @like-comment="likeComment"
-                        @like-reply="likeReply"
-                        @reply-comment="startReply"
-                        @reply-to-reply="startReplyToReply"
-                        @delete-comment="handleDeleteComment"
-                        @delete-reply="handleDeleteReply"
-                        @report-comment="handleReportComment"
-                        @report-reply="handleReportReply"
-                        @pin-comment="handlePinComment"
-                        @unpin-comment="handleUnpinComment"
-                      />
-                      <div v-if="commentsHasNext && comments.length" class="ik-dialog__load-more">
-                        <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>
-                      </div>
-                      <div v-else-if="comments.length" class="ik-dialog__load-more">
-                        <span class="ik-meta">- 评论已全部加载 -</span>
-                      </div>
+                      <div v-else-if="showCommentsEmpty" class="ik-empty" style="padding: 40px 0">啥都木有¯\(°_o)/¯</div>
+                      <template v-if="commentsVisible">
+                        <CommentItem
+                          v-for="(comment, idx) in comments"
+                          :key="comment.id"
+                          :comment="comment"
+                          :index="idx"
+                          :current-user-author-id="auth.user?.authorId"
+                          :can-pin="canPin"
+                          :highlighted-comment-id="highlightedCommentId"
+                          @like-comment="likeComment"
+                          @like-reply="likeReply"
+                          @reply-comment="startReply"
+                          @reply-to-reply="startReplyToReply"
+                          @delete-comment="handleDeleteComment"
+                          @delete-reply="handleDeleteReply"
+                          @report-comment="handleReportComment"
+                          @report-reply="handleReportReply"
+                          @pin-comment="handlePinComment"
+                          @unpin-comment="handleUnpinComment"
+                        />
+                        <div v-if="commentsHasNext && comments.length" class="ik-dialog__load-more">
+                          <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>
+                        </div>
+                        <div v-else-if="comments.length" class="ik-dialog__load-more">
+                          <span class="ik-meta">- 评论已全部加载 -</span>
+                        </div>
+                      </template>
                     </div>
                   </div>
 
@@ -1457,6 +1572,7 @@ onBeforeUnmount(() => {
                           </div>
                           <!-- @ 提及高亮叠加层：teleport 到 textarea 父级，pointer-events:none -->
                           <MentionHighlightOverlay
+                            v-if="mentionInputInitialized"
                             :target="commentTextareaRef"
                             :text="newComment"
                             :mentions="mention.mentions.value"
@@ -1633,6 +1749,7 @@ onBeforeUnmount(() => {
       />
 
       <EmotePicker
+        v-if="emotePickerVisible"
         :visible="emotePickerVisible"
         :anchor="emotePickerAnchor"
         @select="onEmoteSelect"
@@ -1662,19 +1779,28 @@ onBeforeUnmount(() => {
    ═══════════════════════════════════════════════ */
 
 /* ── Backdrop ──────────────────────────────────── */
-/* 与 Flutter showZZZDialog 完全一致：
-   - 黑遮罩 alpha 0.6
-   - BackdropFilter blur 10px */
-.ik-overlay {
+.ik-overlay.ik-overlay {
   position: fixed;
   inset: 0;
   z-index: 9000;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
+  background: transparent;
+  --ik-overlay-bg: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+/* 独立背景层：承载遮罩颜色，用 opacity 过渡替代 .ik-overlay 的 background-color 过渡。
+   移动端/桌面端颜色通过 --ik-overlay-bg 变量切换，入场时只让 opacity 变化，避免全屏 paint。 */
+.ik-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--ik-overlay-bg);
+  opacity: 1;
 }
 
 /* 斜线纹理（PatternPainter）—— web 端调优版：
@@ -2773,10 +2899,48 @@ onBeforeUnmount(() => {
   transform: scale(1.1) translateX(-5%);
 }
 
+/* 保留根元素 transition 0.2s，让 Vue 的 <Transition> 能正确计算离场时长。
+   实际用 opacity 作为无动画占位，真正的退场仍由 .ik-overlay__backdrop 的 opacity
+   与 .ik-dialog 的 transform/opacity 完成。 */
+.ik-overlay.ik-overlay-enter-active,
+.ik-overlay.ik-overlay-leave-active {
+  transition: opacity 0.2s;
+  will-change: auto;
+}
+
+.ik-overlay.ik-overlay-enter-active .ik-overlay__backdrop {
+  transition: opacity 200ms var(--ease-out-quart);
+  will-change: opacity;
+}
+
+.ik-overlay.ik-overlay-enter-from .ik-overlay__backdrop {
+  opacity: 0;
+}
+
+.ik-overlay.ik-overlay-leave-active .ik-overlay__backdrop {
+  transition: opacity 200ms var(--ease-in-quart);
+  will-change: opacity;
+}
+
+.ik-overlay.ik-overlay-leave-to .ik-overlay__backdrop {
+  opacity: 0;
+}
+
 /* ═══════════════════════════════════════════════
-   Mobile Layout (< 800px)
+   Mobile & Tablet Overlay (< 1024px)
    ═══════════════════════════════════════════════ */
-@media (max-width: 800px) {
+@media (max-width: 1024px) {
+  .ik-overlay.ik-overlay {
+    --ik-overlay-bg: rgba(0, 0, 0, 0.88);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   Mobile & Tablet Layout (< 1024px)
+   ═══════════════════════════════════════════════ */
+@media (max-width: 1024px) {
   .ik-dialog {
     width: 90%;
     height: 90%;
@@ -2803,9 +2967,16 @@ onBeforeUnmount(() => {
     border-radius: 0;
     /* 保持透明，让 .ik-dialog__main 里的跑马灯水印透出来（与桌面端一致） */
     background: transparent;
-    /* 提升为独立合成层，避免 iOS 上 overflow:hidden 祖先导致触摸滚动卡死 */
+    /* 入场动画期间避免强制提升为独立合成层，减少 GPU 层数；
+       实际滚动时浏览器会按需提升，iOS 触摸滚动不会卡死 */
+    will-change: auto;
+    -webkit-transform: none;
+  }
+
+  .ik-dialog__body--scrollable {
     will-change: scroll-position;
     -webkit-transform: translateZ(0);
+    transform: translateZ(0);
   }
 
   .ik-dialog__body::-webkit-scrollbar {

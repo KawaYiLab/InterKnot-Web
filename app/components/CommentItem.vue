@@ -91,6 +91,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
             :src="comment.author?.avatar || '/images/default-avatar.webp'"
             :alt="comment.author?.name || ''"
             class="ik-comment__avatar"
+            decoding="async"
             @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
           />
         </UserHoverCard>
@@ -132,6 +133,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
               :src="toThumbUrl(image.url)"
               :alt="comment.author?.name || '评论图片'"
               class="ik-comment__media-thumb"
+              decoding="async"
             />
           </button>
         </div>
@@ -192,6 +194,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                 :src="reply.author?.avatar || '/images/default-avatar.webp'"
                 :alt="reply.author?.name || ''"
                 class="ik-comment__avatar ik-comment__avatar--sm"
+                decoding="async"
                 @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
               />
             </UserHoverCard>
@@ -224,6 +227,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                   :src="toThumbUrl(image.url)"
                   :alt="reply.author?.name || '回复图片'"
                   class="ik-comment__media-thumb"
+                  decoding="async"
                 />
               </button>
             </div>
