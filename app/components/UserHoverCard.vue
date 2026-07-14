@@ -28,8 +28,7 @@ let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
 const SHOW_DELAY = 400;
 const HIDE_DELAY = 250;
-
-
+const CARD_FALLBACK_HEIGHT = 240;
 
 // Simple in-memory cache
 const profileCache = new Map<string, Profile>();
@@ -68,30 +67,31 @@ const updatePosition = () => {
   const rect = trigger.getBoundingClientRect();
   const cardWidth = 320;
   const card = cardRef.value;
-  const cardHeight = card ? card.offsetHeight : 300;
+  const cardHeight = card ? card.offsetHeight : CARD_FALLBACK_HEIGHT;
   const gap = 8;
 
-  let top = rect.top - gap - cardHeight;
-  let left = rect.left + rect.width / 2 - cardWidth / 2;
+  const spaceAbove = rect.top - gap - cardHeight;
+  const left = Math.min(
+    Math.max(rect.left + rect.width / 2 - cardWidth / 2, 12),
+    window.innerWidth - 12 - cardWidth,
+  );
 
-  // Flip below if not enough space above
-  if (top < 16) {
-    top = rect.bottom + gap;
-  }
-
-  // Clamp horizontal
-  if (left < 12) left = 12;
-  if (left + cardWidth > window.innerWidth - 12) {
-    left = window.innerWidth - 12 - cardWidth;
-  }
-
-  cardStyle.value = {
+  const style: Record<string, string> = {
     position: "fixed",
-    top: `${top}px`,
     left: `${left}px`,
     width: `${cardWidth}px`,
     zIndex: "9999",
   };
+
+  if (spaceAbove < 16) {
+    // 上方空间不足，放到触发器下方；top 不依赖卡片高度
+    style.top = `${rect.bottom + gap}px`;
+  } else {
+    // 放到触发器上方，用 bottom 锚定卡片底边，避免内容高度变化导致整卡跳动
+    style.bottom = `${window.innerHeight - rect.top + gap}px`;
+  }
+
+  cardStyle.value = style;
 };
 
 const clearTimers = () => {
@@ -307,7 +307,6 @@ onBeforeUnmount(() => {
     0 8px 32px rgba(0, 0, 0, 0.6),
     0 2px 8px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
-  transition: top 200ms ease, left 200ms ease;
 }
 
 /* 外边框 */
