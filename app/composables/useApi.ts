@@ -4,6 +4,7 @@ import type {
   Author,
   Avatar,
   AvatarType,
+  BlockedUser,
   BusinessCard,
   BusinessCardType,
   Category,
@@ -22,6 +23,7 @@ import type {
   LikeToggleResult,
   FavoriteToggleResult,
   FollowToggleResult,
+  UserBlockToggleResult,
   Profile,
   SignedUploadResult,
   UploadedFile,
@@ -1070,6 +1072,59 @@ export function useApi() {
     return (unwrapData(response) as Record<string, boolean>) || {};
   };
 
+  const toggleUserBlock = async (
+    authorDocumentId: string,
+  ): Promise<UserBlockToggleResult> => {
+    const response = await $api("/api/user-blocks/toggle", {
+      method: "POST",
+      body: { authorDocumentId },
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      blocked: data.blocked === true,
+      authorDocumentId: String(data.authorDocumentId || authorDocumentId),
+    };
+  };
+
+  const batchCheckUserBlocks = async (
+    authorDocumentIds: string[],
+  ): Promise<Record<string, boolean>> => {
+    if (!authorDocumentIds.length) return {};
+    const response = await $api("/api/user-blocks/check", {
+      query: { authorIds: authorDocumentIds.join(",") },
+    });
+    return (unwrapData(response) as Record<string, boolean>) || {};
+  };
+
+  const getMyBlockedList = async (
+    endCur = "",
+    limit = DEFAULT_PAGE_SIZE,
+  ): Promise<Pagination<BlockedUser>> => {
+    const start = parseStart(endCur);
+    const response = await $api("/api/user-blocks/my-list", {
+      query: { start: String(start), limit: String(limit) },
+    });
+    const meta = extractPaginationMeta(response);
+    const data = unwrapData<unknown[]>(response) || [];
+    const nodes = data
+      .map((item) => {
+        const u = item as Record<string, unknown>;
+        const avatarUrl = u.avatar;
+        return {
+          documentId: String(u.documentId || ""),
+          name: typeof u.name === "string" ? u.name : undefined,
+          username: typeof u.username === "string" ? u.username : undefined,
+          level: typeof u.level === "number" ? u.level : undefined,
+          avatar: typeof avatarUrl === "string" && avatarUrl
+            ? normalizeMediaUrl(avatarUrl, apiBaseUrl)
+            : undefined,
+          createdAt: typeof u.createdAt === "string" ? u.createdAt : undefined,
+        };
+      })
+      .filter((u) => u.documentId);
+    return buildPagination(nodes, start, meta);
+  };
+
   /**
    * 把「已读」写回 query 缓存：遍历所有文章列表/详情/个人页文章缓存，
    * 命中 id 的节点置 isRead=true。否则乐观已读只活在当前页面的 list 里，
@@ -1201,6 +1256,9 @@ export function useApi() {
       isSelf: data.isSelf === true,
       isHidden: data.isHidden === true,
       profileHidden: data.profileHidden === true,
+      isAiAgent: data.isAiAgent === true,
+      isBlockedByMe: data.isBlockedByMe === true,
+      hasBlockedMe: data.hasBlockedMe === true,
       zzz,
       isFollowing: data.isFollowing === true,
       followersCount: Number(data.followersCount || 0),
@@ -1988,6 +2046,9 @@ export function useApi() {
     batchCheckReports,
     toggleFollow,
     batchCheckFollows,
+    toggleUserBlock,
+    batchCheckUserBlocks,
+    getMyBlockedList,
     markAsReadBatch,
     getProfile,
     getProfileArticles,

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { resolveErrorMessage } from "~/utils/api-error";
 import type { Profile } from "~/types/entities";
 import type { ComponentPublicInstance } from "vue";
 import { useHoverCapable } from "~/composables/useHoverCapable";
@@ -14,12 +13,6 @@ const props = withDefaults(defineProps<{
 const hoverCapable = useHoverCapable();
 // hover 用不到时（移动端/窄视口）不实例化 api，避免为每个评论/回复创建一次 cachedRead 闭包。
 const api = hoverCapable.value ? useApi() : null;
-// 移动端不需要 hover card 的私信/举报/登录弹窗，避免为每个 UserHoverCard 挂载 DM/弹窗相关状态。
-const auth = hoverCapable.value ? useAuthStore() : null;
-const loginDialog = hoverCapable.value ? useLoginDialog() : null;
-const knockKnockModal = hoverCapable.value ? useKnockKnockModal() : null;
-const dm = hoverCapable.value ? useDmConversations() : null;
-const reportDialog = hoverCapable.value ? useReportDialog() : null;
 
 const triggerRef = ref<HTMLElement | ComponentPublicInstance | null>(null);
 const cardRef = ref<HTMLElement | null>(null);
@@ -28,41 +21,6 @@ const profile = ref<Profile | null>(null);
 const loading = ref(false);
 const fetchError = ref(false);
 
-/** "私信"按钮加载态 & 错误态：避免短时间内连点重复打开 direct API */
-const dmStarting = ref(false);
-const dmError = ref<string | null>(null);
-
-/** 自己不能给自己私信；profileHidden 用户后端也会拒，前端先隐 */
-const canSendDm = computed<boolean>(() => {
-  if (!profile.value) return false;
-  if (profile.value.isSelf) return false;
-  if (profile.value.profileHidden) return false;
-  // 没有 uid（极少数老数据）也禁用
-  if (typeof profile.value.uid !== "number") return false;
-  return true;
-});
-
-const canReport = computed<boolean>(() => {
-  if (!profile.value) return false;
-  if (profile.value.isSelf) return false;
-  return typeof profile.value.uid === "number";
-});
-
-const reportUser = () => {
-  const target = profile.value;
-  if (!target || typeof target.uid !== "number") return;
-  if (!auth?.isLogin) {
-    loginDialog?.open();
-    return;
-  }
-  visible.value = false;
-  reportDialog?.open({
-    targetType: "user",
-    targetId: String(target.uid),
-    targetLabel: `用户 ${target.name || target.login || ""}`.trim(),
-  });
-};
-
 const cardStyle = ref<Record<string, string>>({});
 
 let showTimer: ReturnType<typeof setTimeout> | null = null;
@@ -70,8 +28,7 @@ let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
 const SHOW_DELAY = 400;
 const HIDE_DELAY = 250;
-
-
+const CARD_FALLBACK_HEIGHT = 240;
 
 // Simple in-memory cache
 const profileCache = new Map<string, Profile>();
@@ -110,30 +67,31 @@ const updatePosition = () => {
   const rect = trigger.getBoundingClientRect();
   const cardWidth = 320;
   const card = cardRef.value;
-  const cardHeight = card ? card.offsetHeight : 300;
+  const cardHeight = card ? card.offsetHeight : CARD_FALLBACK_HEIGHT;
   const gap = 8;
 
-  let top = rect.top - gap - cardHeight;
-  let left = rect.left + rect.width / 2 - cardWidth / 2;
+  const spaceAbove = rect.top - gap - cardHeight;
+  const left = Math.min(
+    Math.max(rect.left + rect.width / 2 - cardWidth / 2, 12),
+    window.innerWidth - 12 - cardWidth,
+  );
 
-  // Flip below if not enough space above
-  if (top < 16) {
-    top = rect.bottom + gap;
-  }
-
-  // Clamp horizontal
-  if (left < 12) left = 12;
-  if (left + cardWidth > window.innerWidth - 12) {
-    left = window.innerWidth - 12 - cardWidth;
-  }
-
-  cardStyle.value = {
+  const style: Record<string, string> = {
     position: "fixed",
-    top: `${top}px`,
     left: `${left}px`,
     width: `${cardWidth}px`,
     zIndex: "9999",
   };
+
+  if (spaceAbove < 16) {
+    // 上方空间不足，放到触发器下方；top 不依赖卡片高度
+    style.top = `${rect.bottom + gap}px`;
+  } else {
+    // 放到触发器上方，用 bottom 锚定卡片底边，避免内容高度变化导致整卡跳动
+    style.bottom = `${window.innerHeight - rect.top + gap}px`;
+  }
+
+  cardStyle.value = style;
 };
 
 const clearTimers = () => {
@@ -180,34 +138,6 @@ const goProfile = () => {
   if (!props.authorId) return;
   visible.value = false;
   navigateTo(profileUrl.value);
-};
-
-/**
- * 发起私聊：
- *  1. 未登录 → 弹登录框
- *  2. canSendDm = false → 不应进到这里（按钮也会 disabled）
- *  3. 调 /api/dm/conversations/direct 找/建私聊
- *  4. 拿到 documentId 后打开敲敲弹窗并定位到该会话
- */
-const startDm = async () => {
-  if (!auth?.isLogin) {
-    visible.value = false;
-    loginDialog?.open();
-    return;
-  }
-  if (!canSendDm.value || !profile.value || typeof profile.value.uid !== "number" || !dm) return;
-  if (dmStarting.value) return;
-  dmStarting.value = true;
-  dmError.value = null;
-  try {
-    const { summary } = await dm.openDirectConversation(profile.value.uid);
-    visible.value = false;
-    knockKnockModal?.open({ dmConversationId: summary.documentId });
-  } catch (err) {
-    dmError.value = resolveErrorMessage(err, "无法发起私聊");
-  } finally {
-    dmStarting.value = false;
-  }
 };
 
 const formatNumber = (n: number) => {
@@ -283,9 +213,6 @@ onBeforeUnmount(() => {
               <div class="ik-hovercard__skel" style="width:24px;height:11px" />
             </div>
           </div>
-          <div class="ik-hovercard__footer">
-            <div class="ik-hovercard__skel" style="width:100%;height:30px;border-radius:8px" />
-          </div>
         </div>
 
         <!-- Profile content -->
@@ -340,32 +267,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="ik-hovercard__footer">
-            <div v-if="dmError" class="ik-hovercard__dm-error" role="alert">
-              {{ dmError }}
-            </div>
-            <div class="ik-hovercard__footer-actions">
-              <button
-                v-if="canSendDm"
-                type="button"
-                class="ik-hovercard__send-dm-btn"
-                :disabled="dmStarting"
-                @click="startDm"
-              >
-                {{ dmStarting ? "..." : "私信" }}
-              </button>
-              <button class="ik-hovercard__profile-btn" @click="goProfile">查看主页</button>
-              <button
-                v-if="canReport"
-                type="button"
-                class="ik-hovercard__report-btn"
-                title="举报用户"
-                @click="reportUser"
-              >
-                举报
-              </button>
-            </div>
-          </div>
+
         </template>
 
         <!-- Error state -->
@@ -405,7 +307,6 @@ onBeforeUnmount(() => {
     0 8px 32px rgba(0, 0, 0, 0.6),
     0 2px 8px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
-  transition: top 200ms ease, left 200ms ease;
 }
 
 /* 外边框 */
@@ -573,98 +474,6 @@ onBeforeUnmount(() => {
 .ik-hovercard__stat-label {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.35);
-}
-
-/* ── Footer ────────────────────────────────────── */
-.ik-hovercard__footer {
-  position: relative;
-  padding: 0 16px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ik-hovercard__footer-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.ik-hovercard__profile-btn {
-  flex: 1;
-  padding: 6px 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
-}
-
-.ik-hovercard__report-btn {
-  flex-shrink: 0;
-  padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
-}
-
-.ik-hovercard__report-btn:hover {
-  background: rgba(255, 107, 107, 0.1);
-  border-color: rgba(255, 107, 107, 0.4);
-  color: #ff6b6b;
-}
-
-.ik-hovercard__profile-btn:hover {
-  background: rgba(215, 255, 0, 0.1);
-  border-color: rgba(215, 255, 0, 0.3);
-  color: #BFFF09;
-}
-
-/* 主操作：私信（黄底黑字，强调） */
-.ik-hovercard__send-dm-btn {
-  flex: 1;
-  padding: 6px 0;
-  border: 1px solid #fbfe00;
-  border-radius: 8px;
-  background: #fbfe00;
-  color: #000;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease, transform 80ms ease, opacity 140ms ease;
-}
-
-.ik-hovercard__send-dm-btn:hover:not(:disabled) {
-  background: #e8eb00;
-  border-color: #e8eb00;
-}
-
-.ik-hovercard__send-dm-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.ik-hovercard__send-dm-btn:disabled {
-  background: rgba(251, 254, 0, 0.35);
-  border-color: rgba(251, 254, 0, 0.35);
-  color: rgba(0, 0, 0, 0.55);
-  cursor: not-allowed;
-}
-
-.ik-hovercard__dm-error {
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba(255, 80, 80, 0.15);
-  color: #ff8080;
-  font-size: 11px;
-  font-weight: 600;
-  text-align: center;
 }
 
 /* ── Error ─────────────────────────────────────── */
