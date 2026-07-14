@@ -1,9 +1,14 @@
 const IMAGE_HOST = "https://im.tiwat.cn";
 const LEGACY_IMAGE_HOST_RE = /^https?:\/\/image\.tiwat\.cn/;
 const LEGACY_THUMB_SUFFIX = "-small.webp";
+const WEBP_PROCESS = "format,webp/quality,q_80";
 
 function getResizeProcess(width: number): string {
-  return `image_process=resize,w_${width}/format,webp/quality,q_80`;
+  return `image_process=resize,w_${width}/${WEBP_PROCESS}`;
+}
+
+function getNoResizeProcess(): string {
+  return `image_process=${WEBP_PROCESS}`;
 }
 
 function stripImageProcess(url: string): string {
@@ -87,4 +92,19 @@ export function toThumbUrl(url: string | undefined, width = 360): string {
 
   const sep = clean.includes("?") ? "&" : "?";
   return `${clean}${sep}${getResizeProcess(width)}`;
+}
+
+/**
+ * 保持原图尺寸，仅转换为 WebP 并压缩到 q_80 的 URL。
+ * 名片等宽幅图片不适合缩略图时使用，避免被 resize 后模糊。
+ */
+export function toNoResizeWebpUrl(url: string | undefined): string {
+  if (!url) return "";
+  if (isInlineUrl(url)) return url;
+
+  const clean = migrateImageUrl(url);
+  if (clean.includes("image_process=")) return clean;
+
+  const sep = clean.includes("?") ? "&" : "?";
+  return `${clean}${sep}${getNoResizeProcess()}`;
 }

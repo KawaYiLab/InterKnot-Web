@@ -2,7 +2,7 @@
 import { useMessage } from "zenless-ui";
 import type { BusinessCard, BusinessCardType, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
-import { toThumbUrl } from "~/utils/image";
+import { toNoResizeWebpUrl } from "~/utils/image";
 
 const props = defineProps<{
   profile: Profile;
@@ -278,7 +278,7 @@ onBeforeUnmount(() => {
                         <div class="ik-bc-grid__thumb">
                           <img
                             v-if="card.image"
-                            :src="toThumbUrl(card.image)"
+                            :src="toNoResizeWebpUrl(card.image)"
                             alt=""
                             class="ik-bc-grid__img"
                           />

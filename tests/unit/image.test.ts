@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toCanonicalUrl, toMediaUrl, toThumbUrl } from "~/utils/image";
+import { toCanonicalUrl, toMediaUrl, toNoResizeWebpUrl, toThumbUrl } from "~/utils/image";
 
 describe("image url helpers", () => {
   it("toThumbUrl appends image_process for new host", () => {
@@ -60,5 +60,28 @@ describe("image url helpers", () => {
 
   it("toMediaUrl prefixes relative paths", () => {
     expect(toMediaUrl("/uploads/a.png")).toBe("https://im.tiwat.cn/uploads/a.png");
+  });
+
+  it("toNoResizeWebpUrl appends webp/quality process without resize", () => {
+    expect(toNoResizeWebpUrl("https://im.tiwat.cn/uploads/a.png")).toBe(
+      "https://im.tiwat.cn/uploads/a.png?image_process=format,webp/quality,q_80",
+    );
+  });
+
+  it("toNoResizeWebpUrl is idempotent and preserves existing image_process", () => {
+    const once =
+      "https://im.tiwat.cn/uploads/a.png?image_process=format,webp/quality,q_80";
+    expect(toNoResizeWebpUrl(once)).toBe(once);
+  });
+
+  it("toNoResizeWebpUrl migrates legacy host and preserves existing query", () => {
+    expect(toNoResizeWebpUrl("https://image.tiwat.cn/uploads/a.png-small.webp?x=1")).toBe(
+      "https://im.tiwat.cn/uploads/a.png?x=1&image_process=format,webp/quality,q_80",
+    );
+  });
+
+  it("toNoResizeWebpUrl preserves blob and data URLs", () => {
+    expect(toNoResizeWebpUrl("blob:abc")).toBe("blob:abc");
+    expect(toNoResizeWebpUrl("data:image/png;base64,abc")).toBe("data:image/png;base64,abc");
   });
 });
