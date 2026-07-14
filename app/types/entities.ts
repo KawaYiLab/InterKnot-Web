@@ -242,6 +242,8 @@ export interface Profile {
   equippedCard?: BusinessCard;
   equippedAvatar?: Avatar;
   isAiAgent?: boolean;
+  isBlockedByMe?: boolean;
+  hasBlockedMe?: boolean;
   /** 绑定的绝区零角色（米游社绑定） */
   zzz?: ZzzRoleBadge | null;
 }
@@ -278,6 +280,20 @@ export interface FavoriteToggleResult {
 export interface FollowToggleResult {
   following: boolean;
   followersCount: number;
+}
+
+export interface UserBlockToggleResult {
+  blocked: boolean;
+  authorDocumentId: string;
+}
+
+export interface BlockedUser {
+  documentId: string;
+  name?: string;
+  username?: string;
+  level?: number;
+  avatar?: string;
+  createdAt?: string;
 }
 
 /** 首页 feed 模式：推荐 / 我关注的作者 / 我的收藏。 */

@@ -3,6 +3,7 @@ import { resolveErrorMessage } from "~/utils/api-error";
 import type { Profile } from "~/types/entities";
 import type { ComponentPublicInstance } from "vue";
 import { useHoverCapable } from "~/composables/useHoverCapable";
+import { useMessage } from "zenless-ui";
 
 const props = withDefaults(defineProps<{
   authorId?: string;
@@ -20,6 +21,7 @@ const loginDialog = hoverCapable.value ? useLoginDialog() : null;
 const knockKnockModal = hoverCapable.value ? useKnockKnockModal() : null;
 const dm = hoverCapable.value ? useDmConversations() : null;
 const reportDialog = hoverCapable.value ? useReportDialog() : null;
+const message = hoverCapable.value ? useMessage() : null;
 
 const triggerRef = ref<HTMLElement | ComponentPublicInstance | null>(null);
 const cardRef = ref<HTMLElement | null>(null);
@@ -32,13 +34,26 @@ const fetchError = ref(false);
 const dmStarting = ref(false);
 const dmError = ref<string | null>(null);
 
-/** 自己不能给自己私信；profileHidden 用户后端也会拒，前端先隐 */
+/** 拉黑按钮加载态 */
+const blockLoading = ref(false);
+
+/** 自己不能给自己私信；双向拉黑或 profileHidden 用户后端也会拒，前端先隐 */
 const canSendDm = computed<boolean>(() => {
   if (!profile.value) return false;
   if (profile.value.isSelf) return false;
   if (profile.value.profileHidden) return false;
+  if (profile.value.isBlockedByMe || profile.value.hasBlockedMe) return false;
   // 没有 uid（极少数老数据）也禁用
   if (typeof profile.value.uid !== "number") return false;
+  return true;
+});
+
+const canBlock = computed<boolean>(() => {
+  const p = profile.value;
+  if (!p) return false;
+  if (p.isSelf) return false;
+  if (p.isAiAgent) return false;
+  if (typeof p.uid !== "number") return false;
   return true;
 });
 
@@ -210,6 +225,37 @@ const startDm = async () => {
   }
 };
 
+const toggleBlock = async () => {
+  const p = profile.value;
+  if (!p?.documentId || !canBlock.value || !api) return;
+  if (!auth?.isLogin) {
+    visible.value = false;
+    loginDialog?.open();
+    return;
+  }
+  if (blockLoading.value) return;
+  blockLoading.value = true;
+  try {
+    const result = await api.toggleUserBlock(p.documentId);
+    const next: Profile = { ...p, isBlockedByMe: result.blocked };
+    if (result.blocked) {
+      next.isFollowing = false;
+    }
+    profile.value = next;
+    if (p.documentId && profileCache.has(p.documentId)) {
+      profileCache.set(p.documentId, next);
+    }
+    message?.success(result.blocked ? "已拉黑" : "已取消拉黑");
+    // 让个人页/列表缓存失效，刷新后应用拉黑过滤
+    api.invalidateQueries(["profile"]);
+    api.invalidateQueries(["articles"]);
+  } catch (err) {
+    message?.error(resolveErrorMessage(err, "操作失败"));
+  } finally {
+    blockLoading.value = false;
+  }
+};
+
 const formatNumber = (n: number) => {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -363,6 +409,16 @@ onBeforeUnmount(() => {
                 @click="reportUser"
               >
                 举报
+              </button>
+              <button
+                v-if="canBlock"
+                type="button"
+                class="ik-hovercard__block-btn"
+                :class="{ 'ik-hovercard__block-btn--blocked': profile?.isBlockedByMe }"
+                :disabled="blockLoading"
+                @click="toggleBlock"
+              >
+                {{ blockLoading ? "..." : (profile?.isBlockedByMe ? "取消拉黑" : "拉黑") }}
               </button>
             </div>
           </div>
@@ -619,6 +675,35 @@ onBeforeUnmount(() => {
   background: rgba(255, 107, 107, 0.1);
   border-color: rgba(255, 107, 107, 0.4);
   color: #ff6b6b;
+}
+
+.ik-hovercard__block-btn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.ik-hovercard__block-btn:hover:not(:disabled) {
+  background: rgba(255, 80, 80, 0.1);
+  border-color: rgba(255, 80, 80, 0.4);
+  color: #ff8080;
+}
+
+.ik-hovercard__block-btn--blocked {
+  color: #ff8080;
+  border-color: rgba(255, 80, 80, 0.3);
+}
+
+.ik-hovercard__block-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .ik-hovercard__profile-btn:hover {

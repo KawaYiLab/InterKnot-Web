@@ -2,7 +2,7 @@
 import { useMessage } from "zenless-ui";
 import QRCode from "qrcode";
 import { resolveErrorMessage } from "~/utils/api-error";
-import type { MihoyoBinding } from "~/types/entities";
+import type { BlockedUser, MihoyoBinding } from "~/types/entities";
 
 const props = defineProps<{
   currentName?: string;
@@ -30,6 +30,7 @@ const showEditName = computed(() => modalQuery.value === 'edit-name');
 const showEditBio = computed(() => modalQuery.value === 'edit-bio');
 const showPinned = computed(() => modalQuery.value === 'pinned');
 const showSocial = computed(() => modalQuery.value === 'social');
+const showBlocked = computed(() => modalQuery.value === 'blocked');
 const showLogout = computed(() => modalQuery.value === 'logout');
 const showMihoyo = computed(() => modalQuery.value === 'mihoyo');
 
@@ -350,6 +351,56 @@ const handleSocialOverlayClick = (e: MouseEvent) => {
   }
 };
 
+// ── 黑名单管理 ─────────────────────────────────────────────
+const blockedUsers = ref<BlockedUser[]>([]);
+const blockedLoading = ref(false);
+const blockedHasNext = ref(true);
+const blockedCursor = ref("");
+
+const openBlocked = async () => {
+  blockedCursor.value = "";
+  blockedUsers.value = [];
+  blockedHasNext.value = true;
+  openSub('blocked');
+  await loadBlocked();
+};
+
+const closeBlocked = () => {
+  closeSub();
+};
+
+const loadBlocked = async () => {
+  if (blockedLoading.value || !blockedHasNext.value) return;
+  blockedLoading.value = true;
+  try {
+    const page = await api.getMyBlockedList(blockedCursor.value);
+    blockedUsers.value.push(...page.nodes);
+    blockedHasNext.value = page.hasNextPage;
+    blockedCursor.value = page.endCursor;
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "加载黑名单失败"));
+  } finally {
+    blockedLoading.value = false;
+  }
+};
+
+const unblockUser = async (user: BlockedUser) => {
+  if (!user.documentId) return;
+  try {
+    await api.toggleUserBlock(user.documentId);
+    message.success("已取消拉黑");
+    blockedUsers.value = blockedUsers.value.filter((u) => u.documentId !== user.documentId);
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "取消拉黑失败"));
+  }
+};
+
+const handleBlockedOverlayClick = (e: MouseEvent) => {
+  if ((e.target as HTMLElement).classList.contains("ik-overlay")) {
+    closeBlocked();
+  }
+};
+
 const handleEditBioOverlayClick = (e: MouseEvent) => {
   if ((e.target as HTMLElement).classList.contains("ik-overlay")) {
     closeEditBio();
@@ -378,6 +429,8 @@ const handleKeydown = (e: KeyboardEvent) => {
       closeLogout();
     } else if (showMihoyo.value) {
       closeMihoyo();
+    } else if (showBlocked.value) {
+      closeBlocked();
     } else if (showSocial.value) {
       closeSocial();
     } else if (showEditBio.value) {
@@ -446,6 +499,7 @@ onBeforeUnmount(() => {
               <z-button @click="openEditBio">修改签名</z-button>
               <z-button @click="openPinned">修改委托展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
+              <z-button @click="openBlocked">黑名单管理</z-button>
               <z-button @click="openMihoyo">{{ mihoyoMenuLabel }}</z-button>
               <z-button @click="openLogout">退出登录</z-button>
             </div>
@@ -581,6 +635,57 @@ onBeforeUnmount(() => {
                         v-model="publicSwitch"
                         :disabled="togglingHidden"
                       />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Blocked Users Sub-dialog -->
+    <Teleport to="body">
+      <Transition name="ik-overlay" appear>
+        <div v-if="showBlocked" class="ik-overlay ik-overlay--sub" @click="handleBlockedOverlayClick">
+          <div class="ik-overlay__stripe" aria-hidden="true"></div>
+          <div class="ik-dialog ik-dialog--large" @click.stop>
+            <div class="ik-dialog__outer">
+              <div class="ik-dialog__inner">
+                <div class="ik-dialog__header">
+                  <span class="ik-dialog__title">黑名单管理</span>
+                  <button class="ik-dialog__close" aria-label="关闭" @click="closeBlocked">
+                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
+                  </button>
+                </div>
+                <div class="ik-dialog__body">
+                  <IkZzzMarquee />
+                  <div class="ik-blocked-list">
+                    <template v-if="!blockedUsers.length && !blockedLoading">
+                      <div class="ik-blocked-list__empty">暂无拉黑用户</div>
+                    </template>
+                    <div
+                      v-for="user in blockedUsers"
+                      :key="user.documentId"
+                      class="ik-blocked-list__item"
+                    >
+                      <img
+                        :src="user.avatar || '/images/default-avatar.webp'"
+                        alt=""
+                        class="ik-blocked-list__avatar"
+                        @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+                      />
+                      <div class="ik-blocked-list__info">
+                        <span class="ik-blocked-list__name">{{ user.name || user.username || '匿名用户' }}</span>
+                        <span v-if="user.level" class="ik-blocked-list__level">Lv.{{ user.level }}</span>
+                      </div>
+                      <z-button size="small" @click="unblockUser(user)">取消拉黑</z-button>
+                    </div>
+                    <div v-if="blockedHasNext" class="ik-blocked-list__more">
+                      <z-button :loading="blockedLoading" @click="loadBlocked">
+                        {{ blockedLoading ? '加载中' : '加载更多' }}
+                      </z-button>
                     </div>
                   </div>
                 </div>
@@ -1177,6 +1282,68 @@ onBeforeUnmount(() => {
   color: #fff;
   text-align: right;
   word-break: break-all;
+}
+
+/* ── 黑名单管理 ─────────────────────────────────── */
+.ik-blocked-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 0;
+}
+
+.ik-blocked-list__empty {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 14px;
+  padding: 40px 0;
+}
+
+.ik-blocked-list__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 10px;
+}
+
+.ik-blocked-list__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.ik-blocked-list__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ik-blocked-list__name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ik-blocked-list__level {
+  color: #bfff09;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ik-blocked-list__more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
 }
 
 /* prefers-reduced-motion 由 theme.css 全局接管 */

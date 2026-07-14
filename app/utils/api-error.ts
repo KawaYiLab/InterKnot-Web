@@ -21,6 +21,12 @@ export function isNotFoundError(error: unknown): boolean {
   return typeof e.statusCode === "number" && e.statusCode === 404;
 }
 
+/** 判断 API 错误是否为 403 用户已被拉黑 */
+export function isUserBlockedError(error: unknown): boolean {
+  const e = normalizeApiError(error);
+  return e.statusCode === 403 || e.code === "USER_BLOCKED";
+}
+
 export function resolveErrorMessage(error: unknown, fallback = "请求失败"): string {
   const e = normalizeApiError(error);
   const message = e.message || "";
