@@ -93,7 +93,6 @@ export interface ExamSubmitResult {
 
 /** 入站考试错题回顾单题 */
 export interface ExamReviewQuestion extends ExamQuestion {
-  correctKeys: string[];
   userAnswer: string[];
   isCorrect: boolean;
   score: number;

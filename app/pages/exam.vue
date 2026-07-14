@@ -59,9 +59,6 @@ const reviewQuestions = computed<ExamReviewQuestion[]>(() => {
   return review.value.questions.filter((q) => !q.isCorrect);
 });
 
-const isOptionSelected = (q: ExamReviewQuestion, key: string) => q.userAnswer.includes(key);
-const isOptionCorrect = (q: ExamReviewQuestion, key: string) => q.correctKeys.includes(key);
-
 const viewReview = async () => {
   if (reviewing.value || !attemptId.value) return;
   reviewing.value = true;
@@ -70,7 +67,7 @@ const viewReview = async () => {
     review.value = res;
     phase.value = "review";
   } catch (err) {
-    message.error(resolveErrorMessage(err, "获取答案解析失败"));
+    message.error(resolveErrorMessage(err, "获取答题回顾失败"));
   } finally {
     reviewing.value = false;
   }
@@ -371,7 +368,7 @@ useHead({ title: "入站考试 - 绳网" });
             <div class="ik-exam-actions">
               <z-button @click="navigateTo('/')">开始探索</z-button>
               <z-button plain :loading="reviewing" @click="viewReview">
-                查看答案解析
+                查看答题回顾
               </z-button>
             </div>
           </template>
@@ -384,17 +381,17 @@ useHead({ title: "入站考试 - 绳网" });
                 再试一次
               </z-button>
               <z-button plain :loading="reviewing" @click="viewReview">
-                查看答案解析
+                查看答题回顾
               </z-button>
             </div>
           </template>
         </div>
       </div>
 
-      <!-- 答案解析 -->
+      <!-- 答题回顾 -->
       <div v-else-if="phase === 'review' && review" class="ik-exam-review">
         <div class="ik-exam-review__bar">
-          <span>答案解析</span>
+          <span>答题回顾</span>
           <span>{{ review.correctCount }} / {{ review.questionCount }} 题正确</span>
         </div>
         <div class="ik-exam-panel">
@@ -426,36 +423,12 @@ useHead({ title: "入站考试 - 绳网" });
                   <span v-else class="ik-exam-review-card__status--wrong">回答错误</span>
                 </p>
 
-                <div class="ik-exam-review-options">
-                  <div
-                    v-for="opt in q.options"
-                    :key="opt.key"
-                    class="ik-exam-review-option"
-                    :class="{
-                      'ik-exam-review-option--selected-correct': isOptionSelected(q, opt.key) && isOptionCorrect(q, opt.key),
-                      'ik-exam-review-option--selected-wrong': isOptionSelected(q, opt.key) && !isOptionCorrect(q, opt.key),
-                      'ik-exam-review-option--missed': !isOptionSelected(q, opt.key) && isOptionCorrect(q, opt.key),
-                    }"
-                  >
-                    <span class="ik-exam-review-option__marker">
-                      {{ isOptionCorrect(q, opt.key) ? '✓' : isOptionSelected(q, opt.key) ? '✗' : '' }}
-                    </span>
-                    {{ opt.text }}
-                  </div>
-                </div>
-
-                <div v-if="!q.isCorrect" class="ik-exam-review-card__answers">
-                  <p>
-                    你的答案：
-                    {{ q.userAnswer.length
-                      ? q.userAnswer.map((k) => q.options.find((o) => o.key === k)?.text).filter(Boolean).join('、')
-                      : '未作答' }}
-                  </p>
-                  <p>
-                    正确答案：
-                    {{ q.correctKeys.map((k) => q.options.find((o) => o.key === k)?.text).filter(Boolean).join('、') }}
-                  </p>
-                </div>
+                <p class="ik-exam-review-card__answers">
+                  你的答案：
+                  {{ q.userAnswer.length
+                    ? q.userAnswer.map((k) => q.options.find((o) => o.key === k)?.text).filter(Boolean).join('、')
+                    : '未作答' }}
+                </p>
 
                 <p v-if="q.explanation" class="ik-exam-review-card__explanation">
                   解析：{{ q.explanation }}
