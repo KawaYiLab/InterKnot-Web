@@ -367,8 +367,8 @@ useHead({ title: "入站考试 - 绳网" });
             </p>
             <div class="ik-exam-actions">
               <z-button @click="navigateTo('/')">开始探索</z-button>
-              <z-button plain :loading="reviewing" @click="viewReview">
-                查看答题回顾
+              <z-button :loading="reviewing" @click="viewReview">
+                答题回顾
               </z-button>
             </div>
           </template>
@@ -380,8 +380,8 @@ useHead({ title: "入站考试 - 绳网" });
               <z-button :disabled="cooldownRemaining > 0" @click="retry">
                 再试一次
               </z-button>
-              <z-button plain :loading="reviewing" @click="viewReview">
-                查看答题回顾
+              <z-button :loading="reviewing" @click="viewReview">
+                答题回顾
               </z-button>
             </div>
           </template>
