@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
-import type { ExamQuestion, ExamStatus, ExamSubmitResult } from "~/types/entities";
+import type {
+  ExamAttemptReview,
+  ExamQuestion,
+  ExamReviewQuestion,
+  ExamStatus,
+  ExamSubmitResult,
+} from "~/types/entities";
 
 const auth = useAuthStore();
 const api = useApi();
 const message = useMessage();
 const loginDialog = useLoginDialog();
 
-type Phase = "loading" | "intro" | "quiz" | "result";
+type Phase = "loading" | "intro" | "quiz" | "result" | "review";
 
 const phase = ref<Phase>("loading");
 const status = ref<ExamStatus | null>(null);
@@ -19,6 +25,9 @@ const questions = ref<ExamQuestion[]>([]);
 const answers = reactive<Record<string, string[]>>({});
 const expiresAt = ref<string>("");
 const result = ref<ExamSubmitResult | null>(null);
+const review = ref<ExamAttemptReview | null>(null);
+const reviewing = ref(false);
+const onlyWrong = ref(false);
 
 // ── 倒计时 ──────────────────────────────────────
 const nowTs = ref(Date.now());
@@ -43,6 +52,33 @@ const answeredCount = computed(
 
 const typeLabel = (type: ExamQuestion["type"]) =>
   type === "multiple" ? "多选" : type === "boolean" ? "判断" : "单选";
+
+const reviewQuestions = computed<ExamReviewQuestion[]>(() => {
+  if (!review.value) return [];
+  if (!onlyWrong.value) return review.value.questions;
+  return review.value.questions.filter((q) => !q.isCorrect);
+});
+
+const isOptionSelected = (q: ExamReviewQuestion, key: string) => q.userAnswer.includes(key);
+const isOptionCorrect = (q: ExamReviewQuestion, key: string) => q.correctKeys.includes(key);
+
+const viewReview = async () => {
+  if (reviewing.value || !attemptId.value) return;
+  reviewing.value = true;
+  try {
+    const res = await api.getExamReview(attemptId.value);
+    review.value = res;
+    phase.value = "review";
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "获取答案解析失败"));
+  } finally {
+    reviewing.value = false;
+  }
+};
+
+const backToResult = () => {
+  phase.value = "result";
+};
 
 // 逐题作答：当前题号
 const qIndex = ref(0);
@@ -143,9 +179,11 @@ watch(remainingSeconds, (val) => {
 
 const retry = async () => {
   result.value = null;
+  review.value = null;
   attemptId.value = "";
   questions.value = [];
   qIndex.value = 0;
+  onlyWrong.value = false;
   await loadStatus();
 };
 
@@ -330,16 +368,109 @@ useHead({ title: "入站考试 - 绳网" });
                 rel="noopener noreferrer"
               >题目投稿入口</a>
             </p>
-            <z-button @click="navigateTo('/')">开始探索</z-button>
+            <div class="ik-exam-actions">
+              <z-button @click="navigateTo('/')">开始探索</z-button>
+              <z-button plain :loading="reviewing" @click="viewReview">
+                查看答案解析
+              </z-button>
+            </div>
           </template>
           <template v-else>
             <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
               失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
             </p>
-            <z-button :disabled="cooldownRemaining > 0" @click="retry">
-              再试一次
-            </z-button>
+            <div class="ik-exam-actions">
+              <z-button :disabled="cooldownRemaining > 0" @click="retry">
+                再试一次
+              </z-button>
+              <z-button plain :loading="reviewing" @click="viewReview">
+                查看答案解析
+              </z-button>
+            </div>
           </template>
+        </div>
+      </div>
+
+      <!-- 答案解析 -->
+      <div v-else-if="phase === 'review' && review" class="ik-exam-review">
+        <div class="ik-exam-review__bar">
+          <span>答案解析</span>
+          <span>{{ review.correctCount }} / {{ review.questionCount }} 题正确</span>
+        </div>
+        <div class="ik-exam-panel">
+          <div class="ik-exam-panel__body">
+            <div class="ik-exam-review__header">
+              <p class="ik-exam-score">
+                得分 <b>{{ review.scorePercent }}%</b>（{{ review.correctCount }} / {{ review.questionCount }} 题正确，及格线 {{ review.config.passScorePercent }}%）
+              </p>
+              <label class="ik-exam-review__toggle">
+                <input v-model="onlyWrong" type="checkbox" />
+                只看错题
+              </label>
+            </div>
+
+            <div class="ik-exam-review__list">
+              <div
+                v-for="(q, idx) in reviewQuestions"
+                :key="q.questionId"
+                class="ik-exam-review-card"
+                :class="{
+                  'ik-exam-review-card--correct': q.isCorrect,
+                  'ik-exam-review-card--wrong': !q.isCorrect,
+                }"
+              >
+                <p class="ik-exam-question__title">
+                  <span class="ik-exam-question__type">{{ typeLabel(q.type) }}</span>
+                  {{ idx + 1 }}. {{ q.question }}
+                  <span v-if="q.isCorrect" class="ik-exam-review-card__status--correct">回答正确</span>
+                  <span v-else class="ik-exam-review-card__status--wrong">回答错误</span>
+                </p>
+
+                <div class="ik-exam-review-options">
+                  <div
+                    v-for="opt in q.options"
+                    :key="opt.key"
+                    class="ik-exam-review-option"
+                    :class="{
+                      'ik-exam-review-option--selected-correct': isOptionSelected(q, opt.key) && isOptionCorrect(q, opt.key),
+                      'ik-exam-review-option--selected-wrong': isOptionSelected(q, opt.key) && !isOptionCorrect(q, opt.key),
+                      'ik-exam-review-option--missed': !isOptionSelected(q, opt.key) && isOptionCorrect(q, opt.key),
+                    }"
+                  >
+                    <span class="ik-exam-review-option__marker">
+                      {{ isOptionCorrect(q, opt.key) ? '✓' : isOptionSelected(q, opt.key) ? '✗' : '' }}
+                    </span>
+                    {{ opt.text }}
+                  </div>
+                </div>
+
+                <div v-if="!q.isCorrect" class="ik-exam-review-card__answers">
+                  <p>
+                    你的答案：
+                    {{ q.userAnswer.length
+                      ? q.userAnswer.map((k) => q.options.find((o) => o.key === k)?.text).filter(Boolean).join('、')
+                      : '未作答' }}
+                  </p>
+                  <p>
+                    正确答案：
+                    {{ q.correctKeys.map((k) => q.options.find((o) => o.key === k)?.text).filter(Boolean).join('、') }}
+                  </p>
+                </div>
+
+                <p v-if="q.explanation" class="ik-exam-review-card__explanation">
+                  解析：{{ q.explanation }}
+                </p>
+              </div>
+            </div>
+
+            <div class="ik-exam-actions">
+              <z-button @click="backToResult">返回结果</z-button>
+              <z-button v-if="!review.passed" :disabled="cooldownRemaining > 0" @click="retry">
+                再试一次
+              </z-button>
+              <z-button v-else @click="navigateTo('/')">开始探索</z-button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -568,6 +699,156 @@ useHead({ title: "入站考试 - 绳网" });
 
 .ik-exam-link:hover {
   color: #d9ff66;
+}
+
+.ik-exam-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+
+.ik-exam-review {
+  width: 100%;
+}
+
+.ik-exam-review__bar {
+  position: sticky;
+  top: 64px;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  color: #ccc;
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(180deg, #0a0a0a 0%, #070707 100%);
+  border: 4px solid #000;
+  border-radius: 12px 0 12px 12px;
+  box-shadow: 0 0 0 4px #2d2c2d;
+}
+
+.ik-exam-review__header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.ik-exam-review__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.ik-exam-review__toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #bfff09;
+  cursor: pointer;
+}
+
+.ik-exam-review__list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ik-exam-review-card {
+  padding: 20px;
+  border-radius: 12px 0 12px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ik-exam-review-card--correct {
+  border-left: 4px solid #bfff09;
+}
+
+.ik-exam-review-card--wrong {
+  border-left: 4px solid #ff7a45;
+}
+
+.ik-exam-review-card__status--correct {
+  color: #bfff09;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.ik-exam-review-card__status--wrong {
+  color: #ff7a45;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.ik-exam-review-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ik-exam-review-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #eee;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.ik-exam-review-option--selected-correct {
+  background: rgba(191, 255, 9, 0.15);
+  border-color: #bfff09;
+  color: #bfff09;
+}
+
+.ik-exam-review-option--selected-wrong {
+  background: rgba(255, 122, 69, 0.15);
+  border-color: #ff7a45;
+  color: #ff7a45;
+}
+
+.ik-exam-review-option--missed {
+  border: 1px dashed #bfff09;
+  color: #bfff09;
+}
+
+.ik-exam-review-option__marker {
+  width: 1.2em;
+  text-align: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.ik-exam-review-card__answers {
+  margin-top: 12px;
+  color: #aaa;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.ik-exam-review-card__answers p {
+  margin: 0 0 4px;
+}
+
+.ik-exam-review-card__explanation {
+  margin-top: 12px;
+  color: #bfff09;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* ── 移动端优化 ── */

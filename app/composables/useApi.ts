@@ -10,6 +10,7 @@ import type {
   Comment,
   DailyExpStatus,
   DraftArticle,
+  ExamAttemptReview,
   ExamStartResult,
   ExamStatus,
   ExamSubmitResult,
@@ -1951,6 +1952,14 @@ export function useApi() {
     return response as ExamSubmitResult;
   };
 
+  const getExamReview = async (attemptId?: string): Promise<ExamAttemptReview> => {
+    const response = await $api("/api/exam/review", {
+      method: "GET",
+      query: attemptId ? { attemptId } : {},
+    });
+    return response as ExamAttemptReview;
+  };
+
   return {
     clearAllCache,
     invalidateQueries,
@@ -2018,6 +2027,7 @@ export function useApi() {
     getExamStatus,
     startExam,
     submitExam,
+    getExamReview,
     // 米游社登录 / 绑定
     createMihoyoQr,
     pollMihoyoQr,

@@ -91,6 +91,29 @@ export interface ExamSubmitResult {
   reward: { denny: number; exp: number } | null;
 }
 
+/** 入站考试错题回顾单题 */
+export interface ExamReviewQuestion extends ExamQuestion {
+  correctKeys: string[];
+  userAnswer: string[];
+  isCorrect: boolean;
+  score: number;
+  explanation: string | null;
+}
+
+/** GET /api/exam/review 返回 */
+export interface ExamAttemptReview {
+  attemptId: string;
+  passed: boolean;
+  score: number;
+  totalScore: number;
+  scorePercent: number;
+  correctCount: number;
+  questionCount: number;
+  submittedAt: string;
+  config: ExamConfig;
+  questions: ExamReviewQuestion[];
+}
+
 /** 平台 AI 角色卡（GET /api/agent/characters） */
 export interface AiRoleCard {
   slug: string;
