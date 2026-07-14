@@ -407,6 +407,9 @@ useHead({ title: "入站考试 - 绳网" });
             </div>
 
             <div class="ik-exam-review__list">
+              <p v-if="reviewQuestions.length === 0" class="ik-exam-review__empty">
+                没有错题，全部答对！
+              </p>
               <div
                 v-for="(q, idx) in reviewQuestions"
                 :key="q.questionId"
@@ -715,6 +718,13 @@ useHead({ title: "入站考试 - 绳网" });
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.ik-exam-review__empty {
+  color: #aaa;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px 0;
 }
 
 .ik-exam-review__list {
