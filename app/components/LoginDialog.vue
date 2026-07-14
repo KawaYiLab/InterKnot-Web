@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
-import QRCode from "qrcode";
 import { resolveErrorMessage } from "~/utils/api-error";
 
 const api = useApi();
@@ -30,19 +29,32 @@ const modeTitle = computed(() => {
 });
 
 // ── 米游社扫码登录 ──────────────────────────────
-type MihoyoQrStatus = "loading" | "waiting" | "scanned" | "confirmed" | "expired" | "cancelled" | "error";
-
-const MIHOYO_POLL_INTERVAL_MS = 1500;
-
 const isMihoyo = ref(false);
 // 进入米游社弹窗时所处的页面（登录/注册），决定弹窗标题
 const mihoyoFromRegister = ref(false);
 const mihoyoTitle = computed(() => (mihoyoFromRegister.value ? "米游社注册" : "米游社登录"));
-const mihoyoStatus = ref<MihoyoQrStatus>("loading");
-const mihoyoQrDataUrl = ref("");
-let mihoyoTicket = "";
-let mihoyoPollTimer: ReturnType<typeof setTimeout> | null = null;
-let mihoyoPolling = false;
+
+const mihoyo = useMihoyoQr({
+  isActive: () => isMihoyo.value && visible.value,
+  width: 220,
+  onConfirmed: async (res) => {
+    if (res.mode !== "login") return;
+    if (!res.auth.token) throw new Error("登录失败：未获取到 Token");
+    const isNewUser = res.isNewUser;
+    await onLoginSuccess(res.auth.token, res.auth.user);
+    if (isNewUser) {
+      message.success("完成入站考试后即可解锁发布委托、评论等功能");
+      await navigateTo("/exam");
+    }
+  },
+  onError: (err) => {
+    message.error(resolveErrorMessage(err, "获取二维码失败"));
+  },
+});
+
+const mihoyoQrDataUrl = mihoyo.qrDataUrl;
+const mihoyoStatus = mihoyo.qrStatus;
+const mihoyoNeedRefresh = mihoyo.qrNeedRefresh;
 
 const mihoyoStatusText = computed(() => {
   switch (mihoyoStatus.value) {
@@ -56,78 +68,8 @@ const mihoyoStatusText = computed(() => {
   }
 });
 
-const mihoyoNeedRefresh = computed(() =>
-  mihoyoStatus.value === "expired" || mihoyoStatus.value === "cancelled" || mihoyoStatus.value === "error",
-);
-
-const stopMihoyoPolling = () => {
-  if (mihoyoPollTimer) {
-    clearTimeout(mihoyoPollTimer);
-    mihoyoPollTimer = null;
-  }
-  mihoyoPolling = false;
-};
-
-const scheduleMihoyoPoll = () => {
-  if (!mihoyoPolling) return;
-  mihoyoPollTimer = setTimeout(() => void pollMihoyo(), MIHOYO_POLL_INTERVAL_MS);
-};
-
-const pollMihoyo = async () => {
-  if (!mihoyoPolling || !mihoyoTicket) return;
-  try {
-    const res = await api.pollMihoyoQr(mihoyoTicket);
-    if (!mihoyoPolling) return;
-    if (res.status !== "confirmed") {
-      mihoyoStatus.value = res.status;
-      if (res.status === "expired" || res.status === "cancelled") {
-        stopMihoyoPolling();
-      } else {
-        scheduleMihoyoPoll();
-      }
-      return;
-    }
-    // confirmed（登录框内只会是 login 模式）
-    mihoyoStatus.value = "confirmed";
-    stopMihoyoPolling();
-    if (res.mode === "login") {
-      if (!res.auth.token) throw new Error("登录失败：未获取到 Token");
-      const isNewUser = res.isNewUser;
-      await onLoginSuccess(res.auth.token, res.auth.user);
-      if (isNewUser) {
-        message.success("完成入站考试后即可解锁发布委托、评论等功能");
-        await navigateTo("/exam");
-      }
-    }
-  } catch (err) {
-    if (!mihoyoPolling && mihoyoStatus.value === "confirmed") {
-      message.error(resolveErrorMessage(err, "登录失败"));
-      mihoyoStatus.value = "error";
-      return;
-    }
-    // 单次轮询失败不中断，继续重试
-    scheduleMihoyoPoll();
-  }
-};
-
-const startMihoyoQr = async () => {
-  stopMihoyoPolling();
-  mihoyoStatus.value = "loading";
-  mihoyoQrDataUrl.value = "";
-  mihoyoTicket = "";
-  try {
-    const res = await api.createMihoyoQr();
-    mihoyoQrDataUrl.value = await QRCode.toDataURL(res.qrUrl, { width: 220, margin: 1 });
-    if (!isMihoyo.value || !visible.value) return;
-    mihoyoTicket = res.ticket;
-    mihoyoStatus.value = "waiting";
-    mihoyoPolling = true;
-    scheduleMihoyoPoll();
-  } catch (err) {
-    mihoyoStatus.value = "error";
-    message.error(resolveErrorMessage(err, "获取二维码失败"));
-  }
-};
+const startMihoyoQr = mihoyo.startQr;
+const stopMihoyoPolling = mihoyo.stopQr;
 
 const enterMihoyoMode = () => {
   isMihoyo.value = true;
@@ -138,8 +80,6 @@ const enterMihoyoMode = () => {
 const exitMihoyoMode = () => {
   isMihoyo.value = false;
   stopMihoyoPolling();
-  mihoyoQrDataUrl.value = "";
-  mihoyoTicket = "";
 };
 
 const stopCooldown = () => {
