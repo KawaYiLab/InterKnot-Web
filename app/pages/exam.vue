@@ -27,7 +27,7 @@ const expiresAt = ref<string>("");
 const result = ref<ExamSubmitResult | null>(null);
 const review = ref<ExamAttemptReview | null>(null);
 const reviewing = ref(false);
-const onlyWrong = ref(false);
+const reviewFilter = ref<'all' | 'wrong'>('all');
 
 // ── 倒计时 ──────────────────────────────────────
 const nowTs = ref(Date.now());
@@ -55,8 +55,8 @@ const typeLabel = (type: ExamQuestion["type"]) =>
 
 const reviewQuestions = computed<ExamReviewQuestion[]>(() => {
   if (!review.value) return [];
-  if (!onlyWrong.value) return review.value.questions;
-  return review.value.questions.filter((q) => !q.isCorrect);
+  if (reviewFilter.value === 'wrong') return review.value.questions.filter((q) => !q.isCorrect);
+  return review.value.questions;
 });
 
 const viewReview = async () => {
@@ -180,7 +180,7 @@ const retry = async () => {
   attemptId.value = "";
   questions.value = [];
   qIndex.value = 0;
-  onlyWrong.value = false;
+  reviewFilter.value = 'all';
   await loadStatus();
 };
 
@@ -400,10 +400,10 @@ useHead({ title: "入站考试 - 绳网" });
               <p class="ik-exam-score">
                 得分 <b>{{ review.scorePercent }}%</b>（{{ review.correctCount }} / {{ review.questionCount }} 题正确，及格线 {{ review.config.passScorePercent }}%）
               </p>
-              <label class="ik-exam-review__toggle">
-                <input v-model="onlyWrong" type="checkbox" />
-                只看错题
-              </label>
+              <z-radio-group v-model="reviewFilter" class="ik-exam-review__filter">
+                <z-radio value="all">全部题目</z-radio>
+                <z-radio value="wrong">只看错题</z-radio>
+              </z-radio-group>
             </div>
 
             <div class="ik-exam-review__list">
@@ -711,20 +711,10 @@ useHead({ title: "入站考试 - 绳网" });
   margin-bottom: 20px;
 }
 
-.ik-exam-review__toggle {
+.ik-exam-review__filter {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #ccc;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.ik-exam-review__toggle input {
-  width: 16px;
-  height: 16px;
-  accent-color: #bfff09;
-  cursor: pointer;
+  gap: 16px;
 }
 
 .ik-exam-review__list {
