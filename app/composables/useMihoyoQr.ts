@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted, computed, ref } from "vue";
 import QRCode from "qrcode";
-import type { MihoyoQrCreateResult, MihoyoQrPollResult } from "~/composables/useApi";
+import type { MihoyoQrPollResult } from "~/composables/useApi";
 
 export type MihoyoQrStatus =
   | "loading"
@@ -26,7 +26,7 @@ export interface UseMihoyoQrOptions {
   maxErrors?: number;
   /** Confirmed 后的回调 */
   onConfirmed: (res: Extract<MihoyoQrPollResult, { status: "confirmed" }>) => void | Promise<void>;
-  /** 创建二维码失败/轮询最终失败的回调 */
+  /** 创建二维码失败 / 轮询最终失败 / Confirmed 回调失败的回调 */
   onError?: (err: unknown) => void;
 }
 
@@ -51,6 +51,7 @@ export function useMihoyoQr(options: UseMihoyoQrOptions) {
   let ticket = "";
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let polling = false;
+  let starting = false;
   let consecutiveErrors = 0;
   let currentDelay = minInterval;
 
@@ -65,7 +66,7 @@ export function useMihoyoQr(options: UseMihoyoQrOptions) {
   };
 
   const schedulePoll = () => {
-    if (!polling || pollTimer) return;
+    if (!polling || pollTimer || (typeof document !== "undefined" && document.hidden)) return;
     pollTimer = setTimeout(() => {
       pollTimer = null;
       void doPoll();
@@ -73,6 +74,8 @@ export function useMihoyoQr(options: UseMihoyoQrOptions) {
   };
 
   const startQr = async () => {
+    if (starting) return;
+    starting = true;
     stopQr();
     qrStatus.value = "loading";
     consecutiveErrors = 0;
@@ -92,6 +95,8 @@ export function useMihoyoQr(options: UseMihoyoQrOptions) {
     } catch (err) {
       qrStatus.value = "error";
       options.onError?.(err);
+    } finally {
+      starting = false;
     }
   };
 
@@ -112,11 +117,7 @@ export function useMihoyoQr(options: UseMihoyoQrOptions) {
         }
 
         qrStatus.value = res.status;
-        if (res.status === "scanned") {
-          currentDelay = Math.max(currentDelay, scannedInterval);
-        } else {
-          currentDelay = minInterval;
-        }
+        currentDelay = res.status === "scanned" ? scannedInterval : minInterval;
         schedulePoll();
         return;
       }
@@ -124,7 +125,12 @@ export function useMihoyoQr(options: UseMihoyoQrOptions) {
       // Confirmed
       polling = false;
       qrStatus.value = "confirmed";
-      await options.onConfirmed(res as Extract<MihoyoQrPollResult, { status: "confirmed" }>);
+      try {
+        await options.onConfirmed(res as Extract<MihoyoQrPollResult, { status: "confirmed" }>);
+      } catch (err) {
+        qrStatus.value = "error";
+        options.onError?.(err);
+      }
     } catch (err) {
       consecutiveErrors += 1;
       if (consecutiveErrors > maxErrors) {
@@ -146,6 +152,10 @@ export function useMihoyoQr(options: UseMihoyoQrOptions) {
         pollTimer = null;
       }
       polling = false;
+      return;
+    }
+    if (!ticket && qrStatus.value === "loading" && !starting && options.isActive()) {
+      void startQr();
       return;
     }
     if (
