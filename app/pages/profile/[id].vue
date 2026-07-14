@@ -248,19 +248,17 @@ const toggleBlock = async () => {
     // 让文章列表/搜索缓存失效，刷新后应用拉黑过滤
     api.invalidateQueries(["articles"]);
     api.invalidateQueries(["profile"]);
-    // 取消拉黑后重新拉取完整个人资料与文章/评论
-    if (!result.blocked) {
-      try {
-        const fresh = await api.getProfile(profileId.value);
-        profile.value = fresh;
-      } catch {
-        // 失败则保持本地乐观更新
-      }
-      articles.value = [];
-      articleCursor.value = "";
-      articleHasNext.value = true;
-      void loadProfileArticles();
+    // 重新拉取个人资料，保持拉黑/取消拉黑后的数据一致性
+    try {
+      const fresh = await api.getProfile(profileId.value);
+      profile.value = fresh;
+    } catch {
+      // 失败则保持本地乐观更新
     }
+    articles.value = [];
+    articleCursor.value = "";
+    articleHasNext.value = true;
+    void loadProfileArticles();
   } catch (err) {
     message.error(resolveErrorMessage(err, "操作失败"));
   } finally {
