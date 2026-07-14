@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
 import QRCode from "qrcode";
+import { watch } from "vue";
 import { resolveErrorMessage } from "~/utils/api-error";
 import type { BlockedUser, MihoyoBinding } from "~/types/entities";
 
@@ -260,6 +261,12 @@ onMounted(async () => {
   } catch {
     // 未登录/接口失败时保持未绑定文案
   }
+  if (showBlocked.value) {
+    blockedCursor.value = "";
+    blockedHasNext.value = true;
+    blockedUsers.value = [];
+    await loadBlocked();
+  }
 });
 
 const openMihoyo = async () => {
@@ -383,6 +390,15 @@ const loadBlocked = async () => {
     blockedLoading.value = false;
   }
 };
+
+watch(showBlocked, (show) => {
+  if (show) {
+    blockedCursor.value = "";
+    blockedHasNext.value = true;
+    blockedUsers.value = [];
+    void loadBlocked();
+  }
+});
 
 const unblockUser = async (user: BlockedUser) => {
   if (!user.documentId) return;

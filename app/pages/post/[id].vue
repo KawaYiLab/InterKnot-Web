@@ -514,7 +514,10 @@ const handleBlockUserFromComment = async (authorDocumentId: string) => {
   try {
     const result = await api.toggleUserBlock(authorDocumentId);
     message.success(result.blocked ? "已拉黑用户" : "已取消拉黑");
-    // 重新拉取评论，让后端拉黑过滤生效
+    // 让评论/搜索/个人页缓存失效，重新拉取时后端会过滤掉已拉黑内容
+    api.invalidateQueries(["articles", "comments", postId.value]);
+    api.invalidateQueries(["articles", "search"]);
+    api.invalidateQueries(["profile"]);
     await refreshComments();
   } catch (err) {
     message.error(resolveErrorMessage(err, "操作失败"));
