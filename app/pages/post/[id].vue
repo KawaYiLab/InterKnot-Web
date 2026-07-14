@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMessage } from "zenless-ui";
 import type { Comment, Post } from "~/types/entities";
-import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
+import { isNotFoundError, isUserBlockedError, resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
 import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
@@ -27,6 +27,7 @@ const message = useMessage();
 const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
+const isBlocked = ref(false);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
@@ -146,11 +147,16 @@ const openCoverPreview = () => {
 const loadPost = async () => {
   loading.value = true;
   loadError.value = false;
+  isBlocked.value = false;
   try {
     post.value = await api.getPost(postId.value);
   } catch (err) {
     if (isNotFoundError(err)) {
       showError({ statusCode: 404, message: "委托不存在" });
+      return;
+    }
+    if (isUserBlockedError(err)) {
+      isBlocked.value = true;
       return;
     }
     loadError.value = true;
@@ -391,6 +397,33 @@ const startReplyToReply = (reply: Comment["replies"][number], parentComment: Com
 const isOwner = computed(() => post.value?.isOwner === true);
 const canPin = computed(() => auth.isLogin && (isOwner.value || auth.user?.isAdmin === true));
 
+const isPostAuthorBlocked = ref(false);
+const isPostAuthorBlockLoading = ref(false);
+
+// 当委托作者可识别且非匿名/非自己/非 AI 时，预拉一次当前拉黑状态，用于「更多操作」菜单文案。
+watch(
+  () => ({
+    id: post.value?.author?.documentId,
+    isAnon: post.value?.isAnonymous,
+    isOwner: isOwner.value,
+    isAiAgent: post.value?.author?.isAiAgent,
+  }),
+  async (curr, prev) => {
+    if (!curr.id || curr.isAnon || curr.isOwner || curr.isAiAgent) {
+      isPostAuthorBlocked.value = false;
+      return;
+    }
+    if (curr.id === prev?.id) return;
+    try {
+      const res = await api.batchCheckUserBlocks([curr.id]);
+      isPostAuthorBlocked.value = res[curr.id] === true;
+    } catch {
+      isPostAuthorBlocked.value = false;
+    }
+  },
+  { immediate: true },
+);
+
 const deletingArticle = ref(false);
 
 const handleDeleteArticle = async () => {
@@ -423,6 +456,36 @@ const handleArticleMenuCommand = (command: string | number) => {
     handleEditArticle();
   } else if (command === "report") {
     handleReportArticle();
+  } else if (command === "block") {
+    void handleBlockAuthor();
+  }
+};
+
+const handleBlockAuthor = async () => {
+  const authorDocumentId = post.value?.author?.documentId;
+  if (!authorDocumentId || post.value?.isAnonymous || isOwner.value || post.value?.author?.isAiAgent) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (isPostAuthorBlockLoading.value) return;
+  isPostAuthorBlockLoading.value = true;
+  try {
+    const result = await api.toggleUserBlock(authorDocumentId);
+    isPostAuthorBlocked.value = result.blocked;
+    message.success(result.blocked ? "已拉黑作者" : "已取消拉黑作者");
+    // 让个人页/列表/搜索缓存失效，刷新后应用拉黑过滤
+    api.invalidateQueries(["articles"]);
+    api.invalidateQueries(["profile"]);
+    if (result.blocked) {
+      // 拉黑后该委托不应再被看到，切回首页
+      post.value = null;
+      isBlocked.value = true;
+    }
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "操作失败"));
+  } finally {
+    isPostAuthorBlockLoading.value = false;
   }
 };
 
@@ -449,6 +512,24 @@ const handleReportReply = (reply: Comment["replies"][number]) => {
     return;
   }
   reportDialog.open({ targetType: "comment", targetId: reply.id, targetLabel: "回复" });
+};
+
+const handleBlockUserFromComment = async (authorDocumentId: string) => {
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  try {
+    const result = await api.toggleUserBlock(authorDocumentId);
+    message.success(result.blocked ? "已拉黑用户" : "已取消拉黑");
+    // 让评论/搜索/个人页缓存失效，重新拉取时后端会过滤掉已拉黑内容
+    api.invalidateQueries(["articles", "comments", postId.value]);
+    api.invalidateQueries(["articles", "search"]);
+    api.invalidateQueries(["profile"]);
+    await refreshComments();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "操作失败"));
+  }
 };
 
 const favoriting = ref(false);
@@ -851,6 +932,20 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <!-- ── Blocked ───────────────────────────── -->
+    <div v-else-if="isBlocked" class="ik-page__shell">
+      <div class="ik-page__outer">
+        <div class="ik-page__inner">
+          <div class="ik-page__main">
+            <IkZzzMarquee />
+            <div class="ik-page__error">
+              无法查看该委托：你与作者之间存在拉黑关系
+            </div>
+          </div><!-- /.ik-page__main -->
+        </div>
+      </div>
+    </div>
+
     <!-- ── Loaded Content ────────────────────── -->
     <template v-else-if="post">
       <div class="ik-page__shell">
@@ -976,6 +1071,7 @@ onBeforeUnmount(() => {
                   @delete-reply="handleDeleteReply"
                   @report-comment="handleReportComment"
                   @report-reply="handleReportReply"
+                  @block-user="handleBlockUserFromComment"
                   @pin-comment="handlePinComment"
                   @unpin-comment="handleUnpinComment"
                 />
@@ -1117,6 +1213,12 @@ onBeforeUnmount(() => {
                           <z-dropdown-item command="report" :disabled="isOwner">举报委托</z-dropdown-item>
                           <z-dropdown-item command="edit" :disabled="!isOwner">编辑委托</z-dropdown-item>
                           <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除委托</z-dropdown-item>
+                          <z-dropdown-item
+                            command="block"
+                            :disabled="isOwner || post.isAnonymous || isPostAuthorBlockLoading || post.author?.isAiAgent"
+                          >
+                            {{ isPostAuthorBlocked ? "取消拉黑作者" : "拉黑作者" }}
+                          </z-dropdown-item>
                         </template>
                       </z-dropdown>
                     </div>

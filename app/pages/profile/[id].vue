@@ -16,7 +16,7 @@ const profile = ref<Profile | null>(null);
 const loadError = ref(false);
 const loading = ref(false);
 
-const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'pinned', 'social', 'logout', 'mihoyo'];
+const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'pinned', 'social', 'blocked', 'logout', 'mihoyo'];
 const modalQuery = computed(() => String(route.query.modal || ''));
 const showCardModal = computed(() => modalQuery.value === 'banner');
 const showAvatarModal = computed(() => modalQuery.value === 'avatar');
@@ -167,12 +167,19 @@ const doCheckIn = async () => {
   }
 };
 
-/** 是否能给当前 profile 用户发私聊：非自己、未隐藏、有 uid */
+/** 当前 profile 与访客之间是否存在任一方向的拉黑关系 */
+const isBlockedRelationship = computed<boolean>(() => {
+  const p = profile.value;
+  return !!(p && (p.isBlockedByMe || p.hasBlockedMe));
+});
+
+/** 是否能给当前 profile 用户发私聊：非自己、未隐藏、有 uid、未拉黑 */
 const canSendDm = computed<boolean>(() => {
   const p = profile.value;
   if (!p) return false;
   if (p.isSelf) return false;
   if (p.profileHidden) return false;
+  if (isBlockedRelationship.value) return false;
   if (typeof p.uid !== "number") return false;
   return true;
 });
@@ -199,14 +206,65 @@ const startDm = async () => {
   }
 };
 
-/** 是否可关注该用户：非自己、未隐藏（与 canSendDm 一致用 profileHidden）。 */
+/** 是否可关注该用户：非自己、未隐藏、未拉黑。 */
 const canFollow = computed<boolean>(() => {
   const p = profile.value;
   if (!p) return false;
   if (p.isSelf) return false;
   if (p.profileHidden) return false;
+  if (isBlockedRelationship.value) return false;
   return true;
 });
+
+/** 是否可拉黑/取消拉黑该用户：非自己、非 AI、有 uid。 */
+const canBlock = computed<boolean>(() => {
+  const p = profile.value;
+  if (!p) return false;
+  if (p.isSelf) return false;
+  if (p.isAiAgent) return false;
+  if (typeof p.uid !== "number") return false;
+  return true;
+});
+
+const blockLoading = ref(false);
+
+const toggleBlock = async () => {
+  const p = profile.value;
+  if (!p?.documentId || !canBlock.value) return;
+  if (!auth.isLogin) {
+    loginDialog.open();
+    return;
+  }
+  if (blockLoading.value) return;
+  blockLoading.value = true;
+  try {
+    const result = await api.toggleUserBlock(p.documentId);
+    const next: Profile = { ...p, isBlockedByMe: result.blocked };
+    if (result.blocked) {
+      next.isFollowing = false;
+    }
+    profile.value = next;
+    message.success(result.blocked ? "已拉黑" : "已取消拉黑");
+    // 让文章列表/搜索缓存失效，刷新后应用拉黑过滤
+    api.invalidateQueries(["articles"]);
+    api.invalidateQueries(["profile"]);
+    // 重新拉取个人资料，保持拉黑/取消拉黑后的数据一致性
+    try {
+      const fresh = await api.getProfile(profileId.value);
+      profile.value = fresh;
+    } catch {
+      // 失败则保持本地乐观更新
+    }
+    articles.value = [];
+    articleCursor.value = "";
+    articleHasNext.value = true;
+    void loadProfileArticles();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "操作失败"));
+  } finally {
+    blockLoading.value = false;
+  }
+};
 
 const followLoading = ref(false);
 
@@ -438,6 +496,13 @@ onBeforeUnmount(() => {
             {{ profile.isFollowing ? "已关注" : "关注" }}
           </z-button>
           <z-button v-if="canSendDm" :loading="dmStarting" @click="startDm">私信</z-button>
+          <z-button
+            v-if="canBlock"
+            :loading="blockLoading"
+            @click="toggleBlock"
+          >
+            {{ profile.isBlockedByMe ? "取消拉黑" : "拉黑" }}
+          </z-button>
         </div>
       </div>
 
@@ -475,6 +540,10 @@ onBeforeUnmount(() => {
           <!-- Hidden badge (self view only) -->
           <div v-if="profile.isSelf && profile.profileHidden" class="ik-banner__hidden-badge">
             个人资料已隐藏，仅自己可见
+          </div>
+          <!-- Blocked badge (visitor view only) -->
+          <div v-else-if="isBlockedRelationship" class="ik-banner__hidden-badge">
+            {{ profile.isBlockedByMe ? "你已拉黑该用户" : "你已被该用户拉黑" }}
           </div>
 
           <!-- Stats text row -->
@@ -521,6 +590,11 @@ onBeforeUnmount(() => {
       <div v-if="profile.isHidden" class="ik-article-grid">
         <div class="ik-article-grid__empty">
           该用户已隐藏个人资料
+        </div>
+      </div>
+      <div v-else-if="isBlockedRelationship" class="ik-article-grid">
+        <div class="ik-article-grid__empty">
+          {{ profile.isBlockedByMe ? "你已拉黑该用户，内容不可见" : "你已被该用户拉黑，内容不可见" }}
         </div>
       </div>
       <div v-else class="ik-article-grid">
