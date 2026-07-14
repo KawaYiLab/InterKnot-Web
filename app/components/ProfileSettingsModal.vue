@@ -700,11 +700,7 @@ onBeforeUnmount(() => {
                       </div>
                       <z-button size="small" @click="unblockUser(user)">取消拉黑</z-button>
                     </div>
-                    <div v-if="blockedHasNext" class="ik-blocked-list__more">
-                      <z-button :loading="blockedLoading" @click="loadBlocked">
-                        {{ blockedLoading ? '加载中' : '加载更多' }}
-                      </z-button>
-                    </div>
+
                   </div>
                 </div>
               </div>
@@ -1339,7 +1335,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.65);
   border-radius: 10px;
 }
 
@@ -1372,12 +1368,6 @@ onBeforeUnmount(() => {
   color: #bfff09;
   font-size: 12px;
   font-weight: 700;
-}
-
-.ik-blocked-list__more {
-  display: flex;
-  justify-content: center;
-  padding: 8px 0;
 }
 
 /* prefers-reduced-motion 由 theme.css 全局接管 */
