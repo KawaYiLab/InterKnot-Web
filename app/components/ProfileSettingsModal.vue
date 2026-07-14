@@ -967,19 +967,32 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  max-width: 336px;
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 20px;
+  padding: 16px;
   background: rgba(0, 0, 0, 0.8);
   border-radius: 16px;
+  box-sizing: border-box;
 }
 
 .ik-settings__list :deep(.z-button) {
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   margin-left: 0;
+  padding: 12px 10px;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* 奇数个按钮时最后一项独占一行，避免右侧空白 */
+.ik-settings__list > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 /* Appearance actions live in the bottom action bar on desktop, so
@@ -1170,20 +1183,23 @@ onBeforeUnmount(() => {
   z-index: 9200;
 }
 
+/* Settings dialog now has 7+ entries (up to 11 on mobile); let it size
+   to content and scroll when it hits the viewport, instead of clipping
+   against the fixed 300px height. */
+.ik-dialog--settings {
+  height: auto;
+  max-height: 90%;
+}
+
+.ik-dialog--settings .ik-dialog__body {
+  overflow-y: auto;
+  align-items: flex-start;
+}
+
 /* ── Mobile / Portrait — show appearance actions in the menu ─── */
 @media (max-width: 1023px), (orientation: portrait) {
   .ik-settings__action--mobile {
     display: inline-flex;
-  }
-  /* Settings dialog grows from 6 to 10 entries; let it size to content
-     and stay within viewport rather than overflowing the fixed 300px. */
-  .ik-dialog--settings {
-    height: auto;
-    max-height: 90%;
-  }
-  .ik-dialog--settings .ik-dialog__body {
-    overflow-y: auto;
-    align-items: flex-start;
   }
 }
 
