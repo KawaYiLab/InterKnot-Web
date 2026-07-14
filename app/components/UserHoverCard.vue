@@ -241,10 +241,14 @@ const toggleBlock = async () => {
     if (result.blocked) {
       next.isFollowing = false;
     }
-    profile.value = next;
-    if (p.documentId && profileCache.has(p.documentId)) {
-      profileCache.set(p.documentId, next);
+    if (p.documentId) {
+      if (result.blocked) {
+        profileCache.set(p.documentId, next);
+      } else {
+        profileCache.delete(p.documentId);
+      }
     }
+    profile.value = next;
     message?.success(result.blocked ? "已拉黑" : "已取消拉黑");
     // 让个人页/列表缓存失效，刷新后应用拉黑过滤
     api.invalidateQueries(["profile"]);

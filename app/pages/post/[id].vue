@@ -400,11 +400,16 @@ const canPin = computed(() => auth.isLogin && (isOwner.value || auth.user?.isAdm
 const isPostAuthorBlocked = ref(false);
 const isPostAuthorBlockLoading = ref(false);
 
-// 当委托作者可识别且非匿名/非自己时，预拉一次当前拉黑状态，用于「更多操作」菜单文案。
+// 当委托作者可识别且非匿名/非自己/非 AI 时，预拉一次当前拉黑状态，用于「更多操作」菜单文案。
 watch(
-  () => ({ id: post.value?.author?.documentId, isAnon: post.value?.isAnonymous, isOwner: isOwner.value }),
+  () => ({
+    id: post.value?.author?.documentId,
+    isAnon: post.value?.isAnonymous,
+    isOwner: isOwner.value,
+    isAiAgent: post.value?.author?.isAiAgent,
+  }),
   async (curr, prev) => {
-    if (!curr.id || curr.isAnon || curr.isOwner) {
+    if (!curr.id || curr.isAnon || curr.isOwner || curr.isAiAgent) {
       isPostAuthorBlocked.value = false;
       return;
     }
@@ -458,7 +463,7 @@ const handleArticleMenuCommand = (command: string | number) => {
 
 const handleBlockAuthor = async () => {
   const authorDocumentId = post.value?.author?.documentId;
-  if (!authorDocumentId || post.value?.isAnonymous || isOwner.value) return;
+  if (!authorDocumentId || post.value?.isAnonymous || isOwner.value || post.value?.author?.isAiAgent) return;
   if (!auth.isLogin) {
     loginDialog.open();
     return;
@@ -469,6 +474,9 @@ const handleBlockAuthor = async () => {
     const result = await api.toggleUserBlock(authorDocumentId);
     isPostAuthorBlocked.value = result.blocked;
     message.success(result.blocked ? "已拉黑作者" : "已取消拉黑作者");
+    // 让个人页/列表/搜索缓存失效，刷新后应用拉黑过滤
+    api.invalidateQueries(["articles"]);
+    api.invalidateQueries(["profile"]);
     if (result.blocked) {
       // 拉黑后该委托不应再被看到，切回首页
       post.value = null;
@@ -1207,7 +1215,7 @@ onBeforeUnmount(() => {
                           <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除委托</z-dropdown-item>
                           <z-dropdown-item
                             command="block"
-                            :disabled="isOwner || post.isAnonymous || isPostAuthorBlockLoading"
+                            :disabled="isOwner || post.isAnonymous || isPostAuthorBlockLoading || post.author?.isAiAgent"
                           >
                             {{ isPostAuthorBlocked ? "取消拉黑作者" : "拉黑作者" }}
                           </z-dropdown-item>

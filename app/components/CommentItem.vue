@@ -49,13 +49,13 @@ const handleCommentMenuCommand = (command: string | number) => {
   else if (command === "unpin") emit("unpinComment", props.comment);
   else if (command === "delete") emit("deleteComment", props.comment);
   else if (command === "report") emit("reportComment", props.comment);
-  else if (command === "block" && props.comment.author?.documentId) emit("blockUser", props.comment.author.documentId);
+  else if (command === "block" && props.comment.author?.documentId && !isOwnComment.value && !props.comment.author?.isAiAgent) emit("blockUser", props.comment.author.documentId);
 };
 
 const handleReplyMenuCommand = (reply: CommentReply, command: string | number) => {
   if (command === "delete") emit("deleteReply", reply, props.comment);
   else if (command === "report") emit("reportReply", reply, props.comment);
-  else if (command === "block" && reply.author?.documentId) emit("blockUser", reply.author.documentId);
+  else if (command === "block" && reply.author?.documentId && !isOwnReply(reply) && !reply.author?.isAiAgent) emit("blockUser", reply.author.documentId);
 };
 
 const floorLabel = computed(() => {
@@ -173,7 +173,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                 <z-dropdown-item command="report" :disabled="isOwnComment">举报评论</z-dropdown-item>
                 <z-dropdown-item
                   command="block"
-                  :disabled="!comment.author?.documentId"
+                  :disabled="!comment.author?.documentId || isOwnComment || comment.author?.isAiAgent"
                 >
                   拉黑用户
                 </z-dropdown-item>
@@ -271,7 +271,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                     <z-dropdown-item command="report" :disabled="isOwnReply(reply)">举报评论</z-dropdown-item>
                     <z-dropdown-item
                       command="block"
-                      :disabled="!reply.author?.documentId"
+                      :disabled="!reply.author?.documentId || isOwnReply(reply) || reply.author?.isAiAgent"
                     >
                       拉黑用户
                     </z-dropdown-item>

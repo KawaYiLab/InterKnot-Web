@@ -1105,20 +1105,22 @@ export function useApi() {
     });
     const meta = extractPaginationMeta(response);
     const data = unwrapData<unknown[]>(response) || [];
-    const nodes = data.map((item) => {
-      const u = item as Record<string, unknown>;
-      const avatarUrl = u.avatar;
-      return {
-        documentId: String(u.documentId || ""),
-        name: typeof u.name === "string" ? u.name : undefined,
-        username: typeof u.username === "string" ? u.username : undefined,
-        level: typeof u.level === "number" ? u.level : undefined,
-        avatar: typeof avatarUrl === "string" && avatarUrl
-          ? normalizeMediaUrl(avatarUrl, apiBaseUrl)
-          : undefined,
-        createdAt: typeof u.createdAt === "string" ? u.createdAt : undefined,
-      };
-    });
+    const nodes = data
+      .map((item) => {
+        const u = item as Record<string, unknown>;
+        const avatarUrl = u.avatar;
+        return {
+          documentId: String(u.documentId || ""),
+          name: typeof u.name === "string" ? u.name : undefined,
+          username: typeof u.username === "string" ? u.username : undefined,
+          level: typeof u.level === "number" ? u.level : undefined,
+          avatar: typeof avatarUrl === "string" && avatarUrl
+            ? normalizeMediaUrl(avatarUrl, apiBaseUrl)
+            : undefined,
+          createdAt: typeof u.createdAt === "string" ? u.createdAt : undefined,
+        };
+      })
+      .filter((u) => u.documentId);
     return buildPagination(nodes, start, meta);
   };
 
@@ -1253,6 +1255,7 @@ export function useApi() {
       isSelf: data.isSelf === true,
       isHidden: data.isHidden === true,
       profileHidden: data.profileHidden === true,
+      isAiAgent: data.isAiAgent === true,
       isBlockedByMe: data.isBlockedByMe === true,
       hasBlockedMe: data.hasBlockedMe === true,
       zzz,

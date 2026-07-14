@@ -364,12 +364,11 @@ const blockedLoading = ref(false);
 const blockedHasNext = ref(true);
 const blockedCursor = ref("");
 
-const openBlocked = async () => {
+const openBlocked = () => {
   blockedCursor.value = "";
   blockedUsers.value = [];
   blockedHasNext.value = true;
   openSub('blocked');
-  await loadBlocked();
 };
 
 const closeBlocked = () => {
@@ -398,7 +397,7 @@ watch(showBlocked, (show) => {
     blockedUsers.value = [];
     void loadBlocked();
   }
-});
+}, { flush: 'post' });
 
 const unblockUser = async (user: BlockedUser) => {
   if (!user.documentId) return;
@@ -406,6 +405,9 @@ const unblockUser = async (user: BlockedUser) => {
     await api.toggleUserBlock(user.documentId);
     message.success("已取消拉黑");
     blockedUsers.value = blockedUsers.value.filter((u) => u.documentId !== user.documentId);
+    // 取消拉黑后让列表/搜索/个人页缓存失效，刷新后重新显示内容
+    api.invalidateQueries(["articles"]);
+    api.invalidateQueries(["profile"]);
   } catch (err) {
     message.error(resolveErrorMessage(err, "取消拉黑失败"));
   }
