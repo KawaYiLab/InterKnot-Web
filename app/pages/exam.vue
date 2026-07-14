@@ -760,59 +760,11 @@ useHead({ title: "入站考试 - 绳网" });
   margin-left: 8px;
 }
 
-.ik-exam-review-options {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.ik-exam-review-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #eee;
-  line-height: 1.5;
-  word-break: break-word;
-  overflow-wrap: break-word;
-}
-
-.ik-exam-review-option--selected-correct {
-  background: rgba(191, 255, 9, 0.15);
-  border-color: #bfff09;
-  color: #bfff09;
-}
-
-.ik-exam-review-option--selected-wrong {
-  background: rgba(255, 122, 69, 0.15);
-  border-color: #ff7a45;
-  color: #ff7a45;
-}
-
-.ik-exam-review-option--missed {
-  border: 1px dashed #bfff09;
-  color: #bfff09;
-}
-
-.ik-exam-review-option__marker {
-  width: 1.2em;
-  text-align: center;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
 .ik-exam-review-card__answers {
   margin-top: 12px;
   color: #aaa;
   font-size: 14px;
   line-height: 1.6;
-}
-
-.ik-exam-review-card__answers p {
-  margin: 0 0 4px;
 }
 
 .ik-exam-review-card__explanation {
