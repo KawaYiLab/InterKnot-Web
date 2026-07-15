@@ -16,7 +16,7 @@ const profile = ref<Profile | null>(null);
 const loadError = ref(false);
 const loading = ref(false);
 
-const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'pinned', 'social', 'blocked', 'logout', 'mihoyo'];
+const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'pinned', 'social', 'logout'];
 const modalQuery = computed(() => String(route.query.modal || ''));
 const showCardModal = computed(() => modalQuery.value === 'banner');
 const showAvatarModal = computed(() => modalQuery.value === 'avatar');
