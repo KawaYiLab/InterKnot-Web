@@ -29,7 +29,7 @@ const emit = defineEmits<{
 }>();
 
 /** 按下后延迟多久才开始显示三连蓄力动画（ms）。避免短按误出圆环 */
-const WARMUP_MS = 200;
+const WARMUP_MS = 400;
 /** 蓄力圆环从出现到充满的时长（ms）。圆环填满时触发三连 */
 const CHARGE_MS = 1300;
 /** 从按下到三连触发的总时长 = WARMUP_MS + CHARGE_MS */
