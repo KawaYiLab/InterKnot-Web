@@ -118,6 +118,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="ik-img-overlay" @click="handleOverlayClick">
+    <div class="ik-img-overlay__backdrop" aria-hidden="true" />
     <div class="ik-overlay__stripe" aria-hidden="true" />
     <div class="ik-img-dialog" @click.stop>
       <div class="ik-img-frame">
@@ -215,9 +216,17 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
+  background: transparent;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+}
+
+.ik-img-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(0, 0, 0, 0.7);
+  pointer-events: none;
 }
 
 .ik-overlay__stripe {
@@ -236,6 +245,7 @@ onBeforeUnmount(() => {
 
 .ik-img-dialog {
   position: relative;
+  z-index: 1;
   width: 56%;
   height: 66%;
   transform: scale(1.1);
@@ -354,6 +364,10 @@ onBeforeUnmount(() => {
   min-height: 0;
   border-radius: 16px;
   overflow: hidden;
+  /* GPU 硬件加速层提升：使滚动区域在独立的合成层中渲染，避免与父级 backdrop-filter 冲突导致滚动重绘掉帧 */
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .ik-img-grid-scroll :deep(.z-scrollbar__wrap) {
@@ -386,7 +400,7 @@ onBeforeUnmount(() => {
   font-family: inherit;
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  transition: border-color 160ms ease, transform 160ms ease;
 }
 
 .ik-img-card:hover:not(:disabled) {
@@ -564,9 +578,13 @@ onBeforeUnmount(() => {
 @media (max-width: 768px) {
   .ik-img-overlay {
     align-items: flex-end;
-    background: rgba(0, 0, 0, 0.55);
+    background: transparent;
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
+  }
+
+  .ik-img-overlay__backdrop {
+    background: rgba(0, 0, 0, 0.55);
   }
 
   .ik-overlay__stripe {
