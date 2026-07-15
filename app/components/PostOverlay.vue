@@ -500,7 +500,11 @@ const loadComments = async () => {
   commentsLoading.value = true;
   const loadId = ++currentCommentLoadId;
   try {
-    const page = await api.getComments(props.postId, commentsCursor.value);
+    const page = await api.getComments(
+      props.postId,
+      commentsCursor.value,
+      commentsCursor.value === "",
+    );
     if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
