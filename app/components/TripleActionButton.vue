@@ -28,8 +28,8 @@ const emit = defineEmits<{
   (e: "charge", payload: { progress: number; active: boolean }): void;
 }>();
 
-/** 长按判定阈值（ms）—— 对齐 B 站手感 */
-const HOLD_MS = 600;
+/** 长按判定阈值（ms）—— 对齐 B 站手感，避免短按误触三连 */
+const HOLD_MS = 1500;
 /** 开始判定为拖动/滚动的位移阈值（px），超过即取消长按 */
 const SLOP = 8;
 /** 迸发动画时长（ms），需与 CSS keyframes 对齐 */
