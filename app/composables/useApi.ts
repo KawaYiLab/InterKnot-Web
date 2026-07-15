@@ -36,6 +36,12 @@ import {
 } from "~/utils/pagination";
 import type { MentionCandidate } from "~/composables/useMentionInput";
 import { toMediaUrl } from "~/utils/image";
+import {
+  BENEFIT_MAX_LEVEL,
+  benefitsForLevel,
+  clampBenefitLevel,
+} from "~/utils/benefits";
+import type { BenefitKey, BenefitValues } from "~/utils/benefits";
 
 // ── 集中定义 queryKey，便于写接口精准 invalidate ─────────────
 const qk = {
@@ -2000,6 +2006,43 @@ export function useApi() {
   };
 
   // ── 入站考试 ──────────────────────────────────────────────
+  /**
+   * 获取当前用户的等级权益（未登录按 Lv.0）
+   */
+  const getMyBenefits = async (): Promise<{
+    level: number;
+    maxLevel: number;
+    benefits: BenefitValues;
+    nextLevel?: number;
+    nextBenefits?: BenefitValues;
+  }> => {
+    const response = await $api("/api/benefits/me", { method: "GET" });
+    const data = response as Record<string, unknown>;
+    const level = clampBenefitLevel(data.level);
+    const parse = (raw: unknown, fallbackLevel: number): BenefitValues => {
+      const obj = (raw ?? {}) as Record<string, unknown>;
+      const fallback = benefitsForLevel(fallbackLevel);
+      const num = (key: BenefitKey) =>
+        typeof obj[key] === "number" ? (obj[key] as number) : fallback[key];
+      return {
+        articleMaxImages: num("articleMaxImages"),
+        commentMaxImages: num("commentMaxImages"),
+        articleMaxBody: num("articleMaxBody"),
+      };
+    };
+    const nextLevel =
+      typeof data.nextLevel === "number" ? clampBenefitLevel(data.nextLevel) : undefined;
+    return {
+      level,
+      maxLevel:
+        typeof data.maxLevel === "number" ? data.maxLevel : BENEFIT_MAX_LEVEL,
+      benefits: parse(data.benefits, level),
+      ...(nextLevel != null
+        ? { nextLevel, nextBenefits: parse(data.nextBenefits, nextLevel) }
+        : {}),
+    };
+  };
+
   const getExamStatus = async (): Promise<ExamStatus> => {
     const response = await $api("/api/exam/status");
     return response as ExamStatus;
@@ -2095,6 +2138,8 @@ export function useApi() {
     getCheckInStatus,
     checkIn,
     getDailyExpStatus,
+    // 等级权益
+    getMyBenefits,
     // 入站考试
     getExamStatus,
     startExam,
