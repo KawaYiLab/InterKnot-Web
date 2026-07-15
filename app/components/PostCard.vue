@@ -1,6 +1,19 @@
 <script lang="ts">
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
+
+// 跨实例缓存已经加载过的封面 URL。虚拟列表在上下滚动时会反复挂载/卸载
+// PostCard，这个缓存能让“下滑时已经加载过”的封面在重新上翻进入视口时
+// 直接显示，不再重播 opacity/scale 进场过渡。
+const _loadedCoverUrls = new Set<string>();
+
+function isCoverLoaded(src: string) {
+  return _loadedCoverUrls.has(src);
+}
+
+function markCoverLoaded(src: string) {
+  if (src) _loadedCoverUrls.add(src);
+}
 </script>
 
 <script setup lang="ts">
@@ -27,7 +40,9 @@ const authorName = computed(() => props.post.author?.name || "未知作者");
 const canHover = useHoverCapable();
 
 const coverSrc = ref(DEFAULT_COVER_IMAGE);
-const coverImageLoaded = ref(false);
+// 初始状态优先从跨实例缓存读取：如果同一张封面已经在本页面加载过，
+// 重新进入视口时不应再次展示 loading 态并重播过渡动画。
+const coverImageLoaded = ref(isCoverLoaded(coverSrc.value));
 const coverIsFallback = ref(false);
 const avatarSrc = ref(DEFAULT_AVATAR_IMAGE);
 const cardRef = ref<HTMLElement | null>(null);
@@ -62,7 +77,8 @@ watch(
     const cover = newCover?.trim();
     coverSrc.value = cover || DEFAULT_COVER_IMAGE;
     coverIsFallback.value = !cover;
-    coverImageLoaded.value = false;
+    // 同一封面 URL 已加载过时，直接就绪，避免虚拟列表重挂载时重播过渡。
+    coverImageLoaded.value = isCoverLoaded(coverSrc.value);
   },
   { immediate: true },
 );
@@ -70,6 +86,7 @@ watch(
 onMounted(() => {
   if (coverImgRef.value?.complete) {
     coverImageLoaded.value = true;
+    markCoverLoaded(coverSrc.value);
   }
 });
 
@@ -83,17 +100,20 @@ watch(
 
 const onCoverLoad = () => {
   coverImageLoaded.value = true;
+  markCoverLoaded(coverSrc.value);
 };
 
 const onCoverError = () => {
   if (coverSrc.value === DEFAULT_COVER_IMAGE) {
     coverImageLoaded.value = true;
+    markCoverLoaded(coverSrc.value);
     return;
   }
 
   coverSrc.value = DEFAULT_COVER_IMAGE;
   coverIsFallback.value = true;
   coverImageLoaded.value = true;
+  markCoverLoaded(coverSrc.value);
 };
 
 const onAvatarError = () => {
