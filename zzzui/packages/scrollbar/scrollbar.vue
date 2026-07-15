@@ -15,6 +15,7 @@
 
 <script setup>
 import { nextTick, ref, onBeforeUnmount, computed, provide } from 'vue'
+import { throttle } from 'throttle-debounce'
 import Bar from './bar.vue'
 import getScrollbarWidth from '@src/utils/scrollbar-width'
 import { addResizeListener, removeResizeListener } from '@src/utils/resize-event'
@@ -85,12 +86,12 @@ onBeforeUnmount(() => {
   removeResizeListener(resizeRef.value, updateSizes)
 })
 
-const handleScroll = () => {
+const handleScroll = throttle(16, () => {
   if (props.hideScroll) return
   const wrap = wrapRef.value
   moveX.value = wrap.scrollLeft * 100 / wrap.clientWidth
   moveY.value = wrap.scrollTop * 100 / wrap.clientHeight
-}
+}, { noTrailing: false })
 
 provide(scrollbarContextKey, {
   wrapRef,
