@@ -28,8 +28,12 @@ const emit = defineEmits<{
   (e: "charge", payload: { progress: number; active: boolean }): void;
 }>();
 
-/** 长按判定阈值（ms）—— 对齐 B 站手感 */
-const HOLD_MS = 600;
+/** 按下后延迟多久才开始显示三连蓄力动画（ms）。避免短按误出圆环 */
+const WARMUP_MS = 400;
+/** 蓄力圆环从出现到充满的时长（ms）。圆环填满时触发三连 */
+const CHARGE_MS = 1300;
+/** 从按下到三连触发的总时长 = WARMUP_MS + CHARGE_MS */
+const TRIGGER_MS = WARMUP_MS + CHARGE_MS;
 /** 开始判定为拖动/滚动的位移阈值（px），超过即取消长按 */
 const SLOP = 8;
 /** 迸发动画时长（ms），需与 CSS keyframes 对齐 */
@@ -48,6 +52,7 @@ const bursting = ref(false); // 迸发动画播放中
 let pointerId: number | null = null;
 let startX = 0;
 let startY = 0;
+let warmupTimer: ReturnType<typeof setTimeout> | null = null;
 let holdTimer: ReturnType<typeof setTimeout> | null = null;
 let rafId: number | null = null;
 let burstTimer: ReturnType<typeof setTimeout> | null = null;
@@ -66,6 +71,10 @@ const emitCharge = () => {
 watch([progress, holding], emitCharge, { flush: "sync" });
 
 function clearHold() {
+  if (warmupTimer !== null) {
+    clearTimeout(warmupTimer);
+    warmupTimer = null;
+  }
   if (holdTimer !== null) {
     clearTimeout(holdTimer);
     holdTimer = null;
@@ -76,12 +85,24 @@ function clearHold() {
   }
 }
 
-function startProgress() {
+function startWarmup() {
+  warmupTimer = setTimeout(() => {
+    warmupTimer = null;
+    if (moved || pointerId === null) return;
+    if (prefersReducedMotion) {
+      triggerTriple();
+    } else {
+      startCharge();
+    }
+  }, WARMUP_MS);
+}
+
+function startCharge() {
   holding.value = true;
   progress.value = 0;
   const start = performance.now();
   const step = (now: number) => {
-    const t = Math.min(1, (now - start) / HOLD_MS);
+    const t = Math.min(1, (now - start) / CHARGE_MS);
     progress.value = t;
     if (t < 1) {
       rafId = requestAnimationFrame(step);
@@ -141,15 +162,8 @@ function onPointerDown(e: PointerEvent) {
   pointerId = e.pointerId;
 
   if (props.canTriple) {
-    if (prefersReducedMotion) {
-      // reduced-motion 下不画圆环，到时直接触发
-      holdTimer = setTimeout(() => {
-        holdTimer = null;
-        if (!moved) triggerTriple();
-      }, HOLD_MS);
-    } else {
-      startProgress();
-    }
+    // 先进入预热：预热期间不显示圆环，避免短按误出三连动画
+    startWarmup();
   }
 
   window.addEventListener("pointermove", onPointerMove, { passive: true });
