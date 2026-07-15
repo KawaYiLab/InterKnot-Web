@@ -166,6 +166,13 @@ export function useLightGallery() {
       escKey: true,
       enableDrag: true,
       enableSwipe: true,
+
+      // 移动端默认会隐藏 controls 与关闭按钮，这里只保留关闭按钮，方便用户退出画廊
+      mobileSettings: {
+        controls: false,
+        showCloseIcon: true,
+        download: false,
+      },
     });
 
     isOpen.value = true;
