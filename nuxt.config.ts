@@ -15,9 +15,8 @@ export default defineNuxtConfig({
   css: ["~/assets/styles/theme.css"],
   runtimeConfig: {
     public: {
-      // 本地 dev 可通過 .env 的 NUXT_PUBLIC_API_BASE_URL 覆蓋；
-      // 生產/分支預覽構建若未設置環境變量，則回落到生產 API，避免 Pages 預覽因空 base 連不上後端。
-      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || (process.dev ? "" : "https://ik.tiwat.cn"),
+      // 本地 dev 或 Pages 預覽構建可通過 .env 的 NUXT_PUBLIC_API_BASE_URL 指定後端地址。
+      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || "",
       appName: "绳网",
     },
   },
