@@ -170,7 +170,11 @@ const loadComments = async () => {
   if (isCommentLoadingCancelled || commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
   try {
-    const page = await api.getComments(postId.value, commentsCursor.value);
+    const page = await api.getComments(
+      postId.value,
+      commentsCursor.value,
+      commentsCursor.value === "",
+    );
     if (isCommentLoadingCancelled) return;
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;

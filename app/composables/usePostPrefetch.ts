@@ -46,8 +46,8 @@ export function usePostPrefetch() {
 
   const prefetchPost = (id: string) => {
     if (!import.meta.client || !id) return;
+    // 只预取委托详情；评论列表在弹窗/页面进入时强制拉取，避免旧缓存被预取污染
     void api.getPost(id).catch(() => {});
-    void api.getComments(id, "").catch(() => {});
   };
 
   const cancelPrefetch = () => {

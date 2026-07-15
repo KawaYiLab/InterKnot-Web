@@ -882,8 +882,19 @@ export function useApi() {
   const getComments = async (
     postId: string,
     endCur = "",
+    force = false,
   ): Promise<Pagination<Comment>> => {
     const start = parseStart(endCur);
+    // 弹窗/页面首次加载首屏评论时，强制让该帖子评论缓存失效，避免直接命中旧缓存
+    if (force && start === 0) {
+      const queryKey = qk.articles.comments(postId, start, DEFAULT_PAGE_SIZE);
+      const state = $queryClient?.getQueryState(queryKey);
+      // 如果已经有强制请求在 flight，直接复用该 promise，不再重复失效/重拉
+      if (state?.fetchStatus !== "fetching") {
+        // 只失效首屏，避免污染 loadMore 的后续分页缓存
+        invalidate(queryKey);
+      }
+    }
     return cachedRead(
       qk.articles.comments(postId, start, DEFAULT_PAGE_SIZE),
       async () => {
