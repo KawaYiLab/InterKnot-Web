@@ -75,12 +75,14 @@ useHead({ title: "权益中心" });
 
       <!-- Hero -->
       <section class="ik-bf__hero">
-        <h1 class="ik-bf__title">权益中心</h1>
+        <div class="ik-bf__hero-main">
+          <h1 class="ik-bf__title">权益中心</h1>
+          <p class="ik-bf__hero-hint">等级越高，创作空间越大</p>
+        </div>
         <div class="ik-bf__level-badge">
           <span class="ik-bf__level-num">Lv.{{ level }}</span>
           <span class="ik-bf__level-title">{{ levelTitle }}</span>
         </div>
-        <p class="ik-bf__hero-hint">等级越高，创作空间越大</p>
       </section>
 
       <!-- Current benefits -->
@@ -204,6 +206,12 @@ useHead({ title: "权益中心" });
   flex-direction: column;
   align-items: center;
   padding: 40px 0 12px;
+}
+
+.ik-bf__hero-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .ik-bf__title {
@@ -486,15 +494,145 @@ useHead({ title: "权益中心" });
 }
 
 /* ── Desktop ── */
-@media (min-width: 769px) {
+@media (min-width: 900px) {
   .ik-bf {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    padding-top: 40px;
+    padding-top: 48px;
+    padding-bottom: 80px;
   }
+
   .ik-bf__container {
-    width: 560px;
+    max-width: 960px;
+    gap: 20px;
+  }
+
+  /* 横向 hero：标题居左，等级徽章居右 */
+  .ik-bf__hero {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 4px 4px;
+  }
+
+  .ik-bf__title {
+    font-size: 32px;
+  }
+
+  .ik-bf__hero-hint {
+    margin: 6px 0 0;
+    font-size: 14px;
+  }
+
+  .ik-bf__hero-main {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ik-bf__level-badge {
+    margin-top: 0;
+    padding: 10px 18px;
+    background: rgba(18, 18, 20, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+  }
+
+  .ik-bf__level-num {
+    font-size: 22px;
+  }
+
+  .ik-bf__level-title {
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .ik-bf__cards {
+    gap: 16px;
+  }
+
+  .ik-bf__card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    padding: 22px 24px;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .ik-bf__card:hover {
+    border-color: rgba(70, 97, 253, 0.45);
+    transform: translateY(-2px);
+  }
+
+  .ik-bf__card-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .ik-bf__card-name {
+    flex: 1;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .ik-bf__card-value {
+    width: 100%;
+    order: 3;
+    font-size: 32px;
+    margin-top: 10px;
+  }
+
+  .ik-bf__card-next {
+    order: 4;
+    font-size: 12px;
+  }
+
+  .ik-bf__block-header {
+    padding: 24px 28px 0;
+  }
+
+  .ik-bf__block-title {
+    font-size: 19px;
+  }
+
+  .ik-bf__table {
+    padding: 14px 28px 6px;
+  }
+
+  .ik-bf__table-head .ik-bf__col {
+    font-size: 12px;
+  }
+
+  .ik-bf__table-row {
+    padding: 14px 0;
+  }
+
+  .ik-bf__table-row.is-current {
+    margin: 0 -28px;
+    padding: 14px 28px;
+  }
+
+  .ik-bf__row-num {
+    font-size: 15px;
+    min-width: 44px;
+  }
+
+  .ik-bf__row-title {
+    font-size: 13px;
+  }
+
+  .ik-bf__col--num {
+    font-size: 14px;
+  }
+
+  .ik-bf__notes {
+    padding: 10px 28px 20px;
+  }
+
+  .ik-bf__cta {
+    align-self: center;
+    width: 320px;
   }
 }
 

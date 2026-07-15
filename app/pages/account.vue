@@ -137,6 +137,8 @@ useHead({ title: "账号中心" });
         <p class="ik-ac__hero-hint">管理账号绑定与社交黑名单</p>
       </section>
 
+      <div class="ik-ac__grid">
+
       <!-- 米游社绑定 -->
       <section class="ik-ac__card">
         <div class="ik-ac__card-header">
@@ -261,6 +263,8 @@ useHead({ title: "账号中心" });
         </div>
       </section>
 
+      </div>
+
     </div>
   </div>
 </template>
@@ -295,6 +299,12 @@ useHead({ title: "账号中心" });
   max-width: 520px;
   margin: 0 auto;
   padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ik-ac__grid {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -584,15 +594,69 @@ useHead({ title: "账号中心" });
 }
 
 /* ── Desktop ── */
-@media (min-width: 769px) {
+@media (min-width: 900px) {
   .ik-ac {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    padding-top: 40px;
+    padding-top: 48px;
+    padding-bottom: 80px;
   }
+
   .ik-ac__container {
-    width: 520px;
+    max-width: 960px;
+    gap: 20px;
+  }
+
+  /* 横向 hero：标题居左 */
+  .ik-ac__hero {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 14px;
+    padding: 0 4px 4px;
+  }
+
+  .ik-ac__title {
+    font-size: 32px;
+  }
+
+  .ik-ac__hero-hint {
+    margin: 0;
+    font-size: 14px;
+  }
+
+  /* 双栏卡片 */
+  .ik-ac__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+
+  .ik-ac__card-header {
+    padding: 24px 28px 0;
+  }
+
+  .ik-ac__card-title {
+    font-size: 19px;
+  }
+
+  .ik-ac__card-body {
+    padding: 18px 28px 24px;
+  }
+
+  .ik-ac__card {
+    min-height: 340px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ik-ac__card-body {
+    flex: 1;
+    justify-content: flex-start;
+  }
+
+  .ik-ac__qr-box {
+    width: 200px;
+    height: 200px;
   }
 }
 
