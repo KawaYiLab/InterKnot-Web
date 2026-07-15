@@ -64,9 +64,9 @@ export function usePostModal() {
       url,
     );
 
-    // 预热委托详情与首屏评论，减少 PostOverlay 挂载后的等待与布局抖动
+    // 预热委托详情，减少 PostOverlay 挂载后的等待与布局抖动
+    // 首屏评论由 PostOverlay 挂载时强制拉取最新，避免命中旧缓存
     void api.getPost(id).catch(() => {});
-    void api.getComments(id, "").catch(() => {});
   }
 
   /**
