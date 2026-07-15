@@ -84,8 +84,6 @@ export default defineNuxtConfig({
         'lightgallery/plugins/zoom',
         'lightgallery/plugins/thumbnail',
         'lightgallery/plugins/fullscreen',
-        'lightgallery/plugins/rotate',
-        'lightgallery/plugins/autoplay',
       ],
     },
     resolve: {

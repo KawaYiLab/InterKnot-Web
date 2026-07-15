@@ -10,8 +10,6 @@ function ensureCss() {
     import("lightgallery/css/lg-zoom.css" as string),
     import("lightgallery/css/lg-thumbnail.css" as string),
     import("lightgallery/css/lg-fullscreen.css" as string),
-    import("lightgallery/css/lg-rotate.css" as string),
-    import("lightgallery/css/lg-autoplay.css" as string),
   ]);
   return cssLoaded;
 }
@@ -38,8 +36,6 @@ function ensureModules() {
     import("lightgallery/plugins/zoom"),
     import("lightgallery/plugins/thumbnail"),
     import("lightgallery/plugins/fullscreen"),
-    import("lightgallery/plugins/rotate"),
-    import("lightgallery/plugins/autoplay"),
     ensureCss(),
   ]);
   return modulesPromise;
@@ -103,8 +99,6 @@ export function useLightGallery() {
       { default: lgZoom },
       { default: lgThumbnail },
       { default: lgFullscreen },
-      { default: lgRotate },
-      { default: lgAutoplay },
     ] = await ensureModules();
     _finishLoading();
 
@@ -119,7 +113,7 @@ export function useLightGallery() {
         src: img.src,
         thumb: img.thumb || toThumbUrl(img.src),
       })),
-      plugins: [lgZoom, lgThumbnail, lgFullscreen, lgRotate, lgAutoplay],
+      plugins: [lgZoom, lgThumbnail, lgFullscreen],
 
       // 核心
       mode: "lg-fade",
@@ -145,21 +139,6 @@ export function useLightGallery() {
 
       // 全屏
       fullScreen: true,
-
-      // 旋转
-      rotateLeft: true,
-      rotateRight: true,
-      flipHorizontal: true,
-      flipVertical: true,
-
-      // 自动播放（多图时显示控件）
-      autoplay: multiImage,
-      autoplayControls: multiImage,
-      autoplayFirstVideo: false,
-      slideShowAutoplay: false,
-      slideShowInterval: 4000,
-      progressBar: true,
-      forceSlideShowAutoplay: false,
 
       // 交互
       mousewheel: true,
