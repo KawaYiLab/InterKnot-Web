@@ -268,15 +268,30 @@ const handleLevelClick = () => {
   background:
     radial-gradient(120% 120% at 50% 22%, #ffff8c 0%, #fdff42 38%, #f4f700 66%, #dfe200 100%);
   /* 由外到内：环形底座（从底栏“挖”出来的观感）→ 品牌光晕 → 接触阴影 →
-     顶部内高光 → 底部内阴影，叠出立体圆润的实体按钮 */
+     顶部内高光 → 底部内阴影，叠出立体圆润的实体按钮。
+     注意：box-shadow 不再参与关键帧动画，避免每一帧都触发重绘。 */
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.28),
     0 10px 22px rgba(251, 254, 0, 0.30),
     0 6px 14px rgba(0, 0, 0, 0.45),
     inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
     inset 0 -3px 6px rgba(150, 152, 0, 0.55);
-  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 180ms ease;
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 脉冲光晕使用 ::before 伪元素，通过 opacity 与 transform 做动画，
+   这两个属性可由合成器线程处理，不会像 box-shadow 那样每帧都重新绘制。 */
+.ik-mobile-nav__create-btn::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(251, 254, 0, 0.45) 0%, rgba(251, 254, 0, 0) 70%);
+  filter: blur(10px);
+  opacity: 0.6;
+  transform: scale(1);
+  z-index: -1;
+  pointer-events: none;
   animation: ik-mobile-nav-create-glow 2600ms ease-in-out infinite;
 }
 
@@ -288,7 +303,12 @@ const handleLevelClick = () => {
     0 2px 6px rgba(0, 0, 0, 0.5),
     inset 0 1.5px 1px rgba(255, 255, 255, 0.7),
     inset 0 -2px 5px rgba(150, 152, 0, 0.6);
+}
+
+.ik-mobile-nav__create-btn:active::before {
   animation: none;
+  opacity: 0.7;
+  transform: scale(0.92);
 }
 
 .ik-mobile-nav__create-icon {
@@ -302,20 +322,12 @@ const handleLevelClick = () => {
 @keyframes ik-mobile-nav-create-glow {
   0%,
   100% {
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.28),
-      0 10px 22px rgba(251, 254, 0, 0.28),
-      0 6px 14px rgba(0, 0, 0, 0.45),
-      inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
-      inset 0 -3px 6px rgba(150, 152, 0, 0.55);
+    opacity: 0.6;
+    transform: scale(1);
   }
   50% {
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.28),
-      0 12px 28px rgba(251, 254, 0, 0.5),
-      0 6px 14px rgba(0, 0, 0, 0.45),
-      inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
-      inset 0 -3px 6px rgba(150, 152, 0, 0.55);
+    opacity: 1;
+    transform: scale(1.12);
   }
 }
 
