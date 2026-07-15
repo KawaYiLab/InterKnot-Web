@@ -200,22 +200,9 @@ const stopMihoyoPolling = mihoyo.stopQr;
 // 菜单按钮文案随绑定状态变化，打开设置时先拉一次绑定信息
 const mihoyoMenuLabel = computed(() => (mihoyoBinding.value ? "查看米游社" : "绑定米游社"));
 
-onMounted(async () => {
-  try {
-    mihoyoBinding.value = await api.getMihoyoBinding();
-  } catch {
-    // 未登录/接口失败时保持未绑定文案
-  }
-  if (showBlocked.value) {
-    blockedCursor.value = "";
-    blockedHasNext.value = true;
-    blockedUsers.value = [];
-    await loadBlocked();
-  }
-});
-
-const openMihoyo = async () => {
-  openSub('mihoyo');
+// 刷新绑定状态并在未绑定时启动二维码流程。
+// 被 openMihoyo 和直接通过 ?modal=mihoyo 进入的场景共用。
+const refreshMihoyo = async () => {
   mihoyoLoading.value = true;
   mihoyoBinding.value = null;
   try {
@@ -228,6 +215,31 @@ const openMihoyo = async () => {
   if (!mihoyoBinding.value) {
     void startMihoyoQr();
   }
+};
+
+onMounted(async () => {
+  if (showMihoyo.value) {
+    // 直接通过 ?modal=mihoyo 进入：没有菜单 click 触发 openMihoyo，需要显式启动流程
+    await refreshMihoyo();
+  } else {
+    try {
+      mihoyoBinding.value = await api.getMihoyoBinding();
+    } catch {
+      // 未登录/接口失败时保持未绑定文案
+    }
+  }
+
+  if (showBlocked.value) {
+    blockedCursor.value = "";
+    blockedHasNext.value = true;
+    blockedUsers.value = [];
+    await loadBlocked();
+  }
+});
+
+const openMihoyo = async () => {
+  openSub('mihoyo');
+  await refreshMihoyo();
 };
 
 const closeMihoyo = () => {
@@ -644,6 +656,14 @@ onBeforeUnmount(() => {
                       <z-button size="small" @click="unblockUser(user)">取消拉黑</z-button>
                     </div>
 
+                    <div v-if="blockedLoading" class="ik-blocked-list__loading">加载中…</div>
+                    <z-button
+                      v-else-if="blockedHasNext"
+                      size="small"
+                      @click="loadBlocked"
+                    >
+                      加载更多
+                    </z-button>
                   </div>
                 </div>
               </div>
