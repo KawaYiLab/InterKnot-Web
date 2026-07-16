@@ -170,11 +170,6 @@ const accountMetaText = computed(() => {
   return "未绑定邮箱";
 });
 
-const logout = () => {
-  auth.clearSession();
-  void navigateTo("/");
-};
-
 const openEmail = () => {
   activeSubView.value = "email";
   bindEmailInput.value = security.value?.email || "";
@@ -353,11 +348,6 @@ useHead({ title: "账号中心" });
 
     <div class="ik-account-page__columns">
       <aside class="ik-account-page__nav">
-        <div class="ik-account-page__nav-header">
-          <h1 class="ik-account-page__title">账号中心</h1>
-          <p class="ik-account-page__subtitle">管理你的 InterKnot 身份、安全与连接</p>
-        </div>
-
         <z-menu class="ik-account-menu" :model-value="activeMenuKey" @change="onMenuChange">
           <z-menu-item name="account">
             <div class="ik-account-menu__content">
@@ -389,10 +379,6 @@ useHead({ title: "账号中心" });
             </div>
           </z-menu-item>
         </z-menu>
-
-        <button class="ik-account-page__logout" @click="logout">
-          退出登录
-        </button>
       </aside>
 
       <main class="ik-account-page__panel">
@@ -707,29 +693,6 @@ useHead({ title: "账号中心" });
   max-height: calc(100vh - 100px);
 }
 
-.ik-account-page__nav-header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 4px;
-}
-
-.ik-account-page__title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 800;
-  color: #fff;
-}
-
-.ik-account-page__subtitle {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: #888;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
 .ik-account-menu {
   flex: 1;
   min-height: 320px !important;
@@ -794,29 +757,6 @@ useHead({ title: "账号中心" });
   opacity: 1;
 }
 
-.ik-account-page__logout {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 12px;
-  border: 1px dashed #3a3a3a;
-  border-radius: 10px;
-  background: transparent;
-  color: #ff6b6b;
-  font-size: 14px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
-}
-
-.ik-account-page__logout:hover {
-  border-color: #ff6b6b;
-  background: rgba(255, 107, 107, 0.08);
-}
-
 /* ═════════ Right Panel ═════════ */
 .ik-account-page__panel {
   display: flex;
@@ -825,15 +765,15 @@ useHead({ title: "账号中心" });
   background: #2d2c2d;
   border-radius: 24px 0 24px 24px;
   overflow: hidden;
-  min-height: 480px;
+  min-height: 320px;
 }
 
 .ik-account-page__panel-body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px 26px 28px;
+  gap: 12px;
+  padding: 18px 20px 22px;
   background:
     url("/images/tab-bg-point.webp") repeat,
     linear-gradient(180deg, #0a0a0a 0%, #070707 100%);
@@ -1233,12 +1173,12 @@ useHead({ title: "账号中心" });
   }
 
   .ik-account-page__panel {
-    min-height: 320px;
+    min-height: 280px;
   }
 
   .ik-account-page__panel-body {
-    padding: 20px 20px 24px;
-    gap: 14px;
+    padding: 18px 18px 22px;
+    gap: 12px;
   }
 }
 
@@ -1254,16 +1194,12 @@ useHead({ title: "账号中心" });
     gap: 12px;
   }
 
-  .ik-account-page__title {
-    font-size: 20px;
-  }
-
   .ik-account-page__panel {
     border-radius: 14px;
   }
 
   .ik-account-page__panel-body {
-    padding: 16px 16px 20px;
+    padding: 14px 14px 18px;
     border-radius: 12px;
     border-width: 2px;
   }
@@ -1271,8 +1207,7 @@ useHead({ title: "账号中心" });
 
 @media (prefers-reduced-motion: reduce) {
   .ik-ac-btn,
-  .ik-ac-row,
-  .ik-account-page__logout {
+  .ik-ac-row {
     transition: none;
   }
 }
