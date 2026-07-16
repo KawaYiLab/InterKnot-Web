@@ -336,7 +336,7 @@ onMounted(() => {
   void loadBlocked();
 });
 
-useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
+useHead({ title: "账号中心" });
 </script>
 
 <template>
@@ -1337,9 +1337,3 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
 }
 </style>
 
-<style>
-/* 账号中心：全局跑马灯背景保持极低且均匀的透明度 */
-.ik-account-page .ik-zzz-marquee {
-  opacity: 0.05;
-}
-</style>
