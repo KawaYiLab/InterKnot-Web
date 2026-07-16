@@ -541,3 +541,83 @@ html.no-gpu .ik-card__views {
 html.no-gpu .ik-card__views-icon {
   filter: none !important;
 }
+
+/* ═══════════════════════════════════════════════════
+   无 GPU 弹窗性能降级
+   ─────────────────────────────────────────────────
+   弹窗入场 / 离场期间 backdrop-filter blur 会在 CPU 路径下每帧重算，
+   导致动画掉帧；同时斜线纹理、跑马灯、dialog 位移动画都会加重重绘。
+   这里统一关闭弹窗相关模糊、纹理和 CSS 过渡/动画。
+   ═══════════════════════════════════════════════════ */
+
+/* 关闭所有元素的 backdrop-filter，覆盖 ik-overlay / ik-img-overlay
+   以及各组件 scoped style 中的声明。 */
+html.no-gpu * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 用更深的纯色遮罩替代毛玻璃，保证可读性；同时覆盖 PostOverlay 变量。 */
+html.no-gpu .ik-overlay,
+html.no-gpu .ik-img-overlay {
+  background: rgba(0, 0, 0, 0.88) !important;
+}
+
+html.no-gpu .ik-overlay.ik-overlay {
+  --ik-overlay-bg: rgba(0, 0, 0, 0.88) !important;
+}
+
+html.no-gpu .ik-img-overlay__backdrop,
+html.no-gpu .ik-overlay__backdrop {
+  background: rgba(0, 0, 0, 0.88) !important;
+  opacity: 1 !important;
+}
+
+/* 隐藏弹窗内装饰性斜线纹理和跑马灯。 */
+html.no-gpu .ik-overlay__stripe,
+html.no-gpu .ik-zzz-marquee {
+  display: none !important;
+}
+
+/* 禁用 .ik-overlay 弹窗的入场 / 离场过渡，避免无 GPU 时 transform/opacity
+   动画造成持续重绘。 */
+html.no-gpu .ik-overlay-enter-active,
+html.no-gpu .ik-overlay-enter-active .ik-overlay__stripe,
+html.no-gpu .ik-overlay-enter-active .ik-overlay__backdrop,
+html.no-gpu .ik-overlay-enter-active .ik-dialog,
+html.no-gpu .ik-overlay-enter-active .ik-bc-dialog,
+html.no-gpu .ik-overlay-enter-active .ik-av-dialog,
+html.no-gpu .ik-overlay-enter-active .ik-img-dialog,
+html.no-gpu .ik-overlay-enter-active .ik-crop-dialog,
+html.no-gpu .ik-overlay-leave-active,
+html.no-gpu .ik-overlay-leave-active .ik-overlay__stripe,
+html.no-gpu .ik-overlay-leave-active .ik-overlay__backdrop,
+html.no-gpu .ik-overlay-leave-active .ik-dialog,
+html.no-gpu .ik-overlay-leave-active .ik-bc-dialog,
+html.no-gpu .ik-overlay-leave-active .ik-av-dialog,
+html.no-gpu .ik-overlay-leave-active .ik-img-dialog,
+html.no-gpu .ik-overlay-leave-active .ik-crop-dialog {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* 弹窗内非卡片的图片淡入也关闭。 */
+html.no-gpu .ik-overlay img:not(.ik-card__cover),
+html.no-gpu .ik-img-overlay img:not(.ik-card__cover) {
+  transition: none !important;
+}
+
+/* 其它常见弹窗 / 浮层淡入过渡统一关闭。 */
+html.no-gpu .ik-fade-enter-active,
+html.no-gpu .ik-fade-leave-active,
+html.no-gpu .ik-img-fade-enter-active,
+html.no-gpu .ik-img-fade-leave-active,
+html.no-gpu .ik-hovercard-enter-active,
+html.no-gpu .ik-hovercard-leave-active,
+html.no-gpu .ik-mobile-sheet-enter-active,
+html.no-gpu .ik-mobile-sheet-leave-active,
+html.no-gpu .ik-mobile-sheet-enter-active .ik-mobile-sheet__panel,
+html.no-gpu .ik-mobile-sheet-leave-active .ik-mobile-sheet__panel {
+  transition: none !important;
+  animation: none !important;
+}
