@@ -511,3 +511,16 @@ html.no-gpu .ik-zzz-marquee,
 html.no-gpu .ik-global-marquee {
   display: none !important;
 }
+
+/* 进一步关闭卡片 hover/入场动画，避免无 GPU 时移动鼠标或首屏加载触发持续重绘。 */
+html.no-gpu .ik-card__cover {
+  transition: none !important;
+}
+
+html.no-gpu .ik-card:hover .ik-card__cover {
+  --ik-cover-scale: 1 !important;
+}
+
+html.no-gpu .ik-masonry-card-enter {
+  animation: none !important;
+}

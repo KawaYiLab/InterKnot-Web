@@ -20,6 +20,7 @@ function markCoverLoaded(src: string) {
 import { computed, onMounted, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
+import { toThumbUrl } from "~/utils/image";
 import UserHoverCard from "./UserHoverCard.vue";
 
 const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
@@ -75,7 +76,9 @@ watch(
   ([newId, newCover], oldValue) => {
     if (oldValue && newId === oldValue[0] && newCover === oldValue[1]) return;
     const cover = newCover?.trim();
-    coverSrc.value = cover || DEFAULT_COVER_IMAGE;
+    // 瀑布流卡片尺寸不大，使用缩略图避免在 CPU / 无 GPU 路径下解码和绘制超大原图，
+    // 720px 宽度在常见列宽（~240px）下可覆盖 2x–3x DPR。
+    coverSrc.value = cover ? toThumbUrl(cover, 720) : DEFAULT_COVER_IMAGE;
     coverIsFallback.value = !cover;
     // 同一封面 URL 已加载过时，直接就绪，避免虚拟列表重挂载时重播过渡。
     coverImageLoaded.value = isCoverLoaded(coverSrc.value);
