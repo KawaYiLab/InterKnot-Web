@@ -1208,6 +1208,17 @@ useHead({ title: "账号中心" });
   }
 }
 
+@media (min-width: 901px) {
+  .ik-account-page__panel-body {
+    align-items: center;
+  }
+
+  .ik-account-page__panel-body > * {
+    width: 100%;
+    max-width: 640px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ik-ac-btn,
   .ik-ac-row {
