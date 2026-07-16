@@ -1,6 +1,7 @@
 import type { QueryClient, QueryKey } from "@tanstack/vue-query";
 import type { ApiClientError, Pagination } from "~/types/api";
 import type {
+  AccountSecurity,
   Author,
   Avatar,
   AvatarType,
@@ -1728,6 +1729,49 @@ export function useApi() {
     );
   };
 
+  // ── 账号安全（/api/me/security、邮箱绑定、密码设置） ─────────────
+
+  const getMySecurity = async (): Promise<AccountSecurity> => {
+    const response = await $api("/api/me/security");
+    const data = response as Record<string, unknown>;
+    return {
+      email: String(data.email || ""),
+      provider: data.provider === "local" ? "local" : "mihoyo",
+      hasBoundEmail: data.hasBoundEmail === true,
+      hasPassword: data.hasPassword === true,
+    };
+  };
+
+  const sendBindEmailCode = async (email: string): Promise<SendRegisterCodeResult> => {
+    const response = await $api("/api/me/email/send-code", {
+      method: "POST",
+      body: { email },
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      email: String(data.email || email),
+      sent: data.sent === true,
+      expiresIn: Number(data.expiresIn || 600),
+      cooldown: Number(data.cooldown || 60),
+    };
+  };
+
+  const bindEmail = async (email: string, code: string): Promise<AccountSecurity> => {
+    const response = await $api("/api/me/email", {
+      method: "PUT",
+      body: { email, code },
+    });
+    const data = response as Record<string, unknown>;
+    invalidate(qk.me.self);
+    invalidate(qk.me.profile);
+    return {
+      email: String(data.email || email),
+      provider: data.provider === "local" ? "local" : "mihoyo",
+      hasBoundEmail: data.hasBoundEmail === true,
+      hasPassword: data.hasPassword === true,
+    };
+  };
+
   const getPinnedArticles = async (
     limit?: number,
   ): Promise<{
@@ -2127,6 +2171,10 @@ export function useApi() {
     updateMyBio,
     updateMyVisibility,
     getMyProfileSettings,
+    // 账号安全
+    getMySecurity,
+    sendBindEmailCode,
+    bindEmail,
     getPinnedArticles,
     updatePinnedArticles,
     searchAuthors,

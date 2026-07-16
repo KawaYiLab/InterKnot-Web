@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
 import { resolveErrorMessage } from "~/utils/api-error";
-import type { BlockedUser, MihoyoBinding } from "~/types/entities";
+import type { AccountSecurity, BlockedUser, MihoyoBinding } from "~/types/entities";
 
 const auth = useAuthStore();
 const api = useApi();
@@ -78,6 +78,184 @@ const unbindMihoyo = async () => {
   }
 };
 
+// ── 账号安全 ──────────────────────────────
+const MIHOYO_PLACEHOLDER_EMAIL_SUFFIX = "@mihoyo-login.inter-knot.invalid";
+
+const security = ref<AccountSecurity | null>(null);
+const securityLoading = ref(false);
+const securityAction = ref<null | "bind-email" | "set-password">(null);
+
+const bindEmailInput = ref("");
+const bindCodeInput = ref("");
+const bindEmailLoading = ref(false);
+
+const setPasswordCodeInput = ref("");
+const setPasswordInput = ref("");
+const setPasswordConfirmInput = ref("");
+const setPasswordLoading = ref(false);
+
+const codeCooldown = ref(0);
+let codeCooldownTimer: ReturnType<typeof setInterval> | null = null;
+
+const startCodeCooldown = (seconds: number) => {
+  codeCooldown.value = seconds;
+  codeCooldownTimer = setInterval(() => {
+    codeCooldown.value -= 1;
+    if (codeCooldown.value <= 0 && codeCooldownTimer) {
+      clearInterval(codeCooldownTimer);
+      codeCooldownTimer = null;
+    }
+  }, 1000);
+};
+
+onBeforeUnmount(() => {
+  if (codeCooldownTimer) {
+    clearInterval(codeCooldownTimer);
+    codeCooldownTimer = null;
+  }
+});
+
+const loadSecurity = async () => {
+  if (!auth.isLogin) return;
+  securityLoading.value = true;
+  try {
+    security.value = await api.getMySecurity();
+  } catch {
+    // 后端 /api/me/security 尚未部署时的降级：根据 auth.user.email 推断
+    const email = auth.user?.email || "";
+    const isPlaceholder = email.endsWith(MIHOYO_PLACEHOLDER_EMAIL_SUFFIX);
+    security.value = {
+      email,
+      provider: isPlaceholder ? "mihoyo" : "local",
+      hasBoundEmail: !!email && !isPlaceholder,
+      hasPassword: !!email && !isPlaceholder,
+    };
+  } finally {
+    securityLoading.value = false;
+  }
+};
+
+const logout = () => {
+  auth.clearSession();
+  void navigateTo("/");
+};
+
+const startBindEmail = () => {
+  bindEmailInput.value = security.value?.email || "";
+  bindCodeInput.value = "";
+  securityAction.value = "bind-email";
+};
+
+const startSetPassword = () => {
+  setPasswordCodeInput.value = "";
+  setPasswordInput.value = "";
+  setPasswordConfirmInput.value = "";
+  securityAction.value = "set-password";
+};
+
+const cancelSecurityAction = () => {
+  securityAction.value = null;
+  bindEmailInput.value = "";
+  bindCodeInput.value = "";
+  setPasswordCodeInput.value = "";
+  setPasswordInput.value = "";
+  setPasswordConfirmInput.value = "";
+};
+
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+const sendBindEmailCode = async () => {
+  const email = bindEmailInput.value.trim();
+  if (!isValidEmail(email)) {
+    message.warning("请输入正确的邮箱");
+    return;
+  }
+  bindEmailLoading.value = true;
+  try {
+    const res = await api.sendBindEmailCode(email);
+    message.success("验证码已发送");
+    startCodeCooldown(res.cooldown || 60);
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "发送验证码失败"));
+  } finally {
+    bindEmailLoading.value = false;
+  }
+};
+
+const confirmBindEmail = async () => {
+  const email = bindEmailInput.value.trim();
+  const code = bindCodeInput.value.trim();
+  if (!isValidEmail(email) || !code) {
+    message.warning("请填写正确的邮箱和验证码");
+    return;
+  }
+  bindEmailLoading.value = true;
+  try {
+    const res = await api.bindEmail(email, code);
+    security.value = res;
+    auth.updateUserPartial({ email });
+    message.success("邮箱绑定成功");
+    cancelSecurityAction();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "绑定邮箱失败"));
+  } finally {
+    bindEmailLoading.value = false;
+  }
+};
+
+const sendSetPasswordCode = async () => {
+  if (!security.value?.hasBoundEmail || !security.value.email) {
+    message.warning("请先绑定邮箱");
+    return;
+  }
+  setPasswordLoading.value = true;
+  try {
+    const res = await api.sendResetCode(security.value.email);
+    message.success("验证码已发送");
+    startCodeCooldown(res.cooldown || 60);
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "发送验证码失败"));
+  } finally {
+    setPasswordLoading.value = false;
+  }
+};
+
+const confirmSetPassword = async () => {
+  const code = setPasswordCodeInput.value.trim();
+  const password = setPasswordInput.value;
+  const confirm = setPasswordConfirmInput.value;
+  if (!code || !password) {
+    message.warning("请填写验证码和新密码");
+    return;
+  }
+  if (password.length < 6) {
+    message.warning("密码长度不能少于 6 位");
+    return;
+  }
+  if (password !== confirm) {
+    message.warning("两次输入的密码不一致");
+    return;
+  }
+  if (!security.value?.hasBoundEmail || !security.value.email) {
+    message.warning("请先绑定邮箱");
+    return;
+  }
+  setPasswordLoading.value = true;
+  try {
+    await api.resetPassword(security.value.email, code, password);
+    if (security.value) {
+      security.value.hasPassword = true;
+      security.value.provider = "local";
+    }
+    message.success(security.value?.hasPassword ? "密码修改成功" : "密码设置成功");
+    cancelSecurityAction();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "设置密码失败"));
+  } finally {
+    setPasswordLoading.value = false;
+  }
+};
+
 // ── 黑名单管理 ──────────────────────────────
 const blockedUsers = ref<BlockedUser[]>([]);
 const blockedLoading = ref(false);
@@ -119,6 +297,7 @@ const unblockUser = async (user: BlockedUser) => {
 
 onMounted(() => {
   if (!auth.isLogin) return;
+  void loadSecurity();
   void loadMihoyo();
   void loadBlocked();
 });
@@ -134,10 +313,144 @@ useHead({ title: "账号中心" });
       <!-- Hero -->
       <section class="ik-ac__hero">
         <h1 class="ik-ac__title">账号中心</h1>
-        <p class="ik-ac__hero-hint">管理账号绑定与社交黑名单</p>
+        <p class="ik-ac__hero-hint">管理账号安全、绑定与社交黑名单</p>
       </section>
 
       <div class="ik-ac__grid">
+
+      <!-- 账号安全 -->
+      <section class="ik-ac__card">
+        <div class="ik-ac__card-header">
+          <h2 class="ik-ac__card-title">账号安全</h2>
+          <span
+            v-if="security"
+            class="ik-ac__badge"
+            :class="security.hasBoundEmail ? 'ik-ac__badge--on' : 'ik-ac__badge--off'"
+          >
+            {{ securityLoading ? '加载中' : security.hasBoundEmail ? '已绑定邮箱' : '未绑定邮箱' }}
+          </span>
+        </div>
+
+        <div class="ik-ac__card-body">
+          <template v-if="securityLoading">
+            <p class="ik-ac__loading">加载中…</p>
+          </template>
+
+          <template v-else-if="!securityAction">
+            <div class="ik-ac__security-list">
+              <div class="ik-ac__security-row">
+                <span class="ik-ac__security-label">邮箱</span>
+                <span
+                  class="ik-ac__security-value"
+                  :class="{ 'ik-ac__security-value--empty': !security?.hasBoundEmail }"
+                >
+                  {{ security?.hasBoundEmail ? security.email : '未绑定' }}
+                </span>
+                <button class="ik-ac__btn ik-ac__btn--small" @click="startBindEmail">
+                  {{ security?.hasBoundEmail ? '修改邮箱' : '绑定邮箱' }}
+                </button>
+              </div>
+
+              <div class="ik-ac__security-row">
+                <span class="ik-ac__security-label">密码</span>
+                <span
+                  class="ik-ac__security-value"
+                  :class="{ 'ik-ac__security-value--empty': !security?.hasPassword }"
+                >
+                  {{ security?.hasPassword ? '已设置' : '未设置' }}
+                </span>
+                <button
+                  class="ik-ac__btn ik-ac__btn--small"
+                  :disabled="!security?.hasBoundEmail"
+                  @click="startSetPassword"
+                >
+                  {{ security?.hasPassword ? '修改密码' : '设置密码' }}
+                </button>
+              </div>
+
+              <p v-if="security?.provider === 'mihoyo'" class="ik-ac__security-tip">
+                你当前通过米游社登录，建议绑定邮箱并设置密码，方便换设备登录和解绑米游社。
+              </p>
+
+              <button class="ik-ac__btn ik-ac__btn--danger" @click="logout">
+                退出登录
+              </button>
+            </div>
+          </template>
+
+          <template v-else-if="securityAction === 'bind-email'">
+            <div class="ik-ac__security-form">
+              <z-input
+                v-model="bindEmailInput"
+                type="email"
+                placeholder="请输入邮箱"
+              />
+              <div class="ik-ac__security-code">
+                <z-input v-model="bindCodeInput" placeholder="请输入验证码" />
+                <button
+                  class="ik-ac__btn ik-ac__btn--small"
+                  :disabled="codeCooldown > 0 || bindEmailLoading"
+                  @click="sendBindEmailCode"
+                >
+                  {{ bindEmailLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
+                </button>
+              </div>
+              <div class="ik-ac__security-actions">
+                <button
+                  class="ik-ac__btn"
+                  :disabled="bindEmailLoading"
+                  @click="confirmBindEmail"
+                >
+                  确认绑定
+                </button>
+                <button class="ik-ac__btn ik-ac__btn--ghost" @click="cancelSecurityAction">
+                  取消
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <template v-else-if="securityAction === 'set-password'">
+            <div class="ik-ac__security-form">
+              <p class="ik-ac__security-send-hint">
+                验证码将发送至 {{ security?.email }}
+              </p>
+              <div class="ik-ac__security-code">
+                <z-input v-model="setPasswordCodeInput" placeholder="请输入验证码" />
+                <button
+                  class="ik-ac__btn ik-ac__btn--small"
+                  :disabled="codeCooldown > 0 || setPasswordLoading"
+                  @click="sendSetPasswordCode"
+                >
+                  {{ setPasswordLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
+                </button>
+              </div>
+              <z-input
+                v-model="setPasswordInput"
+                type="password"
+                placeholder="新密码（至少 6 位）"
+              />
+              <z-input
+                v-model="setPasswordConfirmInput"
+                type="password"
+                placeholder="确认新密码"
+              />
+              <div class="ik-ac__security-actions">
+                <button
+                  class="ik-ac__btn"
+                  :disabled="setPasswordLoading"
+                  @click="confirmSetPassword"
+                >
+                  确认
+                </button>
+                <button class="ik-ac__btn ik-ac__btn--ghost" @click="cancelSecurityAction">
+                  取消
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
 
       <!-- 米游社绑定 -->
       <section class="ik-ac__card">
@@ -591,6 +904,95 @@ useHead({ title: "账号中心" });
   width: 100%;
   background: rgba(255, 255, 255, 0.05);
   color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── 账号安全 ── */
+.ik-ac__security-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.ik-ac__security-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+}
+
+.ik-ac__security-label {
+  flex-shrink: 0;
+  width: 44px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.ik-ac__security-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ik-ac__security-value--empty {
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 400;
+}
+
+.ik-ac__security-tip {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(191, 255, 9, 0.06);
+  border: 1px solid rgba(191, 255, 9, 0.12);
+  border-radius: 12px;
+}
+
+.ik-ac__security-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.ik-ac__security-form :deep(.z-input) {
+  width: 100%;
+}
+
+.ik-ac__security-code {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ik-ac__security-code :deep(.z-input) {
+  flex: 1;
+}
+
+.ik-ac__security-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.ik-ac__security-actions .ik-ac__btn {
+  flex: 1;
+}
+
+.ik-ac__security-send-hint {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
 }
 
 /* ── Desktop ── */
