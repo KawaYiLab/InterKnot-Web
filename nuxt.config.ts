@@ -42,7 +42,7 @@ export default defineNuxtConfig({
           content: "width=device-width, initial-scale=1, viewport-fit=cover",
         },
         { name: "color-scheme", content: "dark" },
-        { name: "theme-color", content: "#000000" },
+        { name: "theme-color", content: "#D2BFE8" },
         { name: "description", content: "绳网是一个游戏、技术交流平台" },
         { property: "og:type", content: "website" },
         { property: "og:site_name", content: "绳网" },

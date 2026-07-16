@@ -768,8 +768,8 @@ watch(
 
 .ik-header__progress-bar {
   height: 100%;
-  background: #fbfe00;
-  box-shadow: 0 0 8px rgba(251, 254, 0, 0.6);
+  background: var(--ik-primary);
+  box-shadow: 0 0 8px rgba(210, 191, 232, 0.6);
   transition: width 0.2s ease;
 }
 
@@ -943,7 +943,7 @@ watch(
 .ik-search-suggest__title :deep(mark),
 .ik-search-suggest__excerpt :deep(mark) {
   background: transparent;
-  color: #fbfe00;
+  color: var(--ik-primary);
   font-weight: 600;
 }
 
@@ -1177,8 +1177,8 @@ watch(
 }
 
 .ik-search-input :deep(.z-input.is-focused) {
-  border-color: rgba(215, 255, 0, 0.55);
-  box-shadow: 0 0 0 2px rgba(215, 255, 0, 0.12);
+  border-color: rgba(210, 191, 232, 0.55);
+  box-shadow: 0 0 0 2px rgba(210, 191, 232, 0.12);
 }
 
 .ik-search-input :deep(.z-input__inner) {
@@ -1242,13 +1242,13 @@ watch(
 }
 
 .ik-search-action:hover {
-  background: rgba(215, 255, 0, 0.15);
-  color: #fbfe00;
+  background: rgba(210, 191, 232, 0.15);
+  color: var(--ik-primary);
 }
 
 .ik-search-action:active {
-  background: rgba(215, 255, 0, 0.25);
-  color: #fbfe00;
+  background: rgba(210, 191, 232, 0.25);
+  color: var(--ik-primary);
 }
 
 .ik-header-tabs {
@@ -1284,7 +1284,7 @@ watch(
 }
 
 .ik-header-tab:focus-visible {
-  outline: 2px solid rgba(215, 255, 0, 0.7);
+  outline: 2px solid rgba(210, 191, 232, 0.7);
   outline-offset: 4px;
 }
 
@@ -1338,7 +1338,7 @@ watch(
   top: 0;
   z-index: 1;
   height: 42px;
-  color: #fbfe00;
+  color: #F8D6E4;
   opacity: 0;
   pointer-events: none;
   transform: scale(1.1);
@@ -1369,11 +1369,11 @@ watch(
 
 @keyframes ik-tab-highlight-color {
   from {
-    color: #fbfe00;
+    color: #F8D6E4;
   }
 
   to {
-    color: #dcfe00;
+    color: #D2BFE8;
   }
 }
 
@@ -1419,7 +1419,7 @@ watch(
 }
 
 .ik-mobile-avatar:active .ik-mobile-avatar__img {
-  border-color: rgba(191, 255, 9, 0.4);
+  border-color: rgba(210, 191, 232, 0.4);
 }
 
 @media (max-width: 1180px) {
@@ -1679,7 +1679,7 @@ watch(
 }
 
 .ik-header-denny:hover::after {
-  /* Hover 态亮起内框：使用项目标准荧光黄绿品牌色 */
+  /* Hover 态亮起内框：使用项目标准品牌色 */
   box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4), inset 0 0 0 3px var(--ik-primary), inset 0 0 0 4px #000;
 }
 
