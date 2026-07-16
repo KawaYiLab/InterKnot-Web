@@ -157,12 +157,7 @@ const onPinnedSaved = (pinned: string[] | null) => {
   emit("pinnedUpdated", pinned);
 };
 
-// ── 权益中心 / 账号中心（独立页面） ──────────────
-const openBenefitsCenter = () => {
-  emit("close");
-  void navigateTo("/benefits");
-};
-
+// ── 账号中心（独立页面） ──────────────
 const openAccountCenter = () => {
   emit("close");
   void navigateTo("/account");
@@ -312,7 +307,6 @@ onBeforeUnmount(() => {
               <z-button @click="openEditBio">修改签名</z-button>
               <z-button @click="openPinned">修改委托展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
-              <z-button @click="openBenefitsCenter">权益中心</z-button>
               <z-button @click="openAccountCenter">账号中心</z-button>
               <z-button @click="openLogout">退出登录</z-button>
             </div>

@@ -7,6 +7,7 @@ import {
   MAX_LEVEL,
   expNeededWithinLevel,
 } from "~/utils/level";
+import { BENEFIT_MAX_LEVEL, BENEFIT_MATRIX } from "~/utils/benefits";
 
 const auth = useAuthStore();
 const api = useApi();
@@ -159,6 +160,17 @@ const levelGuideRows = Array.from({ length: MAX_LEVEL }, (_, i) => {
     title: LEVEL_TITLES[level] ?? "",
     totalExp: LEVEL_THRESHOLDS[i] ?? 0,
     spanExp: level < MAX_LEVEL ? expNeededWithinLevel(level) : 0,
+  };
+});
+
+const benefitRows = Array.from({ length: BENEFIT_MAX_LEVEL }, (_, i) => {
+  const lv = i + 1;
+  return {
+    level: lv,
+    title: LEVEL_TITLES[lv] ?? "",
+    articleMaxImages: BENEFIT_MATRIX.articleMaxImages[lv]!,
+    commentMaxImages: BENEFIT_MATRIX.commentMaxImages[lv]!,
+    articleMaxBody: BENEFIT_MATRIX.articleMaxBody[lv]!,
   };
 });
 
@@ -358,6 +370,40 @@ useHead({ title: "绳网等级" });
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- 创作权益 -->
+      <section class="ik-lv__card ik-lv__card--benefits">
+        <div class="ik-lv__card-header">
+          <h2 class="ik-lv__card-title">创作权益</h2>
+        </div>
+        <div class="ik-lv__benefits">
+          <div class="ik-lv__benefits-head">
+            <span class="ik-lv__benefits-col ik-lv__benefits-col--level">等级</span>
+            <span class="ik-lv__benefits-col">发帖图片</span>
+            <span class="ik-lv__benefits-col">评论图片</span>
+            <span class="ik-lv__benefits-col">正文字数</span>
+          </div>
+          <div
+            v-for="row in benefitRows"
+            :key="row.level"
+            class="ik-lv__benefits-row"
+            :class="{ 'is-current': row.level === userLevel }"
+          >
+            <span class="ik-lv__benefits-col ik-lv__benefits-col--level">
+              <span class="ik-lv__benefits-num">Lv.{{ row.level }}</span>
+              <span class="ik-lv__benefits-title">{{ row.title }}</span>
+            </span>
+            <span class="ik-lv__benefits-col ik-lv__benefits-col--num">{{ row.articleMaxImages }}</span>
+            <span class="ik-lv__benefits-col ik-lv__benefits-col--num">{{ row.commentMaxImages }}</span>
+            <span class="ik-lv__benefits-col ik-lv__benefits-col--num">{{ formatExp(row.articleMaxBody) }}</span>
+          </div>
+        </div>
+        <ul class="ik-lv__benefits-notes">
+          <li>单张图片大小上限 10MB，全等级一致。</li>
+          <li>未通过入站考试（Lv.0）暂无法发布委托与评论。</li>
+          <li>已发布的内容不受等级调整影响，仅在新建 / 编辑时生效。</li>
+        </ul>
       </section>
 
     </div>
@@ -853,6 +899,134 @@ useHead({ title: "绳网等级" });
   color: rgba(251, 254, 0, 0.5);
 }
 
+/* ── 创作权益 ── */
+.ik-lv__benefits {
+  padding: 12px 20px 4px;
+}
+
+.ik-lv__benefits-head,
+.ik-lv__benefits-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
+}
+
+.ik-lv__benefits-head {
+  padding: 6px 0 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ik-lv__benefits-head .ik-lv__benefits-col {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: right;
+}
+
+.ik-lv__benefits-head .ik-lv__benefits-col--level {
+  text-align: left;
+}
+
+.ik-lv__benefits-row {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.2s;
+}
+
+.ik-lv__benefits-row:last-child {
+  border-bottom: none;
+}
+
+.ik-lv__benefits-row.is-current {
+  background: rgba(70, 97, 253, 0.08);
+  margin: 0 -20px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  border-bottom-color: transparent;
+}
+
+.ik-lv__benefits-col--level {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ik-lv__benefits-num {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  min-width: 36px;
+}
+
+.ik-lv__benefits-row.is-current .ik-lv__benefits-num {
+  background: linear-gradient(135deg, #4661fd, #10bff0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ik-lv__benefits-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ik-lv__benefits-row.is-current .ik-lv__benefits-title {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ik-lv__benefits-col--num {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ik-lv__benefits-row.is-current .ik-lv__benefits-col--num {
+  color: #fff;
+}
+
+.ik-lv__benefits-notes {
+  margin: 0;
+  padding: 10px 20px 16px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ik-lv__benefits-notes li {
+  position: relative;
+  padding-left: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.ik-lv__benefits-notes li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.7em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+@media (max-width: 380px) {
+  .ik-lv__benefits-title {
+    display: none;
+  }
+}
+
 /* ── Desktop: limit width + center ── */
 @media (min-width: 769px) {
   .ik-lv {
@@ -867,6 +1041,7 @@ useHead({ title: "绳网等级" });
   .ik-lv__ring-fill { transition: none; }
   .ik-lv__checkin-btn { transition: none; }
   .ik-lv__chevron { transition: none; }
+  .ik-lv__benefits-row { transition: none; }
   .ik-lv-expand-enter-active,
   .ik-lv-expand-leave-active { transition: none; }
 }

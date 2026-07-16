@@ -6,6 +6,7 @@ const auth = useAuthStore();
 const router = useRouter();
 const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
+const benefitsModal = useBenefitsModal();
 
 if (import.meta.client) {
   auth.hydrateFromStorage();
@@ -100,7 +101,7 @@ const showMobileBottomNav = computed(
 // 弹窗 backdrop-filter 模糊之后 → 迫使模糊每帧重算。此时暂停它（弹窗自带的
 // 那份跑马灯照常显示），缓解「点开弹窗卡顿」。
 const overlayOpen = computed(
-  () => postModal.isOpen.value || knockModal.visible.value,
+  () => postModal.isOpen.value || knockModal.visible.value || benefitsModal.visible.value,
 );
 </script>
 
@@ -129,6 +130,15 @@ const overlayOpen = computed(
     <!-- 确认弹窗 -->
     <ClientOnly>
       <LazyConfirmDialog />
+    </ClientOnly>
+
+    <!-- 创作权益弹窗 -->
+    <ClientOnly>
+      <Teleport to="body">
+        <Transition name="ik-overlay" appear>
+          <LazyBenefitsModal v-if="benefitsModal.visible.value" />
+        </Transition>
+      </Teleport>
     </ClientOnly>
 
     <!-- 举报弹窗 -->
