@@ -39,11 +39,13 @@ export function useBenefits() {
   });
 
   const refresh = async () => {
-    if (loading.value) return;
+    const forIdentity = identity.value;
     loading.value = true;
-    fetchedFor.value = identity.value;
+    fetchedFor.value = forIdentity;
     try {
       const data = await api.getMyBenefits();
+      // 请求期间登出/切号则丢弃过期响应，由 watcher 重新拉取
+      if (identity.value !== forIdentity) return;
       serverState.value = {
         level: data.level,
         benefits: data.benefits,
@@ -54,17 +56,25 @@ export function useBenefits() {
     } catch {
       // 接口失败时保持本地矩阵兜底
     } finally {
-      loading.value = false;
+      if (fetchedFor.value === forIdentity) {
+        loading.value = false;
+      }
     }
   };
 
   if (import.meta.client) {
+    // 身份变化（登录/登出/切号）或同一用户等级变化（升级）时重新拉取
     watch(
-      identity,
-      () => {
-        if (loading.value && fetchedFor.value === identity.value) return;
-        if (serverState.value && fetchedFor.value === identity.value) return;
-        serverState.value = null;
+      [identity, fallbackLevel] as const,
+      ([id], prev) => {
+        if (loading.value && fetchedFor.value === id) return;
+        const identityChanged = prev == null || prev[0] !== id;
+        if (identityChanged) {
+          serverState.value = null;
+        } else if (serverState.value && fetchedFor.value === id && serverState.value.level === fallbackLevel.value) {
+          return;
+        }
+        // 身份变化时清空重拉；等级变化时保留旧值展示、后台刷新
         refresh();
       },
       { immediate: true },
