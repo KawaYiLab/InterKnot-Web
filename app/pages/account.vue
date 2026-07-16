@@ -15,8 +15,14 @@ if (import.meta.client && !auth.isLogin) {
 }
 
 // ── 页面视图 ─────────────────────────────────
-type AccountView = "list" | "email" | "password" | "mihoyo" | "blacklist";
-const activeView = ref<AccountView>("list");
+type AccountView = "" | "email" | "password" | "mihoyo" | "blacklist";
+const activeView = ref<AccountView>("");
+
+const sidebarActive = computed(() => {
+  if (!activeView.value) return "account";
+  if (activeView.value === "email" || activeView.value === "password") return "account";
+  return activeView.value;
+});
 
 // ── 米游社绑定 ─────────────────────────────
 const mihoyoBinding = ref<MihoyoBinding | null>(null);
@@ -156,21 +162,21 @@ const logout = () => {
 };
 
 const openEmail = () => {
+  activeView.value = "email";
   bindEmailInput.value = security.value?.email || "";
   bindCodeInput.value = "";
-  activeView.value = "email";
 };
 
 const openPassword = () => {
+  activeView.value = "password";
   setPasswordCodeInput.value = "";
   setPasswordInput.value = "";
   setPasswordConfirmInput.value = "";
-  activeView.value = "password";
 };
 
 const goBack = () => {
   stopMihoyoQr();
-  activeView.value = "list";
+  activeView.value = "";
   bindEmailInput.value = "";
   bindCodeInput.value = "";
   setPasswordCodeInput.value = "";
@@ -330,76 +336,149 @@ onMounted(() => {
   void loadBlocked();
 });
 
-useHead({ title: "账号中心" });
+useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
 </script>
 
 <template>
-  <div class="ik-ac">
+  <div class="ik-ac" :class="{ 'ik-ac--detail': !!activeView }">
     <div class="ik-ac__container">
-      <!-- 列表页 -->
-      <template v-if="activeView === 'list'">
-        <header class="ik-ac__header">
-          <h1 class="ik-ac__title">账号中心</h1>
-          <p class="ik-ac__subtitle">管理账号安全、绑定与社交账号</p>
-        </header>
+      <header class="ik-ac__header">
+        <h1 class="ik-ac__title">账号中心</h1>
+        <p class="ik-ac__subtitle">管理你的 InterKnot 身份、安全与连接</p>
+      </header>
 
-        <section class="ik-ac__group">
-          <h2 class="ik-ac__group-title">账号</h2>
-          <button class="ik-ac__row" @click="openEmail">
-            <span class="ik-ac__row-label">邮箱</span>
-            <span class="ik-ac__row-value" :class="{ 'is-empty': !security?.hasBoundEmail && !securityLoading }">
-              {{ securityLoading ? '加载中' : security?.hasBoundEmail ? security.email : '未绑定' }}
-            </span>
-            <span class="ik-ac__row-chevron" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-            </span>
+      <aside class="ik-ac__sidebar">
+        <nav class="ik-ac__nav">
+          <button
+            class="ik-ac__nav-item"
+            :class="{ 'is-active': sidebarActive === 'account' }"
+            @click="activeView = ''"
+          >
+            账号
           </button>
-          <button class="ik-ac__row" @click="openPassword">
-            <span class="ik-ac__row-label">密码</span>
-            <span class="ik-ac__row-value" :class="{ 'is-empty': !security?.hasPassword && !securityLoading }">
-              {{ securityLoading ? '加载中' : security?.hasPassword ? '已设置' : '未设置' }}
-            </span>
-            <span class="ik-ac__row-chevron" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-            </span>
+          <button
+            class="ik-ac__nav-item"
+            :class="{ 'is-active': sidebarActive === 'mihoyo' }"
+            @click="openMihoyo"
+          >
+            连接
           </button>
-        </section>
+          <button
+            class="ik-ac__nav-item"
+            :class="{ 'is-active': sidebarActive === 'blacklist' }"
+            @click="openBlacklist"
+          >
+            隐私
+          </button>
+        </nav>
+        <button class="ik-ac__nav-item ik-ac__nav-item--danger" @click="logout">
+          退出登录
+        </button>
+      </aside>
 
-        <section class="ik-ac__group">
-          <h2 class="ik-ac__group-title">连接</h2>
-          <button class="ik-ac__row" @click="openMihoyo">
-            <span class="ik-ac__row-label">米哈游账号</span>
-            <span class="ik-ac__row-value" :class="{ 'is-empty': !mihoyoBinding && !mihoyoLoading }">
-              {{ mihoyoLoading ? '加载中' : mihoyoBinding ? (mihoyoBinding.zzzNickname || '已绑定') : '未绑定' }}
-            </span>
-            <span class="ik-ac__row-chevron" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-            </span>
-          </button>
-        </section>
+      <main class="ik-ac__content">
+        <!-- 概览（移动端列表 / 桌面端账号概览） -->
+        <div v-if="!activeView" class="ik-ac__overview">
+          <!-- 移动端列表 -->
+          <div class="ik-ac__overview-mobile">
+            <section class="ik-ac__group">
+              <h2 class="ik-ac__group-title">账号</h2>
+              <button class="ik-ac__row" @click="openEmail">
+                <span class="ik-ac__row-label">邮箱</span>
+                <span
+                  class="ik-ac__row-value"
+                  :class="{ 'is-empty': !security?.hasBoundEmail && !securityLoading }"
+                >
+                  {{ securityLoading ? '加载中' : security?.hasBoundEmail ? security.email : '未绑定' }}
+                </span>
+                <span class="ik-ac__row-chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+              <button class="ik-ac__row" @click="openPassword">
+                <span class="ik-ac__row-label">密码</span>
+                <span
+                  class="ik-ac__row-value"
+                  :class="{ 'is-empty': !security?.hasPassword && !securityLoading }"
+                >
+                  {{ securityLoading ? '加载中' : security?.hasPassword ? '已设置' : '未设置' }}
+                </span>
+                <span class="ik-ac__row-chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+            </section>
 
-        <section class="ik-ac__group">
-          <h2 class="ik-ac__group-title">隐私</h2>
-          <button class="ik-ac__row" @click="openBlacklist">
-            <span class="ik-ac__row-label">黑名单</span>
-            <span class="ik-ac__row-value">{{ blockedCountText }}</span>
-            <span class="ik-ac__row-chevron" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-            </span>
-          </button>
-        </section>
+            <section class="ik-ac__group">
+              <h2 class="ik-ac__group-title">连接</h2>
+              <button class="ik-ac__row" @click="openMihoyo">
+                <span class="ik-ac__row-label">米哈游账号</span>
+                <span
+                  class="ik-ac__row-value"
+                  :class="{ 'is-empty': !mihoyoBinding && !mihoyoLoading }"
+                >
+                  {{ mihoyoLoading ? '加载中' : mihoyoBinding ? (mihoyoBinding.zzzNickname || '已绑定') : '未绑定' }}
+                </span>
+                <span class="ik-ac__row-chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+            </section>
 
-        <section class="ik-ac__group">
-          <h2 class="ik-ac__group-title">危险操作</h2>
-          <button class="ik-ac__row ik-ac__row--danger" @click="logout">
-            <span class="ik-ac__row-label">退出登录</span>
-          </button>
-        </section>
-      </template>
+            <section class="ik-ac__group">
+              <h2 class="ik-ac__group-title">隐私</h2>
+              <button class="ik-ac__row" @click="openBlacklist">
+                <span class="ik-ac__row-label">黑名单</span>
+                <span class="ik-ac__row-value">{{ blockedCountText }}</span>
+                <span class="ik-ac__row-chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+            </section>
 
-      <!-- 邮箱详情 -->
-      <template v-else-if="activeView === 'email'">
-        <div class="ik-ac__detail">
+            <section class="ik-ac__group">
+              <h2 class="ik-ac__group-title">危险操作</h2>
+              <button class="ik-ac__row ik-ac__row--danger" @click="logout">
+                <span class="ik-ac__row-label">退出登录</span>
+              </button>
+            </section>
+          </div>
+
+          <!-- 桌面端账号概览 -->
+          <div class="ik-ac__overview-desktop">
+            <section class="ik-ac__section">
+              <h3 class="ik-ac__section-title">账号</h3>
+              <div class="ik-ac__section-divider" />
+              <button class="ik-ac__row" @click="openEmail">
+                <span class="ik-ac__row-label">邮箱</span>
+                <span
+                  class="ik-ac__row-value"
+                  :class="{ 'is-empty': !security?.hasBoundEmail && !securityLoading }"
+                >
+                  {{ securityLoading ? '加载中' : security?.hasBoundEmail ? security.email : '未绑定' }}
+                </span>
+                <span class="ik-ac__row-chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+              <button class="ik-ac__row" @click="openPassword">
+                <span class="ik-ac__row-label">密码</span>
+                <span
+                  class="ik-ac__row-value"
+                  :class="{ 'is-empty': !security?.hasPassword && !securityLoading }"
+                >
+                  {{ securityLoading ? '加载中' : security?.hasPassword ? '已设置' : '未设置' }}
+                </span>
+                <span class="ik-ac__row-chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+            </section>
+          </div>
+        </div>
+
+        <!-- 邮箱详情 -->
+        <div v-else-if="activeView === 'email'" class="ik-ac__detail">
           <header class="ik-ac__detail-header">
             <button class="ik-ac__back" aria-label="返回" @click="goBack">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -438,11 +517,9 @@ useHead({ title: "账号中心" });
             </template>
           </div>
         </div>
-      </template>
 
-      <!-- 密码详情 -->
-      <template v-else-if="activeView === 'password'">
-        <div class="ik-ac__detail">
+        <!-- 密码详情 -->
+        <div v-else-if="activeView === 'password'" class="ik-ac__detail">
           <header class="ik-ac__detail-header">
             <button class="ik-ac__back" aria-label="返回" @click="goBack">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -493,11 +570,9 @@ useHead({ title: "账号中心" });
             </template>
           </div>
         </div>
-      </template>
 
-      <!-- 米游社详情 -->
-      <template v-else-if="activeView === 'mihoyo'">
-        <div class="ik-ac__detail">
+        <!-- 米游社详情 -->
+        <div v-else-if="activeView === 'mihoyo'" class="ik-ac__detail">
           <header class="ik-ac__detail-header">
             <button class="ik-ac__back" aria-label="返回" @click="goBack">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -565,11 +640,9 @@ useHead({ title: "账号中心" });
             </template>
           </div>
         </div>
-      </template>
 
-      <!-- 黑名单详情 -->
-      <template v-else-if="activeView === 'blacklist'">
-        <div class="ik-ac__detail">
+        <!-- 黑名单详情 -->
+        <div v-else-if="activeView === 'blacklist'" class="ik-ac__detail">
           <header class="ik-ac__detail-header">
             <button class="ik-ac__back" aria-label="返回" @click="goBack">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -621,7 +694,7 @@ useHead({ title: "账号中心" });
             </button>
           </div>
         </div>
-      </template>
+      </main>
     </div>
   </div>
 </template>
@@ -637,15 +710,20 @@ useHead({ title: "账号中心" });
 .ik-ac__container {
   position: relative;
   z-index: 1;
-  max-width: 600px;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "header"
+    "content";
+  gap: 24px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 0 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  align-items: start;
 }
 
 .ik-ac__header {
+  grid-area: header;
   padding: 24px 0 8px;
 }
 
@@ -662,7 +740,80 @@ useHead({ title: "账号中心" });
   color: rgba(255, 255, 255, 0.35);
 }
 
-/* ── Grouped list ── */
+.ik-ac__sidebar {
+  display: none;
+  grid-area: sidebar;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.ik-ac__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ik-ac__nav-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.ik-ac__nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.ik-ac__nav-item.is-active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.ik-ac__nav-item--danger {
+  color: #ff6b6b;
+}
+
+.ik-ac__nav-item--danger:hover {
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.ik-ac__content {
+  grid-area: content;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── Overview ── */
+.ik-ac__overview {
+  display: contents;
+}
+
+.ik-ac__overview-mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ik-ac__overview-desktop {
+  display: none;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* ── Mobile grouped list ── */
 .ik-ac__group {
   display: flex;
   flex-direction: column;
@@ -676,6 +827,7 @@ useHead({ title: "账号中心" });
   letter-spacing: 0.5px;
 }
 
+/* ── Rows ── */
 .ik-ac__row {
   display: flex;
   align-items: center;
@@ -735,6 +887,25 @@ useHead({ title: "账号中心" });
   justify-content: center;
   color: #ff6b6b;
   border-bottom: none;
+}
+
+/* ── Desktop section ── */
+.ik-ac__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ik-ac__section-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ik-ac__section-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* ── Detail view ── */
@@ -1032,15 +1203,42 @@ useHead({ title: "账号中心" });
   }
 
   .ik-ac__container {
-    max-width: 600px;
+    grid-template-columns: 220px 1fr;
+    grid-template-areas:
+      "header header"
+      "sidebar content";
+    gap: 40px;
+    padding: 0 40px;
+  }
+
+  .ik-ac__sidebar {
+    display: flex;
+    position: sticky;
+    top: 48px;
   }
 
   .ik-ac__header {
-    padding: 12px 0 16px;
+    padding: 12px 0 0;
   }
 
   .ik-ac__title {
     font-size: 24px;
+  }
+
+  .ik-ac__overview-mobile {
+    display: none;
+  }
+
+  .ik-ac__overview-desktop {
+    display: flex;
+  }
+
+  .ik-ac__content {
+    gap: 32px;
+  }
+
+  .ik-ac__detail {
+    padding-top: 0;
   }
 
   .ik-ac__detail-body {
@@ -1048,10 +1246,24 @@ useHead({ title: "账号中心" });
   }
 }
 
+@media (max-width: 899px) {
+  .ik-ac--detail .ik-ac__header {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ik-ac__btn,
-  .ik-ac__row {
+  .ik-ac__row,
+  .ik-ac__nav-item {
     transition: none;
   }
+}
+</style>
+
+<style>
+/* 降低账号中心全局跑马灯背景透明度，避免内容显得空旷 */
+.ik-account-page .ik-zzz-marquee {
+  opacity: 0.06;
 }
 </style>
