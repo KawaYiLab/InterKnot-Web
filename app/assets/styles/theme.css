@@ -499,3 +499,15 @@ body.is-page-blurred .ik-header-tab.is-active .ik-tab-highlight {
     transition: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════
+   无 GPU 加速降级
+   ─────────────────────────────────────────────────
+   当 useGpuAccelerated 检测到浏览器使用 SwiftShader / Software
+   等软件渲染器时，给 html 添加 .no-gpu。此时关闭全屏跑马灯，
+   避免 CPU 路径下超大移动文字导致滚动重绘掉帧。
+   ═══════════════════════════════════════════════════ */
+html.no-gpu .ik-zzz-marquee,
+html.no-gpu .ik-global-marquee {
+  display: none !important;
+}
