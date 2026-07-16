@@ -13,7 +13,7 @@ const props = withDefaults(
   { paused: false },
 );
 
-const MARQUEE_LINE = "ZENLESS ZONE ZERO ".repeat(3);
+const MARQUEE_LINE = "Remielle Dan ".repeat(3);
 
 /** 等弹窗入场动画结束后再启动，避免与 blur/transform 争抢 GPU */
 const MARQUEE_START_DELAY_MS = 250;
@@ -149,6 +149,17 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .ik-zzz-marquee__track {
     animation: none;
+  }
+}
+
+/* 移动端：放大跑马灯字号与 band 尺寸（与全局背景一致），桌面端保持默认 */
+@media (max-width: 1024px) {
+  .ik-zzz-marquee__band {
+    width: 260%;
+    height: 260%;
+    left: -80%;
+    top: -80%;
+    font-size: clamp(360px, 48vw, 640px);
   }
 }
 </style>
