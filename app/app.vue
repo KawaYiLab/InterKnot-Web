@@ -190,12 +190,27 @@ const overlayOpen = computed(
   z-index: -9999;
 }
 
-/* 仅放大作为全屏背景的这一实例，弹窗内的保持默认尺寸 */
+/* 仅放大作为全屏背景的这一实例（桌面端）；移动端弹窗由组件自身 @media 放大 */
 .ik-global-marquee :deep(.ik-zzz-marquee__band) {
   width: 260%;
   height: 260%;
   left: -80%;
   top: -80%;
   font-size: clamp(360px, 48vw, 640px);
+}
+
+/* 仅全局背景跑马灯文字使用渐变色；弹窗内保持默认半透明白色 */
+.ik-global-marquee :deep(.ik-zzz-marquee__text) {
+  background: linear-gradient(
+    90deg,
+    #F8D6E4 0%,
+    #E7DCF6 45%,
+    #D2BFE8 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  opacity: 0.4;
 }
 </style>
