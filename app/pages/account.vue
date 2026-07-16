@@ -1209,6 +1209,12 @@ useHead({ title: "账号中心" });
 }
 
 @media (min-width: 901px) {
+  .ik-account-page__panel {
+    max-width: 720px;
+    width: 100%;
+    justify-self: center;
+  }
+
   .ik-account-page__panel-body {
     align-items: center;
   }
