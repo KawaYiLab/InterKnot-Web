@@ -779,6 +779,12 @@ watch(
   align-items: center;
   gap: 10px;
   padding: 8px 32px;
+  background: linear-gradient(
+    90deg,
+    #F8D6E4 0%,
+    #E7DCF6 45%,
+    #D2BFE8 100%
+  );
 }
 
 .ik-header__left {
