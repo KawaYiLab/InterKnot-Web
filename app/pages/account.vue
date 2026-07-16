@@ -344,36 +344,44 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
     <div class="ik-ac__container">
       <header class="ik-ac__header">
         <h1 class="ik-ac__title">账号中心</h1>
+        <p class="ik-ac__subtitle-en">ACCOUNT CENTER</p>
+        <div class="ik-ac__header-divider" />
         <p class="ik-ac__subtitle">管理你的 InterKnot 身份、安全与连接</p>
       </header>
 
       <aside class="ik-ac__sidebar">
-        <nav class="ik-ac__nav">
-          <button
-            class="ik-ac__nav-item"
-            :class="{ 'is-active': sidebarActive === 'account' }"
-            @click="activeView = ''"
-          >
-            账号
+        <div class="ik-ac__nav-group">
+          <h3 class="ik-ac__nav-title">设置</h3>
+          <nav class="ik-ac__nav">
+            <button
+              class="ik-ac__nav-item"
+              :class="{ 'is-active': sidebarActive === 'account' }"
+              @click="activeView = ''"
+            >
+              账号
+            </button>
+            <button
+              class="ik-ac__nav-item"
+              :class="{ 'is-active': sidebarActive === 'mihoyo' }"
+              @click="openMihoyo"
+            >
+              连接
+            </button>
+            <button
+              class="ik-ac__nav-item"
+              :class="{ 'is-active': sidebarActive === 'blacklist' }"
+              @click="openBlacklist"
+            >
+              隐私
+            </button>
+          </nav>
+        </div>
+        <div class="ik-ac__nav-group">
+          <h3 class="ik-ac__nav-title ik-ac__nav-title--danger">危险操作</h3>
+          <button class="ik-ac__nav-item ik-ac__nav-item--danger" @click="logout">
+            退出登录
           </button>
-          <button
-            class="ik-ac__nav-item"
-            :class="{ 'is-active': sidebarActive === 'mihoyo' }"
-            @click="openMihoyo"
-          >
-            连接
-          </button>
-          <button
-            class="ik-ac__nav-item"
-            :class="{ 'is-active': sidebarActive === 'blacklist' }"
-            @click="openBlacklist"
-          >
-            隐私
-          </button>
-        </nav>
-        <button class="ik-ac__nav-item ik-ac__nav-item--danger" @click="logout">
-          退出登录
-        </button>
+        </div>
       </aside>
 
       <main class="ik-ac__content">
@@ -716,7 +724,7 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
     "header"
     "content";
   gap: 24px;
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 20px;
   align-items: start;
@@ -735,17 +743,32 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
 }
 
 .ik-ac__subtitle {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.35);
+}
+
+.ik-ac__subtitle-en {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.ik-ac__header-divider {
+  height: 1px;
+  margin: 16px 0 12px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .ik-ac__sidebar {
   display: none;
   grid-area: sidebar;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 24px;
+  gap: 32px;
+  height: fit-content;
 }
 
 .ik-ac__nav {
@@ -754,11 +777,32 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
   gap: 4px;
 }
 
+.ik-ac__nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ik-ac__nav-title {
+  margin: 0;
+  padding: 0 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ik-ac__nav-title--danger {
+  color: rgba(255, 107, 107, 0.65);
+}
+
 .ik-ac__nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 10px 14px;
+  padding: 10px 14px 10px 28px;
   border: none;
   border-radius: 10px;
   background: transparent;
@@ -771,18 +815,42 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
   transition: background 0.12s ease, color 0.12s ease;
 }
 
+.ik-ac__nav-item::before {
+  content: "○";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 10px;
+  line-height: 12px;
+  text-align: center;
+}
+
 .ik-ac__nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: #fff;
 }
 
 .ik-ac__nav-item.is-active {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
 }
 
+.ik-ac__nav-item.is-active::before {
+  content: "●";
+  color: #bfff09;
+}
+
 .ik-ac__nav-item--danger {
+  padding-left: 14px;
   color: #ff6b6b;
+}
+
+.ik-ac__nav-item--danger::before {
+  content: none;
 }
 
 .ik-ac__nav-item--danger:hover {
@@ -794,6 +862,10 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
   display: flex;
   flex-direction: column;
   gap: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 /* ── Overview ── */
@@ -1203,11 +1275,11 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
   }
 
   .ik-ac__container {
-    grid-template-columns: 220px 1fr;
+    grid-template-columns: 260px 1fr;
     grid-template-areas:
       "header header"
       "sidebar content";
-    gap: 40px;
+    gap: 48px;
     padding: 0 40px;
   }
 
@@ -1222,7 +1294,7 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
   }
 
   .ik-ac__title {
-    font-size: 24px;
+    font-size: 26px;
   }
 
   .ik-ac__overview-mobile {
@@ -1235,6 +1307,10 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
 
   .ik-ac__content {
     gap: 32px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    padding: 24px;
   }
 
   .ik-ac__detail {
@@ -1262,8 +1338,10 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
 </style>
 
 <style>
-/* 降低账号中心全局跑马灯背景透明度，避免内容显得空旷 */
+/* 账号中心：让全局跑马灯成为边缘装饰，降低透明度并做中心遮罩 */
 .ik-account-page .ik-zzz-marquee {
-  opacity: 0.06;
+  opacity: 0.05;
+  mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 70%);
+  -webkit-mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 70%);
 }
 </style>
