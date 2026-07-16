@@ -1338,10 +1338,8 @@ useHead({ title: "账号中心", bodyAttrs: { class: "ik-account-page" } });
 </style>
 
 <style>
-/* 账号中心：让全局跑马灯成为边缘装饰，降低透明度并做中心遮罩 */
+/* 账号中心：全局跑马灯背景保持极低且均匀的透明度 */
 .ik-account-page .ik-zzz-marquee {
   opacity: 0.05;
-  mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 70%);
-  -webkit-mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 70%);
 }
 </style>
