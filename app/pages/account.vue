@@ -649,10 +649,11 @@ useHead({ title: "账号中心" });
   position: relative;
   width: min(1440px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 20px 0 100px;
-  min-height: calc(100vh - 80px);
+  padding: 60px 0;
+  min-height: calc(100vh - 78px);
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 16px;
 }
 
@@ -1154,7 +1155,8 @@ useHead({ title: "账号中心" });
 @media (max-width: 900px) {
   .ik-account-page {
     width: calc(100% - 24px);
-    padding: 16px 0 96px;
+    padding: 48px 0 96px;
+    min-height: calc(100vh - 66px - 64px);
     gap: 12px;
   }
 
@@ -1185,7 +1187,8 @@ useHead({ title: "账号中心" });
 @media (max-width: 500px) {
   .ik-account-page {
     width: 100%;
-    padding: 0 0 90px;
+    padding: 32px 0 90px;
+    min-height: calc(100vh - 66px - 64px);
     gap: 0;
   }
 
