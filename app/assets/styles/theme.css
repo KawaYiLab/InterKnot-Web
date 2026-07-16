@@ -531,3 +531,13 @@ html.no-gpu .ik-home-page__stripe,
 html.no-gpu .ik-backdrop-warmup {
   display: none !important;
 }
+
+/* 卡片阅读量遮罩的阴影 / SVG drop-shadow 在 CPU 路径下每个卡片都需
+   额外绘制，无 GPU 时移除可显著减少 overdraw。 */
+html.no-gpu .ik-card__views {
+  text-shadow: none !important;
+}
+
+html.no-gpu .ik-card__views-icon {
+  filter: none !important;
+}
