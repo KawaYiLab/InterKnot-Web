@@ -1297,6 +1297,18 @@ useHead({ title: "账号中心" });
     width: 100%;
     max-width: 640px;
   }
+
+  /* 桌面端：账号安全表单输入框、按钮等收窄并居中，避免横屏过度拉伸 */
+  .ik-ac-detail-body > .z-input,
+  .ik-ac-detail-body > .ik-ac-security-code,
+  .ik-ac-detail-body > .ik-ac-btn,
+  .ik-ac-detail-body > .ik-ac-empty,
+  .ik-ac-detail-body > .ik-ac-security-send-hint,
+  .ik-ac-detail-body > .ik-ac-loading {
+    width: 100%;
+    max-width: 420px;
+    align-self: center;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
