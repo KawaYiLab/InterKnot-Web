@@ -225,6 +225,17 @@ const sendBindEmailCode = async () => {
   }
 };
 
+const clearBindEmailForm = () => {
+  bindEmailInput.value = "";
+  bindCodeInput.value = "";
+};
+
+const clearSetPasswordForm = () => {
+  setPasswordCodeInput.value = "";
+  setPasswordInput.value = "";
+  setPasswordConfirmInput.value = "";
+};
+
 const confirmBindEmail = async () => {
   const email = bindEmailInput.value.trim();
   const code = bindCodeInput.value.trim();
@@ -534,13 +545,22 @@ useHead({ title: "账号中心" });
                       </z-input>
                     </z-form-item>
                   </z-form>
-                  <button
-                    class="ik-ac-btn"
-                    :disabled="bindEmailLoading || !bindEmailInput.trim() || !bindCodeInput.trim()"
-                    @click="confirmBindEmail"
-                  >
-                    {{ security?.hasBoundEmail ? '修改邮箱' : '绑定邮箱' }}
-                  </button>
+                  <div class="ik-ac-form-actions">
+                    <z-button
+                      :icon="{ error: '#ff4444' }"
+                      :disabled="bindEmailLoading"
+                      @click="clearBindEmailForm"
+                    >
+                      清除
+                    </z-button>
+                    <z-button
+                      :icon="{ success: '#00cc0d' }"
+                      :disabled="bindEmailLoading || !bindEmailInput.trim() || !bindCodeInput.trim()"
+                      @click="confirmBindEmail"
+                    >
+                      {{ security?.hasBoundEmail ? '修改邮箱' : '绑定邮箱' }}
+                    </z-button>
+                  </div>
                 </template>
               </div>
             </template>
@@ -595,13 +615,22 @@ useHead({ title: "账号中心" });
                       />
                     </z-form-item>
                   </z-form>
-                  <button
-                    class="ik-ac-btn"
-                    :disabled="setPasswordLoading || !setPasswordCodeInput.trim() || !setPasswordInput || !setPasswordConfirmInput"
-                    @click="confirmSetPassword"
-                  >
-                    {{ security?.hasPassword ? '修改密码' : '设置密码' }}
-                  </button>
+                  <div class="ik-ac-form-actions">
+                    <z-button
+                      :icon="{ error: '#ff4444' }"
+                      :disabled="setPasswordLoading"
+                      @click="clearSetPasswordForm"
+                    >
+                      清除
+                    </z-button>
+                    <z-button
+                      :icon="{ success: '#00cc0d' }"
+                      :disabled="setPasswordLoading || !setPasswordCodeInput.trim() || !setPasswordInput || !setPasswordConfirmInput"
+                      @click="confirmSetPassword"
+                    >
+                      {{ security?.hasPassword ? '修改密码' : '设置密码' }}
+                    </z-button>
+                  </div>
                 </template>
               </div>
             </template>
@@ -1046,6 +1075,15 @@ useHead({ title: "账号中心" });
   white-space: nowrap;
 }
 
+.ik-ac-form-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.ik-ac-form-actions :deep(.z-button) {
+  flex: 1;
+}
+
 .ik-ac-security-send-hint {
   margin: 0;
   font-size: 13px;
@@ -1343,6 +1381,7 @@ useHead({ title: "账号中心" });
   /* 桌面端：账号安全表单输入框、按钮等收窄并居中，避免横屏过度拉伸 */
   .ik-ac-detail-body > .z-input,
   .ik-ac-detail-body > .ik-ac-form,
+  .ik-ac-detail-body > .ik-ac-form-actions,
   .ik-ac-detail-body > .ik-ac-btn,
   .ik-ac-detail-body > .ik-ac-empty,
   .ik-ac-detail-body > .ik-ac-security-send-hint,
