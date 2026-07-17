@@ -512,26 +512,28 @@ useHead({ title: "账号中心" });
                   <p class="ik-ac-loading">加载中…</p>
                 </template>
                 <template v-else>
-                  <z-input
-                    v-model="bindEmailInput"
-                    type="email"
-                    placeholder="请输入邮箱"
-                  />
-                  <z-input
-                    v-model="bindCodeInput"
-                    class="ik-ac-security-code"
-                    placeholder="请输入验证码"
-                  >
-                    <template #suffix>
-                      <button
-                        class="ik-ac-btn ik-ac-btn--small"
-                        :disabled="codeCooldown > 0 || bindEmailLoading"
-                        @click="sendBindEmailCode"
-                      >
-                        {{ bindEmailLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
-                      </button>
-                    </template>
-                  </z-input>
+                  <z-form class="ik-ac-form" label-width="72px" label-position="right">
+                    <z-form-item label="邮箱">
+                      <z-input
+                        v-model="bindEmailInput"
+                        type="email"
+                        placeholder="请输入邮箱"
+                      />
+                    </z-form-item>
+                    <z-form-item label="验证码">
+                      <z-input v-model="bindCodeInput" placeholder="请输入验证码">
+                        <template #append>
+                          <z-button
+                            class="ik-ac-code-btn"
+                            :disabled="codeCooldown > 0 || bindEmailLoading"
+                            @click="sendBindEmailCode"
+                          >
+                            {{ bindEmailLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送' }}
+                          </z-button>
+                        </template>
+                      </z-input>
+                    </z-form-item>
+                  </z-form>
                   <button
                     class="ik-ac-btn"
                     :disabled="bindEmailLoading || !bindEmailInput.trim() || !bindCodeInput.trim()"
@@ -564,31 +566,35 @@ useHead({ title: "账号中心" });
                   <p class="ik-ac-security-send-hint">
                     验证码将发送至 {{ security.email }}
                   </p>
-                  <z-input
-                    v-model="setPasswordCodeInput"
-                    class="ik-ac-security-code"
-                    placeholder="请输入验证码"
-                  >
-                    <template #suffix>
-                      <button
-                        class="ik-ac-btn ik-ac-btn--small"
-                        :disabled="codeCooldown > 0 || setPasswordLoading"
-                        @click="sendSetPasswordCode"
-                      >
-                        {{ setPasswordLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
-                      </button>
-                    </template>
-                  </z-input>
-                  <z-input
-                    v-model="setPasswordInput"
-                    type="password"
-                    placeholder="新密码（至少 6 位）"
-                  />
-                  <z-input
-                    v-model="setPasswordConfirmInput"
-                    type="password"
-                    placeholder="确认新密码"
-                  />
+                  <z-form class="ik-ac-form" label-width="72px" label-position="right">
+                    <z-form-item label="验证码">
+                      <z-input v-model="setPasswordCodeInput" placeholder="请输入验证码">
+                        <template #append>
+                          <z-button
+                            class="ik-ac-code-btn"
+                            :disabled="codeCooldown > 0 || setPasswordLoading"
+                            @click="sendSetPasswordCode"
+                          >
+                            {{ setPasswordLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送' }}
+                          </z-button>
+                        </template>
+                      </z-input>
+                    </z-form-item>
+                    <z-form-item label="新密码">
+                      <z-input
+                        v-model="setPasswordInput"
+                        type="password"
+                        placeholder="新密码（至少 6 位）"
+                      />
+                    </z-form-item>
+                    <z-form-item label="确认密码">
+                      <z-input
+                        v-model="setPasswordConfirmInput"
+                        type="password"
+                        placeholder="确认新密码"
+                      />
+                    </z-form-item>
+                  </z-form>
                   <button
                     class="ik-ac-btn"
                     :disabled="setPasswordLoading || !setPasswordCodeInput.trim() || !setPasswordInput || !setPasswordConfirmInput"
@@ -1007,15 +1013,33 @@ useHead({ title: "账号中心" });
 }
 
 /* ── 账号安全表单 ── */
-.ik-ac-security-code :deep(.z-input__suffix) {
-  padding-right: 6px;
-  margin-left: -6px;
+.ik-ac-form {
+  display: flex;
+  flex-direction: column;
 }
 
-.ik-ac-security-code :deep(.z-input__suffix) .ik-ac-btn--small {
-  padding: 5px 10px;
-  font-size: 11px;
-  border-radius: 8px;
+.ik-ac-form :deep(.z-form-item) {
+  margin-bottom: 0;
+}
+
+.ik-ac-form :deep(.z-form-item + .z-form-item) {
+  margin-top: 16px;
+}
+
+.ik-ac-form :deep(.z-form-item__label) {
+  color: #b8b8c0;
+}
+
+.ik-ac-form :deep(.z-input) {
+  width: 100%;
+}
+
+.ik-ac-form :deep(.z-input__append) {
+  display: flex;
+}
+
+.ik-ac-code-btn {
+  white-space: nowrap;
 }
 
 .ik-ac-security-send-hint {
@@ -1314,7 +1338,7 @@ useHead({ title: "账号中心" });
 
   /* 桌面端：账号安全表单输入框、按钮等收窄并居中，避免横屏过度拉伸 */
   .ik-ac-detail-body > .z-input,
-  .ik-ac-detail-body > .ik-ac-security-code,
+  .ik-ac-detail-body > .ik-ac-form,
   .ik-ac-detail-body > .ik-ac-btn,
   .ik-ac-detail-body > .ik-ac-empty,
   .ik-ac-detail-body > .ik-ac-security-send-hint,
