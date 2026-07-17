@@ -512,7 +512,7 @@ useHead({ title: "账号中心" });
                   <p class="ik-ac-loading">加载中…</p>
                 </template>
                 <template v-else>
-                  <z-form class="ik-ac-form" label-width="72px" label-position="right">
+                  <z-form class="ik-ac-form" label-position="top">
                     <z-form-item label="邮箱">
                       <z-input
                         v-model="bindEmailInput"
@@ -566,7 +566,7 @@ useHead({ title: "账号中心" });
                   <p class="ik-ac-security-send-hint">
                     验证码将发送至 {{ security.email }}
                   </p>
-                  <z-form class="ik-ac-form" label-width="72px" label-position="right">
+                  <z-form class="ik-ac-form" label-position="top">
                     <z-form-item label="验证码">
                       <z-input v-model="setPasswordCodeInput" placeholder="请输入验证码">
                         <template #append>
@@ -1028,6 +1028,10 @@ useHead({ title: "账号中心" });
 
 .ik-ac-form :deep(.z-form-item__label) {
   color: #b8b8c0;
+  text-align: left;
+  padding-right: 0;
+  line-height: 1.4;
+  margin-bottom: 6px;
 }
 
 .ik-ac-form :deep(.z-input) {
