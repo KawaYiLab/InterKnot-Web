@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import { resolveErrorMessage } from "~/utils/api-error";
 import type { AccountSecurity, BlockedUser, MihoyoBinding } from "~/types/entities";
@@ -19,6 +20,12 @@ type AccountMenuKey = "account" | "mihoyo" | "blacklist";
 type AccountSubView = "" | "email" | "password";
 const activeMenuKey = ref<AccountMenuKey>("account");
 const activeSubView = ref<AccountSubView>("");
+
+// 移动端：首屏改为单栏分组列表，点击后进入对应二级面板
+const isMobile = useMediaQuery("(max-width: 900px)");
+const atRoot = computed(
+  () => activeMenuKey.value === "account" && activeSubView.value === "",
+);
 
 const onMenuChange = (name: string | number) => {
   const key = String(name) as AccountMenuKey;
@@ -352,7 +359,7 @@ useHead({ title: "账号中心" });
     <div class="ik-account-page__stripe" aria-hidden="true"></div>
 
     <div class="ik-account-page__columns">
-      <aside class="ik-account-page__nav">
+      <aside v-if="!isMobile" class="ik-account-page__nav">
         <z-menu class="ik-account-menu" :model-value="activeMenuKey" @change="onMenuChange">
           <z-menu-item name="account">
             <div class="ik-account-menu__content">
@@ -386,10 +393,74 @@ useHead({ title: "账号中心" });
         </z-menu>
       </aside>
 
-      <main class="ik-account-page__panel">
+      <div class="ik-account-page__panel">
         <div class="ik-account-page__panel-body">
+          <!-- 移动端首屏：单栏分组列表 -->
+          <template v-if="isMobile && atRoot">
+            <div class="ik-ac-section">
+              <div class="ik-ac-section__head">
+                <span class="ik-ac-section__label">账号</span>
+              </div>
+              <button class="ik-ac-row" @click="openEmail">
+                <span class="ik-ac-row__label">邮箱</span>
+                <span
+                  class="ik-ac-row__value"
+                  :class="{ 'is-empty': !security?.hasBoundEmail && !securityLoading }"
+                >
+                  {{ securityLoading ? '加载中' : security?.hasBoundEmail ? security.email : '未绑定' }}
+                </span>
+                <span class="ik-ac-row__chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+              <button class="ik-ac-row" @click="openPassword">
+                <span class="ik-ac-row__label">密码</span>
+                <span
+                  class="ik-ac-row__value"
+                  :class="{ 'is-empty': !security?.hasPassword && !securityLoading }"
+                >
+                  {{ securityLoading ? '加载中' : security?.hasPassword ? '已设置' : '未设置' }}
+                </span>
+                <span class="ik-ac-row__chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+            </div>
+
+            <div class="ik-ac-section">
+              <div class="ik-ac-section__head">
+                <span class="ik-ac-section__label">连接</span>
+              </div>
+              <button class="ik-ac-row" @click="onMenuChange('mihoyo')">
+                <span class="ik-ac-row__label">米哈游账号</span>
+                <span
+                  class="ik-ac-row__value"
+                  :class="{ 'is-empty': !mihoyoBinding && !mihoyoLoading }"
+                >
+                  {{ mihoyoMetaText }}
+                </span>
+                <span class="ik-ac-row__chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+            </div>
+
+            <div class="ik-ac-section">
+              <div class="ik-ac-section__head">
+                <span class="ik-ac-section__label">隐私</span>
+              </div>
+              <button class="ik-ac-row" @click="onMenuChange('blacklist')">
+                <span class="ik-ac-row__label">黑名单</span>
+                <span class="ik-ac-row__value">{{ blacklistMetaText }}</span>
+                <span class="ik-ac-row__chevron" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </span>
+              </button>
+            </div>
+          </template>
+
           <!-- 账号 -->
-          <template v-if="activeMenuKey === 'account'">
+          <template v-else-if="activeMenuKey === 'account'">
             <template v-if="activeSubView === ''">
               <div class="ik-ac-section">
                 <div class="ik-ac-section__head">
@@ -641,7 +712,7 @@ useHead({ title: "账号中心" });
             </div>
           </template>
         </div>
-      </main>
+      </div>
     </div>
   </section>
 </template>
@@ -1165,18 +1236,9 @@ useHead({ title: "账号中心" });
     gap: 12px;
   }
 
+  /* 移动端：单栏，左侧导航不渲染，面板内直接展示分组列表 */
   .ik-account-page__columns {
     grid-template-columns: 1fr;
-  }
-
-  .ik-account-page__nav {
-    position: static;
-    max-height: none;
-    gap: 8px;
-  }
-
-  .ik-account-menu {
-    min-height: 200px !important;
   }
 
   .ik-account-page__panel {
