@@ -1080,10 +1080,6 @@ useHead({ title: "账号中心" });
   gap: 12px;
 }
 
-.ik-ac-form-actions :deep(.z-button) {
-  flex: 1;
-}
-
 .ik-ac-security-send-hint {
   margin: 0;
   font-size: 13px;
