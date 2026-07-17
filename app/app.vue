@@ -6,9 +6,16 @@ const auth = useAuthStore();
 const router = useRouter();
 const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
+const gpuAccelerated = useGpuAccelerated();
 
 if (import.meta.client) {
   auth.hydrateFromStorage();
+
+  // 检测到软件渲染（未启用 GPU 加速）时，提前给 html 加标记，
+  // CSS 据此关闭全局跑马灯，避免 CPU 路径下全屏重绘造成滚动卡顿。
+  if (!gpuAccelerated.value) {
+    document.documentElement.classList.add("no-gpu");
+  }
 
   const url = new URL(window.location.href);
   const fallbackPath = url.searchParams.get("p");

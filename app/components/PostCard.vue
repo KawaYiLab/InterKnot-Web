@@ -20,6 +20,7 @@ function markCoverLoaded(src: string) {
 import { computed, onMounted, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
+import { toThumbUrl } from "~/utils/image";
 import UserHoverCard from "./UserHoverCard.vue";
 
 const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
@@ -38,6 +39,7 @@ const authorName = computed(() => props.post.author?.name || "未知作者");
 // 悬浮卡仅在支持悬停的设备（桌面鼠标）才有意义；触屏上它本就不弹，却仍会
 // 为每张卡片实例化多个 composable。用此开关在移动端彻底不挂载，省掉浪费。
 const canHover = useHoverCapable();
+const gpuAccelerated = useGpuAccelerated();
 
 const coverSrc = ref(DEFAULT_COVER_IMAGE);
 // 初始状态优先从跨实例缓存读取：如果同一张封面已经在本页面加载过，
@@ -75,7 +77,10 @@ watch(
   ([newId, newCover], oldValue) => {
     if (oldValue && newId === oldValue[0] && newCover === oldValue[1]) return;
     const cover = newCover?.trim();
-    coverSrc.value = cover || DEFAULT_COVER_IMAGE;
+    // 瀑布流卡片尺寸不大，使用缩略图避免在 CPU / 无 GPU 路径下解码和绘制超大原图。
+    // 有 GPU 加速时用 720px 覆盖 2x–3x DPR；无 GPU 时降到 480px，优先保证解码和绘制帧率。
+    const thumbWidth = gpuAccelerated.value ? 720 : 480;
+    coverSrc.value = cover ? toThumbUrl(cover, thumbWidth) : DEFAULT_COVER_IMAGE;
     coverIsFallback.value = !cover;
     // 同一封面 URL 已加载过时，直接就绪，避免虚拟列表重挂载时重播过渡。
     coverImageLoaded.value = isCoverLoaded(coverSrc.value);
