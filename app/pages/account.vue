@@ -126,6 +126,10 @@ const codeCooldown = ref(0);
 let codeCooldownTimer: ReturnType<typeof setInterval> | null = null;
 
 const startCodeCooldown = (seconds: number) => {
+  if (codeCooldownTimer) {
+    clearInterval(codeCooldownTimer);
+    codeCooldownTimer = null;
+  }
   codeCooldown.value = seconds;
   codeCooldownTimer = setInterval(() => {
     codeCooldown.value -= 1;
@@ -275,11 +279,12 @@ const confirmSetPassword = async () => {
   setPasswordLoading.value = true;
   try {
     await api.resetPassword(security.value.email, code, password);
+    const hadPassword = security.value?.hasPassword === true;
     if (security.value) {
       security.value.hasPassword = true;
       security.value.provider = "local";
     }
-    message.success(security.value?.hasPassword ? "密码修改成功" : "密码设置成功");
+    message.success(hadPassword ? "密码修改成功" : "密码设置成功");
     goBack();
   } catch (err) {
     message.error(resolveErrorMessage(err, "设置密码失败"));
@@ -450,7 +455,7 @@ useHead({ title: "账号中心" });
                   </div>
                   <button
                     class="ik-ac-btn"
-                    :disabled="bindEmailLoading"
+                    :disabled="bindEmailLoading || !bindEmailInput.trim() || !bindCodeInput.trim()"
                     @click="confirmBindEmail"
                   >
                     {{ security?.hasBoundEmail ? '修改邮箱' : '绑定邮箱' }}
@@ -502,7 +507,7 @@ useHead({ title: "账号中心" });
                   />
                   <button
                     class="ik-ac-btn"
-                    :disabled="setPasswordLoading"
+                    :disabled="setPasswordLoading || !setPasswordCodeInput.trim() || !setPasswordInput || !setPasswordConfirmInput"
                     @click="confirmSetPassword"
                   >
                     {{ security?.hasPassword ? '修改密码' : '设置密码' }}
