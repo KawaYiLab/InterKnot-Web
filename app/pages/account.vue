@@ -558,7 +558,7 @@ useHead({ title: "账号中心" });
                       :disabled="bindEmailLoading || !bindEmailInput.trim() || !bindCodeInput.trim()"
                       @click="confirmBindEmail"
                     >
-                      {{ security?.hasBoundEmail ? '修改邮箱' : '绑定邮箱' }}
+                      确认
                     </z-button>
                   </div>
                 </template>
@@ -628,7 +628,7 @@ useHead({ title: "账号中心" });
                       :disabled="setPasswordLoading || !setPasswordCodeInput.trim() || !setPasswordInput || !setPasswordConfirmInput"
                       @click="confirmSetPassword"
                     >
-                      {{ security?.hasPassword ? '修改密码' : '设置密码' }}
+                      确认
                     </z-button>
                   </div>
                 </template>
@@ -1078,6 +1078,7 @@ useHead({ title: "账号中心" });
 .ik-ac-form-actions {
   display: flex;
   gap: 12px;
+  justify-content: center;
 }
 
 .ik-ac-security-send-hint {
