@@ -587,19 +587,6 @@ useHead({ title: "账号中心" });
                     验证码将发送至 {{ security.email }}
                   </p>
                   <z-form class="ik-ac-form" label-position="top">
-                    <z-form-item label="验证码">
-                      <z-input v-model="setPasswordCodeInput" placeholder="请输入验证码">
-                        <template #append>
-                          <z-button
-                            class="ik-ac-code-btn"
-                            :disabled="codeCooldown > 0 || setPasswordLoading"
-                            @click="sendSetPasswordCode"
-                          >
-                            {{ setPasswordLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送' }}
-                          </z-button>
-                        </template>
-                      </z-input>
-                    </z-form-item>
                     <z-form-item label="新密码">
                       <z-input
                         v-model="setPasswordInput"
@@ -613,6 +600,19 @@ useHead({ title: "账号中心" });
                         type="password"
                         placeholder="确认新密码"
                       />
+                    </z-form-item>
+                    <z-form-item label="验证码">
+                      <z-input v-model="setPasswordCodeInput" placeholder="请输入验证码">
+                        <template #append>
+                          <z-button
+                            class="ik-ac-code-btn"
+                            :disabled="codeCooldown > 0 || setPasswordLoading"
+                            @click="sendSetPasswordCode"
+                          >
+                            {{ setPasswordLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送' }}
+                          </z-button>
+                        </template>
+                      </z-input>
                     </z-form-item>
                   </z-form>
                   <div class="ik-ac-form-actions">
