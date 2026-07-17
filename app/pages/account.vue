@@ -361,32 +361,23 @@ useHead({ title: "账号中心" });
     <div class="ik-account-page__columns">
       <aside v-if="!isMobile" class="ik-account-page__nav">
         <z-menu class="ik-account-menu" :model-value="activeMenuKey" @change="onMenuChange">
-          <z-menu-item name="account">
+          <z-menu-item name="account" icon="home">
             <div class="ik-account-menu__content">
-              <span class="ik-account-menu__title">
-                <span class="ik-account-menu__arrow">▶</span>
-                账号
-              </span>
+              <span class="ik-account-menu__title">账号</span>
               <span class="ik-account-menu__meta">{{ accountMetaText }}</span>
             </div>
           </z-menu-item>
 
-          <z-menu-item name="mihoyo">
+          <z-menu-item name="mihoyo" icon="plus">
             <div class="ik-account-menu__content">
-              <span class="ik-account-menu__title">
-                <span class="ik-account-menu__arrow">▶</span>
-                连接
-              </span>
+              <span class="ik-account-menu__title">连接</span>
               <span class="ik-account-menu__meta">{{ mihoyoMetaText }}</span>
             </div>
           </z-menu-item>
 
-          <z-menu-item name="blacklist">
+          <z-menu-item name="blacklist" icon="error">
             <div class="ik-account-menu__content">
-              <span class="ik-account-menu__title">
-                <span class="ik-account-menu__arrow">▶</span>
-                隐私
-              </span>
+              <span class="ik-account-menu__title">黑名单</span>
               <span class="ik-account-menu__meta">{{ blacklistMetaText }}</span>
             </div>
           </z-menu-item>
@@ -402,7 +393,10 @@ useHead({ title: "账号中心" });
                 <span class="ik-ac-section__label">账号</span>
               </div>
               <button class="ik-ac-row" @click="openEmail">
-                <span class="ik-ac-row__label">邮箱</span>
+                <span class="ik-ac-row__label">
+                  <i class="z-icon-info" aria-hidden="true" />
+                  邮箱
+                </span>
                 <span
                   class="ik-ac-row__value"
                   :class="{ 'is-empty': !security?.hasBoundEmail && !securityLoading }"
@@ -414,7 +408,10 @@ useHead({ title: "账号中心" });
                 </span>
               </button>
               <button class="ik-ac-row" @click="openPassword">
-                <span class="ik-ac-row__label">密码</span>
+                <span class="ik-ac-row__label">
+                  <i class="z-icon-invisible" aria-hidden="true" />
+                  密码
+                </span>
                 <span
                   class="ik-ac-row__value"
                   :class="{ 'is-empty': !security?.hasPassword && !securityLoading }"
@@ -447,7 +444,7 @@ useHead({ title: "账号中心" });
 
             <div class="ik-ac-section">
               <div class="ik-ac-section__head">
-                <span class="ik-ac-section__label">隐私</span>
+                <span class="ik-ac-section__label">黑名单</span>
               </div>
               <button class="ik-ac-row" @click="onMenuChange('blacklist')">
                 <span class="ik-ac-row__label">黑名单</span>
@@ -468,7 +465,10 @@ useHead({ title: "账号中心" });
                 </div>
 
                 <button class="ik-ac-row" @click="openEmail">
-                  <span class="ik-ac-row__label">邮箱</span>
+                  <span class="ik-ac-row__label">
+                    <i class="z-icon-info" aria-hidden="true" />
+                    邮箱
+                  </span>
                   <span
                     class="ik-ac-row__value"
                     :class="{ 'is-empty': !security?.hasBoundEmail && !securityLoading }"
@@ -481,7 +481,10 @@ useHead({ title: "账号中心" });
                 </button>
 
                 <button class="ik-ac-row" @click="openPassword">
-                  <span class="ik-ac-row__label">密码</span>
+                  <span class="ik-ac-row__label">
+                    <i class="z-icon-invisible" aria-hidden="true" />
+                    密码
+                  </span>
                   <span
                     class="ik-ac-row__value"
                     :class="{ 'is-empty': !security?.hasPassword && !securityLoading }"
@@ -514,16 +517,21 @@ useHead({ title: "账号中心" });
                     type="email"
                     placeholder="请输入邮箱"
                   />
-                  <div class="ik-ac-security-code">
-                    <z-input v-model="bindCodeInput" placeholder="请输入验证码" />
-                    <button
-                      class="ik-ac-btn ik-ac-btn--small"
-                      :disabled="codeCooldown > 0 || bindEmailLoading"
-                      @click="sendBindEmailCode"
-                    >
-                      {{ bindEmailLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
-                    </button>
-                  </div>
+                  <z-input
+                    v-model="bindCodeInput"
+                    class="ik-ac-security-code"
+                    placeholder="请输入验证码"
+                  >
+                    <template #suffix>
+                      <button
+                        class="ik-ac-btn ik-ac-btn--small"
+                        :disabled="codeCooldown > 0 || bindEmailLoading"
+                        @click="sendBindEmailCode"
+                      >
+                        {{ bindEmailLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
+                      </button>
+                    </template>
+                  </z-input>
                   <button
                     class="ik-ac-btn"
                     :disabled="bindEmailLoading || !bindEmailInput.trim() || !bindCodeInput.trim()"
@@ -556,16 +564,21 @@ useHead({ title: "账号中心" });
                   <p class="ik-ac-security-send-hint">
                     验证码将发送至 {{ security.email }}
                   </p>
-                  <div class="ik-ac-security-code">
-                    <z-input v-model="setPasswordCodeInput" placeholder="请输入验证码" />
-                    <button
-                      class="ik-ac-btn ik-ac-btn--small"
-                      :disabled="codeCooldown > 0 || setPasswordLoading"
-                      @click="sendSetPasswordCode"
-                    >
-                      {{ setPasswordLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
-                    </button>
-                  </div>
+                  <z-input
+                    v-model="setPasswordCodeInput"
+                    class="ik-ac-security-code"
+                    placeholder="请输入验证码"
+                  >
+                    <template #suffix>
+                      <button
+                        class="ik-ac-btn ik-ac-btn--small"
+                        :disabled="codeCooldown > 0 || setPasswordLoading"
+                        @click="sendSetPasswordCode"
+                      >
+                        {{ setPasswordLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
+                      </button>
+                    </template>
+                  </z-input>
                   <z-input
                     v-model="setPasswordInput"
                     type="password"
@@ -591,11 +604,11 @@ useHead({ title: "账号中心" });
           <!-- 连接 / 米游社 -->
           <template v-else-if="activeMenuKey === 'mihoyo'">
             <header class="ik-ac-detail-header">
-              <button class="ik-ac-back" aria-label="返回" @click="goBack">
+              <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
               <h2 class="ik-ac-detail-title">米哈游账号</h2>
-              <div class="ik-ac-detail-spacer" />
+              <div v-if="isMobile" class="ik-ac-detail-spacer" />
             </header>
 
             <div class="ik-ac-detail-body">
@@ -661,11 +674,11 @@ useHead({ title: "账号中心" });
           <!-- 隐私 / 黑名单 -->
           <template v-else-if="activeMenuKey === 'blacklist'">
             <header class="ik-ac-detail-header">
-              <button class="ik-ac-back" aria-label="返回" @click="goBack">
+              <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
               <h2 class="ik-ac-detail-title">黑名单</h2>
-              <div class="ik-ac-detail-spacer" />
+              <div v-if="isMobile" class="ik-ac-detail-spacer" />
             </header>
 
             <div class="ik-ac-detail-body">
@@ -778,13 +791,9 @@ useHead({ title: "账号中心" });
 
 /* Customize ZMenu items */
 .ik-account-menu :deep(.z-menu__item) {
-  align-items: stretch;
+  align-items: center;
   min-height: 56px;
   padding: 10px 16px;
-}
-
-.ik-account-menu :deep(.z-menu__item) > * {
-  width: 100%;
 }
 
 .ik-account-menu__content {
@@ -809,10 +818,6 @@ useHead({ title: "账号中心" });
   letter-spacing: 0.2px;
 }
 
-.ik-account-menu__arrow {
-  font-size: 10px;
-  color: #bfff09;
-}
 
 .ik-account-menu__meta {
   font-size: 11px;
@@ -825,7 +830,7 @@ useHead({ title: "账号中心" });
 }
 
 .ik-account-menu :deep(.z-menu__item.is-active) .ik-account-menu__title,
-.ik-account-menu :deep(.z-menu__item.is-active) .ik-account-menu__arrow {
+.ik-account-menu :deep(.z-menu__item.is-active) .z-menu__icon {
   color: #0a0a0a;
 }
 
@@ -910,7 +915,15 @@ useHead({ title: "账号中心" });
 }
 
 .ik-ac-row__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
+}
+
+.ik-ac-row__label i {
+  font-size: 16px;
+  color: #888;
 }
 
 .ik-ac-row__value {
@@ -994,14 +1007,15 @@ useHead({ title: "账号中心" });
 }
 
 /* ── 账号安全表单 ── */
-.ik-ac-security-code {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.ik-ac-security-code :deep(.z-input__suffix) {
+  padding-right: 6px;
+  margin-left: -6px;
 }
 
-.ik-ac-security-code :deep(.z-input) {
-  flex: 1;
+.ik-ac-security-code :deep(.z-input__suffix) .ik-ac-btn--small {
+  padding: 5px 10px;
+  font-size: 11px;
+  border-radius: 8px;
 }
 
 .ik-ac-security-send-hint {
