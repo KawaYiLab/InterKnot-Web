@@ -1018,7 +1018,8 @@ useHead({ title: "账号中心" });
 }
 
 .ik-ac-detail-header--stacked .ik-ac-detail-title {
-  text-align: left;
+  width: 100%;
+  text-align: center;
 }
 
 .ik-ac-detail-body--pushed {
