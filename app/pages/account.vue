@@ -927,7 +927,7 @@ useHead({ title: "账号中心" });
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  margin-left: 2px;
+  margin-left: 12px;
 }
 
 .ik-ac-row__icon {
