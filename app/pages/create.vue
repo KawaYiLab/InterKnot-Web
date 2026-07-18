@@ -816,9 +816,6 @@ if (import.meta.client) {
 
 <template>
   <section class="ik-create-page" @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
-    <!-- 45° 斜线纹理背景 -->
-    <div class="ik-create-page__stripe" aria-hidden="true"></div>
-
     <!-- 未通过入站考试：禁止发布委托，引导去考试页 -->
     <div v-if="auth.needExam" class="ik-create-exam-gate">
       <div class="ik-create-exam-gate__panel">
@@ -1427,22 +1424,6 @@ if (import.meta.client) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-/* 45° 斜线纹理（与委托弹窗一致） */
-.ik-create-page__stripe {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    40deg,
-    transparent,
-    transparent 3.5px,
-    rgba(255, 255, 255, 0.09) 4.5px,
-    rgba(255, 255, 255, 0.09) 7.5px,
-    transparent 8.5px
-  );
 }
 
 .ik-create-page > .ik-create-columns {
@@ -2306,10 +2287,6 @@ if (import.meta.client) {
     background: #121212;
     /* 抑制 iOS/Android 纵向橡皮筋导致暴露 fixed 背景层 */
     overscroll-behavior-y: contain;
-  }
-  /* Flutter mobile 设计无斜纹底纹，避免 overscroll / 软键盘缝隙时露出 */
-  .ik-create-page__stripe {
-    display: none;
   }
   .ik-create-page > .ik-create-columns,
   .ik-create-footer {

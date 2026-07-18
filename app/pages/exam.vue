@@ -212,9 +212,6 @@ useHead({ title: "入站考试 - 绳网" });
 
 <template>
   <section class="ik-exam-page">
-    <!-- 45° 斜线纹理背景（与发布委托页一致） -->
-    <div class="ik-exam-page__stripe" aria-hidden="true"></div>
-
     <div class="ik-exam-page__inner">
       <!-- 未登录 -->
       <div v-if="!auth.isLogin" class="ik-exam-panel">
@@ -470,22 +467,6 @@ useHead({ title: "入站考试 - 绳网" });
   width: 100%;
   max-width: 760px;
   flex-shrink: 0;
-}
-
-/* 与发布委托页一致的 45° 斜线纹理背景 */
-.ik-exam-page__stripe {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    40deg,
-    transparent,
-    transparent 3.5px,
-    rgba(255, 255, 255, 0.09) 4.5px,
-    rgba(255, 255, 255, 0.09) 7.5px,
-    transparent 8.5px
-  );
 }
 
 .ik-exam-panel {
