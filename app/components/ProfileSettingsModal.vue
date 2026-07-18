@@ -2,7 +2,6 @@
 import { useMessage } from "zenless-ui";
 import { watch } from "vue";
 import { resolveErrorMessage } from "~/utils/api-error";
-import type { BlockedUser, MihoyoBinding } from "~/types/entities";
 
 const props = defineProps<{
   currentName?: string;
@@ -30,9 +29,7 @@ const showEditName = computed(() => modalQuery.value === 'edit-name');
 const showEditBio = computed(() => modalQuery.value === 'edit-bio');
 const showPinned = computed(() => modalQuery.value === 'pinned');
 const showSocial = computed(() => modalQuery.value === 'social');
-const showBlocked = computed(() => modalQuery.value === 'blocked');
 const showLogout = computed(() => modalQuery.value === 'logout');
-const showMihoyo = computed(() => modalQuery.value === 'mihoyo');
 
 const openSub = (name: string) => {
   router.replace({ query: { ...route.query, modal: name } });
@@ -160,106 +157,10 @@ const onPinnedSaved = (pinned: string[] | null) => {
   emit("pinnedUpdated", pinned);
 };
 
-// ── 米游社绑定 ──────────────────────────────
-const mihoyoBinding = ref<MihoyoBinding | null>(null);
-const mihoyoLoading = ref(false);
-const mihoyoUnbinding = ref(false);
-
-const mihoyo = useMihoyoQr({
-  isActive: () => showMihoyo.value,
-  width: 200,
-  onConfirmed: (res) => {
-    if (res.mode !== "bind") return;
-    mihoyoBinding.value = res.binding;
-    message.success("米游社账号绑定成功");
-  },
-  onError: (err) => {
-    message.error(resolveErrorMessage(err, "获取二维码失败"));
-  },
-});
-
-const mihoyoQrDataUrl = mihoyo.qrDataUrl;
-const mihoyoQrStatus = mihoyo.qrStatus;
-const mihoyoQrNeedRefresh = mihoyo.qrNeedRefresh;
-
-const mihoyoQrStatusText = computed(() => {
-  switch (mihoyoQrStatus.value) {
-    case "loading": return "二维码生成中…";
-    case "waiting": return "请使用米游社 App 扫码绑定";
-    case "scanned": return "已扫码，请在米游社 App 中确认";
-    case "confirmed": return "绑定中…";
-    case "expired": return "二维码已过期，点击刷新";
-    case "cancelled": return "已取消扫码，点击刷新重试";
-    case "error": return "二维码获取失败，点击刷新重试";
-  }
-});
-
-const startMihoyoQr = mihoyo.startQr;
-const stopMihoyoPolling = mihoyo.stopQr;
-
-// 菜单按钮文案随绑定状态变化，打开设置时先拉一次绑定信息
-const mihoyoMenuLabel = computed(() => (mihoyoBinding.value ? "查看米游社" : "绑定米游社"));
-
-// 刷新绑定状态并在未绑定时启动二维码流程。
-// 被 openMihoyo 和直接通过 ?modal=mihoyo 进入的场景共用。
-const refreshMihoyo = async () => {
-  mihoyoLoading.value = true;
-  mihoyoBinding.value = null;
-  try {
-    mihoyoBinding.value = await api.getMihoyoBinding();
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "获取绑定信息失败"));
-  } finally {
-    mihoyoLoading.value = false;
-  }
-  if (!mihoyoBinding.value) {
-    void startMihoyoQr();
-  }
-};
-
-onMounted(async () => {
-  if (showMihoyo.value) {
-    // 直接通过 ?modal=mihoyo 进入：没有菜单 click 触发 openMihoyo，需要显式启动流程
-    await refreshMihoyo();
-  } else {
-    try {
-      mihoyoBinding.value = await api.getMihoyoBinding();
-    } catch {
-      // 未登录/接口失败时保持未绑定文案
-    }
-  }
-
-  if (showBlocked.value) {
-    blockedCursor.value = "";
-    blockedHasNext.value = true;
-    blockedUsers.value = [];
-    await loadBlocked();
-  }
-});
-
-const openMihoyo = async () => {
-  openSub('mihoyo');
-  await refreshMihoyo();
-};
-
-const closeMihoyo = () => {
-  stopMihoyoPolling();
-  closeSub();
-};
-
-const unbindMihoyo = async () => {
-  if (mihoyoUnbinding.value) return;
-  mihoyoUnbinding.value = true;
-  try {
-    await api.unbindMihoyo();
-    mihoyoBinding.value = null;
-    message.success("已解除米游社绑定");
-    void startMihoyoQr();
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "解绑失败"));
-  } finally {
-    mihoyoUnbinding.value = false;
-  }
+// ── 账号中心（独立页面） ──────────────
+const openAccountCenter = () => {
+  emit("close");
+  void navigateTo("/account");
 };
 
 const hidden = ref(!!props.currentHidden);
@@ -313,67 +214,6 @@ const handleSocialOverlayClick = (e: MouseEvent) => {
   }
 };
 
-// ── 黑名单管理 ─────────────────────────────────────────────
-const blockedUsers = ref<BlockedUser[]>([]);
-const blockedLoading = ref(false);
-const blockedHasNext = ref(true);
-const blockedCursor = ref("");
-
-const openBlocked = () => {
-  blockedCursor.value = "";
-  blockedUsers.value = [];
-  blockedHasNext.value = true;
-  openSub('blocked');
-};
-
-const closeBlocked = () => {
-  closeSub();
-};
-
-const loadBlocked = async () => {
-  if (blockedLoading.value || !blockedHasNext.value) return;
-  blockedLoading.value = true;
-  try {
-    const page = await api.getMyBlockedList(blockedCursor.value);
-    blockedUsers.value.push(...page.nodes);
-    blockedHasNext.value = page.hasNextPage;
-    blockedCursor.value = page.endCursor;
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "加载黑名单失败"));
-  } finally {
-    blockedLoading.value = false;
-  }
-};
-
-watch(showBlocked, (show) => {
-  if (show) {
-    blockedCursor.value = "";
-    blockedHasNext.value = true;
-    blockedUsers.value = [];
-    void loadBlocked();
-  }
-}, { flush: 'post' });
-
-const unblockUser = async (user: BlockedUser) => {
-  if (!user.documentId) return;
-  try {
-    await api.toggleUserBlock(user.documentId);
-    message.success("已取消拉黑");
-    blockedUsers.value = blockedUsers.value.filter((u) => u.documentId !== user.documentId);
-    // 取消拉黑后让列表/搜索/个人页缓存失效，刷新后重新显示内容
-    api.invalidateQueries(["articles"]);
-    api.invalidateQueries(["profile"]);
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "取消拉黑失败"));
-  }
-};
-
-const handleBlockedOverlayClick = (e: MouseEvent) => {
-  if ((e.target as HTMLElement).classList.contains("ik-overlay")) {
-    closeBlocked();
-  }
-};
-
 const handleEditBioOverlayClick = (e: MouseEvent) => {
   if ((e.target as HTMLElement).classList.contains("ik-overlay")) {
     closeEditBio();
@@ -400,10 +240,6 @@ const handleKeydown = (e: KeyboardEvent) => {
     }
     if (showLogout.value) {
       closeLogout();
-    } else if (showMihoyo.value) {
-      closeMihoyo();
-    } else if (showBlocked.value) {
-      closeBlocked();
     } else if (showSocial.value) {
       closeSocial();
     } else if (showEditBio.value) {
@@ -439,7 +275,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown);
   release(SCROLL_LOCK_TOKEN);
-  stopMihoyoPolling();
 });
 </script>
 
@@ -472,8 +307,7 @@ onBeforeUnmount(() => {
               <z-button @click="openEditBio">修改签名</z-button>
               <z-button @click="openPinned">修改委托展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
-              <z-button @click="openBlocked">黑名单管理</z-button>
-              <z-button @click="openMihoyo">{{ mihoyoMenuLabel }}</z-button>
+              <z-button @click="openAccountCenter">账号中心</z-button>
               <z-button @click="openLogout">退出登录</z-button>
             </div>
           </div>
@@ -609,140 +443,6 @@ onBeforeUnmount(() => {
                         :disabled="togglingHidden"
                       />
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Blocked Users Sub-dialog -->
-    <Teleport to="body">
-      <Transition name="ik-overlay" appear>
-        <div v-if="showBlocked" class="ik-overlay ik-overlay--sub" @click="handleBlockedOverlayClick">
-          <div class="ik-overlay__stripe" aria-hidden="true"></div>
-          <div class="ik-dialog ik-dialog--large" @click.stop>
-            <div class="ik-dialog__outer">
-              <div class="ik-dialog__inner">
-                <div class="ik-dialog__header">
-                  <span class="ik-dialog__title">黑名单管理</span>
-                  <button class="ik-dialog__close" aria-label="关闭" @click="closeBlocked">
-                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
-                  </button>
-                </div>
-                <div class="ik-dialog__body">
-                  <IkZzzMarquee />
-                  <div class="ik-blocked-list">
-                    <template v-if="!blockedUsers.length && !blockedLoading">
-                      <div class="ik-blocked-list__empty">暂无拉黑用户</div>
-                    </template>
-                    <div
-                      v-for="user in blockedUsers"
-                      :key="user.documentId"
-                      class="ik-blocked-list__item"
-                    >
-                      <img
-                        :src="user.avatar || '/images/default-avatar.webp'"
-                        alt=""
-                        class="ik-blocked-list__avatar"
-                        @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-                      />
-                      <div class="ik-blocked-list__info">
-                        <span class="ik-blocked-list__name">{{ user.name || user.username || '匿名用户' }}</span>
-                        <span v-if="user.level" class="ik-blocked-list__level">Lv.{{ user.level }}</span>
-                      </div>
-                      <z-button size="small" @click="unblockUser(user)">取消拉黑</z-button>
-                    </div>
-
-                    <div v-if="blockedLoading" class="ik-blocked-list__loading">加载中…</div>
-                    <z-button
-                      v-else-if="blockedHasNext"
-                      size="small"
-                      @click="loadBlocked"
-                    >
-                      加载更多
-                    </z-button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Mihoyo Binding Sub-dialog -->
-    <Teleport to="body">
-      <Transition name="ik-overlay" appear>
-        <div v-if="showMihoyo" class="ik-overlay ik-overlay--sub" @click.self="closeMihoyo">
-          <div class="ik-overlay__stripe" aria-hidden="true"></div>
-          <div class="ik-dialog ik-dialog--mihoyo" @click.stop>
-            <div class="ik-dialog__outer">
-              <div class="ik-dialog__inner">
-                <div class="ik-dialog__header">
-                  <span class="ik-dialog__title">米游社绑定</span>
-                  <button class="ik-dialog__close" aria-label="关闭" @click="closeMihoyo">
-                    <img src="/images/close-btn.webp" alt="关闭" class="ik-dialog__close-img" draggable="false" />
-                  </button>
-                </div>
-                <div class="ik-dialog__body">
-                  <IkZzzMarquee />
-                  <div class="ik-mihoyo">
-                    <template v-if="mihoyoLoading">
-                      <p class="ik-mihoyo__status">加载中…</p>
-                    </template>
-                    <template v-else-if="mihoyoBinding">
-                      <div class="ik-mihoyo__info">
-                        <div class="ik-mihoyo__row">
-                          <span class="ik-mihoyo__label">名称</span>
-                          <span class="ik-mihoyo__value">{{ mihoyoBinding.zzzNickname || "未获取到角色" }}</span>
-                        </div>
-                        <div v-if="mihoyoBinding.zzzUid" class="ik-mihoyo__row">
-                          <span class="ik-mihoyo__label">UID</span>
-                          <span class="ik-mihoyo__value">{{ mihoyoBinding.zzzUid }}</span>
-                        </div>
-                        <div v-if="mihoyoBinding.zzzLevel != null" class="ik-mihoyo__row">
-                          <span class="ik-mihoyo__label">等级</span>
-                          <span class="ik-mihoyo__value">Lv.{{ mihoyoBinding.zzzLevel }}</span>
-                        </div>
-                        <div v-if="mihoyoBinding.zzzRegionName" class="ik-mihoyo__row">
-                          <span class="ik-mihoyo__label">服务器</span>
-                          <span class="ik-mihoyo__value">{{ mihoyoBinding.zzzRegionName }}</span>
-                        </div>
-                      </div>
-                      <z-button
-                        :icon="{ error: '#ff4444' }"
-                        :disabled="mihoyoUnbinding"
-                        @click="unbindMihoyo"
-                      >
-                        {{ mihoyoUnbinding ? "解绑中…" : "解除绑定" }}
-                      </z-button>
-                    </template>
-                    <template v-else>
-                      <div class="ik-mihoyo__qr-box" :class="{ 'is-dimmed': mihoyoQrNeedRefresh }">
-                        <img
-                          v-if="mihoyoQrDataUrl"
-                          :src="mihoyoQrDataUrl"
-                          alt="米游社绑定二维码"
-                          class="ik-mihoyo__qr"
-                          draggable="false"
-                        />
-                        <div v-else class="ik-mihoyo__qr-placeholder" />
-                        <button
-                          v-if="mihoyoQrNeedRefresh"
-                          type="button"
-                          class="ik-mihoyo__refresh"
-                          @click="startMihoyoQr"
-                        >
-                          刷新二维码
-                        </button>
-                      </div>
-                      <p class="ik-mihoyo__status" :class="`is-${mihoyoQrStatus}`">
-                        {{ mihoyoQrStatusText }}
-                      </p>
-                    </template>
                   </div>
                 </div>
               </div>
@@ -1170,167 +870,6 @@ onBeforeUnmount(() => {
   /* Keep the ZZZ-style 3-rounded-corner frame on mobile; sub-dialogs
      (edit name / bio / social / logout) are centered popups, not
      fullscreen sheets. */
-}
-
-/* ── 米游社绑定 ─────────────────────────────────── */
-.ik-dialog--mihoyo {
-  height: auto;
-  min-height: 300px;
-}
-
-.ik-mihoyo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 0;
-  width: 100%;
-}
-
-.ik-mihoyo__qr-box {
-  position: relative;
-  width: 180px;
-  height: 180px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fff;
-}
-
-.ik-mihoyo__qr {
-  width: 100%;
-  height: 100%;
-  display: block;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-.ik-mihoyo__qr-box.is-dimmed .ik-mihoyo__qr {
-  filter: blur(3px) brightness(0.5);
-}
-
-.ik-mihoyo__qr-placeholder {
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ik-mihoyo__refresh {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: rgba(0, 0, 0, 0.55);
-  color: #bfff09;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.ik-mihoyo__status {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.ik-mihoyo__status.is-scanned,
-.ik-mihoyo__status.is-confirmed {
-  color: #bfff09;
-}
-
-.ik-mihoyo__status.is-expired,
-.ik-mihoyo__status.is-cancelled,
-.ik-mihoyo__status.is-error {
-  color: #ff6b6b;
-}
-
-.ik-mihoyo__info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  max-width: 320px;
-  padding: 14px 18px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 12px;
-}
-
-.ik-mihoyo__row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.ik-mihoyo__label {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
-  flex-shrink: 0;
-}
-
-.ik-mihoyo__value {
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-  text-align: right;
-  word-break: break-all;
-}
-
-/* ── 黑名单管理 ─────────────────────────────────── */
-.ik-blocked-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 0;
-}
-
-.ik-blocked-list__empty {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 14px;
-  padding: 40px 0;
-}
-
-.ik-blocked-list__item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.65);
-  border-radius: 10px;
-}
-
-.ik-blocked-list__avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.ik-blocked-list__info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-
-.ik-blocked-list__name {
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ik-blocked-list__level {
-  color: #bfff09;
-  font-size: 12px;
-  font-weight: 700;
 }
 
 /* prefers-reduced-motion 由 theme.css 全局接管 */

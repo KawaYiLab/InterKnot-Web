@@ -829,9 +829,6 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ik-home-container ik-stack">
-    <!-- 45° 斜线纹理背景（与发布委托页 / 入站考试页一致） -->
-    <div class="ik-home-page__stripe" aria-hidden="true"></div>
-
     <!-- 顶部工具条：左侧频道分类，右侧 feed 切换（推荐/关注/收藏），两组错开。 -->
     <div class="ik-home-toolbar">
       <!-- 频道 Tab 条：按 order 展示，「最新」恒在最前。
@@ -1011,23 +1008,7 @@ onBeforeUnmount(() => {
   padding-bottom: 24px;
 }
 
-/* 45° 斜线纹理背景（与发布委托页 / 入站考试页一致） */
-.ik-home-page__stripe {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    40deg,
-    transparent,
-    transparent 3.5px,
-    rgba(255, 255, 255, 0.09) 4.5px,
-    rgba(255, 255, 255, 0.09) 7.5px,
-    transparent 8.5px
-  );
-}
-
-/* 内容层抬到斜纹之上（固定定位的刷新/回顶按钮本就在更高层级） */
+/* 内容层抬到全局背景跑马灯之上（固定定位的刷新/回顶按钮本就在更高层级） */
 .ik-home-toolbar,
 .ik-skeleton-state,
 .ik-empty,
