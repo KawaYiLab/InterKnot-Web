@@ -2,7 +2,6 @@
 import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import {
-  CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   EnvelopeIcon,
@@ -10,7 +9,6 @@ import {
   LockClosedIcon,
   NoSymbolIcon,
   UserIcon,
-  XMarkIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 import type { AccountSecurity, BlockedUser, MihoyoBinding } from "~/types/entities";
@@ -573,22 +571,18 @@ useHead({ title: "账号中心" });
                   </z-form>
                   <div class="ik-ac-form-actions">
                     <z-button
+                      :icon="{ error: '#ff4444' }"
                       :disabled="bindEmailLoading"
                       @click="clearBindEmailForm"
                     >
-                      <span class="ik-ac-btn__content">
-                        <XMarkIcon class="ik-ac-btn__icon ik-ac-btn__icon--error" aria-hidden="true" />
-                        清除
-                      </span>
+                      清除
                     </z-button>
                     <z-button
+                      :icon="{ success: '#00cc0d' }"
                       :disabled="bindEmailLoading || !bindEmailInput.trim() || !bindCodeInput.trim()"
                       @click="confirmBindEmail"
                     >
-                      <span class="ik-ac-btn__content">
-                        <CheckIcon class="ik-ac-btn__icon ik-ac-btn__icon--success" aria-hidden="true" />
-                        确认
-                      </span>
+                      确认
                     </z-button>
                   </div>
                 </template>
@@ -647,22 +641,18 @@ useHead({ title: "账号中心" });
                   </z-form>
                   <div class="ik-ac-form-actions">
                     <z-button
+                      :icon="{ error: '#ff4444' }"
                       :disabled="setPasswordLoading"
                       @click="clearSetPasswordForm"
                     >
-                      <span class="ik-ac-btn__content">
-                        <XMarkIcon class="ik-ac-btn__icon ik-ac-btn__icon--error" aria-hidden="true" />
-                        清除
-                      </span>
+                      清除
                     </z-button>
                     <z-button
+                      :icon="{ success: '#00cc0d' }"
                       :disabled="setPasswordLoading || !setPasswordCodeInput.trim() || !setPasswordInput || !setPasswordConfirmInput"
                       @click="confirmSetPassword"
                     >
-                      <span class="ik-ac-btn__content">
-                        <CheckIcon class="ik-ac-btn__icon ik-ac-btn__icon--success" aria-hidden="true" />
-                        确认
-                      </span>
+                      确认
                     </z-button>
                   </div>
                 </template>
@@ -1126,26 +1116,6 @@ useHead({ title: "账号中心" });
   gap: 12px;
   justify-content: center;
   margin-top: 12px;
-}
-
-.ik-ac-btn__content {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.ik-ac-btn__icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.ik-ac-btn__icon--error {
-  color: #ff4444;
-}
-
-.ik-ac-btn__icon--success {
-  color: #00cc0d;
 }
 
 .ik-ac-security-send-hint {
