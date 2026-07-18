@@ -206,18 +206,4 @@ const overlayOpen = computed(
   font-size: clamp(360px, 48vw, 640px);
 }
 
-/* 仅全局背景跑马灯文字使用渐变色；弹窗内保持默认半透明白色 */
-.ik-global-marquee :deep(.ik-zzz-marquee__text) {
-  background: linear-gradient(
-    90deg,
-    #F8D6E4 0%,
-    #E7DCF6 45%,
-    #D2BFE8 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  opacity: 0.4;
-}
 </style>
