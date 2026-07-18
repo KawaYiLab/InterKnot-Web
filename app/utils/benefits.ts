@@ -11,7 +11,7 @@ export const BENEFIT_MATRIX = {
   /** 评论图片数量上限 */
   commentMaxImages: [0, 3, 6, 9, 9, 12, 12, 18],
   /** 帖子正文字数上限 */
-  articleMaxBody: [0, 10240, 12000, 15000, 20000, 25000, 30000, 40000],
+  articleMaxBody: [0, 1500, 2000, 3000, 4000, 5000, 6500, 8000],
 } as const satisfies Record<string, readonly number[]>;
 
 export type BenefitKey = keyof typeof BENEFIT_MATRIX;
