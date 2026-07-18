@@ -1461,13 +1461,13 @@ useHead({ title: "账号中心" });
 .ik-ac-fade-enter-active,
 .ik-ac-slide-right-enter-active,
 .ik-ac-slide-left-enter-active {
-  transition: transform 250ms var(--ease-out-quart), opacity 250ms var(--ease-out-quart);
+  transition: transform 250ms cubic-bezier(0.165, 0.84, 0.44, 1), opacity 250ms cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 
 .ik-ac-fade-leave-active,
 .ik-ac-slide-right-leave-active,
 .ik-ac-slide-left-leave-active {
-  transition: transform 200ms var(--ease-in-quart), opacity 200ms var(--ease-in-quart);
+  transition: transform 200ms cubic-bezier(0.895, 0.03, 0.685, 0.22), opacity 200ms cubic-bezier(0.895, 0.03, 0.685, 0.22);
 }
 
 .ik-ac-fade-enter-from,
