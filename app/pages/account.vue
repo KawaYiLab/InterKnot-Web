@@ -29,6 +29,8 @@ type AccountMenuKey = "account" | "mihoyo" | "blacklist";
 type AccountSubView = "" | "email" | "password";
 const activeMenuKey = ref<AccountMenuKey>("account");
 const activeSubView = ref<AccountSubView>("");
+const panelTransitionName = ref("ik-ac-fade");
+const panelKey = computed(() => `${activeMenuKey.value}:${activeSubView.value}`);
 
 // 移动端：首屏改为单栏分组列表，点击后进入对应二级面板
 const isMobile = useMediaQuery("(max-width: 900px)");
@@ -38,6 +40,7 @@ const atRoot = computed(
 
 const onMenuChange = (name: string | number) => {
   const key = String(name) as AccountMenuKey;
+  panelTransitionName.value = isMobile.value && atRoot.value ? "ik-ac-slide-right" : "ik-ac-fade";
   activeMenuKey.value = key;
   activeSubView.value = "";
   if (key === "mihoyo") {
@@ -191,12 +194,14 @@ const accountMetaText = computed(() => {
 });
 
 const openEmail = () => {
+  panelTransitionName.value = "ik-ac-slide-right";
   activeSubView.value = "email";
   bindEmailInput.value = security.value?.email || "";
   bindCodeInput.value = "";
 };
 
 const openPassword = () => {
+  panelTransitionName.value = "ik-ac-slide-right";
   activeSubView.value = "password";
   setPasswordCodeInput.value = "";
   setPasswordInput.value = "";
@@ -204,6 +209,7 @@ const openPassword = () => {
 };
 
 const goBack = () => {
+  panelTransitionName.value = "ik-ac-slide-left";
   stopMihoyoQr();
   activeMenuKey.value = "account";
   activeSubView.value = "";
@@ -415,8 +421,9 @@ useHead({ title: "账号中心" });
 
       <div class="ik-account-page__panel">
         <div class="ik-account-page__panel-body">
+          <Transition :name="panelTransitionName" mode="out-in">
           <!-- 移动端首屏：单栏分组列表 -->
-          <template v-if="isMobile && atRoot">
+          <div v-if="isMobile && atRoot" :key="panelKey" class="ik-ac-panel-state">
             <div class="ik-ac-section">
               <div class="ik-ac-section__head">
                 <span class="ik-ac-section__label">账号</span>
@@ -489,10 +496,10 @@ useHead({ title: "账号中心" });
                 </span>
               </button>
             </div>
-          </template>
+          </div>
 
           <!-- 账号 -->
-          <template v-else-if="activeMenuKey === 'account'">
+          <div v-else-if="activeMenuKey === 'account'" :key="panelKey" class="ik-ac-panel-state">
             <template v-if="activeSubView === ''">
               <div class="ik-ac-section">
                 <div class="ik-ac-section__head">
@@ -658,10 +665,10 @@ useHead({ title: "账号中心" });
                 </template>
               </div>
             </template>
-          </template>
+          </div>
 
           <!-- 连接 / 米游社 -->
-          <template v-else-if="activeMenuKey === 'mihoyo'">
+          <div v-else-if="activeMenuKey === 'mihoyo'" :key="panelKey" class="ik-ac-panel-state">
             <header class="ik-ac-detail-header">
               <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
                 <ChevronLeftIcon aria-hidden="true" />
@@ -728,10 +735,10 @@ useHead({ title: "账号中心" });
                 </p>
               </template>
             </div>
-          </template>
+          </div>
 
           <!-- 隐私 / 黑名单 -->
-          <template v-else-if="activeMenuKey === 'blacklist'">
+          <div v-else-if="activeMenuKey === 'blacklist'" :key="panelKey" class="ik-ac-panel-state">
             <header class="ik-ac-detail-header">
               <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
                 <ChevronLeftIcon aria-hidden="true" />
@@ -779,7 +786,8 @@ useHead({ title: "账号中心" });
                 加载更多
               </button>
             </div>
-          </template>
+          </div>
+          </Transition>
         </div>
       </div>
     </div>
@@ -1431,10 +1439,79 @@ useHead({ title: "账号中心" });
   }
 }
 
+.ik-ac-panel-state {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-height: 0;
+}
+
+.ik-ac-fade-enter-active,
+.ik-ac-fade-leave-active,
+.ik-ac-slide-right-enter-active,
+.ik-ac-slide-right-leave-active,
+.ik-ac-slide-left-enter-active,
+.ik-ac-slide-left-leave-active {
+  will-change: transform, opacity;
+}
+
+.ik-ac-fade-enter-active,
+.ik-ac-slide-right-enter-active,
+.ik-ac-slide-left-enter-active {
+  transition: transform 250ms var(--ease-out-quart), opacity 250ms var(--ease-out-quart);
+}
+
+.ik-ac-fade-leave-active,
+.ik-ac-slide-right-leave-active,
+.ik-ac-slide-left-leave-active {
+  transition: transform 200ms var(--ease-in-quart), opacity 200ms var(--ease-in-quart);
+}
+
+.ik-ac-fade-enter-from,
+.ik-ac-fade-leave-to {
+  opacity: 0;
+}
+
+.ik-ac-slide-right-enter-from {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+.ik-ac-slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+
+.ik-ac-slide-left-enter-from {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+
+.ik-ac-slide-left-leave-to {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ik-ac-btn,
-  .ik-ac-row {
-    transition: none;
+  .ik-ac-row,
+  .ik-ac-fade-enter-active,
+  .ik-ac-fade-leave-active,
+  .ik-ac-slide-right-enter-active,
+  .ik-ac-slide-right-leave-active,
+  .ik-ac-slide-left-enter-active,
+  .ik-ac-slide-left-leave-active {
+    transition: none !important;
   }
+}
+
+html.no-gpu .ik-ac-fade-enter-active,
+html.no-gpu .ik-ac-fade-leave-active,
+html.no-gpu .ik-ac-slide-right-enter-active,
+html.no-gpu .ik-ac-slide-right-leave-active,
+html.no-gpu .ik-ac-slide-left-enter-active,
+html.no-gpu .ik-ac-slide-left-leave-active {
+  transition: none !important;
 }
 </style>
