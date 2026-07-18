@@ -485,7 +485,7 @@ useHead({ title: "账号中心" });
                 </template>
                 <template v-else>
                   <z-form class="ik-ac-form" label-position="top">
-                    <z-form-item label="邮箱">
+                    <z-form-item label="新邮箱">
                       <z-input
                         v-model="bindEmailInput"
                         type="email"
@@ -885,6 +885,10 @@ useHead({ title: "账号中心" });
   justify-content: space-between;
   gap: 8px;
   padding: 0 2px;
+}
+
+.ik-ac-section__head + .ik-ac-row {
+  margin-top: 8px;
 }
 
 .ik-ac-section__label {
