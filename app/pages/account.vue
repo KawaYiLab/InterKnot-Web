@@ -422,8 +422,9 @@ useHead({ title: "账号中心" });
       <div class="ik-account-page__panel">
         <div class="ik-account-page__panel-body">
           <Transition :name="panelTransitionName" mode="out-in">
+          <div :key="panelKey" class="ik-ac-panel-state">
           <!-- 移动端首屏：单栏分组列表 -->
-          <div v-if="isMobile && atRoot" :key="panelKey" class="ik-ac-panel-state">
+          <template v-if="isMobile && atRoot">
             <div class="ik-ac-section">
               <div class="ik-ac-section__head">
                 <span class="ik-ac-section__label">账号</span>
@@ -496,10 +497,10 @@ useHead({ title: "账号中心" });
                 </span>
               </button>
             </div>
-          </div>
+          </template>
 
           <!-- 账号 -->
-          <div v-else-if="activeMenuKey === 'account'" :key="panelKey" class="ik-ac-panel-state">
+          <template v-else-if="activeMenuKey === 'account'">
             <template v-if="activeSubView === ''">
               <div class="ik-ac-section">
                 <div class="ik-ac-section__head">
@@ -665,10 +666,10 @@ useHead({ title: "账号中心" });
                 </template>
               </div>
             </template>
-          </div>
+          </template>
 
           <!-- 连接 / 米游社 -->
-          <div v-else-if="activeMenuKey === 'mihoyo'" :key="panelKey" class="ik-ac-panel-state">
+          <template v-else-if="activeMenuKey === 'mihoyo'">
             <header class="ik-ac-detail-header">
               <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
                 <ChevronLeftIcon aria-hidden="true" />
@@ -735,10 +736,10 @@ useHead({ title: "账号中心" });
                 </p>
               </template>
             </div>
-          </div>
+          </template>
 
           <!-- 隐私 / 黑名单 -->
-          <div v-else-if="activeMenuKey === 'blacklist'" :key="panelKey" class="ik-ac-panel-state">
+          <template v-else-if="activeMenuKey === 'blacklist'">
             <header class="ik-ac-detail-header">
               <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
                 <ChevronLeftIcon aria-hidden="true" />
@@ -786,6 +787,7 @@ useHead({ title: "账号中心" });
                 加载更多
               </button>
             </div>
+          </template>
           </div>
           </Transition>
         </div>
