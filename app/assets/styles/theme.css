@@ -525,9 +525,8 @@ html.no-gpu .ik-masonry-card-enter {
   animation: none !important;
 }
 
-/* 主页固定斜线纹理和 backdrop-filter 预热元素在 CPU 路径下也会参与
-   每帧合成/重绘，无 GPU 时一并隐藏。 */
-html.no-gpu .ik-home-page__stripe,
+/* backdrop-filter 预热元素在 CPU 路径下也会参与每帧合成/重绘，
+   无 GPU 时一并隐藏。 */
 html.no-gpu .ik-backdrop-warmup {
   display: none !important;
 }

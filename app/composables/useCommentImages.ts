@@ -4,8 +4,6 @@ import type { UploadedFile, UploadStatus, UploadTask } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { isAllowedImage, MAX_IMAGE_SIZE } from "~/utils/upload";
 
-const MAX_COMMENT_IMAGES = 9;
-
 const createUploadTask = (file: File): UploadTask => ({
   localId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
   filename: file.name,
@@ -38,6 +36,8 @@ const safeRevokeObjectUrl = (url: string) => {
 export function useCommentImages() {
   const api = useApi();
   const message = useMessage();
+  // 等级权益：评论图片数上限随等级变化
+  const { commentMaxImages: maxCommentImages } = useBenefits();
   const uploadTasks = ref<UploadTask[]>([]);
   const showImagePickerModal = ref(false);
 
@@ -48,7 +48,7 @@ export function useCommentImages() {
   );
 
   const remainingImageSlots = computed(() =>
-    Math.max(0, MAX_COMMENT_IMAGES - uploadTasks.value.length),
+    Math.max(0, maxCommentImages.value - uploadTasks.value.length),
   );
 
   const hasPendingUploads = computed(() =>
@@ -72,7 +72,7 @@ export function useCommentImages() {
 
   const openImagePicker = () => {
     if (remainingImageSlots.value <= 0) {
-      message.warning(`最多只能添加 ${MAX_COMMENT_IMAGES} 张图片`);
+      message.warning(`当前等级最多添加 ${maxCommentImages.value} 张图片，升级可提升上限`);
       return;
     }
     showImagePickerModal.value = true;
@@ -120,10 +120,10 @@ export function useCommentImages() {
 
   function handleFileSelect(files: FileList | File[]) {
     const fileArray = Array.from(files);
-    const remaining = MAX_COMMENT_IMAGES - uploadTasks.value.length;
+    const remaining = maxCommentImages.value - uploadTasks.value.length;
 
     if (remaining <= 0) {
-      message.error(`最多只能添加 ${MAX_COMMENT_IMAGES} 张图片`);
+      message.error(`当前等级最多添加 ${maxCommentImages.value} 张图片，升级可提升上限`);
       return;
     }
 
@@ -175,7 +175,7 @@ export function useCommentImages() {
   });
 
   return {
-    MAX_COMMENT_IMAGES,
+    maxCommentImages,
     uploadTasks,
     showImagePickerModal,
     existingUploadIds,

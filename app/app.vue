@@ -6,10 +6,26 @@ const auth = useAuthStore();
 const router = useRouter();
 const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
+const benefitsModal = useBenefitsModal();
 const gpuAccelerated = useGpuAccelerated();
 
 if (import.meta.client) {
   auth.hydrateFromStorage();
+
+  // 登录态恢复后预取账号中心数据，刷新时先从本地缓存恢复再静默更新
+  if (auth.isLogin) {
+    const accountData = useAccountData();
+    const stop = watch(
+      () => auth.user,
+      (user) => {
+        if (user) {
+          void accountData.ensureLoaded();
+          stop();
+        }
+      },
+      { immediate: true },
+    );
+  }
 
   // 检测到软件渲染（未启用 GPU 加速）时，提前给 html 加标记，
   // CSS 据此关闭全局跑马灯，避免 CPU 路径下全屏重绘造成滚动卡顿。
@@ -107,7 +123,7 @@ const showMobileBottomNav = computed(
 // 弹窗 backdrop-filter 模糊之后 → 迫使模糊每帧重算。此时暂停它（弹窗自带的
 // 那份跑马灯照常显示），缓解「点开弹窗卡顿」。
 const overlayOpen = computed(
-  () => postModal.isOpen.value || knockModal.visible.value,
+  () => postModal.isOpen.value || knockModal.visible.value || benefitsModal.visible.value,
 );
 </script>
 
@@ -136,6 +152,15 @@ const overlayOpen = computed(
     <!-- 确认弹窗 -->
     <ClientOnly>
       <LazyConfirmDialog />
+    </ClientOnly>
+
+    <!-- 创作权益弹窗 -->
+    <ClientOnly>
+      <Teleport to="body">
+        <Transition name="ik-overlay" appear>
+          <LazyBenefitsModal v-if="benefitsModal.visible.value" />
+        </Transition>
+      </Teleport>
     </ClientOnly>
 
     <!-- 举报弹窗 -->

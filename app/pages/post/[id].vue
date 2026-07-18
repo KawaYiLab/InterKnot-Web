@@ -861,9 +861,6 @@ onBeforeUnmount(() => {
       <div class="ik-page__gallery-progress-bar" :style="{ width: `${galleryProgress}%` }" />
     </div>
 
-    <!-- ── 斜线纹理背景（ZZZ PatternPainter） ──── -->
-    <div class="ik-page__stripe" aria-hidden="true"></div>
-
     <!-- ── Loading skeleton ──────────────────── -->
     <div v-if="loading" class="ik-page__shell">
       <div class="ik-page__outer">
@@ -1358,22 +1355,6 @@ onBeforeUnmount(() => {
   justify-content: center;
   overflow: hidden;
   pointer-events: none;
-}
-
-/* 45° 斜线纹理 (PatternPainter) */
-.ik-page__stripe {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: repeating-linear-gradient(
-    40deg,
-    transparent,
-    transparent 3.5px,
-    rgba(255, 255, 255, 0.09) 4.5px,
-    rgba(255, 255, 255, 0.09) 7.5px,
-    transparent 8.5px
-  );
 }
 
 /* ── Gallery Loading Progress ─────────────────── */

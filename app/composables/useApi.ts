@@ -1,6 +1,7 @@
 import type { QueryClient, QueryKey } from "@tanstack/vue-query";
 import type { ApiClientError, Pagination } from "~/types/api";
 import type {
+  AccountSecurity,
   Author,
   Avatar,
   AvatarType,
@@ -36,6 +37,12 @@ import {
 } from "~/utils/pagination";
 import type { MentionCandidate } from "~/composables/useMentionInput";
 import { toMediaUrl } from "~/utils/image";
+import {
+  BENEFIT_MAX_LEVEL,
+  benefitsForLevel,
+  clampBenefitLevel,
+} from "~/utils/benefits";
+import type { BenefitKey, BenefitValues } from "~/utils/benefits";
 
 // ── 集中定义 queryKey，便于写接口精准 invalidate ─────────────
 const qk = {
@@ -1722,6 +1729,49 @@ export function useApi() {
     );
   };
 
+  // ── 账号安全（/api/me/security、邮箱绑定、密码设置） ─────────────
+
+  const getMySecurity = async (): Promise<AccountSecurity> => {
+    const response = await $api("/api/me/security");
+    const data = response as Record<string, unknown>;
+    return {
+      email: String(data.email || ""),
+      provider: data.provider === "local" ? "local" : "mihoyo",
+      hasBoundEmail: data.hasBoundEmail === true,
+      hasPassword: data.hasPassword === true,
+    };
+  };
+
+  const sendBindEmailCode = async (email: string): Promise<SendRegisterCodeResult> => {
+    const response = await $api("/api/me/email/send-code", {
+      method: "POST",
+      body: { email },
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      email: String(data.email || email),
+      sent: data.sent === true,
+      expiresIn: Number(data.expiresIn || 600),
+      cooldown: Number(data.cooldown || 60),
+    };
+  };
+
+  const bindEmail = async (email: string, code: string): Promise<AccountSecurity> => {
+    const response = await $api("/api/me/email", {
+      method: "PUT",
+      body: { email, code },
+    });
+    const data = response as Record<string, unknown>;
+    invalidate(qk.me.self);
+    invalidate(qk.me.profile);
+    return {
+      email: String(data.email || email),
+      provider: data.provider === "local" ? "local" : "mihoyo",
+      hasBoundEmail: data.hasBoundEmail === true,
+      hasPassword: data.hasPassword === true,
+    };
+  };
+
   const getPinnedArticles = async (
     limit?: number,
   ): Promise<{
@@ -2000,6 +2050,43 @@ export function useApi() {
   };
 
   // ── 入站考试 ──────────────────────────────────────────────
+  /**
+   * 获取当前用户的等级权益（未登录按 Lv.0）
+   */
+  const getMyBenefits = async (): Promise<{
+    level: number;
+    maxLevel: number;
+    benefits: BenefitValues;
+    nextLevel?: number;
+    nextBenefits?: BenefitValues;
+  }> => {
+    const response = await $api("/api/benefits/me", { method: "GET" });
+    const data = response as Record<string, unknown>;
+    const level = clampBenefitLevel(data.level);
+    const parse = (raw: unknown, fallbackLevel: number): BenefitValues => {
+      const obj = (raw ?? {}) as Record<string, unknown>;
+      const fallback = benefitsForLevel(fallbackLevel);
+      const num = (key: BenefitKey) =>
+        typeof obj[key] === "number" ? (obj[key] as number) : fallback[key];
+      return {
+        articleMaxImages: num("articleMaxImages"),
+        commentMaxImages: num("commentMaxImages"),
+        articleMaxBody: num("articleMaxBody"),
+      };
+    };
+    const nextLevel =
+      typeof data.nextLevel === "number" ? clampBenefitLevel(data.nextLevel) : undefined;
+    return {
+      level,
+      maxLevel:
+        typeof data.maxLevel === "number" ? data.maxLevel : BENEFIT_MAX_LEVEL,
+      benefits: parse(data.benefits, level),
+      ...(nextLevel != null
+        ? { nextLevel, nextBenefits: parse(data.nextBenefits, nextLevel) }
+        : {}),
+    };
+  };
+
   const getExamStatus = async (): Promise<ExamStatus> => {
     const response = await $api("/api/exam/status");
     return response as ExamStatus;
@@ -2084,6 +2171,10 @@ export function useApi() {
     updateMyBio,
     updateMyVisibility,
     getMyProfileSettings,
+    // 账号安全
+    getMySecurity,
+    sendBindEmailCode,
+    bindEmail,
     getPinnedArticles,
     updatePinnedArticles,
     searchAuthors,
@@ -2095,6 +2186,8 @@ export function useApi() {
     getCheckInStatus,
     checkIn,
     getDailyExpStatus,
+    // 等级权益
+    getMyBenefits,
     // 入站考试
     getExamStatus,
     startExam,

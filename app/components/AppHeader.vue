@@ -80,7 +80,7 @@ router.afterEach(() => {
   }, 100);
 });
 
-type HeaderTabName = "home" | "notification" | "create" | "mine";
+type HeaderTabName = "home" | "notification" | "create" | "mine" | null;
 
 const activeTab = ref<HeaderTabName>("home");
 const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
@@ -352,7 +352,10 @@ const resolveActiveTab = (path: string): HeaderTabName => {
   if (path.startsWith("/create")) {
     return "create";
   }
-  return "home";
+  if (path === "/") {
+    return "home";
+  }
+  return null;
 };
 
 const applySearch = async () => {

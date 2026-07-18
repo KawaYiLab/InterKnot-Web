@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DailyExpStatus } from "~/types/entities";
+import { QuestionMarkCircleIcon } from "@heroicons/vue/24/outline";
 import {
   LEVEL_THRESHOLDS,
   LEVEL_TITLES,
@@ -16,6 +17,9 @@ defineProps<{
 }>();
 
 const formatExp = (n: number) => n.toLocaleString("zh-CN");
+
+const benefitsModal = useBenefitsModal();
+const openBenefits = () => benefitsModal.open();
 
 const levelGuideRows = Array.from({ length: MAX_LEVEL }, (_, index) => {
   const level = index + 1;
@@ -112,7 +116,12 @@ onBeforeUnmount(() => {
               </section>
 
               <section class="ik-checkin-help__block">
-                <h3 class="ik-checkin-help__heading">绳网等级</h3>
+                <h3 class="ik-checkin-help__heading">
+                  绳网等级
+                  <button type="button" class="ik-checkin-help__heading-help" aria-label="创作权益" title="创作权益" @click="openBenefits">
+                    <QuestionMarkCircleIcon class="ik-checkin-help__heading-help-icon" aria-hidden="true" />
+                  </button>
+                </h3>
                 <p>绳网等级（<strong>Lv.</strong>）由<strong>累计绳网信用</strong>决定，最高 <strong>Lv.{{ MAX_LEVEL }}</strong>。总绳网信用达到门槛后自动升级，显示在顶部左上角区域。</p>
                 <p>下表为各等级的<strong>累计绳网信用门槛</strong>；「本级还需」指从该等级起点升到下一级，在本级内还要获得的绳网信用（等级越高，跨度越大）：</p>
                 <ul class="ik-checkin-help__list ik-checkin-help__list--levels">
@@ -331,6 +340,31 @@ onBeforeUnmount(() => {
   font-size: 15px;
   font-weight: 700;
   color: #BFFF09;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ik-checkin-help__heading-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease;
+}
+
+.ik-checkin-help__heading-help:hover {
+  color: #BFFF09;
+}
+
+.ik-checkin-help__heading-help-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .ik-checkin-help__list {

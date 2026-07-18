@@ -16,6 +16,14 @@ export interface Author {
   examPassed?: boolean;
 }
 
+/** 账号安全概览（/api/me/security） */
+export interface AccountSecurity {
+  email: string;
+  provider: "mihoyo" | "local";
+  hasBoundEmail: boolean;
+  hasPassword: boolean;
+}
+
 export interface DailyExpSource {
   done: boolean;
   exp: number;

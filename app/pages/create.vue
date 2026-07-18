@@ -27,7 +27,6 @@ import { resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
 import { isAllowedImage, MAX_IMAGE_SIZE } from "~/utils/upload";
 
-const MAX_COVER_IMAGES = 9;
 const AUTO_SAVE_DELAY = 800;
 
 const api = useApi();
@@ -38,6 +37,8 @@ const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const message = useMessage();
 const pendingPost = usePendingPost();
+// 等级权益：发帖图片数与正文字数上限随等级变化
+const { articleMaxImages: maxCoverImages, articleMaxBody: maxBodyChars } = useBenefits();
 
 useSeoMeta({
   title: "发布委托 - 绳网",
@@ -111,8 +112,11 @@ const isCoverUploading = computed(() =>
 );
 
 const remainingCoverSlots = computed(() =>
-  Math.max(0, MAX_COVER_IMAGES - uploadTasks.value.length),
+  Math.max(0, maxCoverImages.value - uploadTasks.value.length),
 );
+
+const bodyCharCount = computed(() => body.value.length);
+const isBodyOverLimit = computed(() => bodyCharCount.value > maxBodyChars.value);
 
 const existingUploadIds = computed(() =>
   uploadTasks.value
@@ -133,6 +137,7 @@ const canPublish = computed(
     !isPublishing.value &&
     !isDeletingDraft.value &&
     !isCoverUploading.value &&
+    !isBodyOverLimit.value &&
     title.value.trim().length > 0 &&
     (body.value.trim().length > 0 || uploadedImages.value.length > 0),
 );
@@ -259,7 +264,7 @@ function openImagePicker() {
     return;
   }
   if (remainingCoverSlots.value <= 0) {
-    message.error(`最多上传 ${MAX_COVER_IMAGES} 张图片`);
+    message.error(`当前等级最多上传 ${maxCoverImages.value} 张图片，升级可提升上限`);
     return;
   }
   showImagePickerModal.value = true;
@@ -309,10 +314,10 @@ async function executeUploadTask(task: UploadTask) {
 
 function handleFileSelect(files: FileList | File[]) {
   const fileArray = Array.from(files);
-  const remaining = MAX_COVER_IMAGES - uploadTasks.value.length;
+  const remaining = maxCoverImages.value - uploadTasks.value.length;
 
   if (remaining <= 0) {
-    message.error(`最多上传 ${MAX_COVER_IMAGES} 张图片`);
+    message.error(`当前等级最多上传 ${maxCoverImages.value} 张图片，升级可提升上限`);
     return;
   }
 
@@ -375,6 +380,11 @@ async function publish() {
 
   if (title.value.trim().length === 0) {
     message.error("标题不能为空");
+    return;
+  }
+
+  if (isBodyOverLimit.value) {
+    message.error(`当前等级正文最多 ${maxBodyChars.value} 字，升级可提升上限`);
     return;
   }
 
@@ -806,9 +816,6 @@ if (import.meta.client) {
 
 <template>
   <section class="ik-create-page" @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
-    <!-- 45° 斜线纹理背景 -->
-    <div class="ik-create-page__stripe" aria-hidden="true"></div>
-
     <!-- 未通过入站考试：禁止发布委托，引导去考试页 -->
     <div v-if="auth.needExam" class="ik-create-exam-gate">
       <div class="ik-create-exam-gate__panel">
@@ -930,7 +937,13 @@ if (import.meta.client) {
           <!-- Body section -->
           <div class="ik-create-section">
             <div class="ik-create-section__head">
-              <span class="ik-create-section__label">正文</span>
+              <span class="ik-create-section__label">
+                正文
+                <span
+                  class="ik-create-section__count-pill"
+                  :class="{ 'ik-create-section__count-pill--over': isBodyOverLimit }"
+                >{{ bodyCharCount }}/{{ maxBodyChars }}</span>
+              </span>
               <span class="ik-create-section__hint">若仅上传图片，正文可留空</span>
             </div>
             <div class="ik-create-editor-frame">
@@ -948,7 +961,7 @@ if (import.meta.client) {
               <span class="ik-create-section__label">
                 <PhotoIcon style="width:14px;height:14px" />
                 图片
-                <span class="ik-create-section__count-pill">{{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
+                <span class="ik-create-section__count-pill">{{ uploadTasks.length }}/{{ maxCoverImages }}</span>
               </span>
               <span class="ik-create-section__hint">第一张图片为封面</span>
             </div>
@@ -1004,7 +1017,7 @@ if (import.meta.client) {
                 </button>
               </div>
               <CoverImageAddButton
-                v-if="uploadTasks.length < MAX_COVER_IMAGES"
+                v-if="uploadTasks.length < maxCoverImages"
                 :is-dragging="isDragging"
                 @click="openImagePicker"
               />
@@ -1072,7 +1085,7 @@ if (import.meta.client) {
       <!-- Cover strip (horizontal scroll) -->
       <div class="ik-mobile-cover-strip">
         <button
-          v-if="uploadTasks.length < MAX_COVER_IMAGES"
+          v-if="uploadTasks.length < maxCoverImages"
           type="button"
           class="ik-mobile-cover-add"
           aria-label="添加图片"
@@ -1164,7 +1177,7 @@ if (import.meta.client) {
       <button type="button" class="ik-mobile-row" @click="openMobileCoverPicker">
         <PhotoIcon class="ik-mobile-row__icon" />
         <span class="ik-mobile-row__title">封面</span>
-        <span class="ik-mobile-row__value">{{ uploadTasks.length }}/{{ MAX_COVER_IMAGES }}</span>
+        <span class="ik-mobile-row__value">{{ uploadTasks.length }}/{{ maxCoverImages }}</span>
         <ChevronRightIcon class="ik-mobile-row__chevron" />
       </button>
 
@@ -1411,22 +1424,6 @@ if (import.meta.client) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-/* 45° 斜线纹理（与委托弹窗一致） */
-.ik-create-page__stripe {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    40deg,
-    transparent,
-    transparent 3.5px,
-    rgba(255, 255, 255, 0.09) 4.5px,
-    rgba(255, 255, 255, 0.09) 7.5px,
-    transparent 8.5px
-  );
 }
 
 .ik-create-page > .ik-create-columns {
@@ -1820,6 +1817,11 @@ if (import.meta.client) {
   font-weight: 900;
   letter-spacing: 0.3px;
   font-variant-numeric: tabular-nums;
+}
+
+.ik-create-section__count-pill--over {
+  background: rgba(255, 68, 68, 0.14);
+  color: #ff5c5c;
 }
 
 /* ── Title input (large, flat) ──────────────────── */
@@ -2285,10 +2287,6 @@ if (import.meta.client) {
     background: #121212;
     /* 抑制 iOS/Android 纵向橡皮筋导致暴露 fixed 背景层 */
     overscroll-behavior-y: contain;
-  }
-  /* Flutter mobile 设计无斜纹底纹，避免 overscroll / 软键盘缝隙时露出 */
-  .ik-create-page__stripe {
-    display: none;
   }
   .ik-create-page > .ik-create-columns,
   .ik-create-footer {
