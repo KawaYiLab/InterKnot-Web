@@ -1074,7 +1074,7 @@ useHead({ title: "账号中心" });
   display: flex;
   gap: 12px;
   justify-content: center;
-  margin-top: 12px;
+  margin-top: 20px;
 }
 
 .ik-ac-security-send-hint {
