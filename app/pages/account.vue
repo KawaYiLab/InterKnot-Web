@@ -11,12 +11,34 @@ import {
   UserIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
-import type { AccountSecurity, BlockedUser, MihoyoBinding } from "~/types/entities";
 
 const auth = useAuthStore();
 const api = useApi();
 const message = useMessage();
 const loginDialog = useLoginDialog();
+const accountData = useAccountData();
+
+const {
+  security,
+  securityLoading,
+  mihoyoBinding,
+  mihoyoLoading,
+  mihoyoLoaded,
+  mihoyoUnbinding,
+  blockedUsers,
+  blockedLoading,
+  blockedLoaded,
+  blockedHasNext,
+  ensureLoaded,
+  ensureMihoyo,
+  ensureBlocked,
+  loadBlocked,
+  setSecurity,
+  setPasswordDone,
+  setMihoyoBinding,
+  unbindMihoyo: unbindMihoyoAction,
+  unblockUser: unblockUserAction,
+} = accountData;
 
 // -- Auth guard --
 if (import.meta.client && !auth.isLogin) {
@@ -45,27 +67,26 @@ const onMenuChange = (name: string | number) => {
   activeSubView.value = "";
   if (key === "mihoyo") {
     if (!mihoyoLoaded.value) {
-      void loadMihoyo();
+      ensureMihoyo().then(() => {
+        if (!mihoyoBinding.value && activeMenuKey.value === "mihoyo") {
+          void startMihoyoQr();
+        }
+      });
     } else if (!mihoyoBinding.value) {
       void startMihoyoQr();
     }
   } else if (key === "blacklist" && !blockedLoaded.value) {
-    void loadBlocked();
+    void ensureBlocked();
   }
 };
 
 // ── 米游社绑定 ─────────────────────────────
-const mihoyoBinding = ref<MihoyoBinding | null>(null);
-const mihoyoLoading = ref(true);
-const mihoyoLoaded = ref(false);
-const mihoyoUnbinding = ref(false);
-
 const mihoyo = useMihoyoQr({
   isActive: () => activeMenuKey.value === "mihoyo" && !mihoyoBinding.value,
   width: 200,
   onConfirmed: (res) => {
     if (res.mode !== "bind") return;
-    mihoyoBinding.value = res.binding;
+    setMihoyoBinding(res.binding);
     message.success("米游社账号绑定成功");
   },
   onError: (err) => {
@@ -96,42 +117,12 @@ const mihoyoMetaText = computed(() => {
   return mihoyoBinding.value ? (mihoyoBinding.value.zzzNickname || "已绑定") : "未绑定";
 });
 
-const loadMihoyo = async () => {
-  mihoyoLoading.value = true;
-  try {
-    mihoyoBinding.value = await api.getMihoyoBinding();
-    mihoyoLoaded.value = true;
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "获取绑定信息失败"));
-  } finally {
-    mihoyoLoading.value = false;
-  }
-  if (!mihoyoBinding.value && activeMenuKey.value === "mihoyo") {
-    void startMihoyoQr();
-  }
-};
-
 const unbindMihoyo = async () => {
-  if (mihoyoUnbinding.value) return;
-  mihoyoUnbinding.value = true;
-  try {
-    await api.unbindMihoyo();
-    mihoyoBinding.value = null;
-    message.success("已解除米游社绑定");
-    void startMihoyoQr();
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "解绑失败"));
-  } finally {
-    mihoyoUnbinding.value = false;
-  }
+  await unbindMihoyoAction();
+  void startMihoyoQr();
 };
 
 // ── 账号安全 ─────────────────────────────────
-const MIHOYO_PLACEHOLDER_EMAIL_SUFFIX = "@mihoyo-login.inter-knot.invalid";
-
-const security = ref<AccountSecurity | null>(null);
-const securityLoading = ref(false);
-
 const bindEmailInput = ref("");
 const bindCodeInput = ref("");
 const bindEmailLoading = ref(false);
@@ -165,26 +156,6 @@ onBeforeUnmount(() => {
     codeCooldownTimer = null;
   }
 });
-
-const loadSecurity = async () => {
-  if (!auth.isLogin) return;
-  securityLoading.value = true;
-  try {
-    security.value = await api.getMySecurity();
-  } catch {
-    // 后端 /api/me/security 尚未部署时的降级：根据 auth.user.email 推断
-    const email = auth.user?.email || "";
-    const isPlaceholder = email.endsWith(MIHOYO_PLACEHOLDER_EMAIL_SUFFIX);
-    security.value = {
-      email,
-      provider: isPlaceholder ? "mihoyo" : "local",
-      hasBoundEmail: !!email && !isPlaceholder,
-      hasPassword: !!email && !isPlaceholder,
-    };
-  } finally {
-    securityLoading.value = false;
-  }
-};
 
 const accountMetaText = computed(() => {
   if (securityLoading.value) return "加载中";
@@ -261,7 +232,7 @@ const confirmBindEmail = async () => {
   bindEmailLoading.value = true;
   try {
     const res = await api.bindEmail(email, code);
-    security.value = res;
+    setSecurity(res);
     auth.updateUserPartial({ email });
     message.success("邮箱绑定成功");
     goBack();
@@ -311,12 +282,9 @@ const confirmSetPassword = async () => {
   }
   setPasswordLoading.value = true;
   try {
-    await api.resetPassword(security.value.email, code, password);
+    await api.resetPassword(security.value!.email, code, password);
     const hadPassword = security.value?.hasPassword === true;
-    if (security.value) {
-      security.value.hasPassword = true;
-      security.value.provider = "local";
-    }
+    setPasswordDone();
     message.success(hadPassword ? "密码修改成功" : "密码设置成功");
     goBack();
   } catch (err) {
@@ -327,54 +295,15 @@ const confirmSetPassword = async () => {
 };
 
 // ── 黑名单管理 ─────────────────────────────
-const blockedUsers = ref<BlockedUser[]>([]);
-const blockedLoading = ref(false);
-const blockedHasNext = ref(true);
-const blockedCursor = ref("");
-const blockedLoaded = ref(false);
-
 const blacklistMetaText = computed(() => {
   if (blockedLoading.value) return "加载中";
   if (!blockedLoaded.value) return "管理屏蔽的用户";
   return blockedUsers.value.length ? `${blockedUsers.value.length} 个用户` : "0 个用户";
 });
 
-const loadBlocked = async () => {
-  if (blockedLoading.value || !blockedHasNext.value) return;
-  blockedLoading.value = true;
-  try {
-    const page = await api.getMyBlockedList(blockedCursor.value);
-    blockedUsers.value.push(...page.nodes);
-    blockedHasNext.value = page.hasNextPage;
-    blockedCursor.value = page.endCursor;
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "加载黑名单失败"));
-  } finally {
-    blockedLoading.value = false;
-    blockedLoaded.value = true;
-  }
-};
-
-const unblockUser = async (user: BlockedUser) => {
-  if (!user.documentId) return;
-  try {
-    await api.toggleUserBlock(user.documentId);
-    message.success("已取消拉黑");
-    blockedUsers.value = blockedUsers.value.filter(
-      (u) => u.documentId !== user.documentId,
-    );
-    api.invalidateQueries(["articles"]);
-    api.invalidateQueries(["profile"]);
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "取消拉黑失败"));
-  }
-};
-
 onMounted(() => {
   if (!auth.isLogin) return;
-  void loadSecurity();
-  void loadMihoyo();
-  void loadBlocked();
+  void ensureLoaded();
 });
 
 useHead({ title: "账号中心" });
@@ -772,7 +701,7 @@ useHead({ title: "账号中心" });
                     <span class="ik-ac-blocked-name">{{ user.name || user.username || '匿名用户' }}</span>
                     <span v-if="user.level" class="ik-ac-blocked-level">Lv.{{ user.level }}</span>
                   </div>
-                  <button class="ik-ac-btn ik-ac-btn--small" @click="unblockUser(user)">
+                  <button class="ik-ac-btn ik-ac-btn--small" @click="unblockUserAction(user)">
                     取消拉黑
                   </button>
                 </div>
@@ -782,7 +711,7 @@ useHead({ title: "账号中心" });
               <button
                 v-else-if="blockedHasNext && blockedUsers.length"
                 class="ik-ac-btn ik-ac-btn--ghost"
-                @click="loadBlocked"
+                @click="() => loadBlocked()"
               >
                 加载更多
               </button>
