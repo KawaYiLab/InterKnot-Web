@@ -311,8 +311,6 @@ useHead({ title: "账号中心" });
 
 <template>
   <section class="ik-account-page">
-    <div class="ik-account-page__stripe" aria-hidden="true"></div>
-
     <div class="ik-account-page__columns">
       <aside v-if="!isMobile" class="ik-account-page__nav">
         <z-menu class="ik-account-menu" :model-value="activeMenuKey" @change="onMenuChange">
@@ -739,22 +737,6 @@ useHead({ title: "账号中心" });
   flex-direction: column;
   justify-content: center;
   gap: 16px;
-}
-
-/* 45° 斜线纹理（与发布委托页一致） */
-.ik-account-page__stripe {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    40deg,
-    transparent,
-    transparent 3.5px,
-    rgba(255, 255, 255, 0.09) 4.5px,
-    rgba(255, 255, 255, 0.09) 7.5px,
-    transparent 8.5px
-  );
 }
 
 .ik-account-page__columns {
