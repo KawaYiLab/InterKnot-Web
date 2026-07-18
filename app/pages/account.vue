@@ -1003,7 +1003,7 @@ useHead({ title: "账号中心" });
   padding: 0;
   border: none;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
+  background: transparent;
   color: #fff;
   cursor: pointer;
   transition: background 0.12s ease;
