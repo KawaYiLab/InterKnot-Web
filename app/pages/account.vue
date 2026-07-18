@@ -702,13 +702,13 @@ useHead({ title: "账号中心" });
                     <span class="ik-ac-mihoyo-value">{{ mihoyoBinding.zzzRegionName }}</span>
                   </div>
                 </div>
-                <button
-                  class="ik-ac-btn ik-ac-btn--danger"
+                <z-button
+                  type="danger"
                   :disabled="mihoyoUnbinding"
                   @click="unbindMihoyo"
                 >
                   {{ mihoyoUnbinding ? "解绑中…" : "解除绑定" }}
-                </button>
+                </z-button>
               </template>
 
               <template v-else>
@@ -1429,6 +1429,7 @@ useHead({ title: "账号中心" });
 
   /* 桌面端：账号安全表单输入框、按钮等收窄并居中，避免横屏过度拉伸 */
   .ik-ac-detail-body > .z-input,
+  .ik-ac-detail-body > .z-button,
   .ik-ac-detail-body > .ik-ac-form,
   .ik-ac-detail-body > .ik-ac-form-actions,
   .ik-ac-detail-body > .ik-ac-btn,
