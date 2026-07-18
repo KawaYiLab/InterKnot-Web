@@ -541,7 +541,7 @@ useHead({ title: "账号中心" });
                 </template>
                 <template v-else-if="!security?.hasBoundEmail">
                   <p class="ik-ac-empty">请先绑定邮箱后再设置密码。</p>
-                  <button class="ik-ac-btn ik-ac-btn--ghost" @click="goBack">返回</button>
+                  <z-button class="ik-ac-return-btn" @click="goBack">返回</z-button>
                 </template>
                 <template v-else>
                   <p class="ik-ac-security-send-hint">
@@ -1289,7 +1289,8 @@ useHead({ title: "账号中心" });
   color: rgba(255, 255, 255, 0.55);
 }
 
-.ik-ac-unbind-btn {
+.ik-ac-unbind-btn,
+.ik-ac-return-btn {
   align-self: center;
 }
 
