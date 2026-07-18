@@ -75,8 +75,8 @@ const onMenuChange = (name: string | number) => {
     } else if (!mihoyoBinding.value) {
       void startMihoyoQr();
     }
-  } else if (key === "blacklist" && !blockedLoaded.value) {
-    void ensureBlocked();
+  } else if (key === "blacklist") {
+    void ensureBlocked(true);
   }
 };
 
