@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  EnvelopeIcon,
+  LinkIcon,
+  LockClosedIcon,
+  NoSymbolIcon,
+  UserIcon,
+  XMarkIcon,
+} from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 import type { AccountSecurity, BlockedUser, MihoyoBinding } from "~/types/entities";
 
@@ -372,24 +383,33 @@ useHead({ title: "账号中心" });
     <div class="ik-account-page__columns">
       <aside v-if="!isMobile" class="ik-account-page__nav">
         <z-menu class="ik-account-menu" :model-value="activeMenuKey" @change="onMenuChange">
-          <z-menu-item name="account" icon="home">
+          <z-menu-item name="account">
             <div class="ik-account-menu__content">
-              <span class="ik-account-menu__title">账号</span>
-              <span class="ik-account-menu__meta">{{ accountMetaText }}</span>
+              <UserIcon class="ik-account-menu__icon" />
+              <div class="ik-account-menu__text">
+                <span class="ik-account-menu__title">账号</span>
+                <span class="ik-account-menu__meta">{{ accountMetaText }}</span>
+              </div>
             </div>
           </z-menu-item>
 
-          <z-menu-item name="mihoyo" icon="plus">
+          <z-menu-item name="mihoyo">
             <div class="ik-account-menu__content">
-              <span class="ik-account-menu__title">连接</span>
-              <span class="ik-account-menu__meta">{{ mihoyoMetaText }}</span>
+              <LinkIcon class="ik-account-menu__icon" />
+              <div class="ik-account-menu__text">
+                <span class="ik-account-menu__title">连接</span>
+                <span class="ik-account-menu__meta">{{ mihoyoMetaText }}</span>
+              </div>
             </div>
           </z-menu-item>
 
-          <z-menu-item name="blacklist" icon="error">
+          <z-menu-item name="blacklist">
             <div class="ik-account-menu__content">
-              <span class="ik-account-menu__title">黑名单</span>
-              <span class="ik-account-menu__meta">{{ blacklistMetaText }}</span>
+              <NoSymbolIcon class="ik-account-menu__icon" />
+              <div class="ik-account-menu__text">
+                <span class="ik-account-menu__title">黑名单</span>
+                <span class="ik-account-menu__meta">{{ blacklistMetaText }}</span>
+              </div>
             </div>
           </z-menu-item>
         </z-menu>
@@ -405,7 +425,7 @@ useHead({ title: "账号中心" });
               </div>
               <button class="ik-ac-row" @click="openEmail">
                 <span class="ik-ac-row__label">
-                  <i class="z-icon-info" aria-hidden="true" />
+                  <EnvelopeIcon class="ik-ac-row__icon" aria-hidden="true" />
                   邮箱
                 </span>
                 <span
@@ -415,12 +435,12 @@ useHead({ title: "账号中心" });
                   {{ securityLoading ? '加载中' : security?.hasBoundEmail ? security.email : '未绑定' }}
                 </span>
                 <span class="ik-ac-row__chevron" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  <ChevronRightIcon aria-hidden="true" />
                 </span>
               </button>
               <button class="ik-ac-row" @click="openPassword">
                 <span class="ik-ac-row__label">
-                  <i class="z-icon-invisible" aria-hidden="true" />
+                  <LockClosedIcon class="ik-ac-row__icon" aria-hidden="true" />
                   密码
                 </span>
                 <span
@@ -430,7 +450,7 @@ useHead({ title: "账号中心" });
                   {{ securityLoading ? '加载中' : security?.hasPassword ? '已设置' : '未设置' }}
                 </span>
                 <span class="ik-ac-row__chevron" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  <ChevronRightIcon aria-hidden="true" />
                 </span>
               </button>
             </div>
@@ -440,7 +460,10 @@ useHead({ title: "账号中心" });
                 <span class="ik-ac-section__label">连接</span>
               </div>
               <button class="ik-ac-row" @click="onMenuChange('mihoyo')">
-                <span class="ik-ac-row__label">米哈游账号</span>
+                <span class="ik-ac-row__label">
+                  <LinkIcon class="ik-ac-row__icon" aria-hidden="true" />
+                  米哈游账号
+                </span>
                 <span
                   class="ik-ac-row__value"
                   :class="{ 'is-empty': !mihoyoBinding && !mihoyoLoading }"
@@ -448,7 +471,7 @@ useHead({ title: "账号中心" });
                   {{ mihoyoMetaText }}
                 </span>
                 <span class="ik-ac-row__chevron" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  <ChevronRightIcon aria-hidden="true" />
                 </span>
               </button>
             </div>
@@ -458,10 +481,13 @@ useHead({ title: "账号中心" });
                 <span class="ik-ac-section__label">黑名单</span>
               </div>
               <button class="ik-ac-row" @click="onMenuChange('blacklist')">
-                <span class="ik-ac-row__label">黑名单</span>
+                <span class="ik-ac-row__label">
+                  <NoSymbolIcon class="ik-ac-row__icon" aria-hidden="true" />
+                  黑名单
+                </span>
                 <span class="ik-ac-row__value">{{ blacklistMetaText }}</span>
                 <span class="ik-ac-row__chevron" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  <ChevronRightIcon aria-hidden="true" />
                 </span>
               </button>
             </div>
@@ -477,7 +503,7 @@ useHead({ title: "账号中心" });
 
                 <button class="ik-ac-row" @click="openEmail">
                   <span class="ik-ac-row__label">
-                    <i class="z-icon-info" aria-hidden="true" />
+                    <EnvelopeIcon class="ik-ac-row__icon" aria-hidden="true" />
                     邮箱
                   </span>
                   <span
@@ -487,13 +513,13 @@ useHead({ title: "账号中心" });
                     {{ securityLoading ? '加载中' : security?.hasBoundEmail ? security.email : '未绑定' }}
                   </span>
                   <span class="ik-ac-row__chevron" aria-hidden="true">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                    <ChevronRightIcon aria-hidden="true" />
                   </span>
                 </button>
 
                 <button class="ik-ac-row" @click="openPassword">
                   <span class="ik-ac-row__label">
-                    <i class="z-icon-invisible" aria-hidden="true" />
+                    <LockClosedIcon class="ik-ac-row__icon" aria-hidden="true" />
                     密码
                   </span>
                   <span
@@ -503,7 +529,7 @@ useHead({ title: "账号中心" });
                     {{ securityLoading ? '加载中' : security?.hasPassword ? '已设置' : '未设置' }}
                   </span>
                   <span class="ik-ac-row__chevron" aria-hidden="true">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                    <ChevronRightIcon aria-hidden="true" />
                   </span>
                 </button>
               </div>
@@ -512,7 +538,7 @@ useHead({ title: "账号中心" });
             <template v-else-if="activeSubView === 'email'">
               <header class="ik-ac-detail-header">
                 <button class="ik-ac-back" aria-label="返回" @click="goBack">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                  <ChevronLeftIcon aria-hidden="true" />
                 </button>
                 <h2 class="ik-ac-detail-title">邮箱</h2>
                 <div class="ik-ac-detail-spacer" />
@@ -547,18 +573,22 @@ useHead({ title: "账号中心" });
                   </z-form>
                   <div class="ik-ac-form-actions">
                     <z-button
-                      :icon="{ error: '#ff4444' }"
                       :disabled="bindEmailLoading"
                       @click="clearBindEmailForm"
                     >
-                      清除
+                      <span class="ik-ac-btn__content">
+                        <XMarkIcon class="ik-ac-btn__icon ik-ac-btn__icon--error" aria-hidden="true" />
+                        清除
+                      </span>
                     </z-button>
                     <z-button
-                      :icon="{ success: '#00cc0d' }"
                       :disabled="bindEmailLoading || !bindEmailInput.trim() || !bindCodeInput.trim()"
                       @click="confirmBindEmail"
                     >
-                      确认
+                      <span class="ik-ac-btn__content">
+                        <CheckIcon class="ik-ac-btn__icon ik-ac-btn__icon--success" aria-hidden="true" />
+                        确认
+                      </span>
                     </z-button>
                   </div>
                 </template>
@@ -568,7 +598,7 @@ useHead({ title: "账号中心" });
             <template v-else-if="activeSubView === 'password'">
               <header class="ik-ac-detail-header">
                 <button class="ik-ac-back" aria-label="返回" @click="goBack">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                  <ChevronLeftIcon aria-hidden="true" />
                 </button>
                 <h2 class="ik-ac-detail-title">密码</h2>
                 <div class="ik-ac-detail-spacer" />
@@ -617,18 +647,22 @@ useHead({ title: "账号中心" });
                   </z-form>
                   <div class="ik-ac-form-actions">
                     <z-button
-                      :icon="{ error: '#ff4444' }"
                       :disabled="setPasswordLoading"
                       @click="clearSetPasswordForm"
                     >
-                      清除
+                      <span class="ik-ac-btn__content">
+                        <XMarkIcon class="ik-ac-btn__icon ik-ac-btn__icon--error" aria-hidden="true" />
+                        清除
+                      </span>
                     </z-button>
                     <z-button
-                      :icon="{ success: '#00cc0d' }"
                       :disabled="setPasswordLoading || !setPasswordCodeInput.trim() || !setPasswordInput || !setPasswordConfirmInput"
                       @click="confirmSetPassword"
                     >
-                      确认
+                      <span class="ik-ac-btn__content">
+                        <CheckIcon class="ik-ac-btn__icon ik-ac-btn__icon--success" aria-hidden="true" />
+                        确认
+                      </span>
                     </z-button>
                   </div>
                 </template>
@@ -640,7 +674,7 @@ useHead({ title: "账号中心" });
           <template v-else-if="activeMenuKey === 'mihoyo'">
             <header class="ik-ac-detail-header">
               <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                <ChevronLeftIcon aria-hidden="true" />
               </button>
               <h2 class="ik-ac-detail-title">米哈游账号</h2>
               <div v-if="isMobile" class="ik-ac-detail-spacer" />
@@ -710,7 +744,7 @@ useHead({ title: "账号中心" });
           <template v-else-if="activeMenuKey === 'blacklist'">
             <header class="ik-ac-detail-header">
               <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                <ChevronLeftIcon aria-hidden="true" />
               </button>
               <h2 class="ik-ac-detail-title">黑名单</h2>
               <div v-if="isMobile" class="ik-ac-detail-spacer" />
@@ -719,10 +753,7 @@ useHead({ title: "账号中心" });
             <div class="ik-ac-detail-body">
               <template v-if="!blockedUsers.length && blockedLoaded && !blockedLoading">
                 <div class="ik-ac-empty">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5" />
-                    <path d="M5.8 5.8l12.4 12.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                  </svg>
+                  <NoSymbolIcon class="ik-ac-empty__icon" aria-hidden="true" />
                   <span>暂无拉黑用户</span>
                 </div>
               </template>
@@ -834,10 +865,23 @@ useHead({ title: "账号中心" });
 .ik-account-menu__content {
   position: relative;
   display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.ik-account-menu__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.ik-account-menu__text {
+  display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
-  width: 100%;
 }
 
 .ik-account-menu__title {
@@ -865,7 +909,7 @@ useHead({ title: "账号中心" });
 }
 
 .ik-account-menu :deep(.z-menu__item.is-active) .ik-account-menu__title,
-.ik-account-menu :deep(.z-menu__item.is-active) .z-menu__icon {
+.ik-account-menu :deep(.z-menu__item.is-active) .ik-account-menu__icon {
   color: #0a0a0a;
 }
 
@@ -956,9 +1000,11 @@ useHead({ title: "账号中心" });
   flex-shrink: 0;
 }
 
-.ik-ac-row__label i {
-  font-size: 16px;
+.ik-ac-row__icon {
+  width: 16px;
+  height: 16px;
   color: #888;
+  flex-shrink: 0;
 }
 
 .ik-ac-row__value {
@@ -1082,6 +1128,26 @@ useHead({ title: "账号中心" });
   margin-top: 12px;
 }
 
+.ik-ac-btn__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ik-ac-btn__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.ik-ac-btn__icon--error {
+  color: #ff4444;
+}
+
+.ik-ac-btn__icon--success {
+  color: #00cc0d;
+}
+
 .ik-ac-security-send-hint {
   margin: 0;
   font-size: 13px;
@@ -1192,6 +1258,11 @@ useHead({ title: "账号中心" });
   padding: 40px 0;
   color: #555;
   font-size: 13px;
+}
+
+.ik-ac-empty__icon {
+  width: 40px;
+  height: 40px;
 }
 
 .ik-ac-blocked-list {
