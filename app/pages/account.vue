@@ -703,7 +703,7 @@ useHead({ title: "账号中心" });
                   </div>
                 </div>
                 <z-button
-                  type="danger"
+                  class="ik-ac-unbind-btn"
                   :disabled="mihoyoUnbinding"
                   @click="unbindMihoyo"
                 >
@@ -1339,6 +1339,10 @@ useHead({ title: "账号中心" });
   color: rgba(255, 255, 255, 0.55);
 }
 
+.ik-ac-unbind-btn {
+  align-self: center;
+}
+
 /* ── Misc ── */
 .ik-ac-loading {
   margin: 0;
@@ -1429,7 +1433,6 @@ useHead({ title: "账号中心" });
 
   /* 桌面端：账号安全表单输入框、按钮等收窄并居中，避免横屏过度拉伸 */
   .ik-ac-detail-body > .z-input,
-  .ik-ac-detail-body > .z-button,
   .ik-ac-detail-body > .ik-ac-form,
   .ik-ac-detail-body > .ik-ac-form-actions,
   .ik-ac-detail-body > .ik-ac-btn,
