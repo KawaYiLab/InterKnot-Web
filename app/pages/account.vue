@@ -471,7 +471,7 @@ useHead({ title: "账号中心" });
             </template>
 
             <template v-else-if="activeSubView === 'email'">
-              <header class="ik-ac-detail-header">
+              <header class="ik-ac-detail-header ik-ac-detail-header--stacked">
                 <button class="ik-ac-back" aria-label="返回" @click="goBack">
                   <ChevronLeftIcon aria-hidden="true" />
                 </button>
@@ -479,7 +479,7 @@ useHead({ title: "账号中心" });
                 <div class="ik-ac-detail-spacer" />
               </header>
 
-              <div class="ik-ac-detail-body">
+              <div class="ik-ac-detail-body ik-ac-detail-body--pushed">
                 <template v-if="securityLoading">
                   <p class="ik-ac-loading">加载中…</p>
                 </template>
@@ -1004,6 +1004,25 @@ useHead({ title: "账号中心" });
 
 .ik-ac-detail-spacer {
   width: 36px;
+}
+
+.ik-ac-detail-header--stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.ik-ac-detail-header--stacked .ik-ac-detail-spacer {
+  display: none;
+}
+
+.ik-ac-detail-header--stacked .ik-ac-detail-title {
+  text-align: left;
+}
+
+.ik-ac-detail-body--pushed {
+  margin-top: 24px;
 }
 
 .ik-ac-detail-body {
