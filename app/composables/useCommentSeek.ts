@@ -7,6 +7,8 @@ export interface UseCommentSeekOptions {
   comments: Ref<Comment[]>;
   commentsHasNext: Ref<boolean>;
   loadComments: () => Promise<void>;
+  /** 评论 DOM 是否已渲染（如 PostOverlay 的 commentsVisible），未渲染则先等待 */
+  commentsVisible?: Ref<boolean>;
 }
 
 /**
@@ -18,6 +20,7 @@ export function useCommentSeek({
   comments,
   commentsHasNext,
   loadComments,
+  commentsVisible,
 }: UseCommentSeekOptions) {
   const targetFound = ref(false);
   const seeking = ref(false);
@@ -44,6 +47,31 @@ export function useCommentSeek({
 
   const scrollToTarget = async () => {
     if (!targetCommentId.value || !targetFound.value) return;
+
+    // 如果调用方延迟渲染评论 DOM（如 PostOverlay 的入场动画），
+    // 先等待评论可见再滚动，避免目标元素尚未挂载导致滚动失效。
+    if (commentsVisible && !commentsVisible.value) {
+      await new Promise<void>((resolve) => {
+        let stop: ReturnType<typeof watch> | undefined;
+        const timer = setTimeout(() => {
+          stop?.();
+          resolve();
+        }, 3000);
+        stop = watch(
+          commentsVisible,
+          (visible) => {
+            if (visible) {
+              clearTimeout(timer);
+              stop?.();
+              resolve();
+            }
+          },
+          { immediate: false },
+        );
+      });
+      if (!commentsVisible.value) return;
+    }
+
     await nextTick();
     const id = targetCommentId.value;
     const el = document.querySelector(
