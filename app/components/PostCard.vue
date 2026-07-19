@@ -48,7 +48,6 @@ const coverImageLoaded = ref(isCoverLoaded(coverSrc.value));
 const coverIsFallback = ref(false);
 const avatarSrc = ref(DEFAULT_AVATAR_IMAGE);
 const cardRef = ref<HTMLElement | null>(null);
-const coverImgRef = ref<HTMLImageElement | null>(null);
 
 const hasBackendCoverSize = computed(() =>
   typeof props.post.coverWidth === "number" &&
@@ -88,12 +87,7 @@ watch(
   { immediate: true },
 );
 
-onMounted(() => {
-  if (coverImgRef.value?.complete) {
-    coverImageLoaded.value = true;
-    markCoverLoaded(coverSrc.value);
-  }
-});
+
 
 watch(
   () => [props.post.id, props.post.author?.avatar] as const,
@@ -126,6 +120,10 @@ const onAvatarError = () => {
 };
 
 const handleOpen = (e: MouseEvent) => {
+  // 点击 NSFW 遮罩时只揭示，不打开帖子。
+  if ((e.target as HTMLElement | null)?.closest?.(".nsfw-image__overlay")) {
+    return;
+  }
   emit("open", props.post, e);
 };
 </script>
@@ -147,15 +145,11 @@ const handleOpen = (e: MouseEvent) => {
     >
       <div class="ik-card__cover-wrap">
         <div class="ik-card__cover-frame" :style="{ aspectRatio: String(coverAspectRatio) }">
-          <img
-            ref="coverImgRef"
+          <NsfwImage
             :src="coverSrc"
+            :status="post.coverNsfwStatus"
             :alt="coverIsFallback ? 'default cover' : post.title"
-            class="ik-card__cover"
-            :class="{
-              'ik-card__cover--fallback': coverIsFallback,
-              'ik-card__cover--loading': !coverReady,
-            }"
+            :img-class="['ik-card__cover', { 'ik-card__cover--fallback': coverIsFallback, 'ik-card__cover--loading': !coverReady }]"
             :loading="eager ? 'eager' : 'lazy'"
             decoding="async"
             :fetchpriority="eager ? 'high' : 'low'"

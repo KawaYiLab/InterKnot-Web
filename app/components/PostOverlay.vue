@@ -1358,10 +1358,11 @@ onBeforeUnmount(() => {
                               :decoding="isCompact ? 'async' : 'sync'"
                             />
                           </div>
-                          <img
+                          <NsfwImage
                             :src="firstCover ? coverDisplaySrc(firstCover.url) : DEFAULT_COVER_IMAGE"
+                            :status="firstCover?.nsfwStatus"
                             :alt="hasCovers ? post.title : 'default cover'"
-                            class="ik-dialog__cover"
+                            img-class="ik-dialog__cover"
                             decoding="async"
                             @load="onCoverImageLoad(0)"
                             @click="hasCovers && openCoverPreview(0)"
@@ -1405,10 +1406,11 @@ onBeforeUnmount(() => {
                                   :decoding="i === 0 && !isCompact ? 'sync' : 'async'"
                                 />
                               </div>
-                              <img
+                              <NsfwImage
                                 :src="isCoverNearby(i) ? coverDisplaySrc(c.url) : undefined"
+                                :status="c.nsfwStatus"
                                 :alt="`${post.title} - ${i + 1}`"
-                                class="ik-dialog__cover"
+                                img-class="ik-dialog__cover"
                                 :loading="i === 0 ? 'eager' : 'lazy'"
                                 decoding="async"
                                 draggable="false"
