@@ -318,15 +318,19 @@ onUnmounted(() => {
                 <div class="ik-login__wrapper">
                 <div class="ik-login__inner">
                 <!-- 登录方式：第三方登录在上，邮箱表单在「或」下（重置密码时隐藏） -->
-                <div v-if="!isReset" class="ik-login-methods">
-                  <button type="button" class="ik-login-method-btn" @click="enterMihoyoMode">
-                    <img src="/images/mihoyo-icon.webp" alt="" class="ik-login-method-btn__icon" draggable="false" />
-                    {{ isRegister ? "使用米游社注册" : "使用米游社登录" }}
-                  </button>
-                  <div class="ik-login-divider" role="separator">
-                    <span class="ik-login-divider__line" aria-hidden="true"></span>
-                    <span class="ik-login-divider__text">或</span>
-                    <span class="ik-login-divider__line" aria-hidden="true"></span>
+                <div class="ik-login-field-grid" :class="{ 'is-open': !isReset }">
+                  <div class="ik-login-field-grid__inner">
+                    <div class="ik-login-methods">
+                      <button type="button" class="ik-login-method-btn" @click="enterMihoyoMode">
+                        <img src="/images/mihoyo-icon.webp" alt="" class="ik-login-method-btn__icon" draggable="false" />
+                        {{ isRegister ? "使用米游社注册" : "使用米游社登录" }}
+                      </button>
+                      <div class="ik-login-divider" role="separator">
+                        <span class="ik-login-divider__line" aria-hidden="true"></span>
+                        <span class="ik-login-divider__text">或</span>
+                        <span class="ik-login-divider__line" aria-hidden="true"></span>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div class="ik-login-form">
@@ -673,7 +677,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  margin-bottom: 16px;
+  padding-bottom: 16px;
 }
 
 .ik-login-method-btn {
