@@ -416,35 +416,21 @@ onUnmounted(() => {
 
                   <!-- 重置模式 - 未发验证码 -->
                   <template v-if="isReset && !isCodeSent">
-                    <z-button
-                      v-if="!isSendingCode"
-                      @click="sendCode"
-                    >
+                    <z-button :disabled="isSendingCode" @click="sendCode">
                       重置密码
                     </z-button>
-                    <z-button v-else loading>重置密码</z-button>
                   </template>
 
                   <!-- 重置模式 - 已发验证码 -->
                   <template v-else-if="isReset && isCodeSent">
-                    <z-button
-                      v-if="!isLoading"
-                      @click="submit"
-                    >
+                    <z-button :disabled="isLoading" @click="submit">
                       重置密码
                     </z-button>
-                    <z-button v-else loading>重置密码</z-button>
                   </template>
 
                   <!-- 登录 / 注册模式 -->
                   <template v-else>
-                    <z-button
-                      v-if="!isLoading"
-                      @click="submit"
-                    >
-                      {{ isRegister ? "注册账号" : "登录账号" }}
-                    </z-button>
-                    <z-button v-else loading>
+                    <z-button :disabled="isLoading" @click="submit">
                       {{ isRegister ? "注册账号" : "登录账号" }}
                     </z-button>
                   </template>
