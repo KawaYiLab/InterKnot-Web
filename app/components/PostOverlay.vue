@@ -537,6 +537,7 @@ const { seek, highlightedCommentId } = useCommentSeek({
   comments,
   commentsHasNext,
   loadComments,
+  commentsVisible,
 });
 
 // 同委托切换 commentId（如从通知再打开同一篇委托的另一条评论）时重新定位
