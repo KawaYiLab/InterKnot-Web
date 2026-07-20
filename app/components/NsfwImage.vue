@@ -145,7 +145,7 @@ function onRootClick(event: MouseEvent) {
 }
 
 .nsfw-image--sensitive:not(.nsfw-image--revealed) .nsfw-image__media {
-  filter: blur(12px) brightness(0.9);
+  filter: blur(10px) brightness(0.92);
 }
 
 .nsfw-fade-enter-active,
