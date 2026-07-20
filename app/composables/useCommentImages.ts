@@ -24,6 +24,7 @@ const createReferencedUploadTask = (upload: UploadedFile): UploadTask => {
     previewUrl: upload.url,
     serverId: upload.documentId,
     serverUrl: upload.url,
+    nsfwStatus: upload.nsfwStatus,
   };
 };
 
@@ -110,6 +111,7 @@ export function useCommentImages() {
 
       task.serverId = uploaded.documentId;
       task.serverUrl = uploaded.url;
+      task.nsfwStatus = uploaded.nsfwStatus;
       task.status = "done";
       task.progress = 100;
     } catch (err) {

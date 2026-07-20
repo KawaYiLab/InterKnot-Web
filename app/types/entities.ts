@@ -138,11 +138,15 @@ export interface AiRoleCard {
   } | null;
 }
 
+export type NsfwStatus = 'safe' | 'sensitive' | 'error';
+
 export interface CoverImage {
   documentId?: string;
   url: string;
   width?: number;
   height?: number;
+  nsfwStatus?: NsfwStatus;
+  nsfwScores?: Record<string, number>;
 }
 
 /** 委托分类（频道）。GET /api/categories/list 返回完整列表。 */
@@ -169,6 +173,7 @@ export interface Post {
   rawBodyText?: string;
   covers: CoverImage[];
   cover?: string;
+  coverNsfwStatus?: NsfwStatus;
   coverWidth?: number;
   coverHeight?: number;
   views?: number;
@@ -345,6 +350,7 @@ export interface UploadTask {
   previewUrl: string;
   serverId?: string;
   serverUrl?: string;
+  nsfwStatus?: NsfwStatus;
   error?: string;
 }
 
@@ -383,6 +389,8 @@ export interface UploadedFile {
   size?: number;
   width?: number;
   height?: number;
+  nsfwStatus?: NsfwStatus;
+  nsfwScores?: Record<string, number>;
   createdAt?: string;
 }
 

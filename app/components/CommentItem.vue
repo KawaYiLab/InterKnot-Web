@@ -132,10 +132,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
             class="ik-comment__media-item"
             @click="openCommentImages(comment.images, imageIndex)"
           >
-            <img
+            <NsfwImage
               :src="toThumbUrl(image.url)"
+              :status="image.nsfwStatus"
               :alt="comment.author?.name || '评论图片'"
-              class="ik-comment__media-thumb"
+              img-class="ik-comment__media-thumb"
               decoding="async"
             />
           </button>
@@ -232,10 +233,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                 class="ik-comment__media-item"
                 @click="openCommentImages(reply.images, imageIndex)"
               >
-                <img
+                <NsfwImage
                   :src="toThumbUrl(image.url)"
+                  :status="image.nsfwStatus"
                   :alt="reply.author?.name || '回复图片'"
-                  class="ik-comment__media-thumb"
+                  img-class="ik-comment__media-thumb"
                   decoding="async"
                 />
               </button>
@@ -484,7 +486,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   cursor: var(--ik-cursor-pointer);
 }
 
-.ik-comment__media-thumb {
+:deep(.ik-comment__media-thumb) {
   width: 100%;
   height: 100%;
   object-fit: cover;
