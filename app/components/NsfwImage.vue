@@ -90,32 +90,36 @@ function onRootClick(event: MouseEvent) {
     }"
     @click="onRootClick"
   >
-    <img
-      ref="imgRef"
-      :src="src"
-      :alt="alt || ''"
-      class="nsfw-image__img"
-      :class="imgClass"
-      :loading="loading"
-      :decoding="decoding"
-      :fetchpriority="fetchpriority"
-      :draggable="draggableAttr"
-      @load="onLoad"
-      @error="onError"
-    />
-    <div
-      v-if="showOverlay"
-      class="nsfw-image__overlay"
-      :class="{ 'nsfw-image__overlay--readonly': !revealOnClick }"
-      aria-hidden="true"
-      @click="onOverlayClick"
-    >
-      <div class="nsfw-image__warning">
-        <NoSymbolIcon class="nsfw-image__icon" />
-        <span class="nsfw-image__title">内容警告：成人内容</span>
-        <span class="nsfw-image__desc">系统已将这个帖子标记为包含成人内容。</span>
-      </div>
+    <div class="nsfw-image__media">
+      <img
+        ref="imgRef"
+        :src="src"
+        :alt="alt || ''"
+        class="nsfw-image__img"
+        :class="imgClass"
+        :loading="loading"
+        :decoding="decoding"
+        :fetchpriority="fetchpriority"
+        :draggable="draggableAttr"
+        @load="onLoad"
+        @error="onError"
+      />
     </div>
+    <Transition name="nsfw-fade">
+      <div
+        v-if="showOverlay"
+        class="nsfw-image__overlay"
+        :class="{ 'nsfw-image__overlay--readonly': !revealOnClick }"
+        aria-hidden="true"
+        @click="onOverlayClick"
+      >
+        <div class="nsfw-image__warning">
+          <NoSymbolIcon class="nsfw-image__icon" />
+          <span class="nsfw-image__title">内容警告：成人内容</span>
+          <span class="nsfw-image__desc">系统已将这个帖子标记为包含成人内容。</span>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -128,15 +132,30 @@ function onRootClick(event: MouseEvent) {
   height: 100%;
 }
 
+.nsfw-image__media {
+  width: 100%;
+  height: 100%;
+  transition: filter 200ms ease;
+}
+
 .nsfw-image__img {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.nsfw-image--sensitive:not(.nsfw-image--revealed) .nsfw-image__img {
+.nsfw-image--sensitive:not(.nsfw-image--revealed) .nsfw-image__media {
   filter: blur(12px) brightness(0.9);
-  transform: scale(1.05);
+}
+
+.nsfw-fade-enter-active,
+.nsfw-fade-leave-active {
+  transition: opacity 200ms ease;
+}
+
+.nsfw-fade-enter-from,
+.nsfw-fade-leave-to {
+  opacity: 0;
 }
 
 .nsfw-image__overlay {
