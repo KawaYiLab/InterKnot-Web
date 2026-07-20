@@ -56,6 +56,7 @@ watch(
 );
 
 function reveal(event: MouseEvent) {
+  event.preventDefault();
   event.stopPropagation();
   revealed.value = true;
 }
@@ -106,6 +107,7 @@ function onRootClick(event: MouseEvent) {
 .nsfw-image {
   display: block;
   position: relative;
+  isolation: isolate;
   width: 100%;
   height: 100%;
 }
@@ -117,7 +119,7 @@ function onRootClick(event: MouseEvent) {
 }
 
 .nsfw-image--sensitive:not(.nsfw-image--revealed) .nsfw-image__img {
-  filter: blur(24px) brightness(0.65);
+  filter: blur(12px) brightness(0.75);
   transform: scale(1.05);
 }
 
