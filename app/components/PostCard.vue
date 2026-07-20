@@ -153,6 +153,7 @@ const handleOpen = (e: MouseEvent) => {
             :loading="eager ? 'eager' : 'lazy'"
             decoding="async"
             :fetchpriority="eager ? 'high' : 'low'"
+            :reveal-on-click="false"
             @load="onCoverLoad"
             @error="onCoverError"
           />

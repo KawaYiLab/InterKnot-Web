@@ -12,9 +12,11 @@ const props = withDefaults(
     decoding?: "async" | "sync" | "auto";
     fetchpriority?: "high" | "low" | "auto";
     draggable?: boolean | "true" | "false";
+    revealOnClick?: boolean;
   }>(),
   {
     status: "safe",
+    revealOnClick: true,
     loading: "lazy",
     decoding: "async",
     fetchpriority: "auto",
@@ -63,13 +65,11 @@ function reveal(event: MouseEvent) {
 }
 
 function onOverlayClick(event: MouseEvent) {
-  // 只有「显示」按钮负责揭示，点击遮罩其他区域不触发任何父级（如 NuxtLink）的跳转
-  const target = event.target as HTMLElement | null;
-  if (target?.closest(".nsfw-image__show-btn")) {
+  // 首页等仅展示场景不响应揭示，让点击穿透给父级（如打开帖子）
+  if (!props.revealOnClick) {
     return;
   }
-  event.preventDefault();
-  event.stopPropagation();
+  reveal(event);
 }
 
 function onRootClick(event: MouseEvent) {
@@ -103,19 +103,18 @@ function onRootClick(event: MouseEvent) {
       @load="onLoad"
       @error="onError"
     />
-    <div v-if="showOverlay" class="nsfw-image__overlay" aria-hidden="true" @click="onOverlayClick">
+    <div
+      v-if="showOverlay"
+      class="nsfw-image__overlay"
+      :class="{ 'nsfw-image__overlay--readonly': !revealOnClick }"
+      aria-hidden="true"
+      @click="onOverlayClick"
+    >
       <div class="nsfw-image__warning">
         <NoSymbolIcon class="nsfw-image__icon" />
         <span class="nsfw-image__title">内容警告：成人内容</span>
         <span class="nsfw-image__desc">系统已将这个帖子标记为包含成人内容。</span>
       </div>
-      <button
-        type="button"
-        class="nsfw-image__show-btn"
-        @click.stop="reveal"
-      >
-        显示
-      </button>
     </div>
   </div>
 </template>
@@ -183,25 +182,8 @@ function onRootClick(event: MouseEvent) {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
-.nsfw-image__show-btn {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  padding: 6px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.25;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: background-color 120ms ease;
-}
-
-.nsfw-image__show-btn:hover {
-  background: rgba(255, 255, 255, 0.22);
+.nsfw-image__overlay--readonly {
+  pointer-events: none;
+  cursor: default;
 }
 </style>
