@@ -1363,6 +1363,7 @@ onBeforeUnmount(() => {
                             :status="firstCover?.nsfwStatus"
                             :alt="hasCovers ? post.title : 'default cover'"
                             img-class="ik-dialog__cover"
+                            loading="eager"
                             decoding="async"
                             @load="onCoverImageLoad(0)"
                             @click="hasCovers && openCoverPreview(0)"
@@ -2159,7 +2160,7 @@ onBeforeUnmount(() => {
   transform: scale(1.05);
 }
 
-.ik-dialog__cover {
+:deep(.ik-dialog__cover) {
   position: relative;
   z-index: 1;
   display: block;

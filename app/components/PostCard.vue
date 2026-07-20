@@ -253,7 +253,7 @@ const handleOpen = (e: MouseEvent) => {
   margin-right: 4px;
 }
 
-.ik-card__cover {
+:deep(.ik-card__cover) {
   --ik-cover-scale: 1;
   display: block;
   width: 100%;
@@ -267,23 +267,23 @@ const handleOpen = (e: MouseEvent) => {
   will-change: transform;
 }
 
-.ik-card:hover .ik-card__cover {
+.ik-card:hover :deep(.ik-card__cover) {
   --ik-cover-scale: 1.06;
 }
 
-.ik-card__cover--loading {
+:deep(.ik-card__cover--loading) {
   --ik-cover-scale: 1.02;
   opacity: 0;
 }
 
 /* fallback 时 frame 已切换为占位图原生比例，
    占位图天然填满 frame，沿用 object-fit: cover 即可 */
-.ik-card__cover--fallback {
+:deep(.ik-card__cover--fallback) {
   background: var(--ik-post-card-cover-bg);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ik-card__cover {
+  :deep(.ik-card__cover) {
     transition: none;
   }
 }

@@ -486,7 +486,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   cursor: var(--ik-cursor-pointer);
 }
 
-.ik-comment__media-thumb {
+:deep(.ik-comment__media-thumb) {
   width: 100%;
   height: 100%;
   object-fit: cover;

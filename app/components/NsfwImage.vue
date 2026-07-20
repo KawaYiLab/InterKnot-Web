@@ -35,7 +35,7 @@ const draggableAttr = computed(() => String(props.draggable) as "true" | "false"
 
 onMounted(() => {
   const img = imgRef.value;
-  if (img && img.complete && img.naturalWidth > 0) {
+  if (props.src && img && img.complete && img.naturalWidth > 0) {
     onLoad(new Event("load"));
   }
 });
@@ -47,6 +47,13 @@ function onLoad(event: Event) {
 function onError(event: Event) {
   emit("error", event);
 }
+
+watch(
+  () => props.src,
+  () => {
+    revealed.value = false;
+  },
+);
 
 function reveal(event: MouseEvent) {
   event.stopPropagation();
@@ -63,6 +70,7 @@ function onRootClick(event: MouseEvent) {
 
 <template>
   <div
+    v-if="src"
     class="nsfw-image"
     :class="{
       'nsfw-image--sensitive': isSensitive,
@@ -86,8 +94,7 @@ function onRootClick(event: MouseEvent) {
     <div
       v-if="showOverlay"
       class="nsfw-image__overlay"
-      role="button"
-      aria-label="敏感内容，点击显示"
+      aria-hidden="true"
       @click.stop="reveal"
     >
       <span class="nsfw-image__label">敏感内容 · 点击显示</span>
