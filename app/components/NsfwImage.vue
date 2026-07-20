@@ -62,6 +62,16 @@ function reveal(event: MouseEvent) {
   revealed.value = true;
 }
 
+function onOverlayClick(event: MouseEvent) {
+  // 只有「显示」按钮负责揭示，点击遮罩其他区域不触发任何父级（如 NuxtLink）的跳转
+  const target = event.target as HTMLElement | null;
+  if (target?.closest(".nsfw-image__show-btn")) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 function onRootClick(event: MouseEvent) {
   if (showOverlay.value) {
     return;
@@ -93,7 +103,7 @@ function onRootClick(event: MouseEvent) {
       @load="onLoad"
       @error="onError"
     />
-    <div v-if="showOverlay" class="nsfw-image__overlay" aria-hidden="true">
+    <div v-if="showOverlay" class="nsfw-image__overlay" aria-hidden="true" @click="onOverlayClick">
       <div class="nsfw-image__warning">
         <NoSymbolIcon class="nsfw-image__icon" />
         <span class="nsfw-image__title">内容警告：成人内容</span>
@@ -159,7 +169,7 @@ function onRootClick(event: MouseEvent) {
 }
 
 .nsfw-image__title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1.3;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
