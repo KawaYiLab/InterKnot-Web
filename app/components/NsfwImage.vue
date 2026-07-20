@@ -53,8 +53,13 @@ function onError(event: Event) {
 
 watch(
   () => props.src,
-  () => {
+  (newSrc) => {
     revealed.value = false;
+    // 切换为已缓存图片时浏览器不会再触发 load，手动补发确保父级 loading 态正确更新
+    const img = imgRef.value;
+    if (newSrc && img && img.complete && img.naturalWidth > 0) {
+      onLoad(new Event("load"));
+    }
   },
 );
 
@@ -130,6 +135,7 @@ function onRootClick(event: MouseEvent) {
   isolation: isolate;
   width: 100%;
   height: 100%;
+  contain: layout paint;
 }
 
 .nsfw-image__media {
@@ -169,6 +175,8 @@ function onRootClick(event: MouseEvent) {
   background: rgba(0, 0, 0, 0.4);
   color: #fff;
   text-align: center;
+  cursor: pointer;
+  user-select: none;
   z-index: 1;
 }
 
