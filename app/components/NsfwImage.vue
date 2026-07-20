@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { NoSymbolIcon } from "@heroicons/vue/24/outline";
 import type { NsfwStatus } from "~/types/entities";
 
 const props = withDefaults(
@@ -92,13 +93,19 @@ function onRootClick(event: MouseEvent) {
       @load="onLoad"
       @error="onError"
     />
-    <div
-      v-if="showOverlay"
-      class="nsfw-image__overlay"
-      aria-hidden="true"
-      @click.stop="reveal"
-    >
-      <span class="nsfw-image__label">敏感内容 · 点击显示</span>
+    <div v-if="showOverlay" class="nsfw-image__overlay" aria-hidden="true">
+      <div class="nsfw-image__warning">
+        <NoSymbolIcon class="nsfw-image__icon" />
+        <span class="nsfw-image__title">内容警告：成人内容</span>
+        <span class="nsfw-image__desc">系统已将这个帖子标记为包含成人内容。</span>
+      </div>
+      <button
+        type="button"
+        class="nsfw-image__show-btn"
+        @click.stop="reveal"
+      >
+        显示
+      </button>
     </div>
   </div>
 </template>
@@ -119,7 +126,7 @@ function onRootClick(event: MouseEvent) {
 }
 
 .nsfw-image--sensitive:not(.nsfw-image--revealed) .nsfw-image__img {
-  filter: blur(12px) brightness(0.75);
+  filter: blur(12px) brightness(0.9);
   transform: scale(1.05);
 }
 
@@ -127,21 +134,64 @@ function onRootClick(event: MouseEvent) {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.4);
   color: #fff;
-  font-size: 15px;
-  font-weight: 700;
   text-align: center;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-  cursor: pointer;
   z-index: 1;
 }
 
-.nsfw-image__label {
-  pointer-events: none;
-  user-select: none;
+.nsfw-image__warning {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+}
+
+.nsfw-image__icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 6px;
+}
+
+.nsfw-image__title {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.nsfw-image__desc {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  opacity: 0.9;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.nsfw-image__show-btn {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background-color 120ms ease;
+}
+
+.nsfw-image__show-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 </style>
