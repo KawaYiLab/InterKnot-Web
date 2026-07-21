@@ -121,7 +121,7 @@ function onRootClick(event: MouseEvent) {
         <div class="nsfw-image__warning">
           <NoSymbolIcon class="nsfw-image__icon" />
           <span class="nsfw-image__title">内容警告：敏感内容</span>
-          <span class="nsfw-image__desc">绳网已将这个帖子标记为包含敏感内容。</span>
+          <span class="nsfw-image__desc">绳网已将这个委托标记为包含敏感内容。</span>
         </div>
       </div>
     </Transition>
