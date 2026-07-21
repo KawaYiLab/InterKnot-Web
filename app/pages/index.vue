@@ -270,7 +270,7 @@ const fetchList = async (reset = false) => {
   // 仅对 reset=true（首屏 / 切回 / 切搜索词）启用；refreshing 是用户明确下拉，不走捷径。
   let cacheHit = false;
   if (reset && !refreshing.value) {
-    const cached = api.peekArticles(activeQuery(), "0", selectedCategory.value, feedMode.value);
+    const cached = api.peekArticles(activeQuery(), "0", selectedCategory.value, feedMode.value, activeTag.value);
     if (cached) {
       const uniqueNodes = toUniqueNodes(cached.nodes, true);
       enterAnimationIds.value = new Set();
@@ -426,7 +426,9 @@ const pollLatestArticles = async () => {
   polling = true;
   try {
     // 强制失效当前频道空搜索的第一页，让 fetchQuery 真正打到后端
-    api.invalidateQueries(["articles", "search", "", selectedCategory.value]);
+    const cacheCategory = selectedCategory.value;
+    const cacheKey = activeTag.value ? `${cacheCategory}|${activeTag.value}` : cacheCategory;
+    api.invalidateQueries(["articles", "search", "", cacheKey]);
     const page = await api.searchArticles("", "", selectedCategory.value, "recommend", activeTag.value);
     if (!page.nodes.length) return;
 
@@ -641,7 +643,7 @@ const consumePendingPosts = () => {
   list.value = [...fresh, ...list.value];
 };
 
-if (cached && cached.query === query.value && cached.category === selectedCategory.value) {
+if (cached && cached.query === query.value && cached.category === selectedCategory.value && cached.tag === activeTag.value) {
   // 从缓存恢复：跳过网络请求，直接填充列表状态
   const restoredFeed = cached.feed ?? "recommend";
   if (restoredFeed !== feedMode.value) {
@@ -805,6 +807,7 @@ onBeforeRouteLeave(() => {
     hasNextPage: hasNextPage.value,
     query: query.value,
     category: selectedCategory.value,
+    tag: activeTag.value,
     feed: feedMode.value,
     seenIds,
     measuredHeights: heights ? new Map(heights) : new Map(),

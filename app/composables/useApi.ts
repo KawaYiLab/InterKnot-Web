@@ -851,13 +851,15 @@ export function useApi() {
     endCur = "",
     category = "",
     feed: ArticleFeed = "recommend",
+    tag = "",
   ): Pagination<Post> | undefined => {
     const qc = $queryClient as QueryClient | undefined;
     if (!qc) return undefined;
     const start = parseStart(endCur);
     const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
+    const cacheKey = tag ? `${cacheCategory}|${tag}` : cacheCategory;
     return qc.getQueryData<Pagination<Post>>(
-      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE),
+      qk.articles.search(query, cacheKey, start, DEFAULT_PAGE_SIZE),
     );
   };
 

@@ -14,6 +14,7 @@ export interface HomeStateSnapshot {
   hasNextPage: boolean;
   query: string;
   category: string;
+  tag: string;
   feed: ArticleFeed;
   seenIds: Set<string>;
   measuredHeights: Map<string | number, number>;

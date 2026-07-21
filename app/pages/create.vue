@@ -163,6 +163,7 @@ function buildSnapshot(): string {
     text: body.value.trim(),
     cover: coverPayload.value,
     category: selectedCategory.value,
+    tags: selectedTags.value,
   });
 }
 
@@ -857,11 +858,18 @@ function removeTag(name: string) {
 }
 
 function onTagKeydown(e: KeyboardEvent) {
-  // 回车或逗号（含中文逗号）确认添加
+  if (e.isComposing) return;
+  // 去除作为分隔符输入的尾逗号（含中文逗号），避免把逗号算进标签名
+  const raw = tagInput.value.replace(/[,，]+$/g, "").trim();
+  // 回车或逗号（含中文逗号）确认添加；支持用逗号/中文逗号一次输入多个标签
   if (e.key === "Enter" || e.key === "," || e.key === "，") {
     e.preventDefault();
-    if (tagInput.value.trim()) {
-      addTag(tagInput.value);
+    const candidates = raw
+      ? raw.split(/[,，]+/).map((s) => s.trim()).filter(Boolean)
+      : [];
+    for (const name of candidates) {
+      if (selectedTags.value.length >= MAX_TAGS) break;
+      addTag(name);
     }
   }
   // Backspace 且输入为空时删除最后一个标签
