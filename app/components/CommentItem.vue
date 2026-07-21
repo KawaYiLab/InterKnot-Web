@@ -138,6 +138,8 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
               :alt="comment.author?.name || '评论图片'"
               img-class="ik-comment__media-thumb"
               decoding="async"
+              overlay-title="内容警告：敏感内容"
+              overlay-description="绳网已将这张图片标记为包含敏感内容。"
             />
           </button>
         </div>

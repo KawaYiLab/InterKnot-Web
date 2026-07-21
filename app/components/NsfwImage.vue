@@ -13,6 +13,8 @@ const props = withDefaults(
     fetchpriority?: "high" | "low" | "auto";
     draggable?: boolean | "true" | "false";
     revealOnClick?: boolean;
+    overlayTitle?: string;
+    overlayDescription?: string;
   }>(),
   {
     status: "safe",
@@ -120,8 +122,8 @@ function onRootClick(event: MouseEvent) {
       >
         <div class="nsfw-image__warning">
           <NoSymbolIcon class="nsfw-image__icon" />
-          <span class="nsfw-image__title">内容警告：敏感内容</span>
-          <span class="nsfw-image__desc">绳网已将这个委托标记为包含敏感内容。</span>
+          <span class="nsfw-image__title">{{ overlayTitle || "内容警告：敏感内容" }}</span>
+          <span class="nsfw-image__desc">{{ overlayDescription || "绳网已将这个委托标记为包含敏感内容。" }}</span>
         </div>
       </div>
     </Transition>
