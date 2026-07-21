@@ -1475,6 +1475,18 @@ onBeforeUnmount(() => {
                       <h1 class="ik-dialog__title">
                         <span v-if="post.category" class="ik-dialog__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
                       </h1>
+                      <!-- 标签 -->
+                      <div v-if="post.tags?.length" class="ik-dialog__tags">
+                        <NuxtLink
+                          v-for="tag in post.tags"
+                          :key="tag.slug"
+                          :to="{ path: '/', query: { tag: tag.slug } }"
+                          class="ik-dialog__tag-chip"
+                          @click="emit('close')"
+                        >
+                          {{ tag.name }}
+                        </NuxtLink>
+                      </div>
                       <div
                         v-if="bodyHasContent"
                         class="ik-dialog__content"
@@ -2324,6 +2336,33 @@ onBeforeUnmount(() => {
   font-weight: 900;
   letter-spacing: 0.5px;
   color: #fff;
+}
+
+.ik-dialog__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.ik-dialog__tag-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  border: 1px solid #444;
+  background: transparent;
+  color: #aaa;
+  font-size: 12px;
+  line-height: 1;
+  text-decoration: none;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.ik-dialog__tag-chip:hover {
+  color: #fff;
+  border-color: #666;
 }
 
 .ik-dialog__content {

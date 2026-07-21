@@ -10,7 +10,7 @@ import {
   getNormalizedCoverAspectRatio,
 } from "~/utils/cover";
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
-import { ArrowPathIcon } from "@heroicons/vue/24/outline";
+import { ArrowPathIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 
 // 静态导入核心瀑布流组件，防止下滑加载或冷启动时动态请求分包导致滚动卡顿
 import VirtualMasonry from "~/components/VirtualMasonry.vue";
@@ -75,6 +75,12 @@ const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined)
 // 频道筛选：空串 = 最新（推荐流）。Tab 选中后随 list/缓存键一起隔离。
 const categories = ref<Category[]>([]);
 const selectedCategory = ref<string>("");
+
+// 标签筛选：从路由 query 读取，空串 = 不过滤。
+const activeTag = computed(() => {
+  const tag = route.query.tag;
+  return typeof tag === "string" ? tag : "";
+});
 
 // feed 模式：推荐 / 关注（我关注的作者）/ 收藏（我的收藏）。
 // 关注、收藏需登录；缓存键随 feed 一起隔离（见 useApi.searchArticles）。
@@ -297,6 +303,7 @@ const fetchList = async (reset = false) => {
       reset ? "0" : endCursor.value,
       selectedCategory.value,
       feedMode.value,
+      activeTag.value,
     );
     if (currentVersion !== requestVersion.value) {
       return;
@@ -420,7 +427,7 @@ const pollLatestArticles = async () => {
   try {
     // 强制失效当前频道空搜索的第一页，让 fetchQuery 真正打到后端
     api.invalidateQueries(["articles", "search", "", selectedCategory.value]);
-    const page = await api.searchArticles("", "", selectedCategory.value);
+    const page = await api.searchArticles("", "", selectedCategory.value, "recommend", activeTag.value);
     if (!page.nodes.length) return;
 
     const knownIds = new Set(list.value.map((d) => d.id));
@@ -558,16 +565,22 @@ const selectCategory = (slug: string) => {
   selectedCategory.value = slug;
 };
 
+/** 清除标签过滤：从路由 query 中移除 tag 参数。 */
+const clearTagFilter = () => {
+  const { tag, ...restQuery } = route.query;
+  void navigateTo({ path: route.path, query: restQuery });
+};
+
 // 缓存恢复时同步 feedMode 会触发下面的 watcher；用此标记跳过那次重拉。
 let skipFeedWatch = false;
 
-// 切换频道或 feed：清空"新委托提示"、重置分页并强制失效缓存后重拉首屏，
-// 确保即使命中旧缓存也会真正打到后端、列表随频道/feed 刷新。
-// 合并 feedMode + selectedCategory 为单个 watcher：切 feed 时常会同时改这两个值
-// （见 selectFeed / selectCategory），合并后同一 flush 周期只触发一次，避免两个独立
+// 切换频道、feed 或标签：清空"新委托提示"、重置分页并强制失效缓存后重拉首屏，
+// 确保即使命中旧缓存也会真正打到后端、列表随频道/feed/标签刷新。
+// 合并 feedMode + selectedCategory + activeTag 为单个 watcher：切 feed 时常会同时改这些值
+// （见 selectFeed / selectCategory），合并后同一 flush 周期只触发一次，避免多个独立
 // watcher 各自 ++requestVersion 互相作废导致 fetchList 提前 return、列表不刷新。
 watch(
-  () => [feedMode.value, selectedCategory.value] as const,
+  () => [feedMode.value, selectedCategory.value, activeTag.value] as const,
   () => {
     if (skipFeedWatch) {
       skipFeedWatch = false;
@@ -867,6 +880,18 @@ onBeforeUnmount(() => {
         >
           {{ tab.label }}
         </button>
+
+        <!-- 标签筛选 chip：点击 × 清除标签过滤 -->
+        <span v-if="activeTag" class="ik-tag-filter-chip">
+          <span class="ik-tag-filter-chip__label">标签: {{ activeTag }}</span>
+          <button
+            type="button"
+            class="ik-tag-filter-chip__clear"
+            @click="clearTagFilter"
+          >
+            <XMarkIcon class="ik-tag-filter-chip__clear-icon" />
+          </button>
+        </span>
       </nav>
 
       <!-- 在线人数：🟢 N 在线 + 头像堆叠 +N -->
@@ -1072,6 +1097,53 @@ onBeforeUnmount(() => {
   background: var(--ik-primary, #BFFF09);
   border-color: var(--ik-primary, #BFFF09);
   font-weight: 700;
+}
+
+/* 标签筛选 chip */
+.ik-tag-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px 0 12px;
+  border-radius: 9999px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: #eee;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.ik-tag-filter-chip__label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ik-tag-filter-chip__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.ik-tag-filter-chip__clear:hover {
+  color: #fff;
+  background: #444;
+}
+
+.ik-tag-filter-chip__clear-icon {
+  width: 12px;
+  height: 12px;
 }
 
 /* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */

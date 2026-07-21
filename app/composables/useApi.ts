@@ -21,6 +21,8 @@ import type {
   NsfwStatus,
   Post,
   PostCategory,
+  PostTag,
+  Tag,
   ArticleFeed,
   ZzzRoleBadge,
   LikeToggleResult,
@@ -61,6 +63,10 @@ const qk = {
   },
   categories: {
     list: ["categories", "list"] as QueryKey,
+  },
+  tags: {
+    list: ["tags", "list"] as QueryKey,
+    suggest: (q: string) => ["tags", "suggest", q] as QueryKey,
   },
   articles: {
     search: (query: string, category: string, start: number, limit: number) =>
@@ -428,6 +434,20 @@ function toPostCategory(raw: unknown): PostCategory | null {
   };
 }
 
+function toPostTag(raw: unknown): PostTag | null {
+  if (!raw || typeof raw !== "object") return null;
+  const t = raw as Record<string, unknown>;
+  const name = typeof t.name === "string" ? t.name : "";
+  const slug = typeof t.slug === "string" ? t.slug : "";
+  if (!name) return null;
+  return { name, slug };
+}
+
+function toPostTags(raw: unknown): PostTag[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(toPostTag).filter((t): t is PostTag => t !== null);
+}
+
 function toPost(raw: unknown, apiBaseUrl: string): Post {
   const data = (raw || {}) as Record<string, unknown>;
 
@@ -482,6 +502,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     isHidden: data.isHidden === true,
     isOwner: data.isOwner === true,
     category: toPostCategory(data.category),
+    tags: toPostTags(data.tags),
     createdAt: data.createdAt as string | undefined,
     updatedAt: data.updatedAt as string | undefined,
     editedAt: data.editedAt as string | undefined,
@@ -521,6 +542,7 @@ function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
     cover: covers,
     hasPublishedVersion: raw.hasPublishedVersion === true,
     category: toPostCategory(raw.category),
+    tags: toPostTags(raw.tags),
     createdAt: raw.createdAt as string | undefined,
     updatedAt: raw.updatedAt as string | undefined,
   };
@@ -785,18 +807,22 @@ export function useApi() {
     endCur = "",
     category = "",
     feed: ArticleFeed = "recommend",
+    tag = "",
   ): Promise<Pagination<Post>> => {
     const start = parseStart(endCur);
     // feed != recommend 时把 feed 折进 category 缓存槽，避免推荐/关注/收藏互相串缓存。
+    // tag 也折进缓存槽，避免不同标签过滤串缓存。
     const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
+    const cacheKey = tag ? `${cacheCategory}|${tag}` : cacheCategory;
     return cachedRead(
-      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE),
+      qk.articles.search(query, cacheKey, start, DEFAULT_PAGE_SIZE),
       async () => {
         const endpoint = query ? "/api/articles/search" : "/api/articles/list";
         const response = await $api(endpoint, {
           query: {
             ...(query ? { q: query } : {}),
             ...(category ? { category } : {}),
+            ...(tag ? { tag } : {}),
             ...(feed !== "recommend" ? { feed } : {}),
             start: String(start),
             limit: String(DEFAULT_PAGE_SIZE),
@@ -901,6 +927,47 @@ export function useApi() {
           .filter((c): c is Category => c !== null);
       },
       STALE_LIST,
+    );
+  };
+
+  const getTags = async (): Promise<Tag[]> => {
+    return cachedRead(
+      qk.tags.list,
+      async () => {
+        const response = await $api("/api/tags/list");
+        const data = unwrapData<unknown[]>(response) || [];
+        return data
+          .map((raw): Tag | null => {
+            if (!raw || typeof raw !== "object") return null;
+            const t = raw as Record<string, unknown>;
+            const name = typeof t.name === "string" ? t.name : "";
+            const slug = typeof t.slug === "string" ? t.slug : "";
+            if (!name) return null;
+            return {
+              name,
+              slug,
+              articlesCount: typeof t.articlesCount === "number" ? t.articlesCount : undefined,
+            };
+          })
+          .filter((t): t is Tag => t !== null);
+      },
+      STALE_LIST,
+    );
+  };
+
+  const suggestTags = async (q: string): Promise<PostTag[]> => {
+    const trimmed = q.trim();
+    if (!trimmed) return [];
+    return cachedRead(
+      qk.tags.suggest(trimmed),
+      async () => {
+        const response = await $api("/api/tags/suggest", {
+          query: { q: trimmed },
+        });
+        const data = unwrapData<unknown[]>(response) || [];
+        return toPostTags(data);
+      },
+      STALE_DETAIL,
     );
   };
 
@@ -1395,6 +1462,7 @@ export function useApi() {
     authorId?: string;
     isAnonymous?: boolean;
     category?: string;
+    tags?: string[];
   }): Promise<DraftArticle> => {
     const data: Record<string, unknown> = {
       title: payload.title,
@@ -1403,6 +1471,9 @@ export function useApi() {
     };
     if (payload.category) {
       data.category = payload.category;
+    }
+    if (payload.tags?.length) {
+      data.tags = payload.tags;
     }
     if (payload.coverId != null) {
       data.cover = payload.coverId;
@@ -1433,6 +1504,7 @@ export function useApi() {
       authorId?: string;
       isAnonymous?: boolean;
       category?: string;
+      tags?: string[];
     },
   ): Promise<DraftArticle> => {
     const data: Record<string, unknown> = {};
@@ -1440,6 +1512,8 @@ export function useApi() {
     if (payload.text !== undefined) data.text = payload.text;
     data.editorState = payload.editorState;
     if (payload.category) data.category = payload.category;
+    // 显式传入 tags（含空数组）才修改；空数组 = 清空标签。
+    if (payload.tags !== undefined) data.tags = payload.tags;
     if (payload.coverId !== undefined) {
       data.cover = payload.coverId ?? [];
     }
@@ -2174,6 +2248,8 @@ export function useApi() {
     suggestArticles,
     peekArticles,
     getCategories,
+    getTags,
+    suggestTags,
     getPost,
     recordArticleView,
     getComments,

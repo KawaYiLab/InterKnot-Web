@@ -165,6 +165,19 @@ export interface PostCategory {
   slug: string;
 }
 
+/** 标签（GET /api/tags/list、/api/tags/suggest 返回）。 */
+export interface Tag {
+  name: string;
+  slug: string;
+  articlesCount?: number;
+}
+
+/** 委托上附带的精简标签信息。 */
+export interface PostTag {
+  name: string;
+  slug: string;
+}
+
 export interface Post {
   id: string;
   title: string;
@@ -191,6 +204,7 @@ export interface Post {
   /** 当前登录用户是否为该委托作者（解决匿名委托 author.documentId 为 null 的问题）。 */
   isOwner?: boolean;
   category?: PostCategory | null;
+  tags?: PostTag[];
   createdAt?: string;
   updatedAt?: string;
   editedAt?: string;
@@ -363,6 +377,7 @@ export interface DraftArticle {
   hasPublishedVersion: boolean;
   isAnonymous?: boolean;
   category?: PostCategory | null;
+  tags?: PostTag[];
   createdAt?: string;
   updatedAt?: string;
   author?: Author;

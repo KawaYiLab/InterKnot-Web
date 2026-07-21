@@ -77,6 +77,13 @@ const visibleCategories = computed(() =>
   categories.value.filter((c) => !c.adminOnly || auth.user?.isAdmin === true),
 );
 
+/* ── 委托标签：多选，用户自由创建，最多 5 个 ── */
+const MAX_TAGS = 5;
+const selectedTags = ref<string[]>([]);
+const tagInput = ref("");
+const tagSuggestions = ref<{ name: string; slug: string }[]>([]);
+const showTagSuggestions = ref(false);
+
 /* ── Mobile-only UI state ─────────────────────────── */
 const isMobileDraftsOpen = ref(false);
 const isMobileSettingsOpen = ref(false);
@@ -186,6 +193,7 @@ const performSaveDraft = async (force = false) => {
       authorId: authorId || undefined,
       isAnonymous: isAnonymous.value || undefined,
       category: selectedCategory.value || DEFAULT_CATEGORY_SLUG,
+      tags: selectedTags.value,
     };
 
     let result: DraftArticle;
@@ -594,6 +602,7 @@ function applyDraftToEditor(draft: DraftArticle) {
     body.value = draft.text;
     isAnonymous.value = !!draft.isAnonymous;
     selectedCategory.value = draft.category?.slug || DEFAULT_CATEGORY_SLUG;
+    selectedTags.value = (draft.tags ?? []).map((t) => t.name);
 
     for (const task of uploadTasks.value) {
       URL.revokeObjectURL(task.previewUrl);
@@ -634,6 +643,10 @@ function resetEditor() {
     isAnonymous.value = false;
     isEditingPublished.value = false;
     selectedCategory.value = DEFAULT_CATEGORY_SLUG;
+    selectedTags.value = [];
+    tagInput.value = "";
+    tagSuggestions.value = [];
+    showTagSuggestions.value = false;
     lastSavedSnapshot.value = "";
     hasUnsavedChanges.value = false;
   } finally {
@@ -794,6 +807,73 @@ async function loadCategories() {
   }
 }
 
+/* ── 标签输入相关方法 ── */
+const debouncedTagSuggest = useDebounceFn(async (q: string) => {
+  const trimmed = q.trim();
+  if (!trimmed) {
+    tagSuggestions.value = [];
+    showTagSuggestions.value = false;
+    return;
+  }
+  try {
+    const suggestions = await api.suggestTags(trimmed);
+    // 过滤掉已选中的标签
+    tagSuggestions.value = suggestions.filter((s) => !selectedTags.value.includes(s.name));
+    showTagSuggestions.value = tagSuggestions.value.length > 0;
+  } catch {
+    tagSuggestions.value = [];
+    showTagSuggestions.value = false;
+  }
+}, 300);
+
+function onTagInput() {
+  debouncedTagSuggest(tagInput.value);
+}
+
+function normalizeTagName(raw: string): string | null {
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (!name || name.length > 20) return null;
+  return name;
+}
+
+function addTag(name: string) {
+  const normalized = normalizeTagName(name);
+  if (!normalized) return;
+  if (selectedTags.value.includes(normalized)) return;
+  if (selectedTags.value.length >= MAX_TAGS) return;
+  selectedTags.value.push(normalized);
+  tagInput.value = "";
+  tagSuggestions.value = [];
+  showTagSuggestions.value = false;
+  markDirty();
+}
+
+function removeTag(name: string) {
+  const index = selectedTags.value.indexOf(name);
+  if (index !== -1) {
+    selectedTags.value.splice(index, 1);
+    markDirty();
+  }
+}
+
+function onTagKeydown(e: KeyboardEvent) {
+  // 回车或逗号（含中文逗号）确认添加
+  if (e.key === "Enter" || e.key === "," || e.key === "，") {
+    e.preventDefault();
+    if (tagInput.value.trim()) {
+      addTag(tagInput.value);
+    }
+  }
+  // Backspace 且输入为空时删除最后一个标签
+  if (e.key === "Backspace" && !tagInput.value && selectedTags.value.length) {
+    removeTag(selectedTags.value[selectedTags.value.length - 1]!);
+  }
+}
+
+function selectTagSuggestion(tag: { name: string; slug: string }) {
+  addTag(tag.name);
+}
+
 /* ── Edit mode entry (?edit=<documentId>) ──────── */
 async function loadEditTarget(id: string) {
   try {
@@ -933,6 +1013,58 @@ if (import.meta.client) {
                   aria-hidden="true"
                 ></span>
               </template>
+            </div>
+          </div>
+
+          <!-- Tag section（可选，最多 5 个） -->
+          <div class="ik-create-section">
+            <div class="ik-create-section__head">
+              <span class="ik-create-section__label">标签</span>
+              <span class="ik-create-section__hint">可选，最多 {{ MAX_TAGS }} 个，回车或逗号添加</span>
+            </div>
+            <div class="ik-create-tag-area">
+              <div class="ik-create-tag-chips">
+                <span
+                  v-for="tag in selectedTags"
+                  :key="tag"
+                  class="ik-create-tag-chip"
+                >
+                  {{ tag }}
+                  <button
+                    type="button"
+                    class="ik-create-tag-chip__remove"
+                    @click="removeTag(tag)"
+                  >
+                    <XMarkIcon class="ik-create-tag-chip__remove-icon" />
+                  </button>
+                </span>
+                <input
+                  v-model="tagInput"
+                  type="text"
+                  class="ik-create-tag-input"
+                  :placeholder="selectedTags.length >= MAX_TAGS ? '已达上限' : '输入标签…'"
+                  :disabled="selectedTags.length >= MAX_TAGS"
+                  maxlength="20"
+                  @input="onTagInput"
+                  @keydown="onTagKeydown"
+                  @blur="showTagSuggestions = false"
+                />
+              </div>
+              <!-- 联想下拉 -->
+              <div
+                v-if="showTagSuggestions && tagSuggestions.length"
+                class="ik-create-tag-suggestions"
+              >
+                <button
+                  v-for="suggestion in tagSuggestions"
+                  :key="suggestion.slug"
+                  type="button"
+                  class="ik-create-tag-suggestion"
+                  @mousedown.prevent="selectTagSuggestion(suggestion)"
+                >
+                  {{ suggestion.name }}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1798,6 +1930,119 @@ if (import.meta.client) {
     animation: none;
     opacity: 0.5;
   }
+}
+
+/* ── 标签输入区 ── */
+.ik-create-tag-area {
+  position: relative;
+}
+
+.ik-create-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 0;
+}
+
+.ik-create-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px 0 12px;
+  border-radius: 9999px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: #eee;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.ik-create-tag-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.ik-create-tag-chip__remove:hover {
+  color: #fff;
+  background: #444;
+}
+
+.ik-create-tag-chip__remove-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.ik-create-tag-input {
+  flex: 1;
+  min-width: 120px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ik-create-tag-input::placeholder {
+  color: #666;
+}
+
+.ik-create-tag-input:focus {
+  border-color: #444;
+  background: #1a1a1a;
+}
+
+.ik-create-tag-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ik-create-tag-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin-top: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #1c1c1c;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.ik-create-tag-suggestion {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #eee;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.ik-create-tag-suggestion:hover {
+  background: #2a2a2a;
 }
 
 .ik-create-section__count {
