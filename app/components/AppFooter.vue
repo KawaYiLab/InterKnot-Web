@@ -12,7 +12,7 @@
           <ul class="app-footer__list">
             <li>
               <a
-                href="https://qm.qq.com/q/CAbKsHOCpW"
+                href="https://qm.qq.com/q/cI1SQvB2kU"
                 target="_blank"
                 rel="noopener noreferrer"
               >
