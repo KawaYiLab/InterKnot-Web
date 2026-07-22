@@ -134,8 +134,9 @@ let polling = false;
 
 const masonryKeyMapper = (post: Post) => post.id;
 const skeletonKeyMapper = (item: SkeletonItem) => item.id;
-const { width: viewportWidth } = useWindowSize({ initialWidth: 0 });
-const isMobile = useMediaQuery("(max-width: 768px)");
+const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+const { width: viewportWidth } = useWindowSize({ initialWidth });
+const isMobile = useMediaQuery("(max-width: 768px)", { ssrWidth: initialWidth });
 
 // 瀑布流列间距：移动端收窄，避免两列离得过远（与 .ik-home-container 的左右边距协调）
 const feedGap = computed(() => (viewportWidth.value && viewportWidth.value <= 768 ? 14 : 32));
