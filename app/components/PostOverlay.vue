@@ -48,8 +48,9 @@ const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const reportDialog = useReportDialog();
 const message = useMessage();
-const isMobile = useMediaQuery("(max-width: 768px)");
-const isCompact = useMediaQuery("(max-width: 1024px)");
+const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+const isMobile = useMediaQuery("(max-width: 768px)", { ssrWidth: initialWidth });
+const isCompact = useMediaQuery("(max-width: 1024px)", { ssrWidth: initialWidth });
 
 const post = ref<Post | null>(null);
 const loading = ref(true);
