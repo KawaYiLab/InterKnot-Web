@@ -404,6 +404,7 @@ function setItemRef(el: Element | null, key: string | number) {
   if (!props.measureItems) return;
 
   const existing = itemRefMap.get(key);
+  if (existing === el) return;
   if (existing && existing !== el) {
     unobserveItem(existing);
     itemRefMap.delete(key);

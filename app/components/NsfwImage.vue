@@ -146,6 +146,12 @@ function onRootClick(event: MouseEvent) {
   transition: filter 200ms ease;
 }
 
+@media (max-width: 1024px) {
+  .nsfw-image__media {
+    transition: none;
+  }
+}
+
 .nsfw-image__img {
   display: block;
   width: 100%;
@@ -211,8 +217,9 @@ function onRootClick(event: MouseEvent) {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
-.nsfw-image__overlay--readonly {
-  pointer-events: none;
+.nsfw-image__overlay--readonly,
+.nsfw-image__overlay--readonly * {
+  pointer-events: none !important;
   cursor: default;
 }
 </style>
