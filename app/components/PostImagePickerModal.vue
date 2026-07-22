@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckIcon } from "@heroicons/vue/24/outline";
+import { CheckIcon, TrashIcon } from "@heroicons/vue/24/outline";
 import { useMessage } from "zenless-ui";
 import type { UploadedFile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -18,15 +18,18 @@ const emit = defineEmits<{
   close: [];
   upload: [files: File[]];
   select: [uploads: UploadedFile[]];
+  delete: [upload: UploadedFile];
 }>();
 
 const api = useApi();
 const message = useMessage();
+const confirmDialog = useConfirmDialog();
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const uploads = ref<UploadedFile[]>([]);
 const selectedUploadIds = ref<string[]>([]);
 const loading = ref(true);
+const deletingIds = ref<Set<string>>(new Set());
 
 const existingIdSet = computed(() => new Set(props.existingIds));
 const selectedIdSet = computed(() => new Set(selectedUploadIds.value));
@@ -53,8 +56,12 @@ const onFileSelected = (event: Event) => {
   emit("close");
 };
 
+const isDeleting = (upload: UploadedFile) => {
+  return upload.documentId ? deletingIds.value.has(upload.documentId) : false;
+};
+
 const toggleUpload = (upload: UploadedFile) => {
-  if (!upload.documentId) return;
+  if (!upload.documentId || isDeleting(upload)) return;
   if (existingIdSet.value.has(upload.documentId)) {
     message.warning("这张图片已经添加过了");
     return;
@@ -68,6 +75,43 @@ const toggleUpload = (upload: UploadedFile) => {
     return;
   }
   selectedUploadIds.value = [...selectedUploadIds.value, upload.documentId];
+};
+
+const handleDelete = async (upload: UploadedFile) => {
+  if (!upload.documentId || isDeleting(upload)) return;
+
+  const confirmed = await confirmDialog.open({
+    title: "删除图片",
+    message: "确定从图库中移除这张图片吗？",
+    danger: true,
+  });
+  if (!confirmed) return;
+
+  deletingIds.value.add(upload.documentId);
+  try {
+    const result = await api.deleteMyUpload(upload.documentId);
+
+    uploads.value = uploads.value.filter(
+      (item) => item.documentId !== upload.documentId
+    );
+    selectedUploadIds.value = selectedUploadIds.value.filter(
+      (id) => id !== upload.documentId
+    );
+
+    emit("delete", upload);
+
+    if (result.deleted) {
+      message.success("图片已删除");
+    } else if (result.inUse) {
+      message.success("已从图库移除，已有内容不受影响");
+    } else {
+      message.success("已从图库移除");
+    }
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "删除失败"));
+  } finally {
+    deletingIds.value.delete(upload.documentId);
+  }
 };
 
 const confirmSelection = () => {
@@ -160,34 +204,50 @@ onBeforeUnmount(() => {
                         @change="onFileSelected"
                       />
 
-                      <button
+                      <div
                         v-for="upload in uploads"
                         :key="upload.documentId"
-                        type="button"
-                        class="ik-img-card"
-                        :class="{
-                          'is-selected': selectedIdSet.has(upload.documentId),
-                          'is-disabled': existingIdSet.has(upload.documentId),
-                        }"
-                        @click="toggleUpload(upload)"
+                        class="ik-img-card-wrap"
                       >
-                        <div class="ik-img-card__thumb">
-                          <img
-                            :src="toThumbUrl(upload.url)"
-                            :alt="upload.name || '历史图片'"
-                            class="ik-img-card__image"
-                            loading="lazy"
-                            decoding="async"
-                            draggable="false"
-                            @error="($event.target as HTMLImageElement).src = upload.url"
-                          />
-                        </div>
-                        <span class="ik-img-card__name">{{ upload.name || '历史图片' }}</span>
-                        <span v-if="selectedIdSet.has(upload.documentId)" class="ik-img-card__badge">
-                          <CheckIcon class="ik-img-card__badge-icon" />
-                        </span>
-                        <span v-else-if="existingIdSet.has(upload.documentId)" class="ik-img-card__used">已添加</span>
-                      </button>
+                        <button
+                          type="button"
+                          class="ik-img-card"
+                          :class="{
+                            'is-selected': selectedIdSet.has(upload.documentId),
+                            'is-disabled': existingIdSet.has(upload.documentId),
+                            'is-deleting': isDeleting(upload),
+                          }"
+                          :disabled="isDeleting(upload)"
+                          @click="toggleUpload(upload)"
+                        >
+                          <div class="ik-img-card__thumb">
+                            <img
+                              :src="toThumbUrl(upload.url)"
+                              :alt="upload.name || '历史图片'"
+                              class="ik-img-card__image"
+                              loading="lazy"
+                              decoding="async"
+                              draggable="false"
+                              @error="($event.target as HTMLImageElement).src = upload.url"
+                            />
+                          </div>
+                          <span class="ik-img-card__name">{{ upload.name || '历史图片' }}</span>
+                          <span v-if="selectedIdSet.has(upload.documentId)" class="ik-img-card__badge">
+                            <CheckIcon class="ik-img-card__badge-icon" />
+                          </span>
+                          <span v-else-if="existingIdSet.has(upload.documentId)" class="ik-img-card__used">已添加</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="ik-img-card__delete"
+                          :class="{ 'is-deleting': isDeleting(upload) }"
+                          :disabled="isDeleting(upload)"
+                          aria-label="删除"
+                          @click.stop="handleDelete(upload)"
+                        >
+                          <TrashIcon class="ik-img-card__delete-icon" />
+                        </button>
+                      </div>
                     </div>
                     <div v-if="!uploads.length" class="ik-img-empty">暂无图片，请上传一张图片试试吧(✿◡‿◡)</div>
                   </z-scrollbar>
@@ -386,6 +446,11 @@ onBeforeUnmount(() => {
   padding: 18px 24px 58px 18px;
 }
 
+.ik-img-card-wrap {
+  position: relative;
+  min-width: 0;
+}
+
 .ik-img-card {
   position: relative;
   display: block;
@@ -491,6 +556,47 @@ onBeforeUnmount(() => {
   background: rgba(0, 0, 0, 0.72);
   color: #aaa;
   font-size: 10px;
+}
+
+.ik-img-card__delete {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.ik-img-card-wrap:hover .ik-img-card__delete,
+.ik-img-card__delete:focus-visible {
+  opacity: 1;
+}
+
+.ik-img-card__delete:hover:not(:disabled) {
+  background: rgba(255, 68, 68, 0.85);
+  transform: scale(1.05);
+}
+
+.ik-img-card__delete:disabled,
+.ik-img-card__delete.is-deleting {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ik-img-card__delete-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .ik-img-state,
