@@ -3,7 +3,7 @@
  * 表情选择面板（QQ/微信风格）：贴在评论输入框下方，可连续插入、实时预览。
  *
  * - 跟随评论 composer 内嵌，不是全屏/居中弹窗
- * - 顶部分类 tab：最近 / 各后台分组 / emoji
+ * - 底部分类 tab：最近 / 各后台分组 / emoji
  * - 点击表情直接 emit，由父组件插入 textarea，面板不关闭
  */
 import { computed, ref, watch } from "vue";
@@ -149,38 +149,6 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
       class="ik-emote-picker"
       @keydown.esc.stop="emit('close')"
     >
-      <div class="ik-emote-picker__header">
-        <span class="ik-emote-picker__title">表情</span>
-        <button
-          type="button"
-          class="ik-emote-picker__close"
-          aria-label="关闭"
-          @click="emit('close')"
-        >
-          ×
-        </button>
-      </div>
-
-      <div class="ik-emote-picker__tabs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          type="button"
-          class="ik-emote-picker__tab"
-          :class="{ 'ik-emote-picker__tab--active': tab.key === activeTab?.key }"
-          :title="tab.title"
-          @click.stop.prevent="setActiveTab(tab)"
-        >
-          <img
-            v-if="tab.iconUrl"
-            :src="tab.iconUrl"
-            :alt="tab.title"
-            draggable="false"
-          />
-          <span v-else>{{ tab.iconChar }}</span>
-        </button>
-      </div>
-
       <div class="ik-emote-picker__body">
         <Transition name="ik-emote-picker-fade">
           <div v-if="loading && !emotes.length" class="ik-emote-picker__state">
@@ -233,6 +201,26 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
           </z-scrollbar>
         </Transition>
       </div>
+
+      <div class="ik-emote-picker__tabs">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          type="button"
+          class="ik-emote-picker__tab"
+          :class="{ 'ik-emote-picker__tab--active': tab.key === activeTab?.key }"
+          :title="tab.title"
+          @click.stop.prevent="setActiveTab(tab)"
+        >
+          <img
+            v-if="tab.iconUrl"
+            :src="tab.iconUrl"
+            :alt="tab.title"
+            draggable="false"
+          />
+          <span v-else>{{ tab.iconChar }}</span>
+        </button>
+      </div>
     </div>
   </Transition>
 </template>
@@ -242,111 +230,23 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-height: 320px;
+  height: 45vh;
+  min-height: 180px;
+  max-height: 440px;
   margin-top: 8px;
   background: #0a0a0a;
   border-top: 1px solid #202020;
-  border-radius: 12px 12px 0 0;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.35);
   color: #f5f5f5;
   overflow: hidden;
-  will-change: transform, opacity, max-height;
-}
-
-.ik-emote-picker__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  flex-shrink: 0;
-}
-
-.ik-emote-picker__title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.ik-emote-picker__close {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #888;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-
-.ik-emote-picker__close:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
-
-.ik-emote-picker__tabs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px 8px;
-  flex-shrink: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.ik-emote-picker__tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.ik-emote-picker__tab {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 30px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  color: #bfbfbf;
-  transition: background-color 120ms ease;
-}
-
-.ik-emote-picker__tab:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-}
-
-.ik-emote-picker__tab--active {
-  color: #fff;
-  background-color: rgba(255, 255, 255, 0.14);
-}
-
-.ik-emote-picker__tab img {
-  width: 22px;
-  height: 22px;
-  object-fit: contain;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-drag: none;
+  will-change: max-height, opacity;
 }
 
 .ik-emote-picker__body {
   flex: 1;
   min-height: 0;
   position: relative;
-  border-radius: 0 0 12px 12px;
   overflow: hidden;
 }
 
@@ -362,11 +262,65 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   min-height: auto;
 }
 
+.ik-emote-picker__tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-top: 1px solid #202020;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ik-emote-picker__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ik-emote-picker__tab {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #888;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.ik-emote-picker__tab:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.ik-emote-picker__tab--active {
+  color: #4aa3ff;
+  border-color: #4aa3ff;
+  background-color: rgba(74, 163, 255, 0.08);
+}
+
+.ik-emote-picker__tab img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 .ik-emote-picker__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-  gap: 8px;
-  padding: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 6px;
+  padding: 10px;
 }
 
 .ik-emote-picker__card {
@@ -419,7 +373,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 }
 
 .ik-emote-picker__emoji {
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1;
   user-select: none;
 }
@@ -431,13 +385,13 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   bottom: 0;
   display: block;
   min-width: 0;
-  padding: 16px 4px 4px;
+  padding: 14px 3px 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.72) 100%);
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-align: center;
   pointer-events: none;
@@ -468,16 +422,15 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   to { transform: rotate(360deg); }
 }
 
-/* 面板整体显隐：从 composer 底部向上淡入 */
+/* 面板整体显隐：高度从 0 展开，类似键盘/表情面板从底部升起 */
 .ik-emote-picker-panel-enter-active,
 .ik-emote-picker-panel-leave-active {
-  transition: opacity 160ms ease, transform 160ms ease, max-height 160ms ease;
+  transition: max-height 180ms ease, opacity 180ms ease;
 }
 
 .ik-emote-picker-panel-enter-from,
 .ik-emote-picker-panel-leave-to {
   opacity: 0;
-  transform: translateY(12px);
   max-height: 0;
 }
 
