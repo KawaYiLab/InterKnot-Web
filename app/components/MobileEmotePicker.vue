@@ -490,8 +490,9 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   }
 
   .ik-emote-picker__grid {
-    align-content: stretch;
-    align-items: center;
+    align-content: start;
+    align-items: start;
+    justify-items: start;
     min-height: 100%;
   }
 
