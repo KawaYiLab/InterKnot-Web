@@ -995,7 +995,7 @@ onBeforeUnmount(() => {
         <div class="ik-page__main">
           <IkZzzMarquee />
         <!-- ── Body (双栏) ───────────────────── -->
-        <div class="ik-page__body">
+        <div class="ik-page__body" :class="{ 'ik-page__body--emote-open': emotePickerVisible }">
           <!-- 左栏：封面 + 正文 -->
           <div class="ik-page__left">
             <div class="ik-page__left-scroll" ref="scrollRef">
@@ -1093,7 +1093,7 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- 底部操作栏 -->
-            <div class="ik-page__actions" :class="{ 'ik-page__actions--active': isCommentEditorActive }">
+            <div class="ik-page__actions" :class="{ 'ik-page__actions--active': isCommentEditorActive, 'ik-page__actions--emote-open': emotePickerVisible }">
               <div class="ik-engage-bar">
                 <div class="ik-engage-bar__main">
                   <div ref="commentInputBoxRef" class="ik-engage-bar__content-edit" @click="focusCommentInput">
@@ -2362,6 +2362,19 @@ onBeforeUnmount(() => {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .ik-page__actions--emote-open {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    transform: translateZ(0);
+  }
+
+  .ik-page__body--emote-open {
+    padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
   }
 }
 

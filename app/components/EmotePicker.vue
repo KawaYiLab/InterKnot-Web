@@ -227,7 +227,13 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 
 <style>
 :root {
-  --emote-panel-height: clamp(220px, 45vh, 420px);
+  --emote-panel-height: 50vh;
+}
+
+@supports (height: 1dvh) {
+  :root {
+    --emote-panel-height: 50dvh;
+  }
 }
 </style>
 
@@ -472,10 +478,6 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 }
 
 @media (max-width: 767px) {
-  :root {
-    --emote-panel-height: clamp(220px, 45dvh, 360px);
-  }
-
   .ik-emote-picker {
     position: relative;
     left: auto;
@@ -497,7 +499,8 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 
   .ik-emote-picker__grid {
     flex: 1;
-    align-content: flex-end;
+    align-content: stretch;
+    align-items: center;
   }
 
   .ik-emote-picker__tabs {

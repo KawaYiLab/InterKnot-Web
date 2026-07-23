@@ -1235,7 +1235,7 @@ onBeforeUnmount(() => {
       <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
       <!-- ── 弹窗主体 ────────────────────────────── -->
-      <div class="ik-dialog">
+      <div class="ik-dialog" :class="{ 'ik-dialog--emote-open': emotePickerVisible }">
         <!-- 外边框（半透明白色，三圆角） -->
         <div class="ik-dialog__outer">
           <!-- 内边框（纯黑，三圆角） -->
@@ -1345,7 +1345,7 @@ onBeforeUnmount(() => {
 
             <template v-if="post">
               <!-- 桌面端：双栏布局 -->
-              <div v-show="!loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable }">
+              <div v-show="!loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable, 'ik-dialog__body--emote-open': emotePickerVisible }">
                 <!-- 左栏：封面 + 正文 -->
                 <div class="ik-dialog__left">
                   <div class="ik-dialog__left-scroll" ref="scrollRef">
@@ -1542,7 +1542,7 @@ onBeforeUnmount(() => {
                   </div>
 
                   <!-- 底部操作栏 -->
-                  <div class="ik-dialog__actions" :class="{ 'ik-dialog__actions--active': isCommentEditorActive }">
+                  <div class="ik-dialog__actions" :class="{ 'ik-dialog__actions--active': isCommentEditorActive, 'ik-dialog__actions--emote-open': emotePickerVisible }">
                     <!-- 评论输入 -->
                     <div class="ik-engage-bar">
                       <div class="ik-engage-bar__main">
@@ -3063,6 +3063,19 @@ onBeforeUnmount(() => {
     border-top: 1px solid #202020;
   }
 
+  .ik-dialog__actions--emote-open {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    transform: translateZ(0);
+  }
+
+  .ik-dialog__body--emote-open {
+    padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
+  }
+
   /* 小屏直接隐藏"说点什么..."文字，避免与评论数 badge 重叠 */
   .ik-engage-bar__placeholder span {
     display: none;
@@ -3084,6 +3097,11 @@ onBeforeUnmount(() => {
 
   .ik-dialog__inner {
     border-radius: 0;
+  }
+
+  .ik-dialog--emote-open .ik-dialog__outer,
+  .ik-dialog--emote-open .ik-dialog__inner {
+    overflow: visible;
   }
 
   /* 顶部 header 适配刘海/状态栏安全区 */
