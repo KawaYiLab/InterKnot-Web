@@ -2369,11 +2369,13 @@ onBeforeUnmount(() => {
     left: 0;
     right: 0;
     bottom: 0;
+    bottom: calc(100vh - 100dvh);
     z-index: 100;
-    transform: translateZ(0);
   }
 
   .ik-page__body--emote-open {
+    transform: none;
+    -webkit-transform: none;
     padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
   }
 }

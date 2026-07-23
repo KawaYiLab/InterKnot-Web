@@ -3068,8 +3068,8 @@ onBeforeUnmount(() => {
     left: 0;
     right: 0;
     bottom: 0;
+    bottom: calc(100vh - 100dvh);
     z-index: 100;
-    transform: translateZ(0);
   }
 
   .ik-dialog__body--emote-open {
@@ -3089,6 +3089,10 @@ onBeforeUnmount(() => {
     height: 100vh;
     height: 100dvh;
     max-height: 100dvh;
+  }
+
+  .ik-dialog--emote-open {
+    transform: none;
   }
 
   .ik-dialog__outer {
