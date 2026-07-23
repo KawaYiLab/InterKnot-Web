@@ -133,13 +133,13 @@ const mention: MentionInputAPI = shallowReactive<MentionInputAPI>({
 
 const emoteInsert: EmoteInsertAPI = shallowReactive<EmoteInsertAPI>({
   emotes: ref<EmoteRange[]>([]),
-  insertEmote: async (code: string) => {
+  insertEmote: async (code: string, options?: { focus?: boolean }) => {
     ensureMentionInputInitialized();
-    return emoteInsert.insertEmote(code);
+    return emoteInsert.insertEmote(code, options);
   },
-  insertText: async (text: string) => {
+  insertText: async (text: string, options?: { focus?: boolean }) => {
     ensureMentionInputInitialized();
-    return emoteInsert.insertText(text);
+    return emoteInsert.insertText(text, options);
   },
   refresh: () => {},
   onKeyDown: () => {},
@@ -150,7 +150,6 @@ const emoteInsert: EmoteInsertAPI = shallowReactive<EmoteInsertAPI>({
 });
 
 const emotePickerVisible = ref(false);
-const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);
 
 // 评论列表在入场动画结束后再渲染，避免弹窗打开瞬间挂载大量 CommentItem 与 useEmotes 触发 fetch。
 function scheduleShowComments() {
@@ -162,28 +161,26 @@ function scheduleShowComments() {
   }, 300);
 }
 
-const toggleEmotePicker = (e: MouseEvent) => {
+const toggleEmotePicker = () => {
   if (emotePickerVisible.value) {
     emotePickerVisible.value = false;
+    focusCommentInput();
     return;
   }
-  const target = e.currentTarget as HTMLElement;
-  const rect = target.getBoundingClientRect();
-  emotePickerAnchor.value = { top: rect.top, left: rect.left, height: rect.height };
   emotePickerVisible.value = true;
+  const ta = commentInputBoxRef.value?.querySelector("textarea") as HTMLTextAreaElement | null;
+  ta?.blur();
 };
 
 const onEmoteSelect = async (emote: { code: string }) => {
-  const ok = await emoteInsert.insertEmote(emote.code);
+  const ok = await emoteInsert.insertEmote(emote.code, { focus: false });
   if (!ok) {
     message.warning("表情数量已达上限");
   }
-  emotePickerVisible.value = false;
 };
 
 const onEmojiSelect = async (emoji: string) => {
-  await emoteInsert.insertText(emoji);
-  emotePickerVisible.value = false;
+  await emoteInsert.insertText(emoji, { focus: false });
 };
 
 const commentImages = useCommentImages();
@@ -665,6 +662,7 @@ const sendComment = async () => {
     commentInputFocused.value = false;
     commentAnonymous.value = false;
     replyTarget.value = null;
+    emotePickerVisible.value = false;
     syncCommentInputHeight();
     if (post.value) {
       post.value.commentsCount = (post.value.commentsCount ?? 0) + 1;
@@ -807,6 +805,7 @@ const focusCommentInput = () => {
     loginDialog.open();
     return;
   }
+  emotePickerVisible.value = false;
   ensureMentionInputInitialized();
   commentInputFocused.value = true;
   const input = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLElement | null;
@@ -820,6 +819,7 @@ const handleCommentInputFocus = (e: FocusEvent) => {
     loginDialog.open();
     return;
   }
+  emotePickerVisible.value = false;
   ensureMentionInputInitialized();
   commentInputFocused.value = true;
 };
@@ -837,6 +837,7 @@ const cancelComment = () => {
   commentInputFocused.value = false;
   commentAnonymous.value = false;
   replyTarget.value = null;
+  emotePickerVisible.value = false;
   syncCommentInputHeight();
 };
 
@@ -1044,6 +1045,7 @@ const handleUnpinComment = async (comment: Comment) => {
 
 /* ── 关闭 / 键盘 ──────────────────────────────── */
 const handleClose = () => {
+  emotePickerVisible.value = false;
   cancelCoverInteractions();
   emit("close");
 };
@@ -1700,9 +1702,7 @@ onBeforeUnmount(() => {
                             >
                               <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                             </button>
-                            <!-- 表情按钮：点击弹出 EmotePicker 浮层。
-                                 @mousedown.stop 阻止冒泡到 document，避免 EmotePicker
-                                 的 click-outside 在点击按钮时误触发 close。 -->
+                            <!-- 表情按钮：切换底部表情面板，可连续插入 -->
                             <button
                               type="button"
                               class="ik-engage-bar__tool"
@@ -1742,6 +1742,13 @@ onBeforeUnmount(() => {
                           </div>
                         </div>
                       </div>
+
+                      <EmotePicker
+                        :visible="emotePickerVisible"
+                        @select="onEmoteSelect"
+                        @select-emoji="onEmojiSelect"
+                        @close="emotePickerVisible = false"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1762,14 +1769,6 @@ onBeforeUnmount(() => {
         :anchor="mention.pickerAnchor.value"
         @select="mention.selectCandidate"
         @hover="(idx: number) => (mention.pickerActiveIndex.value = idx)"
-      />
-
-      <EmotePicker
-        :visible="emotePickerVisible"
-        :anchor="emotePickerAnchor"
-        @select="onEmoteSelect"
-        @select-emoji="onEmojiSelect"
-        @close="emotePickerVisible = false"
       />
 
       <Teleport to="body">
