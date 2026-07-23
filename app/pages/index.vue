@@ -714,6 +714,8 @@ const detachPullMove = () => {
 
 const onTouchStart = (e: TouchEvent) => {
   if (!isMobile.value || refreshing.value || loading.value) return;
+  // 弹窗/覆盖层打开时：下拉属于覆盖层自身手势，不应触发首页刷新
+  if (document.querySelector(".ik-overlay")) return;
   if (window.scrollY > 5) return;
   const touch = e.touches[0];
   if (!touch) return;
@@ -729,7 +731,7 @@ const onTouchEnd = () => {
   if (!isPulling) return;
   isPulling = false;
   detachPullMove();
-  if (pullTriggered.value && !refreshing.value) {
+  if (pullTriggered.value && !refreshing.value && !document.querySelector(".ik-overlay")) {
     void handleRefresh();
   }
   pullDistance.value = 0;
