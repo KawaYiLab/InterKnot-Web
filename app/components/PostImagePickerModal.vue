@@ -454,6 +454,7 @@ onBeforeUnmount(() => {
 .ik-img-card {
   position: relative;
   display: block;
+  width: 100%;
   min-width: 0;
   aspect-ratio: 1 / 1;
   padding: 0;
