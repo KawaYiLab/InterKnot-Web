@@ -293,6 +293,12 @@ function handleImagePickerSelect(uploads: UploadedFile[]) {
   markDirty();
 }
 
+function handleImagePickerDelete(upload: UploadedFile) {
+  if (!upload.documentId) return;
+  const index = uploadTasks.value.findIndex((task) => task.serverId === upload.documentId);
+  if (index !== -1) removeUpload(index);
+}
+
 async function executeUploadTask(task: UploadTask) {
   try {
     task.status = "uploading";
@@ -1406,6 +1412,7 @@ if (import.meta.client) {
             @close="showImagePickerModal = false"
             @upload="handleImagePickerUpload"
             @select="handleImagePickerSelect"
+            @delete="handleImagePickerDelete"
           />
         </Transition>
       </Teleport>
