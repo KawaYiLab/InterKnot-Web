@@ -472,6 +472,10 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 }
 
 @media (max-width: 767px) {
+  :root {
+    --emote-panel-height: clamp(220px, 45dvh, 360px);
+  }
+
   .ik-emote-picker {
     position: relative;
     left: auto;
@@ -485,8 +489,19 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
     will-change: height, opacity;
   }
 
+  .ik-emote-picker__scroll :deep(.z-scrollbar__view) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+
+  .ik-emote-picker__grid {
+    flex: 1;
+    align-content: flex-end;
+  }
+
   .ik-emote-picker__tabs {
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    padding-bottom: 8px;
   }
 
   /* 移动端：在互动栏内展开，高度固定，不遮挡输入框 */
