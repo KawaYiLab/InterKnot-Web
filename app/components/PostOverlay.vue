@@ -8,7 +8,7 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
+import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import type { MentionCandidate, MentionAnchor, MentionRange, DisplaySegment } from "~/composables/useMentionInput";
@@ -25,6 +25,7 @@ import CommentItem from "./CommentItem.vue";
 import MentionHighlightOverlay from "./MentionHighlightOverlay.vue";
 import MentionPicker from "./MentionPicker.vue";
 import EmotePicker from "./EmotePicker.vue";
+import MobileEmotePicker from "./MobileEmotePicker.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -133,13 +134,13 @@ const mention: MentionInputAPI = shallowReactive<MentionInputAPI>({
 
 const emoteInsert: EmoteInsertAPI = shallowReactive<EmoteInsertAPI>({
   emotes: ref<EmoteRange[]>([]),
-  insertEmote: async (code: string) => {
+  insertEmote: async (code: string, options?: { focus?: boolean }) => {
     ensureMentionInputInitialized();
-    return emoteInsert.insertEmote(code);
+    return emoteInsert.insertEmote(code, options);
   },
-  insertText: async (text: string) => {
+  insertText: async (text: string, options?: { focus?: boolean }) => {
     ensureMentionInputInitialized();
-    return emoteInsert.insertText(text);
+    return emoteInsert.insertText(text, options);
   },
   refresh: () => {},
   onKeyDown: () => {},
@@ -165,25 +166,34 @@ function scheduleShowComments() {
 const toggleEmotePicker = (e: MouseEvent) => {
   if (emotePickerVisible.value) {
     emotePickerVisible.value = false;
+    focusCommentInput();
     return;
   }
   const target = e.currentTarget as HTMLElement;
   const rect = target.getBoundingClientRect();
   emotePickerAnchor.value = { top: rect.top, left: rect.left, height: rect.height };
   emotePickerVisible.value = true;
+  if (isMobile.value) {
+    const ta = commentInputBoxRef.value?.querySelector("textarea") as HTMLTextAreaElement | null;
+    ta?.blur();
+  }
 };
 
 const onEmoteSelect = async (emote: { code: string }) => {
-  const ok = await emoteInsert.insertEmote(emote.code);
+  const ok = await emoteInsert.insertEmote(emote.code, { focus: !isMobile.value });
   if (!ok) {
     message.warning("表情数量已达上限");
   }
-  emotePickerVisible.value = false;
+  if (!isMobile.value) {
+    emotePickerVisible.value = false;
+  }
 };
 
 const onEmojiSelect = async (emoji: string) => {
-  await emoteInsert.insertText(emoji);
-  emotePickerVisible.value = false;
+  await emoteInsert.insertText(emoji, { focus: !isMobile.value });
+  if (!isMobile.value) {
+    emotePickerVisible.value = false;
+  }
 };
 
 const commentImages = useCommentImages();
@@ -663,7 +673,9 @@ const sendComment = async () => {
     emoteInsert.reset();
     commentImages.clearUploads();
     commentInputFocused.value = false;
+    commentAnonymous.value = false;
     replyTarget.value = null;
+    emotePickerVisible.value = false;
     syncCommentInputHeight();
     if (post.value) {
       post.value.commentsCount = (post.value.commentsCount ?? 0) + 1;
@@ -806,6 +818,7 @@ const focusCommentInput = () => {
     loginDialog.open();
     return;
   }
+  emotePickerVisible.value = false;
   ensureMentionInputInitialized();
   commentInputFocused.value = true;
   const input = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLElement | null;
@@ -819,6 +832,7 @@ const handleCommentInputFocus = (e: FocusEvent) => {
     loginDialog.open();
     return;
   }
+  emotePickerVisible.value = false;
   ensureMentionInputInitialized();
   commentInputFocused.value = true;
 };
@@ -834,8 +848,14 @@ const cancelComment = () => {
   emoteInsert.reset();
   commentImages.clearUploads();
   commentInputFocused.value = false;
+  commentAnonymous.value = false;
   replyTarget.value = null;
+  emotePickerVisible.value = false;
   syncCommentInputHeight();
+};
+
+const toggleAnonymous = () => {
+  commentAnonymous.value = !commentAnonymous.value;
 };
 
 const startReply = (comment: Comment) => {
@@ -1038,6 +1058,7 @@ const handleUnpinComment = async (comment: Comment) => {
 
 /* ── 关闭 / 键盘 ──────────────────────────────── */
 const handleClose = () => {
+  emotePickerVisible.value = false;
   cancelCoverInteractions();
   emit("close");
 };
@@ -1227,7 +1248,7 @@ onBeforeUnmount(() => {
       <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
       <!-- ── 弹窗主体 ────────────────────────────── -->
-      <div class="ik-dialog">
+      <div class="ik-dialog" :class="{ 'ik-dialog--emote-open': emotePickerVisible }">
         <!-- 外边框（半透明白色，三圆角） -->
         <div class="ik-dialog__outer">
           <!-- 内边框（纯黑，三圆角） -->
@@ -1337,7 +1358,7 @@ onBeforeUnmount(() => {
 
             <template v-if="post">
               <!-- 桌面端：双栏布局 -->
-              <div v-show="!loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable }">
+              <div v-show="!loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable, 'ik-dialog__body--emote-open': emotePickerVisible }">
                 <!-- 左栏：封面 + 正文 -->
                 <div class="ik-dialog__left">
                   <div class="ik-dialog__left-scroll" ref="scrollRef">
@@ -1534,7 +1555,7 @@ onBeforeUnmount(() => {
                   </div>
 
                   <!-- 底部操作栏 -->
-                  <div class="ik-dialog__actions" :class="{ 'ik-dialog__actions--active': isCommentEditorActive }">
+                  <div class="ik-dialog__actions" :class="{ 'ik-dialog__actions--active': isCommentEditorActive, 'ik-dialog__actions--emote-open': emotePickerVisible }">
                     <!-- 评论输入 -->
                     <div class="ik-engage-bar">
                       <div class="ik-engage-bar__main">
@@ -1694,9 +1715,7 @@ onBeforeUnmount(() => {
                             >
                               <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                             </button>
-                            <!-- 表情按钮：点击弹出 EmotePicker 浮层。
-                                 @mousedown.stop 阻止冒泡到 document，避免 EmotePicker
-                                 的 click-outside 在点击按钮时误触发 close。 -->
+                            <!-- 表情按钮：切换底部表情面板，可连续插入 -->
                             <button
                               type="button"
                               class="ik-engage-bar__tool"
@@ -1715,9 +1734,10 @@ onBeforeUnmount(() => {
                               :class="{ 'ik-engage-bar__tool--active': commentAnonymous }"
                               :aria-label="commentAnonymous ? '取消匿名' : '匿名评论'"
                               :title="commentAnonymous ? '取消匿名' : '匿名评论'"
-                              @click.stop="commentAnonymous = !commentAnonymous"
+                              @click.stop="toggleAnonymous"
                             >
-                              <EyeSlashIcon class="ik-engage-icon" aria-hidden="true" />
+                              <EyeSlashIcon v-if="commentAnonymous" class="ik-engage-icon" aria-hidden="true" />
+                              <EyeIcon v-else class="ik-engage-icon" aria-hidden="true" />
                             </button>
                           </div>
                           <div class="ik-engage-bar__right-btns">
@@ -1735,7 +1755,24 @@ onBeforeUnmount(() => {
                           </div>
                         </div>
                       </div>
+
                     </div>
+
+                    <EmotePicker
+                      v-if="!isMobile"
+                      :visible="emotePickerVisible"
+                      :anchor="emotePickerAnchor"
+                      @select="onEmoteSelect"
+                      @select-emoji="onEmojiSelect"
+                      @close="emotePickerVisible = false"
+                    />
+                    <MobileEmotePicker
+                      v-else
+                      :visible="emotePickerVisible"
+                      @select="onEmoteSelect"
+                      @select-emoji="onEmojiSelect"
+                      @close="emotePickerVisible = false"
+                    />
                   </div>
                 </div>
               </div>
@@ -1755,15 +1792,6 @@ onBeforeUnmount(() => {
         :anchor="mention.pickerAnchor.value"
         @select="mention.selectCandidate"
         @hover="(idx: number) => (mention.pickerActiveIndex.value = idx)"
-      />
-
-      <EmotePicker
-        v-if="emotePickerVisible"
-        :visible="emotePickerVisible"
-        :anchor="emotePickerAnchor"
-        @select="onEmoteSelect"
-        @select-emoji="onEmojiSelect"
-        @close="emotePickerVisible = false"
       />
 
       <Teleport to="body">
@@ -2484,6 +2512,8 @@ onBeforeUnmount(() => {
   color: #f5f5f5;
 }
 
+
+
 .ik-engage-bar__main {
   display: flex;
   align-items: center;
@@ -2499,12 +2529,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 44px;
   cursor: text;
-  transition: flex-basis 220ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-radius 160ms ease;
-}
-
-.ik-dialog__actions--active .ik-engage-bar__content-edit {
-  flex-basis: 100%;
+  transition: border-radius 160ms ease;
 }
 
 .ik-engage-bar__textarea {
@@ -2700,6 +2725,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   opacity: 1;
   transform: translateX(0);
+  will-change: width, transform, opacity;
   transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1),
               opacity 140ms ease,
               transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -2818,6 +2844,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   opacity: 0;
   transform: translateY(-4px);
+  will-change: max-height, transform, opacity;
   transition: max-height 180ms ease, opacity 140ms ease, transform 180ms ease;
 }
 
@@ -2850,6 +2877,8 @@ onBeforeUnmount(() => {
 
 .ik-engage-bar__tool--active {
   color: var(--ik-primary);
+  background: rgba(191, 255, 9, 0.12);
+  border-radius: 6px;
 }
 
 .ik-engage-bar__submit,
@@ -3053,6 +3082,19 @@ onBeforeUnmount(() => {
     border-top: 1px solid #202020;
   }
 
+  .ik-dialog__actions--emote-open {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    bottom: var(--vv-bottom, 0px);
+    z-index: 100;
+  }
+
+  .ik-dialog__body--emote-open {
+    padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
+  }
+
   /* 小屏直接隐藏"说点什么..."文字，避免与评论数 badge 重叠 */
   .ik-engage-bar__placeholder span {
     display: none;
@@ -3068,12 +3110,27 @@ onBeforeUnmount(() => {
     max-height: 100dvh;
   }
 
+  .ik-dialog--emote-open {
+    transform: none;
+  }
+
+  .ik-dialog--emote-open .ik-dialog__body--scrollable {
+    transform: none;
+    -webkit-transform: none;
+    will-change: auto;
+  }
+
   .ik-dialog__outer {
     border-radius: 0;
   }
 
   .ik-dialog__inner {
     border-radius: 0;
+  }
+
+  .ik-dialog--emote-open .ik-dialog__outer,
+  .ik-dialog--emote-open .ik-dialog__inner {
+    overflow: visible;
   }
 
   /* 顶部 header 适配刘海/状态栏安全区 */
