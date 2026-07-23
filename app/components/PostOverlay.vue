@@ -25,6 +25,7 @@ import CommentItem from "./CommentItem.vue";
 import MentionHighlightOverlay from "./MentionHighlightOverlay.vue";
 import MentionPicker from "./MentionPicker.vue";
 import EmotePicker from "./EmotePicker.vue";
+import MobileEmotePicker from "./MobileEmotePicker.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -150,6 +151,7 @@ const emoteInsert: EmoteInsertAPI = shallowReactive<EmoteInsertAPI>({
 });
 
 const emotePickerVisible = ref(false);
+const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);
 
 // 评论列表在入场动画结束后再渲染，避免弹窗打开瞬间挂载大量 CommentItem 与 useEmotes 触发 fetch。
 function scheduleShowComments() {
@@ -161,26 +163,37 @@ function scheduleShowComments() {
   }, 300);
 }
 
-const toggleEmotePicker = () => {
+const toggleEmotePicker = (e: MouseEvent) => {
   if (emotePickerVisible.value) {
     emotePickerVisible.value = false;
     focusCommentInput();
     return;
   }
+  const target = e.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  emotePickerAnchor.value = { top: rect.top, left: rect.left, height: rect.height };
   emotePickerVisible.value = true;
-  const ta = commentInputBoxRef.value?.querySelector("textarea") as HTMLTextAreaElement | null;
-  ta?.blur();
+  if (isMobile.value) {
+    const ta = commentInputBoxRef.value?.querySelector("textarea") as HTMLTextAreaElement | null;
+    ta?.blur();
+  }
 };
 
 const onEmoteSelect = async (emote: { code: string }) => {
-  const ok = await emoteInsert.insertEmote(emote.code, { focus: false });
+  const ok = await emoteInsert.insertEmote(emote.code, { focus: !isMobile.value });
   if (!ok) {
     message.warning("表情数量已达上限");
+  }
+  if (!isMobile.value) {
+    emotePickerVisible.value = false;
   }
 };
 
 const onEmojiSelect = async (emoji: string) => {
-  await emoteInsert.insertText(emoji, { focus: false });
+  await emoteInsert.insertText(emoji, { focus: !isMobile.value });
+  if (!isMobile.value) {
+    emotePickerVisible.value = false;
+  }
 };
 
 const commentImages = useCommentImages();
@@ -1746,6 +1759,15 @@ onBeforeUnmount(() => {
                     </div>
 
                     <EmotePicker
+                      v-if="!isMobile"
+                      :visible="emotePickerVisible"
+                      :anchor="emotePickerAnchor"
+                      @select="onEmoteSelect"
+                      @select-emoji="onEmojiSelect"
+                      @close="emotePickerVisible = false"
+                    />
+                    <MobileEmotePicker
+                      v-else
                       :visible="emotePickerVisible"
                       @select="onEmoteSelect"
                       @select-emoji="onEmojiSelect"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, isUserBlockedError, resolveErrorMessage } from "~/utils/api-error";
@@ -80,27 +81,40 @@ const emoteInsert = useEmoteInsert({
   },
 });
 const emotePickerVisible = ref(false);
+const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);
+const isMobile = useMediaQuery("(max-width: 768px)");
 
-const toggleEmotePicker = () => {
+const toggleEmotePicker = (e: MouseEvent) => {
   if (emotePickerVisible.value) {
     emotePickerVisible.value = false;
     focusCommentInput();
     return;
   }
+  const target = e.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  emotePickerAnchor.value = { top: rect.top, left: rect.left, height: rect.height };
   emotePickerVisible.value = true;
-  const ta = commentInputBoxRef.value?.querySelector("textarea") as HTMLTextAreaElement | null;
-  ta?.blur();
+  if (isMobile.value) {
+    const ta = commentInputBoxRef.value?.querySelector("textarea") as HTMLTextAreaElement | null;
+    ta?.blur();
+  }
 };
 
 const onEmoteSelect = async (emote: { code: string }) => {
-  const ok = await emoteInsert.insertEmote(emote.code, { focus: false });
+  const ok = await emoteInsert.insertEmote(emote.code, { focus: !isMobile.value });
   if (!ok) {
     message.warning("表情数量已达上限");
+  }
+  if (!isMobile.value) {
+    emotePickerVisible.value = false;
   }
 };
 
 const onEmojiSelect = async (emoji: string) => {
-  await emoteInsert.insertText(emoji, { focus: false });
+  await emoteInsert.insertText(emoji, { focus: !isMobile.value });
+  if (!isMobile.value) {
+    emotePickerVisible.value = false;
+  }
 };
 
 const commentImages = useCommentImages();
@@ -1304,6 +1318,15 @@ onBeforeUnmount(() => {
               </div>
 
               <EmotePicker
+                v-if="!isMobile"
+                :visible="emotePickerVisible"
+                :anchor="emotePickerAnchor"
+                @select="onEmoteSelect"
+                @select-emoji="onEmojiSelect"
+                @close="emotePickerVisible = false"
+              />
+              <MobileEmotePicker
+                v-else
                 :visible="emotePickerVisible"
                 @select="onEmoteSelect"
                 @select-emoji="onEmojiSelect"
