@@ -158,7 +158,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
         </Transition>
 
         <Transition name="ik-emote-picker-fade">
-          <z-scrollbar v-if="!loading || emotes.length" class="ik-emote-picker__scroll">
+          <div v-if="!loading || emotes.length" class="ik-emote-picker__scroll">
             <Transition name="ik-emote-picker-grid" mode="out-in">
               <div :key="activeTab?.key" class="ik-emote-picker__grid">
                 <template v-if="activeTab?.isEmoji">
@@ -198,7 +198,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
               </div>
             </Transition>
             <div v-if="!activeTab" class="ik-emote-picker__empty">暂无表情</div>
-          </z-scrollbar>
+          </div>
         </Transition>
       </div>
 
@@ -227,13 +227,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 
 <style>
 :root {
-  --emote-panel-height: 50vh;
-}
-
-@supports (height: 1dvh) {
-  :root {
-    --emote-panel-height: 50dvh;
-  }
+  --emote-panel-height: clamp(220px, 45vh, 360px);
 }
 </style>
 
@@ -262,14 +256,15 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 
 .ik-emote-picker__scroll {
   height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
-.ik-emote-picker__scroll :deep(.z-scrollbar__wrap) {
-  background: transparent;
-}
-
-.ik-emote-picker__scroll :deep(.z-scrollbar__view) {
-  min-height: auto;
+.ik-emote-picker__grid {
+  min-height: 100%;
 }
 
 .ik-emote-picker__tabs {
@@ -491,16 +486,10 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
     will-change: height, opacity;
   }
 
-  .ik-emote-picker__scroll :deep(.z-scrollbar__view) {
-    display: flex;
-    flex-direction: column;
-    min-height: 100%;
-  }
-
   .ik-emote-picker__grid {
-    flex: 1;
     align-content: stretch;
     align-items: center;
+    min-height: 100%;
   }
 
   .ik-emote-picker__tabs {
