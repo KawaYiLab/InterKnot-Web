@@ -10,6 +10,7 @@
  * - 点击外部 / 按 ESC 自动关闭（emit close）
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 import { useEmotes, type Emote } from "~/composables/useEmotes";
 
 const props = defineProps<{
@@ -37,6 +38,8 @@ const EMOJI_LIST = [
 ];
 
 const { groupedEmotes, emoteGroups, loading, emotes, refreshIfStale } = useEmotes();
+
+const isMobile = useMediaQuery("(max-width: 640px)");
 
 const PICKER_W = 320;
 const PICKER_MAX_H = 280;
@@ -134,6 +137,20 @@ const onTabMouseDown = (e: MouseEvent, tab: PickerTab) => {
 };
 
 const styleObj = computed(() => {
+  if (!props.visible) return { display: "none" } as Record<string, string>;
+
+  // 小屏直接作为底部面板，不依赖触发按钮的锚点
+  if (isMobile.value) {
+    return {
+      top: "auto",
+      left: "0",
+      right: "0",
+      bottom: "max(0px, env(safe-area-inset-bottom))",
+      width: "100%",
+      maxWidth: "100vw",
+    } as Record<string, string>;
+  }
+
   if (!props.anchor) return { display: "none" } as Record<string, string>;
   const a = props.anchor;
 
@@ -249,6 +266,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
       v-if="visible"
       ref="pickerRootRef"
       class="ik-emote-picker"
+      :class="{ 'is-mobile': isMobile }"
       :style="styleObj"
       role="dialog"
       aria-label="表情"
@@ -465,5 +483,54 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+/* 移动端底部面板：宽度撑满、避开 Home 指示条 */
+@media (max-width: 640px) {
+  .ik-emote-picker.is-mobile {
+    top: auto !important;
+    left: 0 !important;
+    right: 0;
+    bottom: max(0px, env(safe-area-inset-bottom));
+    width: 100%;
+    max-width: 100vw;
+    border-radius: 16px 16px 0 0;
+    padding: 0;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.55);
+  }
+
+  .ik-emote-picker.is-mobile .ik-emote-picker__inner {
+    border-radius: 14px 14px 0 0;
+  }
+
+  .ik-emote-picker.is-mobile .ik-emote-picker__content {
+    height: auto;
+    min-height: 180px;
+    max-height: min(40vh, 260px);
+  }
+
+  .ik-emote-picker.is-mobile .ik-emote-picker__item {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ik-emote-picker.is-mobile .ik-emote-picker__item img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .ik-emote-picker.is-mobile .ik-emote-picker__item--emoji {
+    font-size: 24px;
+  }
+
+  .ik-emote-picker.is-mobile .ik-emote-picker__tab {
+    width: 38px;
+    height: 32px;
+  }
+
+  .ik-emote-picker.is-mobile .ik-emote-picker__tab img {
+    width: 22px;
+    height: 22px;
+  }
 }
 </style>

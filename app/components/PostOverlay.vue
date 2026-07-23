@@ -8,7 +8,7 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
+import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import type { MentionCandidate, MentionAnchor, MentionRange, DisplaySegment } from "~/composables/useMentionInput";
@@ -663,6 +663,7 @@ const sendComment = async () => {
     emoteInsert.reset();
     commentImages.clearUploads();
     commentInputFocused.value = false;
+    commentAnonymous.value = false;
     replyTarget.value = null;
     syncCommentInputHeight();
     if (post.value) {
@@ -834,8 +835,13 @@ const cancelComment = () => {
   emoteInsert.reset();
   commentImages.clearUploads();
   commentInputFocused.value = false;
+  commentAnonymous.value = false;
   replyTarget.value = null;
   syncCommentInputHeight();
+};
+
+const toggleAnonymous = () => {
+  commentAnonymous.value = !commentAnonymous.value;
 };
 
 const startReply = (comment: Comment) => {
@@ -1715,9 +1721,10 @@ onBeforeUnmount(() => {
                               :class="{ 'ik-engage-bar__tool--active': commentAnonymous }"
                               :aria-label="commentAnonymous ? '取消匿名' : '匿名评论'"
                               :title="commentAnonymous ? '取消匿名' : '匿名评论'"
-                              @click.stop="commentAnonymous = !commentAnonymous"
+                              @click.stop="toggleAnonymous"
                             >
-                              <EyeSlashIcon class="ik-engage-icon" aria-hidden="true" />
+                              <EyeSlashIcon v-if="commentAnonymous" class="ik-engage-icon" aria-hidden="true" />
+                              <EyeIcon v-else class="ik-engage-icon" aria-hidden="true" />
                             </button>
                           </div>
                           <div class="ik-engage-bar__right-btns">
@@ -2850,6 +2857,8 @@ onBeforeUnmount(() => {
 
 .ik-engage-bar__tool--active {
   color: var(--ik-primary);
+  background: rgba(191, 255, 9, 0.12);
+  border-radius: 6px;
 }
 
 .ik-engage-bar__submit,
