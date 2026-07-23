@@ -862,7 +862,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="ik-page-container" :class="{ 'ik-page-container--emote-open': emotePickerVisible }">
+  <section class="ik-page-container">
     <!-- ── Gallery Loading Progress ────────── -->
     <div class="ik-page__gallery-progress" :class="{ 'is-active': isGalleryLoading }">
       <div class="ik-page__gallery-progress-bar" :style="{ width: `${galleryProgress}%` }" />
@@ -1094,7 +1094,7 @@ onBeforeUnmount(() => {
 
             <!-- 底部操作栏 -->
             <div class="ik-page__actions" :class="{ 'ik-page__actions--active': isCommentEditorActive }">
-              <div class="ik-engage-bar" :class="{ 'ik-engage-bar--emote-open': emotePickerVisible }">
+              <div class="ik-engage-bar">
                 <div class="ik-engage-bar__main">
                   <div ref="commentInputBoxRef" class="ik-engage-bar__content-edit" @click="focusCommentInput">
                     <z-input
@@ -1774,21 +1774,7 @@ onBeforeUnmount(() => {
   color: #f5f5f5;
 }
 
-@media (max-width: 767px) {
-  .ik-engage-bar {
-    transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
-    will-change: transform;
-  }
 
-  .ik-engage-bar--emote-open {
-    z-index: 100;
-    transform: translateY(calc(-1 * var(--emote-panel-height)));
-  }
-
-  .ik-page-container--emote-open .ik-page__body {
-    padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
-  }
-}
 
 .ik-engage-bar__main {
   display: flex;

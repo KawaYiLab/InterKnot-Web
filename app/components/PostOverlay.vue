@@ -1227,7 +1227,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="ik-overlay" :class="{ 'ik-overlay--emote-open': emotePickerVisible }" @click="onBackdropClick">
+  <div class="ik-overlay" @click="onBackdropClick">
       <!-- 独立背景层：用 opacity 过渡替代 .ik-overlay 的 background-color 过渡，避免全屏 paint -->
       <div class="ik-overlay__backdrop" aria-hidden="true"></div>
 
@@ -1544,7 +1544,7 @@ onBeforeUnmount(() => {
                   <!-- 底部操作栏 -->
                   <div class="ik-dialog__actions" :class="{ 'ik-dialog__actions--active': isCommentEditorActive }">
                     <!-- 评论输入 -->
-                    <div class="ik-engage-bar" :class="{ 'ik-engage-bar--emote-open': emotePickerVisible }">
+                    <div class="ik-engage-bar">
                       <div class="ik-engage-bar__main">
                         <div ref="commentInputBoxRef" class="ik-engage-bar__content-edit" @click="focusCommentInput">
                           <z-input
@@ -2490,21 +2490,7 @@ onBeforeUnmount(() => {
   color: #f5f5f5;
 }
 
-@media (max-width: 767px) {
-  .ik-engage-bar {
-    transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
-    will-change: transform;
-  }
 
-  .ik-engage-bar--emote-open {
-    z-index: 100;
-    transform: translateY(calc(-1 * var(--emote-panel-height)));
-  }
-
-  .ik-overlay--emote-open .ik-dialog__body {
-    padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
-  }
-}
 
 .ik-engage-bar__main {
   display: flex;

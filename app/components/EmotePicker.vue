@@ -473,32 +473,31 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 
 @media (max-width: 767px) {
   .ik-emote-picker {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: var(--emote-panel-height);
-    max-height: none;
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    height: auto;
+    max-height: var(--emote-panel-height);
     margin-top: 0;
-    z-index: 99;
+    z-index: auto;
     border-radius: 16px 16px 0 0;
-    will-change: transform, opacity;
+    will-change: max-height, opacity;
   }
 
   .ik-emote-picker__tabs {
     padding-bottom: calc(8px + env(safe-area-inset-bottom));
   }
 
-  /* 移动端：从底部滑出，不占用文档流 */
+  /* 移动端：在互动栏内展开，不遮挡输入框 */
   .ik-emote-picker-panel-enter-active,
   .ik-emote-picker-panel-leave-active {
-    transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+    transition: max-height 250ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
   }
 
   .ik-emote-picker-panel-enter-from,
   .ik-emote-picker-panel-leave-to {
-    max-height: none;
-    transform: translateY(100%);
+    max-height: 0;
     opacity: 0;
   }
 }
