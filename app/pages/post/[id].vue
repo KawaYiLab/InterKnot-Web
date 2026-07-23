@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, isUserBlockedError, resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
+import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
@@ -81,29 +82,39 @@ const emoteInsert = useEmoteInsert({
 });
 const emotePickerVisible = ref(false);
 const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);
+const isMobile = useMediaQuery("(max-width: 768px)");
 
 const toggleEmotePicker = (e: MouseEvent) => {
   if (emotePickerVisible.value) {
     emotePickerVisible.value = false;
+    focusCommentInput();
     return;
   }
   const target = e.currentTarget as HTMLElement;
   const rect = target.getBoundingClientRect();
   emotePickerAnchor.value = { top: rect.top, left: rect.left, height: rect.height };
   emotePickerVisible.value = true;
+  if (isMobile.value) {
+    const ta = commentInputBoxRef.value?.querySelector("textarea") as HTMLTextAreaElement | null;
+    ta?.blur();
+  }
 };
 
 const onEmoteSelect = async (emote: { code: string }) => {
-  const ok = await emoteInsert.insertEmote(emote.code);
+  const ok = await emoteInsert.insertEmote(emote.code, { focus: !isMobile.value });
   if (!ok) {
     message.warning("表情数量已达上限");
   }
-  emotePickerVisible.value = false;
+  if (!isMobile.value) {
+    emotePickerVisible.value = false;
+  }
 };
 
 const onEmojiSelect = async (emoji: string) => {
-  await emoteInsert.insertText(emoji);
-  emotePickerVisible.value = false;
+  await emoteInsert.insertText(emoji, { focus: !isMobile.value });
+  if (!isMobile.value) {
+    emotePickerVisible.value = false;
+  }
 };
 
 const commentImages = useCommentImages();
@@ -312,7 +323,9 @@ const sendComment = async () => {
     emoteInsert.reset();
     commentImages.clearUploads();
     commentInputFocused.value = false;
+    commentAnonymous.value = false;
     replyTarget.value = null;
+    emotePickerVisible.value = false;
     syncCommentInputHeight();
     if (post.value) {
       post.value.commentsCount = (post.value.commentsCount ?? 0) + 1;
@@ -338,6 +351,7 @@ const focusCommentInput = () => {
     loginDialog.open();
     return;
   }
+  emotePickerVisible.value = false;
   commentInputFocused.value = true;
   const input = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLElement | null;
   input?.focus();
@@ -350,6 +364,7 @@ const handleCommentInputFocus = (e: FocusEvent) => {
     loginDialog.open();
     return;
   }
+  emotePickerVisible.value = false;
   commentInputFocused.value = true;
 };
 
@@ -364,8 +379,14 @@ const cancelComment = () => {
   emoteInsert.reset();
   commentImages.clearUploads();
   commentInputFocused.value = false;
+  emotePickerVisible.value = false;
+  commentAnonymous.value = false;
   replyTarget.value = null;
   syncCommentInputHeight();
+};
+
+const toggleAnonymous = () => {
+  commentAnonymous.value = !commentAnonymous.value;
 };
 
 const startReply = (comment: Comment) => {
@@ -988,7 +1009,7 @@ onBeforeUnmount(() => {
         <div class="ik-page__main">
           <IkZzzMarquee />
         <!-- ── Body (双栏) ───────────────────── -->
-        <div class="ik-page__body">
+        <div class="ik-page__body" :class="{ 'ik-page__body--emote-open': emotePickerVisible }">
           <!-- 左栏：封面 + 正文 -->
           <div class="ik-page__left">
             <div class="ik-page__left-scroll" ref="scrollRef">
@@ -1086,7 +1107,7 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- 底部操作栏 -->
-            <div class="ik-page__actions" :class="{ 'ik-page__actions--active': isCommentEditorActive }">
+            <div class="ik-page__actions" :class="{ 'ik-page__actions--active': isCommentEditorActive, 'ik-page__actions--emote-open': emotePickerVisible }">
               <div class="ik-engage-bar">
                 <div class="ik-engage-bar__main">
                   <div ref="commentInputBoxRef" class="ik-engage-bar__content-edit" @click="focusCommentInput">
@@ -1252,9 +1273,7 @@ onBeforeUnmount(() => {
                       >
                         <AtSymbolIcon class="ik-engage-icon" aria-hidden="true" />
                       </button>
-                      <!-- 表情按钮：点击弹出 EmotePicker 浮层。
-                           @mousedown.stop 阻止冒泡到 document，避免 EmotePicker
-                           的 click-outside 在点击按钮时误触发 close。 -->
+                      <!-- 表情按钮：切换底部表情面板，可连续插入 -->
                       <button
                         type="button"
                         class="ik-engage-bar__tool"
@@ -1273,9 +1292,10 @@ onBeforeUnmount(() => {
                         :class="{ 'ik-engage-bar__tool--active': commentAnonymous }"
                         :aria-label="commentAnonymous ? '取消匿名' : '匿名评论'"
                         :title="commentAnonymous ? '取消匿名' : '匿名评论'"
-                        @click.stop="commentAnonymous = !commentAnonymous"
+                        @click.stop="toggleAnonymous"
                       >
-                        <EyeSlashIcon class="ik-engage-icon" aria-hidden="true" />
+                        <EyeSlashIcon v-if="commentAnonymous" class="ik-engage-icon" aria-hidden="true" />
+                        <EyeIcon v-else class="ik-engage-icon" aria-hidden="true" />
                       </button>
                     </div>
                     <div class="ik-engage-bar__right-btns">
@@ -1291,9 +1311,27 @@ onBeforeUnmount(() => {
                         取消
                       </button>
                     </div>
+
                   </div>
                 </div>
+
               </div>
+
+              <EmotePicker
+                v-if="!isMobile"
+                :visible="emotePickerVisible"
+                :anchor="emotePickerAnchor"
+                @select="onEmoteSelect"
+                @select-emoji="onEmojiSelect"
+                @close="emotePickerVisible = false"
+              />
+              <MobileEmotePicker
+                v-else
+                :visible="emotePickerVisible"
+                @select="onEmoteSelect"
+                @select-emoji="onEmojiSelect"
+                @close="emotePickerVisible = false"
+              />
             </div>
           </div>
         </div>
@@ -1315,15 +1353,6 @@ onBeforeUnmount(() => {
         />
       </Transition>
     </Teleport>
-
-    <!-- 表情面板：组件内部 Teleport 到 body -->
-    <EmotePicker
-      :visible="emotePickerVisible"
-      :anchor="emotePickerAnchor"
-      @select="onEmoteSelect"
-      @select-emoji="onEmojiSelect"
-      @close="emotePickerVisible = false"
-    />
 
     <!-- @ 提及候选下拉：组件内部 Teleport 到 body，避免父级 overflow 截断 -->
     <MentionPicker
@@ -1768,6 +1797,8 @@ onBeforeUnmount(() => {
   color: #f5f5f5;
 }
 
+
+
 .ik-engage-bar__main {
   display: flex;
   align-items: center;
@@ -1783,12 +1814,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 44px;
   cursor: text;
-  transition: flex-basis 220ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-radius 160ms ease;
-}
-
-.ik-page__actions--active .ik-engage-bar__content-edit {
-  flex-basis: 100%;
+  transition: border-radius 160ms ease;
 }
 
 .ik-engage-bar__textarea {
@@ -1984,6 +2010,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   opacity: 1;
   transform: translateX(0);
+  will-change: width, transform, opacity;
   transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1),
               opacity 140ms ease,
               transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -2126,6 +2153,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   opacity: 0;
   transform: translateY(-4px);
+  will-change: max-height, transform, opacity;
   transition: max-height 180ms ease, opacity 140ms ease, transform 180ms ease;
 }
 
@@ -2158,6 +2186,8 @@ onBeforeUnmount(() => {
 
 .ik-engage-bar__tool--active {
   color: var(--ik-primary);
+  background: rgba(191, 255, 9, 0.12);
+  border-radius: 6px;
 }
 
 .ik-engage-bar__submit,
@@ -2349,9 +2379,22 @@ onBeforeUnmount(() => {
     z-index: 3;
     border-radius: 0;
     background: rgba(7, 7, 7, 0.96);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .ik-page__actions--emote-open {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    bottom: var(--vv-bottom, 0px);
+    z-index: 100;
+  }
+
+  .ik-page__body--emote-open {
+    transform: none;
+    -webkit-transform: none;
+    padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
   }
 }
 

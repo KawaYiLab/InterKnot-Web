@@ -142,7 +142,7 @@ export function useEmoteInsert(opts: UseEmoteInsertOptions) {
    * 在光标处插入一个表情（写入占位符 + 登记 range）。
    * 返回 true 表示成功插入，false 表示已达上限。
    */
-  async function insertEmote(code: string): Promise<boolean> {
+  async function insertEmote(code: string, options?: { focus?: boolean }): Promise<boolean> {
     if (emotes.value.length >= maxEmotes) return false;
 
     const el = textareaRef.value;
@@ -167,12 +167,13 @@ export function useEmoteInsert(opts: UseEmoteInsertOptions) {
 
     onInsert?.(start, end, insertion.length);
 
+    const focus = options?.focus ?? true;
     await nextTick();
     if (textareaRef.value) {
       const newCaret = start + insertion.length;
       textareaRef.value.selectionStart = newCaret;
       textareaRef.value.selectionEnd = newCaret;
-      textareaRef.value.focus();
+      if (focus) textareaRef.value.focus();
     }
 
     return true;
@@ -182,7 +183,7 @@ export function useEmoteInsert(opts: UseEmoteInsertOptions) {
    * 在光标处插入一段普通文本（如 emoji 字符），平移其后的表情 range，
    * 并通过 onInsert 让调用方同步 mention range。
    */
-  async function insertText(insertion: string): Promise<void> {
+  async function insertText(insertion: string, options?: { focus?: boolean }): Promise<void> {
     if (!insertion) return;
 
     const el = textareaRef.value;
@@ -203,12 +204,13 @@ export function useEmoteInsert(opts: UseEmoteInsertOptions) {
 
     onInsert?.(start, end, insertion.length);
 
+    const focus = options?.focus ?? true;
     await nextTick();
     if (textareaRef.value) {
       const newCaret = start + insertion.length;
       textareaRef.value.selectionStart = newCaret;
       textareaRef.value.selectionEnd = newCaret;
-      textareaRef.value.focus();
+      if (focus) textareaRef.value.focus();
     }
   }
 
