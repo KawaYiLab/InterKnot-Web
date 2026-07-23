@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * 表情选择面板（QQ/微信风格）：贴在评论输入框下方，可连续插入、实时预览。
+ * 表情选择面板（QQ/微信风格）：可连续插入、实时预览。
  *
- * - 跟随评论 composer 内嵌，不是全屏/居中弹窗
- * - 底部分类 tab：最近 / 各后台分组 / emoji
- * - 点击表情直接 emit，由父组件插入 textarea，面板不关闭
+ * - 桌面端：在 ik-engage-bar 内向下展开（max-height）
+ * - 移动端（< 768px）：固定底部抽屉（bottom sheet），从屏幕底部滑出
+ * - 底部分类 tab 始终可见；表情内容在上方滚动
  */
 import { computed, ref, watch } from "vue";
 import { useEmotes, type Emote } from "~/composables/useEmotes";
@@ -145,7 +145,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 <template>
   <Transition name="ik-emote-picker-panel" appear>
     <div
-      v-if="visible"
+      v-show="visible"
       class="ik-emote-picker"
       @keydown.esc.stop="emit('close')"
     >
@@ -225,14 +225,18 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   </Transition>
 </template>
 
+<style>
+:root {
+  --emote-panel-height: clamp(220px, 45vh, 420px);
+}
+</style>
+
 <style scoped>
 .ik-emote-picker {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 45vh;
-  min-height: 180px;
-  max-height: 440px;
+  max-height: 320px;
   margin-top: 8px;
   background: #0a0a0a;
   border-top: 1px solid #202020;
@@ -422,16 +426,16 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   to { transform: rotate(360deg); }
 }
 
-/* 面板整体显隐：高度从 0 展开，类似键盘/表情面板从底部升起 */
+/* 桌面端：max-height + opacity 展开 */
 .ik-emote-picker-panel-enter-active,
 .ik-emote-picker-panel-leave-active {
-  transition: max-height 180ms ease, opacity 180ms ease;
+  transition: max-height 200ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease;
 }
 
 .ik-emote-picker-panel-enter-from,
 .ik-emote-picker-panel-leave-to {
-  opacity: 0;
   max-height: 0;
+  opacity: 0;
 }
 
 /* 分类内容切换动画：旧网格上滑淡出，新网格上滑淡入 */
@@ -465,5 +469,37 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 .ik-emote-picker-fade-leave-active {
   position: absolute;
   inset: 0;
+}
+
+@media (max-width: 767px) {
+  .ik-emote-picker {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--emote-panel-height);
+    max-height: none;
+    margin-top: 0;
+    z-index: 99;
+    border-radius: 16px 16px 0 0;
+    will-change: transform, opacity;
+  }
+
+  .ik-emote-picker__tabs {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  /* 移动端：从底部滑出，不占用文档流 */
+  .ik-emote-picker-panel-enter-active,
+  .ik-emote-picker-panel-leave-active {
+    transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+  }
+
+  .ik-emote-picker-panel-enter-from,
+  .ik-emote-picker-panel-leave-to {
+    max-height: none;
+    transform: translateY(100%);
+    opacity: 0;
+  }
 }
 </style>
