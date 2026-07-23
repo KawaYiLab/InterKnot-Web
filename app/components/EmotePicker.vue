@@ -228,42 +228,44 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 
                     <Transition name="ik-emote-picker-fade">
                       <z-scrollbar v-if="!loading || emotes.length" class="ik-emote-picker-grid-scroll">
-                        <div class="ik-emote-picker-grid">
-                          <template v-if="activeTab?.isEmoji">
-                            <button
-                              v-for="emoji in EMOJI_LIST"
-                              :key="emoji"
-                              type="button"
-                              class="ik-emote-picker-card ik-emote-picker-card--emoji"
-                              @mousedown.prevent="onEmojiMouseDown($event, emoji)"
-                            >
-                              <div class="ik-emote-picker-card__thumb">
-                                <span class="ik-emote-picker-card__emoji">{{ emoji }}</span>
-                              </div>
-                            </button>
-                          </template>
-                          <template v-else-if="activeTab?.emotes">
-                            <button
-                              v-for="emote in activeTab.emotes"
-                              :key="emote.code"
-                              type="button"
-                              class="ik-emote-picker-card"
-                              :title="emote.name"
-                              @mousedown.prevent="onItemMouseDown($event, emote)"
-                            >
-                              <div class="ik-emote-picker-card__thumb">
-                                <img
-                                  :src="emote.url"
-                                  :alt="emote.name"
-                                  loading="lazy"
-                                  decoding="async"
-                                  draggable="false"
-                                />
-                              </div>
-                              <span class="ik-emote-picker-card__name">{{ emote.name }}</span>
-                            </button>
-                          </template>
-                        </div>
+                        <Transition name="ik-emote-picker-grid" mode="out-in">
+                          <div :key="activeTab?.key" class="ik-emote-picker-grid">
+                            <template v-if="activeTab?.isEmoji">
+                              <button
+                                v-for="emoji in EMOJI_LIST"
+                                :key="emoji"
+                                type="button"
+                                class="ik-emote-picker-card ik-emote-picker-card--emoji"
+                                @mousedown.prevent="onEmojiMouseDown($event, emoji)"
+                              >
+                                <div class="ik-emote-picker-card__thumb">
+                                  <span class="ik-emote-picker-card__emoji">{{ emoji }}</span>
+                                </div>
+                              </button>
+                            </template>
+                            <template v-else-if="activeTab?.emotes">
+                              <button
+                                v-for="emote in activeTab.emotes"
+                                :key="emote.code"
+                                type="button"
+                                class="ik-emote-picker-card"
+                                :title="emote.name"
+                                @mousedown.prevent="onItemMouseDown($event, emote)"
+                              >
+                                <div class="ik-emote-picker-card__thumb">
+                                  <img
+                                    :src="emote.url"
+                                    :alt="emote.name"
+                                    loading="lazy"
+                                    decoding="async"
+                                    draggable="false"
+                                  />
+                                </div>
+                                <span class="ik-emote-picker-card__name">{{ emote.name }}</span>
+                              </button>
+                            </template>
+                          </div>
+                        </Transition>
                         <div v-if="!activeTab" class="ik-emote-picker-empty">暂无表情</div>
                       </z-scrollbar>
                     </Transition>
@@ -654,6 +656,23 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 .ik-emote-picker-fade-leave-active {
   position: absolute;
   inset: 0;
+}
+
+/* 分类内容切换动画：旧网格上滑淡出，新网格上滑淡入，避免内容跳变生硬 */
+.ik-emote-picker-grid-enter-active,
+.ik-emote-picker-grid-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+  will-change: opacity, transform;
+}
+
+.ik-emote-picker-grid-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.ik-emote-picker-grid-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
 }
 
 @media (max-width: 800px) {
