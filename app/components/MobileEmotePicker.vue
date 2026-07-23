@@ -8,6 +8,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useEmotes, type Emote } from "~/composables/useEmotes";
+import { useVisualViewport } from "~/composables/useVisualViewport";
 
 const props = defineProps<{
   visible: boolean;
@@ -32,6 +33,8 @@ const EMOJI_LIST = [
 ];
 
 const { groupedEmotes, emoteGroups, loading, emotes, refreshIfStale } = useEmotes();
+
+useVisualViewport();
 
 const RECENT_KEY = "ik-emote-recent";
 const RECENT_MAX = 12;
@@ -227,7 +230,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 
 <style>
 :root {
-  --emote-panel-height: clamp(220px, 45vh, 360px);
+  --emote-panel-height: clamp(220px, calc(var(--vv-height, 100vh) * 0.45), 360px);
 }
 </style>
 

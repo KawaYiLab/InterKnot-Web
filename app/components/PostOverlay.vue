@@ -3090,7 +3090,7 @@ onBeforeUnmount(() => {
     left: 0;
     right: 0;
     bottom: 0;
-    bottom: calc(100vh - 100dvh);
+    bottom: var(--vv-bottom, 0px);
     z-index: 100;
   }
 
