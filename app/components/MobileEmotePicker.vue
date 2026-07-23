@@ -5,7 +5,7 @@
  * - 固定在评论操作栏下方，从屏幕底部滑入（transform 动画，避免 height 重排）
  * - 底部分类 tab 始终可见；表情内容在上方滚动
  */
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useEmotes, type Emote } from "~/composables/useEmotes";
 import { useVisualViewport } from "~/composables/useVisualViewport";
 
@@ -111,14 +111,19 @@ const tabs = computed<PickerTab[]>(() => {
 });
 
 const activeTabKey = ref<string>("");
+const scrollRef = ref<HTMLElement | null>(null);
 
 const activeTab = computed<PickerTab | null>(() => {
   const found = tabs.value.find((t) => t.key === activeTabKey.value);
   return found ?? tabs.value[0] ?? null;
 });
 
-const setActiveTab = (tab: PickerTab) => {
+const setActiveTab = async (tab: PickerTab) => {
   activeTabKey.value = tab.key;
+  await nextTick();
+  if (scrollRef.value) {
+    scrollRef.value.scrollTop = 0;
+  }
 };
 
 watch(
@@ -160,8 +165,8 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
         </Transition>
 
         <Transition name="ik-emote-picker-fade">
-          <div v-if="!loading || emotes.length" class="ik-emote-picker__scroll">
-            <Transition name="ik-emote-picker-grid" mode="out-in">
+          <div v-if="!loading || emotes.length" ref="scrollRef" class="ik-emote-picker__scroll">
+            <Transition name="ik-emote-picker-grid">
               <div :key="activeTab?.key" class="ik-emote-picker__grid">
                 <template v-if="activeTab?.isEmoji">
                   <button
@@ -441,21 +446,27 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   opacity: 0;
 }
 
-/* 分类内容切换动画：旧网格上滑淡出，新网格上滑淡入 */
+/* 分类内容切换动画：新旧网格同位叠加淡入淡出，避免 out-in 瞬间空白 */
 .ik-emote-picker-grid-enter-active,
 .ik-emote-picker-grid-leave-active {
-  transition: opacity 160ms ease, transform 160ms ease;
-  will-change: opacity, transform;
+  transition: opacity 120ms ease;
+  will-change: opacity;
 }
 
-.ik-emote-picker-grid-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
+.ik-emote-picker-grid-enter-active {
+  position: relative;
+  z-index: 2;
 }
 
+.ik-emote-picker-grid-leave-active {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.ik-emote-picker-grid-enter-from,
 .ik-emote-picker-grid-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
 }
 
 /* 加载/空状态淡入淡出 */
