@@ -7,7 +7,7 @@
  * - 点击外部 / 按 ESC / 点击关闭 自动关闭（emit close）
  * - 最近使用（localStorage，最多 12 个）
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useEmotes, type Emote } from "~/composables/useEmotes";
 
 const props = defineProps<{
@@ -131,21 +131,31 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 };
 
-onMounted(() => {
-  if (typeof window !== "undefined") {
-    window.addEventListener("keydown", handleKeydown, true);
-  }
-  acquire(SCROLL_LOCK_TOKEN);
-  refreshIfStale();
-  activeTabKey.value = tabs.value[0]?.key ?? "";
-});
-
-onBeforeUnmount(() => {
+const teardown = () => {
+  release(SCROLL_LOCK_TOKEN);
   if (typeof window !== "undefined") {
     window.removeEventListener("keydown", handleKeydown, true);
   }
-  release(SCROLL_LOCK_TOKEN);
-});
+};
+
+watch(
+  () => props.visible,
+  (vis) => {
+    if (vis) {
+      acquire(SCROLL_LOCK_TOKEN);
+      if (typeof window !== "undefined") {
+        window.addEventListener("keydown", handleKeydown, true);
+      }
+      refreshIfStale();
+      activeTabKey.value = tabs.value[0]?.key ?? "";
+    } else {
+      teardown();
+    }
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(teardown);
 
 const onItemMouseDown = (e: MouseEvent, emote: Emote) => {
   e.preventDefault();
@@ -161,7 +171,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
 
 <template>
   <Teleport to="body">
-    <Transition name="ik-emote-picker">
+    <Transition name="ik-emote-picker" appear>
       <div
         v-if="visible"
         class="ik-emote-picker-overlay"

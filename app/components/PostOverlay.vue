@@ -1765,7 +1765,6 @@ onBeforeUnmount(() => {
       />
 
       <EmotePicker
-        v-if="emotePickerVisible"
         :visible="emotePickerVisible"
         :anchor="emotePickerAnchor"
         @select="onEmoteSelect"
