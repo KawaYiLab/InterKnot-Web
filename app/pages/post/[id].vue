@@ -1814,12 +1814,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 44px;
   cursor: text;
-  transition: flex-basis 220ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-radius 160ms ease;
-}
-
-.ik-page__actions--active .ik-engage-bar__content-edit {
-  flex-basis: 100%;
+  transition: border-radius 160ms ease;
 }
 
 .ik-engage-bar__textarea {
@@ -2015,6 +2010,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   opacity: 1;
   transform: translateX(0);
+  will-change: width, transform, opacity;
   transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1),
               opacity 140ms ease,
               transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -2157,6 +2153,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   opacity: 0;
   transform: translateY(-4px);
+  will-change: max-height, transform, opacity;
   transition: max-height 180ms ease, opacity 140ms ease, transform 180ms ease;
 }
 
@@ -2382,8 +2379,6 @@ onBeforeUnmount(() => {
     z-index: 3;
     border-radius: 0;
     background: rgba(7, 7, 7, 0.96);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     padding-bottom: calc(8px + env(safe-area-inset-bottom));
   }
 

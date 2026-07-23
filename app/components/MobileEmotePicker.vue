@@ -1,9 +1,8 @@
 <script setup lang="ts">
 /**
- * 表情选择面板（QQ/微信风格）：可连续插入、实时预览。
+ * 移动端表情选择面板（QQ/微信风格）：可连续插入、实时预览。
  *
- * - 桌面端：在 ik-engage-bar 内向下展开（max-height）
- * - 移动端（< 768px）：固定底部抽屉（bottom sheet），从屏幕底部滑出
+ * - 固定在评论操作栏下方，从屏幕底部滑入（transform 动画，避免 height 重排）
  * - 底部分类 tab 始终可见；表情内容在上方滚动
  */
 import { computed, ref, watch } from "vue";
@@ -247,7 +246,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.35);
   color: #f5f5f5;
   overflow: hidden;
-  will-change: max-height, opacity;
+  will-change: transform, opacity;
 }
 
 .ik-emote-picker__body {
@@ -430,15 +429,15 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
   to { transform: rotate(360deg); }
 }
 
-/* 桌面端：max-height + opacity 展开 */
+/* 面板展开/收起：translateY + opacity，全程由合成器处理 */
 .ik-emote-picker-panel-enter-active,
 .ik-emote-picker-panel-leave-active {
-  transition: max-height 200ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease;
 }
 
 .ik-emote-picker-panel-enter-from,
 .ik-emote-picker-panel-leave-to {
-  max-height: 0;
+  transform: translateY(20px);
   opacity: 0;
 }
 
@@ -486,7 +485,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
     margin-top: 0;
     z-index: auto;
     border-radius: 16px 16px 0 0;
-    will-change: height, opacity;
+    will-change: transform, opacity;
   }
 
   .ik-emote-picker__grid {
@@ -500,15 +499,15 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
     padding-bottom: 8px;
   }
 
-  /* 移动端：在互动栏内展开，高度固定，不遮挡输入框 */
+  /* 移动端：从下方整体滑入滑出，不触发 height 重排 */
   .ik-emote-picker-panel-enter-active,
   .ik-emote-picker-panel-leave-active {
-    transition: height 250ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+    transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
   }
 
   .ik-emote-picker-panel-enter-from,
   .ik-emote-picker-panel-leave-to {
-    height: 0;
+    transform: translateY(100%);
     opacity: 0;
   }
 }

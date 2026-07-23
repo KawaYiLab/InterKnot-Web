@@ -15,10 +15,16 @@ export function useVisualViewport() {
   const vv = window.visualViewport;
   if (!vv) return;
 
+  let lastBottom = -1;
+  let lastHeight = -1;
+
   const update = () => {
     // bottom = 布局视口底部到视觉视口底部的距离（底部工具栏/键盘高度）
     const bottom = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
     const height = vv.height;
+    if (bottom === lastBottom && height === lastHeight) return;
+    lastBottom = bottom;
+    lastHeight = height;
     const root = document.documentElement;
     root.style.setProperty("--vv-bottom", `${bottom}px`);
     root.style.setProperty("--vv-height", `${height}px`);
