@@ -1350,6 +1350,7 @@ onBeforeUnmount(() => {
           @close="commentImages.showImagePickerModal.value = false"
           @upload="commentImages.handleImagePickerUpload"
           @select="commentImages.handleImagePickerSelect"
+          @delete="commentImages.removeUploadByServerId($event.documentId)"
         />
       </Transition>
     </Teleport>

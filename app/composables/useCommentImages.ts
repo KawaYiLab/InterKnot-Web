@@ -165,6 +165,11 @@ export function useCommentImages() {
     uploadTasks.value.splice(index, 1);
   }
 
+  function removeUploadByServerId(serverId: string) {
+    const index = uploadTasks.value.findIndex((task) => task.serverId === serverId);
+    if (index !== -1) removeUpload(index);
+  }
+
   function clearUploads() {
     for (const task of uploadTasks.value) {
       safeRevokeObjectUrl(task.previewUrl);
@@ -190,6 +195,7 @@ export function useCommentImages() {
     handleImagePickerSelect,
     retryUpload,
     removeUpload,
+    removeUploadByServerId,
     clearUploads,
   };
 }

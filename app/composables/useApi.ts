@@ -1574,6 +1574,19 @@ export function useApi() {
     );
   };
 
+  const deleteMyUpload = async (documentId: string): Promise<{ deleted: boolean; inUse: boolean }> => {
+    const response = await $api(`/api/me/uploads/${encodeURIComponent(documentId)}`, {
+      method: "DELETE",
+    });
+    invalidate(["me", "uploads"]);
+    const data = (response as Record<string, unknown>)?.data;
+    const result = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+    return {
+      deleted: result.deleted === true,
+      inUse: result.inUse === true,
+    };
+  };
+
   const signUpload = async (payload: {
     filename: string;
     mimeType: string;
@@ -2207,6 +2220,7 @@ export function useApi() {
     completeUpload,
     uploadImage,
     getMyUploads,
+    deleteMyUpload,
     getMyBusinessCards,
     equipBusinessCard,
     getMyAvatars,
