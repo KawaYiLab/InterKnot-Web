@@ -206,7 +206,7 @@ const onEmojiMouseDown = (e: MouseEvent, emoji: string) => {
                       class="ik-emote-picker-tab"
                       :class="{ 'ik-emote-picker-tab--active': tab.key === activeTab?.key }"
                       :title="tab.title"
-                      @mousedown.prevent="setActiveTab(tab)"
+                      @click.stop.prevent="setActiveTab(tab)"
                     >
                       <img
                         v-if="tab.iconUrl"
