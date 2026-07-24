@@ -19,6 +19,7 @@
     "@pinia/nuxt": "^0.11.2",
     "@tanstack/vue-query": "^5.90.7",
     "@vueuse/core": "^13.9.0",
+    "embla-carousel-vue": "^8.6.0",
     "isomorphic-dompurify": "^3.12.0",
     "lightgallery": "^2.9.0",
     "markdown-it": "^14.2.0",
