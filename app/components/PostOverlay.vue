@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
-import useEmblaCarousel from "embla-carousel-vue";
+import EmblaCarousel from "embla-carousel";
+import type { EmblaCarouselType } from "embla-carousel";
 import type { Author, Comment, Post } from "~/types/entities";
 import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -267,7 +268,41 @@ const openCoverPreview = (index = 0) => {
 
 /* ── 封面轮播 ─────────────────────────────────── */
 const coverIndex = ref(0);
-const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
+const emblaRef = shallowRef<HTMLElement | null>(null);
+const emblaApi = shallowRef<EmblaCarouselType | undefined>();
+
+// 手动管理 Embla 生命周期：v-else 里轮播容器在 covers 拿到后才渲染，
+// 直接用 useEmblaCarousel 的 onMounted 会导致实例始终无法创建。
+const syncEmblaState = () => {
+  const api = emblaApi.value;
+  if (!api) return;
+  coverIndex.value = api.selectedScrollSnap();
+  expandLoadWindow();
+};
+
+const destroyEmbla = () => {
+  if (emblaApi.value) {
+    emblaApi.value.destroy();
+    emblaApi.value = undefined;
+  }
+};
+
+const initEmbla = (el: HTMLElement) => {
+  destroyEmbla();
+  emblaApi.value = EmblaCarousel(el, {
+    loop: false,
+    align: "start",
+    dragThreshold: 6,
+  });
+  emblaApi.value.on("select", syncEmblaState);
+  emblaApi.value.on("reInit", syncEmblaState);
+  syncEmblaState();
+};
+
+watch(emblaRef, (el, _, onCleanup) => {
+  if (el) initEmbla(el);
+  onCleanup(() => destroyEmbla());
+}, { flush: "post" });
 
 // 已批准加载的封面索引集合：只有命中其中的图片才会真正请求 src。
 // 设计目的：让新图的网络请求 + 解码不要砸在切换动画的同一帧里。
@@ -317,21 +352,6 @@ const onCoverWheel = (e: WheelEvent) => {
   const parent = scrollRef.value;
   if (parent) parent.scrollTop += e.deltaX;
 };
-
-// Embla select 事件：当前焦点变化时立即扩张加载窗口
-watch(emblaApi, (api) => {
-  if (!api) return;
-  const onSelect = () => {
-    coverIndex.value = api.selectedScrollSnap();
-    expandLoadWindow();
-  };
-  api.on("select", onSelect);
-  coverIndex.value = api.selectedScrollSnap();
-  expandLoadWindow();
-  return () => {
-    api.off("select", onSelect);
-  };
-});
 
 // 切换委托时重置封面索引并将轮播滚回起点
 watch(() => props.postId, () => {
