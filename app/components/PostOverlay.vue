@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
+import EmblaCarousel from "embla-carousel";
+import type { EmblaCarouselType } from "embla-carousel";
 import type { Author, Comment, Post } from "~/types/entities";
 import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -16,7 +18,7 @@ import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import type { EmoteRange } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
-import { toThumbUrl } from "~/utils/image";
+import { toThumbUrl, toNoResizeWebpUrl } from "~/utils/image";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import UserHoverCard from "./UserHoverCard.vue";
@@ -227,12 +229,14 @@ const coverPreviewSrc = (i: number) => {
 };
 
 // 移动端/平板弹窗封面首屏直接加载原图会触发大图 decode/重绘，导致入场掉帧。
-// 移动视图用 800px、平板视图用 1200px 宽度缩略图已足够清晰，只有放大预览时才用原图。
-const coverDisplaySrc = (url: string | undefined) => {
+// 移动视图用 800px、平板/桌面视图用 1200px 宽度缩略图已足够清晰，
+// 若原图本身不足 1200px 则保持原尺寸仅转 WebP，避免被 CDN 放大变糊；
+// 只有放大预览（lightgallery）时才用原图。
+const coverDisplaySrc = (url: string | undefined, naturalWidth?: number) => {
   if (!url) return url;
   if (isMobile.value) return toThumbUrl(url, 800);
-  if (isCompact.value) return toThumbUrl(url, 1200);
-  return url;
+  if (naturalWidth && naturalWidth > 0 && naturalWidth <= 1200) return toNoResizeWebpUrl(url);
+  return toThumbUrl(url, 1200);
 };
 const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
 const setLoadedPreviewImage = (el: Element | ComponentPublicInstance | null) => {
@@ -262,17 +266,48 @@ const openCoverPreview = (index = 0) => {
 };
 
 /* ── 封面轮播 ─────────────────────────────────── */
-const coverScrollerRef = ref<HTMLElement | null>(null);
 const coverIndex = ref(0);
-let coverScrollRAF: number | null = null;
+const emblaRef = shallowRef<HTMLElement | null>(null);
+const emblaApi = shallowRef<EmblaCarouselType | undefined>();
+
+// 手动管理 Embla 生命周期：v-else 里轮播容器在 covers 拿到后才渲染，
+// 直接用 useEmblaCarousel 的 onMounted 会导致实例始终无法创建。
+const syncEmblaState = () => {
+  const api = emblaApi.value;
+  if (!api) return;
+  coverIndex.value = api.selectedScrollSnap();
+  expandLoadWindow();
+};
+
+const destroyEmbla = () => {
+  if (emblaApi.value) {
+    emblaApi.value.destroy();
+    emblaApi.value = undefined;
+  }
+};
+
+const initEmbla = (el: HTMLElement) => {
+  destroyEmbla();
+  emblaApi.value = EmblaCarousel(el, {
+    loop: false,
+    align: "start",
+    dragThreshold: 6,
+  });
+  emblaApi.value.on("select", syncEmblaState);
+  emblaApi.value.on("reInit", syncEmblaState);
+  syncEmblaState();
+};
+
+watch(emblaRef, (el, _, onCleanup) => {
+  if (el) initEmbla(el);
+  onCleanup(() => destroyEmbla());
+}, { flush: "post" });
 
 // 已批准加载的封面索引集合：只有命中其中的图片才会真正请求 src。
 // 设计目的：让新图的网络请求 + 解码不要砸在切换动画的同一帧里。
-// 切换动画进行时窗口保持不变；动画结束（滚动稳定）后，再把当前 ±2 加入窗口。
+// 切换动画由 Embla 在合成器线程驱动，但相邻图仍按需加载，避免一次性拉取全部。
 const loadedCoverIndices = ref<Set<number>>(new Set([0, 1, 2]));
 const LOAD_WINDOW_RADIUS = 2;
-const COVER_SETTLE_DELAY_MS = 160;
-let coverSettleTimer: ReturnType<typeof setTimeout> | null = null;
 
 const expandLoadWindow = () => {
   const i = coverIndex.value;
@@ -289,19 +324,7 @@ const expandLoadWindow = () => {
   if (changed) loadedCoverIndices.value = next;
 };
 
-const scheduleExpandLoadWindow = () => {
-  if (coverSettleTimer !== null) clearTimeout(coverSettleTimer);
-  coverSettleTimer = setTimeout(() => {
-    coverSettleTimer = null;
-    expandLoadWindow();
-  }, COVER_SETTLE_DELAY_MS);
-};
-
 const resetLoadWindow = () => {
-  if (coverSettleTimer !== null) {
-    clearTimeout(coverSettleTimer);
-    coverSettleTimer = null;
-  }
   // 重置到初始窗口（前三张），与首次进入时一致
   loadedCoverIndices.value = new Set([0, 1, 2]);
 };
@@ -310,32 +333,17 @@ const resetLoadWindow = () => {
 const isCoverNearby = (i: number) =>
   i === coverIndex.value || loadedCoverIndices.value.has(i);
 
-const onCoverScroll = () => {
-  // 任何一次 scroll 事件都会重置 settle 定时器，确保动画进行中窗口不会扩张
-  scheduleExpandLoadWindow();
-  if (coverScrollRAF !== null) return;
-  coverScrollRAF = requestAnimationFrame(() => {
-    coverScrollRAF = null;
-    const el = coverScrollerRef.value;
-    if (!el) return;
-    const w = el.clientWidth;
-    if (w <= 0) return;
-    const idx = Math.round(el.scrollLeft / w);
-    if (idx !== coverIndex.value) coverIndex.value = idx;
-  });
-};
-
 const goCover = (index: number) => {
-  const el = coverScrollerRef.value;
-  if (!el) return;
+  const api = emblaApi.value;
+  if (!api) return;
   const total = covers.value.length;
   if (total <= 1) return;
   const target = Math.min(Math.max(index, 0), total - 1);
-  el.scrollTo({ left: target * el.clientWidth, behavior: "smooth" });
+  api.scrollTo(target);
 };
 
 // 拦截滚轮：只拦截会被横向滑动吞掉的那部分（平板/鼠标水平滚轮），
-// 转换为外层弹窗的垂直滚动，避免被诤判为切图。
+// 转换为外层弹窗的垂直滚动，避免被误判为切图。
 // 垂直滚轮（deltaY）不拦截——交给浏览器原生平滑滚动处理，避免"瞬移"感。
 const onCoverWheel = (e: WheelEvent) => {
   if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
@@ -344,125 +352,22 @@ const onCoverWheel = (e: WheelEvent) => {
   if (parent) parent.scrollTop += e.deltaX;
 };
 
-/* ── 鼠标拖拽切图 ─────────────────────────────── */
-// 触屏由原生 overflow-x 滑动接管；鼠标/笔需要我们手动模拟拖拽，
-// 否则按住拖动会被识别成 click 直接打开预览。
-const DRAG_THRESHOLD_PX = 6;
-// 拖动距离超过单页宽度该比例即切下一张（不到一半也算）
-const DRAG_SNAP_RATIO = 0.01;
-// 释放瞬间速度超过该值（px/ms）也触发切图，方便"轻甩"
-const DRAG_FLING_VELOCITY = 0.01;
-let isDraggingCover = false;
-let coverDragStartX = 0;
-let coverDragStartScroll = 0;
-let coverDragStartIndex = 0;
-let coverDragMoved = false;
-let coverDragLastX = 0;
-let coverDragLastT = 0;
-let coverDragVelocity = 0;
-
-const onCoverPointerDown = (e: PointerEvent) => {
-  if (e.pointerType !== "mouse" && e.pointerType !== "pen") return;
-  if (covers.value.length <= 1) return;
-  const el = coverScrollerRef.value;
-  if (!el) return;
-  isDraggingCover = true;
-  coverDragMoved = false;
-  coverDragStartX = e.clientX;
-  coverDragStartScroll = el.scrollLeft;
-  coverDragStartIndex = coverIndex.value;
-  coverDragLastX = e.clientX;
-  coverDragLastT = performance.now();
-  coverDragVelocity = 0;
-  (e.target as Element).setPointerCapture?.(e.pointerId);
-};
-
-const onCoverPointerMove = (e: PointerEvent) => {
-  if (!isDraggingCover) return;
-  const el = coverScrollerRef.value;
-  if (!el) return;
-  const dx = e.clientX - coverDragStartX;
-  if (!coverDragMoved && Math.abs(dx) > DRAG_THRESHOLD_PX) coverDragMoved = true;
-  el.scrollLeft = coverDragStartScroll - dx;
-
-  // 实时估算速度（px/ms），向右为正、向左为负
-  const now = performance.now();
-  const dt = now - coverDragLastT;
-  if (dt > 0) {
-    const instV = (e.clientX - coverDragLastX) / dt;
-    // 指数平滑，减少抖动
-    coverDragVelocity = coverDragVelocity * 0.5 + instV * 0.5;
-  }
-  coverDragLastX = e.clientX;
-  coverDragLastT = now;
-};
-
-const onCoverPointerUp = (e: PointerEvent) => {
-  if (!isDraggingCover) return;
-  isDraggingCover = false;
-  const el = coverScrollerRef.value;
-  if (!el) return;
-  try {
-    (e.target as Element).releasePointerCapture?.(e.pointerId);
-  } catch {
-    /* ignore */
-  }
-  if (!coverDragMoved) return;
-
-  const w = el.clientWidth;
-  if (w <= 0) return;
-
-  // 起始页相对位移：>0 表示朝下一页，<0 表示朝上一页
-  const offset = el.scrollLeft - coverDragStartIndex * w;
-  // 速度 > 0 表示手指向右移动（看上一张），< 0 表示向左（看下一张）
-  const v = coverDragVelocity;
-  let targetIdx = coverDragStartIndex;
-  if (offset > w * DRAG_SNAP_RATIO || v < -DRAG_FLING_VELOCITY) {
-    targetIdx = coverDragStartIndex + 1;
-  } else if (offset < -w * DRAG_SNAP_RATIO || v > DRAG_FLING_VELOCITY) {
-    targetIdx = coverDragStartIndex - 1;
-  }
-  targetIdx = Math.max(0, Math.min(covers.value.length - 1, targetIdx));
-  el.scrollTo({ left: targetIdx * w, behavior: "smooth" });
-};
-
-const cancelCoverInteractions = () => {
-  if (coverScrollRAF !== null) {
-    cancelAnimationFrame(coverScrollRAF);
-    coverScrollRAF = null;
-  }
-  if (coverSettleTimer !== null) {
-    clearTimeout(coverSettleTimer);
-    coverSettleTimer = null;
-  }
-  isDraggingCover = false;
-  coverDragMoved = false;
-};
-
-// 在 click 捕获阶段拦截：拖动后产生的 click 不应打开预览
-const onCoverClickCapture = (e: MouseEvent) => {
-  if (coverDragMoved) {
-    coverDragMoved = false;
-    e.preventDefault();
-    e.stopPropagation();
-  }
-};
-
-// 切换委托时重置封面索引并将容器滚回起点
+// 切换委托时重置封面索引并将轮播滚回起点
 watch(() => props.postId, () => {
   coverIndex.value = 0;
   resetLoadWindow();
   loadedCoverImages.value = new Set();
   nextTick(() => {
-    const el = coverScrollerRef.value;
-    if (el) el.scrollLeft = 0;
+    emblaApi.value?.scrollTo(0, true);
   });
 });
 
-// 首次拿到封面列表后，根据当前 coverIndex 立即扩张一次窗口，
-// 保证打开弹窗时前几张就处于可加载状态。
-watch(() => covers.value.length, (n) => {
-  if (n > 0) expandLoadWindow();
+// 封面列表变化后重新初始化 Embla，并立即扩张当前索引的加载窗口
+watch(covers, () => {
+  nextTick(() => {
+    emblaApi.value?.reInit();
+    expandLoadWindow();
+  });
 });
 
 /* ── 数据加载 ──────────────────────────────────── */
@@ -1059,7 +964,6 @@ const handleUnpinComment = async (comment: Comment) => {
 /* ── 关闭 / 键盘 ──────────────────────────────── */
 const handleClose = () => {
   emotePickerVisible.value = false;
-  cancelCoverInteractions();
   emit("close");
 };
 
@@ -1228,7 +1132,6 @@ onBeforeUnmount(() => {
   commentsHasNext.value = false;
   window.removeEventListener("keydown", onKeyDown);
   destroyPreview();
-  cancelCoverInteractions();
   teardownMentionListeners?.();
   teardownMentionListeners = null;
   if (scrollableTimer) {
@@ -1381,7 +1284,7 @@ onBeforeUnmount(() => {
                             />
                           </div>
                           <NsfwImage
-                            :src="firstCover ? coverDisplaySrc(firstCover.url) : DEFAULT_COVER_IMAGE"
+                            :src="firstCover ? coverDisplaySrc(firstCover.url, firstCover.width) : DEFAULT_COVER_IMAGE"
                             :status="firstCover?.nsfwStatus"
                             :alt="hasCovers ? post.title : 'default cover'"
                             img-class="ik-dialog__cover"
@@ -1398,54 +1301,50 @@ onBeforeUnmount(() => {
                           ></div>
                         </template>
 
-                        <!-- 多图轮播：横向滑动 + 滚动捕捉 -->
+                        <!-- 多图轮播：使用 Embla Carousel，鼠标/触摸统一走合成器动画 -->
                         <template v-else>
                           <div
-                            ref="coverScrollerRef"
+                            ref="emblaRef"
                             class="ik-dialog__cover-scroller"
-                            @scroll.passive="onCoverScroll"
                             @wheel="onCoverWheel"
-                            @pointerdown="onCoverPointerDown"
-                            @pointermove="onCoverPointerMove"
-                            @pointerup="onCoverPointerUp"
-                            @pointercancel="onCoverPointerUp"
-                            @click.capture="onCoverClickCapture"
                           >
-                            <div
-                              v-for="(c, i) in covers"
-                              :key="c.url + i"
-                              class="ik-dialog__cover-slide"
-                            >
+                            <div class="ik-dialog__cover-track">
                               <div
-                                v-if="coverPreviewSrc(i)"
-                                class="ik-dialog__cover-preview"
+                                v-for="(c, i) in covers"
+                                :key="c.url + i"
+                                class="ik-dialog__cover-slide"
                               >
-                                <img
-                                  :ref="i === 0 ? setLoadedPreviewImage : undefined"
-                                  :src="isCoverNearby(i) ? coverPreviewSrc(i) : undefined"
-                                  alt=""
-                                  class="ik-dialog__cover-preview-image"
-                                  aria-hidden="true"
-                                  :decoding="i === 0 && !isCompact ? 'sync' : 'async'"
+                                <div
+                                  v-if="coverPreviewSrc(i)"
+                                  class="ik-dialog__cover-preview"
+                                >
+                                  <img
+                                    :ref="i === 0 ? setLoadedPreviewImage : undefined"
+                                    :src="isCoverNearby(i) ? coverPreviewSrc(i) : undefined"
+                                    alt=""
+                                    class="ik-dialog__cover-preview-image"
+                                    aria-hidden="true"
+                                    :decoding="i === 0 && !isCompact ? 'sync' : 'async'"
+                                  />
+                                </div>
+                                <NsfwImage
+                                  :src="isCoverNearby(i) ? coverDisplaySrc(c.url, c.width) : undefined"
+                                  :status="c.nsfwStatus"
+                                  :alt="`${post.title} - ${i + 1}`"
+                                  img-class="ik-dialog__cover"
+                                  :loading="isCoverNearby(i) ? 'eager' : 'lazy'"
+                                  decoding="async"
+                                  draggable="false"
+                                  @load="onCoverImageLoad(i)"
+                                  @click="openCoverPreview(i)"
+                                  @error="onCoverImageLoad(i); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                                 />
+                                <div
+                                  v-if="!isCoverImageLoaded(i) && (!isCoverNearby(i) || !coverPreviewSrc(i))"
+                                  class="ik-skel ik-dialog__cover-skel"
+                                  aria-hidden="true"
+                                ></div>
                               </div>
-                              <NsfwImage
-                                :src="isCoverNearby(i) ? coverDisplaySrc(c.url) : undefined"
-                                :status="c.nsfwStatus"
-                                :alt="`${post.title} - ${i + 1}`"
-                                img-class="ik-dialog__cover"
-                                :loading="i === 0 ? 'eager' : 'lazy'"
-                                decoding="async"
-                                draggable="false"
-                                @load="onCoverImageLoad(i)"
-                                @click="openCoverPreview(i)"
-                                @error="onCoverImageLoad(i); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
-                              />
-                              <div
-                                v-if="!isCoverImageLoaded(i) && (!isCoverNearby(i) || !coverPreviewSrc(i))"
-                                class="ik-skel ik-dialog__cover-skel"
-                                aria-hidden="true"
-                              ></div>
                             </div>
                           </div>
 
@@ -2223,22 +2122,15 @@ onBeforeUnmount(() => {
 .ik-dialog__cover-scroller {
   position: absolute;
   inset: 0;
-  display: flex;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
+  overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
-  touch-action: pan-x;
 }
 
-.ik-dialog__cover-scroller::-webkit-scrollbar {
-  display: none;
+.ik-dialog__cover-track {
+  display: flex;
+  height: 100%;
+  touch-action: pan-y pinch-zoom;
 }
 
 .ik-dialog__cover-slide {
@@ -2246,8 +2138,7 @@ onBeforeUnmount(() => {
   flex: 0 0 100%;
   width: 100%;
   height: 100%;
-  scroll-snap-align: center;
-  scroll-snap-stop: always;
+  min-width: 0;
 }
 
 .ik-dialog__cover-nav {
@@ -3046,10 +2937,10 @@ onBeforeUnmount(() => {
     border-width: 0 0 4px;
   }
 
-  /* 多图轮播在移动端需要同时允许水平（切图）与垂直（翻页）触摸滑动，
-     否则手指落在封面区域时无法上下滚动整个弹窗。 */
+  /* Embla 已经通过 touch-action 处理好横向拖拽与纵向翻页的协调，
+     这里显式保留纵向滚动穿透，避免和整体弹窗滚动冲突。 */
   .ik-dialog__cover-scroller {
-    touch-action: pan-x pan-y;
+    touch-action: pan-y pinch-zoom;
   }
 
   .ik-dialog__detail {
