@@ -229,15 +229,14 @@ const coverPreviewSrc = (i: number) => {
 };
 
 // 移动端/平板弹窗封面首屏直接加载原图会触发大图 decode/重绘，导致入场掉帧。
-// 移动视图用 800px、平板视图用 1200px、桌面视图用 1600px 宽度缩略图已足够清晰，
-// 若原图本身不足 1600px 则保持原尺寸仅转 WebP，避免被 CDN 放大变糊；
+// 移动视图用 800px、平板/桌面视图用 1200px 宽度缩略图已足够清晰，
+// 若原图本身不足 1200px 则保持原尺寸仅转 WebP，避免被 CDN 放大变糊；
 // 只有放大预览（lightgallery）时才用原图。
 const coverDisplaySrc = (url: string | undefined, naturalWidth?: number) => {
   if (!url) return url;
   if (isMobile.value) return toThumbUrl(url, 800);
-  if (isCompact.value) return toThumbUrl(url, 1200);
-  if (naturalWidth && naturalWidth > 0 && naturalWidth <= 1600) return toNoResizeWebpUrl(url);
-  return toThumbUrl(url, 1600);
+  if (naturalWidth && naturalWidth > 0 && naturalWidth <= 1200) return toNoResizeWebpUrl(url);
+  return toThumbUrl(url, 1200);
 };
 const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
 const setLoadedPreviewImage = (el: Element | ComponentPublicInstance | null) => {
@@ -1333,7 +1332,7 @@ onBeforeUnmount(() => {
                                   :status="c.nsfwStatus"
                                   :alt="`${post.title} - ${i + 1}`"
                                   img-class="ik-dialog__cover"
-                                  :loading="i === 0 ? 'eager' : 'lazy'"
+                                  :loading="isCoverNearby(i) ? 'eager' : 'lazy'"
                                   decoding="async"
                                   draggable="false"
                                   @load="onCoverImageLoad(i)"
