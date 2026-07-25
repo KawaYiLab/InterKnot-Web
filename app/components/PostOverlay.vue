@@ -266,17 +266,9 @@ const openCoverPreview = (index = 0) => {
 };
 
 /* ── 封面轮播 ─────────────────────────────────── */
-// 不同委托各自记忆退出弹窗时的封面索引，重新打开同篇委托时回到上次位置。
-const coverIndexCache = useState<Record<string, number>>("pm:cover-index", () => ({}));
-const coverIndex = ref(coverIndexCache.value[props.postId] ?? 0);
+const coverIndex = ref(0);
 const emblaRef = shallowRef<HTMLElement | null>(null);
 const emblaApi = shallowRef<EmblaCarouselType | undefined>();
-
-watch(coverIndex, (val) => {
-  if (props.postId) {
-    coverIndexCache.value = { ...coverIndexCache.value, [props.postId]: val };
-  }
-});
 
 // 手动管理 Embla 生命周期：v-else 里轮播容器在 covers 拿到后才渲染，
 // 直接用 useEmblaCarousel 的 onMounted 会导致实例始终无法创建。
@@ -305,7 +297,7 @@ const initEmbla = (el: HTMLElement) => {
   emblaApi.value.on("settle", syncEmblaState);
 
   // 弹窗进入动画期间容器尺寸可能为 0，此时 scrollTo/startIndex 会被忽略。
-  // 监听 resize，等容器真实展开后再跳转到缓存的封面位置。
+  // 监听 resize，等容器真实展开后再跳转到目标封面位置。
   const restoreCachedIndex = () => {
     const api = emblaApi.value;
     if (!api) return;
@@ -374,17 +366,16 @@ const onCoverWheel = (e: WheelEvent) => {
   if (parent) parent.scrollTop += e.deltaX;
 };
 
-// 切换委托时恢复该委托上次记忆的封面索引，没有记录则回到第一张。
+// 打开新委托或切换委托时都从第一张开始。
 // 弹窗关闭时 postId 会被置为空字符串，此处不处理，避免离场动画期间滚动。
 watch(() => props.postId, (newId, oldId) => {
   if (!newId || newId === oldId) return;
-  const target = coverIndexCache.value[newId] ?? 0;
-  coverIndex.value = target;
+  coverIndex.value = 0;
   resetLoadWindow();
   loadedCoverImages.value = new Set();
   expandLoadWindow();
   nextTick(() => {
-    emblaApi.value?.scrollTo(target, true);
+    emblaApi.value?.scrollTo(0, true);
   });
 });
 

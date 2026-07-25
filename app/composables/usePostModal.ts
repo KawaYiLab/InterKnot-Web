@@ -58,6 +58,13 @@ export function usePostModal() {
     const url = opts?.commentId
       ? `/post/${id}?comment=${encodeURIComponent(opts.commentId)}`
       : `/post/${id}`;
+    // 弹窗打开前先保存当前页面滚动位置，避免按 Esc / history.back 返回时
+    // Vue Router 读不到原生 pushState 之前的 savedPosition，导致底层页面跳回顶部。
+    window.history.replaceState(
+      overlayHistoryState({ scroll: { left: 0, top: window.scrollY } }),
+      "",
+      window.location.href,
+    );
     window.history.pushState(
       overlayHistoryState({ __postModal: true, postId: id, commentId: opts?.commentId ?? null }),
       "",
