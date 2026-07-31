@@ -98,7 +98,7 @@ onBeforeUnmount(() => {
               </div>
 
               <ul class="ik-benefits__notes">
-                <li>单张图片大小上限 10MB，全等级一致。</li>
+                <li>单张图片大小上限 30MB，全等级一致。</li>
                 <li>已发布的内容不受等级调整影响，仅在新建 / 编辑时生效。</li>
               </ul>
             </div>

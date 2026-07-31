@@ -1,17 +1,23 @@
 const IMAGE_HOST = "https://im.tiwat.cn";
 const LEGACY_IMAGE_HOST_RE = /^https?:\/\/image\.tiwat\.cn/;
 const LEGACY_THUMB_SUFFIX = "-small.webp";
-const WEBP_PROCESS = "format,webp/quality,q_80";
+const CDN_CGI_IMAGE_RE = /^https?:\/\/[^/]+\/cdn-cgi\/image\//;
+const IMAGE_PROCESS_RE = /[?&]image_process=/;
 
-function getResizeProcess(width: number): string {
-  return `image_process=resize,w_${width}/${WEBP_PROCESS}`;
+function isInlineUrl(url: string): boolean {
+  return url.startsWith("blob:") || url.startsWith("data:");
 }
 
-function getNoResizeProcess(): string {
-  return `image_process=${WEBP_PROCESS}`;
+function stripLegacyThumbSuffix(url: string): string {
+  if (!url.includes(LEGACY_THUMB_SUFFIX)) return url;
+  const parts = url.split("?");
+  const path = parts[0] ?? "";
+  if (!path.endsWith(LEGACY_THUMB_SUFFIX)) return url;
+  const newPath = path.slice(0, -LEGACY_THUMB_SUFFIX.length);
+  return parts.length > 1 ? `${newPath}?${parts.slice(1).join("?")}` : newPath;
 }
 
-function stripImageProcess(url: string): string {
+function stripImageProcessQuery(url: string): string {
   if (!url.includes("image_process=")) return url;
   const parts = url.split("?");
   const path = parts[0] ?? "";
@@ -24,22 +30,18 @@ function stripImageProcess(url: string): string {
   return params.length ? `${path}?${params.join("&")}` : path;
 }
 
-function isInlineUrl(url: string): boolean {
-  return url.startsWith("blob:") || url.startsWith("data:");
+function isCdnCgiImageUrl(url: string): boolean {
+  return CDN_CGI_IMAGE_RE.test(url);
+}
+
+function hasImageProcess(url: string): boolean {
+  return IMAGE_PROCESS_RE.test(url);
 }
 
 function migrateImageUrl(url: string): string {
   if (isInlineUrl(url)) return url;
 
-  const parts = url.split("?");
-  let path = parts[0] ?? "";
-  const rest = parts.slice(1);
-  if (path.endsWith(LEGACY_THUMB_SUFFIX)) {
-    path = path.slice(0, -LEGACY_THUMB_SUFFIX.length);
-  }
-  const query = rest.length ? `?${rest.join("?")}` : "";
-
-  let clean = `${path}${query}`;
+  let clean = stripLegacyThumbSuffix(url);
   clean = clean.replace(/^\/\/image\.tiwat\.cn/, IMAGE_HOST);
   clean = clean.replace(LEGACY_IMAGE_HOST_RE, IMAGE_HOST);
 
@@ -52,6 +54,79 @@ function migrateImageUrl(url: string): string {
   }
 
   return clean;
+}
+
+function buildR2ImageUrl(canonicalUrl: string, options: string): string {
+  const u = new URL(canonicalUrl);
+  u.pathname = `/cdn-cgi/image/${options}${u.pathname}`;
+  return u.toString();
+}
+
+function buildEsaImageUrl(canonicalUrl: string, process: string): string {
+  const sep = canonicalUrl.includes("?") ? "&" : "?";
+  return `${canonicalUrl}${sep}image_process=${process}`;
+}
+
+function replaceR2Width(url: string, width: number): string {
+  const u = new URL(url);
+  const prefix = "/cdn-cgi/image/";
+  if (!u.pathname.startsWith(prefix)) return url;
+
+  const rest = u.pathname.slice(prefix.length);
+  const slashIdx = rest.indexOf("/");
+  if (slashIdx === -1) return url;
+
+  const options = rest.slice(0, slashIdx);
+  const path = rest.slice(slashIdx);
+
+  const opts = options
+    .split(",")
+    .filter((o) => !o.startsWith("width=") && o.trim());
+  opts.unshift(`width=${width}`);
+
+  u.pathname = `${prefix}${opts.join(",")}${path}`;
+  return u.toString();
+}
+
+function removeR2Width(url: string): string {
+  const u = new URL(url);
+  const prefix = "/cdn-cgi/image/";
+  if (!u.pathname.startsWith(prefix)) return url;
+
+  const rest = u.pathname.slice(prefix.length);
+  const slashIdx = rest.indexOf("/");
+  if (slashIdx === -1) return url;
+
+  const options = rest.slice(0, slashIdx);
+  const path = rest.slice(slashIdx);
+
+  const opts = options.split(",").filter((o) => !o.startsWith("width=") && o.trim());
+
+  u.pathname = `${prefix}${opts.join(",")}${path}`;
+  return u.toString();
+}
+
+function ensureEsaResizeWidth(url: string, width: number): string {
+  const canonical = stripImageProcessQuery(url);
+  return buildEsaImageUrl(canonical, `resize,w_${width}/format,webp/quality,q_80`);
+}
+
+function removeEsaWidth(url: string): string {
+  const canonical = stripImageProcessQuery(url);
+  return buildEsaImageUrl(canonical, "format,webp/quality,q_80");
+}
+
+function stripCdnCgiImagePath(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.pathname.startsWith("/cdn-cgi/image/")) {
+      u.pathname = u.pathname.replace(/^\/cdn-cgi\/image\/[^/]+\//, "/");
+      return u.toString();
+    }
+  } catch {
+    // ignore malformed URLs
+  }
+  return url;
 }
 
 /**
@@ -68,43 +143,56 @@ export function toMediaUrl(url: string | undefined): string {
 }
 
 /**
- * 返回「无 image_process 缩略图参数」的原图 URL，用于正文 / 详情大图。
+ * 返回「无 ESA / R2 缩略图参数」的原图 URL，用于正文 / 详情大图。
  */
 export function toCanonicalUrl(url: string | undefined): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
-  return stripImageProcess(migrateImageUrl(url));
+
+  let clean = migrateImageUrl(url);
+  clean = stripCdnCgiImagePath(clean);
+  clean = stripImageProcessQuery(clean);
+  return clean;
 }
 
 /**
  * 生成缩略图 URL：
- * - 本地 blob/data 预览不动
- * - 去掉旧七牛云的 -small.webp 后缀
- * - 将旧 image.tiwat.cn 域名迁移到新 R2 域名 im.tiwat.cn
- * - 避免重复追加 image_process
+ * - 若 url 已是 R2 /cdn-cgi/image 或 ESA image_process 缩略图，保持同一服务并替换宽度；
+ * - 否则回退到 ESA 参数（canonical 原图一般由后端包装过，前端不自行决定 R2）。
  */
 export function toThumbUrl(url: string | undefined, width = 360): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
 
   const clean = migrateImageUrl(url);
-  if (clean.includes("image_process=")) return clean;
 
-  const sep = clean.includes("?") ? "&" : "?";
-  return `${clean}${sep}${getResizeProcess(width)}`;
+  if (isCdnCgiImageUrl(clean)) {
+    return replaceR2Width(clean, width);
+  }
+
+  if (hasImageProcess(clean)) {
+    return ensureEsaResizeWidth(clean, width);
+  }
+
+  return buildEsaImageUrl(clean, `resize,w_${width}/format,webp/quality,q_80`);
 }
 
 /**
- * 保持原图尺寸，仅转换为 WebP 并压缩到 q_80 的 URL。
- * 名片等宽幅图片不适合缩略图时使用，避免被 resize 后模糊。
+ * 保持原图尺寸，仅转换为 WebP 并压缩到 quality=80 的 URL。
  */
 export function toNoResizeWebpUrl(url: string | undefined): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
 
   const clean = migrateImageUrl(url);
-  if (clean.includes("image_process=")) return clean;
 
-  const sep = clean.includes("?") ? "&" : "?";
-  return `${clean}${sep}${getNoResizeProcess()}`;
+  if (isCdnCgiImageUrl(clean)) {
+    return removeR2Width(clean);
+  }
+
+  if (hasImageProcess(clean)) {
+    return removeEsaWidth(clean);
+  }
+
+  return buildEsaImageUrl(clean, "format,webp/quality,q_80");
 }

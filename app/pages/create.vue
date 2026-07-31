@@ -335,7 +335,7 @@ function handleFileSelect(files: FileList | File[]) {
       return false;
     }
     if (f.size > MAX_IMAGE_SIZE) {
-      message.error(`图片 ${f.name} 超过 10MB`);
+      message.error(`图片 ${f.name} 超过 30MB`);
       return false;
     }
     return true;

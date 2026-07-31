@@ -18,7 +18,7 @@ import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import type { EmoteRange } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
-import { toThumbUrl, toNoResizeWebpUrl } from "~/utils/image";
+import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import UserHoverCard from "./UserHoverCard.vue";
@@ -228,15 +228,11 @@ const coverPreviewSrc = (i: number) => {
   return (i === 0 && previewCover.value) || toThumbUrl(cover.url, 360) || undefined;
 };
 
-// 移动端/平板弹窗封面首屏直接加载原图会触发大图 decode/重绘，导致入场掉帧。
-// 移动视图用 800px、平板/桌面视图用 1200px 宽度缩略图已足够清晰，
-// 若原图本身不足 1200px 则保持原尺寸仅转 WebP，避免被 CDN 放大变糊；
-// 只有放大预览（lightgallery）时才用原图。
-const coverDisplaySrc = (url: string | undefined, naturalWidth?: number) => {
+// 弹窗封面直接显示原图，与放大预览保持一致；
+// 入场占位图仍用缩略图做 blur-up，避免首屏 decode 大图掉帧。
+const coverDisplaySrc = (url: string | undefined) => {
   if (!url) return url;
-  if (isMobile.value) return toThumbUrl(url, 800);
-  if (naturalWidth && naturalWidth > 0 && naturalWidth <= 1200) return toNoResizeWebpUrl(url);
-  return toThumbUrl(url, 1200);
+  return toCanonicalUrl(url);
 };
 const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
 const setLoadedPreviewImage = (el: Element | ComponentPublicInstance | null) => {
@@ -261,7 +257,12 @@ const coverAspectRatio = computed(() => {
 });
 
 const openCoverPreview = (index = 0) => {
-  const images = covers.value.map((c) => ({ src: c.url, width: c.width, height: c.height }));
+  const images = covers.value.map((c) => ({
+    src: toCanonicalUrl(c.url),
+    thumb: toThumbUrl(c.url),
+    width: c.width,
+    height: c.height,
+  }));
   if (images.length) openGallery(images, Math.min(Math.max(index, 0), images.length - 1));
 };
 
@@ -1284,7 +1285,7 @@ onBeforeUnmount(() => {
                             />
                           </div>
                           <NsfwImage
-                            :src="firstCover ? coverDisplaySrc(firstCover.url, firstCover.width) : DEFAULT_COVER_IMAGE"
+                            :src="firstCover ? coverDisplaySrc(firstCover.url) : DEFAULT_COVER_IMAGE"
                             :status="firstCover?.nsfwStatus"
                             :alt="hasCovers ? post.title : 'default cover'"
                             img-class="ik-dialog__cover"
@@ -1328,7 +1329,7 @@ onBeforeUnmount(() => {
                                   />
                                 </div>
                                 <NsfwImage
-                                  :src="isCoverNearby(i) ? coverDisplaySrc(c.url, c.width) : undefined"
+                                  :src="isCoverNearby(i) ? coverDisplaySrc(c.url) : undefined"
                                   :status="c.nsfwStatus"
                                   :alt="`${post.title} - ${i + 1}`"
                                   img-class="ik-dialog__cover"

@@ -106,7 +106,7 @@ const onFileSelected = (e: Event) => {
     return;
   }
   if (file.size > MAX_IMAGE_SIZE) {
-    message.warning("图片大小不能超过 10MB");
+    message.warning("图片大小不能超过 30MB");
     return;
   }
   const reader = new FileReader();
