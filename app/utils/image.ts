@@ -2,16 +2,7 @@ const IMAGE_HOST = "https://im.tiwat.cn";
 const LEGACY_IMAGE_HOST_RE = /^https?:\/\/image\.tiwat\.cn/;
 const LEGACY_THUMB_SUFFIX = "-small.webp";
 const CDN_CGI_IMAGE_RE = /^https?:\/\/[^/]+\/cdn-cgi\/image\//;
-
-const THUMB_OPTIONS = "format=webp,quality=80";
-
-function getThumbOptions(width = 360): string {
-  return `width=${width},${THUMB_OPTIONS}`;
-}
-
-function getNoResizeOptions(): string {
-  return THUMB_OPTIONS;
-}
+const IMAGE_PROCESS_RE = /[?&]image_process=/;
 
 function isInlineUrl(url: string): boolean {
   return url.startsWith("blob:") || url.startsWith("data:");
@@ -43,6 +34,10 @@ function isCdnCgiImageUrl(url: string): boolean {
   return CDN_CGI_IMAGE_RE.test(url);
 }
 
+function hasImageProcess(url: string): boolean {
+  return IMAGE_PROCESS_RE.test(url);
+}
+
 function migrateImageUrl(url: string): string {
   if (isInlineUrl(url)) return url;
 
@@ -61,10 +56,77 @@ function migrateImageUrl(url: string): string {
   return clean;
 }
 
-function buildCdnCgiImageUrl(canonicalUrl: string, options: string): string {
+function buildR2ImageUrl(canonicalUrl: string, options: string): string {
   const u = new URL(canonicalUrl);
   u.pathname = `/cdn-cgi/image/${options}${u.pathname}`;
   return u.toString();
+}
+
+function buildEsaImageUrl(canonicalUrl: string, process: string): string {
+  const sep = canonicalUrl.includes("?") ? "&" : "?";
+  return `${canonicalUrl}${sep}image_process=${process}`;
+}
+
+function replaceR2Width(url: string, width: number): string {
+  const u = new URL(url);
+  const prefix = "/cdn-cgi/image/";
+  if (!u.pathname.startsWith(prefix)) return url;
+
+  const rest = u.pathname.slice(prefix.length);
+  const slashIdx = rest.indexOf("/");
+  if (slashIdx === -1) return url;
+
+  const options = rest.slice(0, slashIdx);
+  const path = rest.slice(slashIdx);
+
+  const opts = options
+    .split(",")
+    .filter((o) => !o.startsWith("width=") && o.trim());
+  opts.unshift(`width=${width}`);
+
+  u.pathname = `${prefix}${opts.join(",")}${path}`;
+  return u.toString();
+}
+
+function removeR2Width(url: string): string {
+  const u = new URL(url);
+  const prefix = "/cdn-cgi/image/";
+  if (!u.pathname.startsWith(prefix)) return url;
+
+  const rest = u.pathname.slice(prefix.length);
+  const slashIdx = rest.indexOf("/");
+  if (slashIdx === -1) return url;
+
+  const options = rest.slice(0, slashIdx);
+  const path = rest.slice(slashIdx);
+
+  const opts = options.split(",").filter((o) => !o.startsWith("width=") && o.trim());
+
+  u.pathname = `${prefix}${opts.join(",")}${path}`;
+  return u.toString();
+}
+
+function ensureEsaResizeWidth(url: string, width: number): string {
+  const canonical = stripImageProcessQuery(url);
+  return buildEsaImageUrl(canonical, `resize,w_${width}/format,webp/quality,q_80`);
+}
+
+function removeEsaWidth(url: string): string {
+  const canonical = stripImageProcessQuery(url);
+  return buildEsaImageUrl(canonical, "format,webp/quality,q_80");
+}
+
+function stripCdnCgiImagePath(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.pathname.startsWith("/cdn-cgi/image/")) {
+      u.pathname = u.pathname.replace(/^\/cdn-cgi\/image\/[^/]+\//, "/");
+      return u.toString();
+    }
+  } catch {
+    // ignore malformed URLs
+  }
+  return url;
 }
 
 /**
@@ -81,57 +143,56 @@ export function toMediaUrl(url: string | undefined): string {
 }
 
 /**
- * 返回「无 R2 图像转换参数」的原图 URL，用于正文 / 详情大图。
+ * 返回「无 ESA / R2 缩略图参数」的原图 URL，用于正文 / 详情大图。
  */
 export function toCanonicalUrl(url: string | undefined): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
 
   let clean = migrateImageUrl(url);
-
-  try {
-    const u = new URL(clean);
-    if (u.pathname.startsWith("/cdn-cgi/image/")) {
-      u.pathname = u.pathname.replace(/^\/cdn-cgi\/image\/[^/]+\//, "/");
-      clean = u.toString();
-    }
-  } catch {
-    // ignore malformed URLs
-  }
-
+  clean = stripCdnCgiImagePath(clean);
   clean = stripImageProcessQuery(clean);
   return clean;
 }
 
 /**
- * 生成缩略图 URL（R2 图像转换）：
- * - 本地 blob/data 预览不动
- * - 去掉旧七牛云的 -small.webp 后缀
- * - 将旧 image.tiwat.cn 域名迁移到新 R2 域名 im.tiwat.cn
- * - 避免重复追加 cdn-cgi/image 参数
+ * 生成缩略图 URL：
+ * - 若 url 已是 R2 /cdn-cgi/image 或 ESA image_process 缩略图，保持同一服务并替换宽度；
+ * - 否则回退到 ESA 参数（canonical 原图一般由后端包装过，前端不自行决定 R2）。
  */
 export function toThumbUrl(url: string | undefined, width = 360): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
 
-  let clean = migrateImageUrl(url);
-  if (isCdnCgiImageUrl(clean)) return clean;
+  const clean = migrateImageUrl(url);
 
-  clean = stripImageProcessQuery(clean);
-  return buildCdnCgiImageUrl(clean, getThumbOptions(width));
+  if (isCdnCgiImageUrl(clean)) {
+    return replaceR2Width(clean, width);
+  }
+
+  if (hasImageProcess(clean)) {
+    return ensureEsaResizeWidth(clean, width);
+  }
+
+  return buildEsaImageUrl(clean, `resize,w_${width}/format,webp/quality,q_80`);
 }
 
 /**
  * 保持原图尺寸，仅转换为 WebP 并压缩到 quality=80 的 URL。
- * 名片等宽幅图片不适合缩略图时使用，避免被 resize 后模糊。
  */
 export function toNoResizeWebpUrl(url: string | undefined): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
 
-  let clean = migrateImageUrl(url);
-  if (isCdnCgiImageUrl(clean)) return clean;
+  const clean = migrateImageUrl(url);
 
-  clean = stripImageProcessQuery(clean);
-  return buildCdnCgiImageUrl(clean, getNoResizeOptions());
+  if (isCdnCgiImageUrl(clean)) {
+    return removeR2Width(clean);
+  }
+
+  if (hasImageProcess(clean)) {
+    return removeEsaWidth(clean);
+  }
+
+  return buildEsaImageUrl(clean, "format,webp/quality,q_80");
 }

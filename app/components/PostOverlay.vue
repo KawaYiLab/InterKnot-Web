@@ -18,7 +18,7 @@ import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import type { EmoteRange } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
-import { toThumbUrl, toNoResizeWebpUrl } from "~/utils/image";
+import { toThumbUrl, toNoResizeWebpUrl, toCanonicalUrl } from "~/utils/image";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import UserHoverCard from "./UserHoverCard.vue";
@@ -261,7 +261,12 @@ const coverAspectRatio = computed(() => {
 });
 
 const openCoverPreview = (index = 0) => {
-  const images = covers.value.map((c) => ({ src: c.url, width: c.width, height: c.height }));
+  const images = covers.value.map((c) => ({
+    src: toCanonicalUrl(c.url),
+    thumb: toThumbUrl(c.url),
+    width: c.width,
+    height: c.height,
+  }));
   if (images.length) openGallery(images, Math.min(Math.max(index, 0), images.length - 1));
 };
 

@@ -1,25 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { toCanonicalUrl, toMediaUrl, toNoResizeWebpUrl, toThumbUrl } from "~/utils/image";
 
-const THUMB_PREFIX = "https://im.tiwat.cn/cdn-cgi/image/width=360,format=webp,quality=80";
-const WEBP_PREFIX = "https://im.tiwat.cn/cdn-cgi/image/format=webp,quality=80";
+const ESA_THUMB = "https://im.tiwat.cn/uploads/a.png?image_process=resize,w_360/format,webp/quality,q_80";
+const ESA_WEBP = "https://im.tiwat.cn/uploads/a.png?image_process=format,webp/quality,q_80";
+const R2_THUMB = "https://im.tiwat.cn/cdn-cgi/image/width=360,format=webp,quality=80/uploads/a.png";
+const R2_WEBP = "https://im.tiwat.cn/cdn-cgi/image/format=webp,quality=80/uploads/a.png";
 
 describe("image url helpers", () => {
-  it("toThumbUrl appends R2 image transformation for new host", () => {
-    expect(toThumbUrl("https://im.tiwat.cn/uploads/a.png")).toBe(
-      `${THUMB_PREFIX}/uploads/a.png`,
-    );
+  it("toThumbUrl falls back to ESA image_process for canonical urls", () => {
+    expect(toThumbUrl("https://im.tiwat.cn/uploads/a.png")).toBe(ESA_THUMB);
   });
 
   it("toThumbUrl migrates legacy host and strips -small.webp", () => {
-    expect(toThumbUrl("https://image.tiwat.cn/uploads/a.png-small.webp")).toBe(
-      `${THUMB_PREFIX}/uploads/a.png`,
+    expect(toThumbUrl("https://image.tiwat.cn/uploads/a.png-small.webp")).toBe(ESA_THUMB);
+  });
+
+  it("toThumbUrl preserves ESA image_process and replaces width", () => {
+    const once = ESA_THUMB;
+    expect(toThumbUrl(once)).toBe(once);
+    expect(toThumbUrl(once, 800)).toBe(
+      "https://im.tiwat.cn/uploads/a.png?image_process=resize,w_800/format,webp/quality,q_80",
     );
   });
 
-  it("toThumbUrl is idempotent", () => {
-    const once = `${THUMB_PREFIX}/uploads/a.png`;
-    expect(toThumbUrl(once)).toBe(once);
+  it("toThumbUrl preserves R2 cdn-cgi and replaces width", () => {
+    expect(toThumbUrl(R2_THUMB)).toBe(R2_THUMB);
+    expect(toThumbUrl(R2_THUMB, 800)).toBe(
+      "https://im.tiwat.cn/cdn-cgi/image/width=800,format=webp,quality=80/uploads/a.png",
+    );
   });
 
   it("toThumbUrl preserves blob and data URLs", () => {
@@ -28,10 +36,10 @@ describe("image url helpers", () => {
   });
 
   it("toThumbUrl prefixes relative paths", () => {
-    expect(toThumbUrl("/uploads/a.png")).toBe(`${THUMB_PREFIX}/uploads/a.png`);
+    expect(toThumbUrl("/uploads/a.png")).toBe(ESA_THUMB);
   });
 
-  it("toCanonicalUrl returns full original without R2 image transformation", () => {
+  it("toCanonicalUrl returns full original without ESA image transformation", () => {
     expect(
       toCanonicalUrl(
         "https://image.tiwat.cn/uploads/a.png?x=1&image_process=resize,w_360/format,webp/quality,q_80",
@@ -41,7 +49,7 @@ describe("image url helpers", () => {
 
   it("toCanonicalUrl strips R2 image transformation prefix", () => {
     expect(
-      toCanonicalUrl(`${THUMB_PREFIX}/uploads/a.png?x=1`),
+      toCanonicalUrl(`${R2_THUMB}?x=1`),
     ).toBe("https://im.tiwat.cn/uploads/a.png?x=1");
   });
 
@@ -65,8 +73,8 @@ describe("image url helpers", () => {
   });
 
   it("toMediaUrl preserves R2 image transformation prefix", () => {
-    expect(toMediaUrl(`${THUMB_PREFIX}/uploads/a.png?x=1`)).toBe(
-      `${THUMB_PREFIX}/uploads/a.png?x=1`,
+    expect(toMediaUrl(`${R2_THUMB}?x=1`)).toBe(
+      `${R2_THUMB}?x=1`,
     );
   });
 
@@ -74,20 +82,21 @@ describe("image url helpers", () => {
     expect(toMediaUrl("/uploads/a.png")).toBe("https://im.tiwat.cn/uploads/a.png");
   });
 
-  it("toNoResizeWebpUrl appends webp/quality transformation without resize", () => {
-    expect(toNoResizeWebpUrl("https://im.tiwat.cn/uploads/a.png")).toBe(
-      `${WEBP_PREFIX}/uploads/a.png`,
-    );
+  it("toNoResizeWebpUrl falls back to ESA image_process without resize", () => {
+    expect(toNoResizeWebpUrl("https://im.tiwat.cn/uploads/a.png")).toBe(ESA_WEBP);
   });
 
-  it("toNoResizeWebpUrl is idempotent", () => {
-    const once = `${WEBP_PREFIX}/uploads/a.png`;
-    expect(toNoResizeWebpUrl(once)).toBe(once);
+  it("toNoResizeWebpUrl removes width from ESA thumb", () => {
+    expect(toNoResizeWebpUrl(ESA_THUMB)).toBe(ESA_WEBP);
+  });
+
+  it("toNoResizeWebpUrl removes width from R2 thumb", () => {
+    expect(toNoResizeWebpUrl(R2_THUMB)).toBe(R2_WEBP);
   });
 
   it("toNoResizeWebpUrl migrates legacy host and preserves query", () => {
     expect(toNoResizeWebpUrl("https://image.tiwat.cn/uploads/a.png-small.webp?x=1")).toBe(
-      `${WEBP_PREFIX}/uploads/a.png?x=1`,
+      "https://im.tiwat.cn/uploads/a.png?x=1&image_process=format,webp/quality,q_80",
     );
   });
 
