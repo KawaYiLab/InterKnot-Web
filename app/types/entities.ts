@@ -153,6 +153,7 @@ export interface ExternalVideo {
   provider: string;
   bvid?: string | null;
   aid?: number | null;
+  cid?: number | null;
   p?: number | null;
   page?: number | null;
   embedUrl?: string | null;
@@ -162,13 +163,22 @@ export interface ExternalVideo {
   duration?: number | null;
 }
 
+export interface BilibiliPage {
+  cid: number;
+  page: number;
+  part?: string;
+  duration?: number;
+}
+
 export interface BilibiliVideoInfo {
   bvid?: string;
   aid?: number;
   title?: string;
   pic?: string;
   duration?: number;
+  cid?: number;
   videos?: number;
+  pages?: BilibiliPage[];
   owner?: { name?: string; mid?: number };
 }
 

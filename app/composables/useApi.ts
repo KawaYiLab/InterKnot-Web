@@ -1414,13 +1414,32 @@ export function useApi() {
       const response = await $api('/api/articles/bilibili-info', { query });
       const raw = (response as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
       if (!raw) return null;
+      const pages = Array.isArray(raw.pages)
+        ? raw.pages
+            .map((p: unknown) => {
+              if (!p || typeof p !== 'object') return null;
+              const item = p as Record<string, unknown>;
+              const cid = typeof item.cid === 'number' ? item.cid : undefined;
+              const page = typeof item.page === 'number' ? item.page : undefined;
+              if (cid === undefined || page === undefined) return null;
+              return {
+                cid,
+                page,
+                part: typeof item.part === 'string' ? item.part : undefined,
+                duration: typeof item.duration === 'number' ? item.duration : undefined,
+              };
+            })
+            .filter((p) => p !== null) as { cid: number; page: number; part?: string; duration?: number }[]
+        : undefined;
       return {
         bvid: typeof raw.bvid === 'string' ? raw.bvid : undefined,
         aid: typeof raw.aid === 'number' ? raw.aid : undefined,
         title: typeof raw.title === 'string' ? raw.title : undefined,
         pic: typeof raw.pic === 'string' ? raw.pic : undefined,
         duration: typeof raw.duration === 'number' ? raw.duration : undefined,
+        cid: typeof raw.cid === 'number' ? raw.cid : undefined,
         videos: typeof raw.videos === 'number' ? raw.videos : undefined,
+        pages,
         owner:
           raw.owner && typeof raw.owner === 'object'
             ? (raw.owner as { name?: string; mid?: number })

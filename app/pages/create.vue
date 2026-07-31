@@ -160,6 +160,27 @@ const BVID_RE = /^BV[0-9A-Za-z]{10}$/;
 const AVID_RE = /^(?:av)?(\d+)$/i;
 const BILIBILI_URL_RE = /(?:bilibili\.com\/video\/(BV[0-9A-Za-z]{10})|bilibili\.com\/video\/(?:av)?(\d+))/i;
 
+function buildBilibiliEmbedUrl(
+  bvid: string | null | undefined,
+  aid: number | null | undefined,
+  cid: number | null | undefined,
+  p: number | null | undefined,
+): string {
+  const params = new URLSearchParams();
+  if (bvid) params.set("bvid", bvid);
+  if (aid) params.set("aid", String(aid));
+  if (cid) params.set("cid", String(cid));
+  if (p && p > 0) {
+    params.set("p", String(p));
+    params.set("page", String(p));
+  }
+  params.set("autoplay", "0");
+  params.set("danmaku", "0");
+  params.set("hideCoverInfo", "1");
+  // highQuality 参数在 embed 场景下通常由 B 站根据登录态决定，保留旧 player 兼容逻辑
+  return `https://www.bilibili.com/blackboard/html5mobileplayer.html?${params.toString()}`;
+}
+
 function parseBilibiliVideo(input: string): ExternalVideo | null {
   const raw = input.trim();
   if (!raw) return null;
@@ -192,23 +213,13 @@ function parseBilibiliVideo(input: string): ExternalVideo | null {
 
   if (!bvid && !aid) return null;
 
-  const params = new URLSearchParams();
-  if (bvid) params.set("bvid", bvid);
-  if (aid) params.set("aid", String(aid));
-  if (p) {
-    params.set("p", String(p));
-    params.set("page", String(p));
-  }
-  params.set("autoplay", "0");
-  params.set("highQuality", "1");
-
   return {
     provider: "bilibili",
     bvid: bvid ?? null,
     aid: aid ?? null,
     p: p ?? null,
     page: p ?? null,
-    embedUrl: `https://player.bilibili.com/player.html?${params.toString()}`,
+    embedUrl: null,
     coverUrl: null,
     title: null,
     duration: null,
@@ -227,11 +238,20 @@ async function onVideoDialogConfirm(raw: string) {
   }
 
   const info = await api.getBilibiliInfo(video.bvid || undefined, video.aid || undefined);
-  if (info?.pic) {
-    video.coverUrl = info.pic;
-    if (info.title) video.title = info.title;
-    if (typeof info.duration === 'number') video.duration = info.duration;
+  if (!info?.pic) {
+    message.error("无法获取该 B 站视频信息，请检查 BV 号或链接是否有效");
+    return;
   }
+
+  const targetP = video.p && video.p > 0 ? video.p : 1;
+  const pageInfo = info.pages?.find((page) => page.page === targetP);
+  const cid = pageInfo?.cid ?? info.cid;
+
+  video.cid = typeof cid === 'number' ? cid : null;
+  video.embedUrl = buildBilibiliEmbedUrl(video.bvid, video.aid, video.cid, video.p);
+  video.coverUrl = info.pic;
+  if (info.title) video.title = info.title;
+  if (typeof info.duration === 'number') video.duration = info.duration;
 
   externalVideos.value.push(video);
   isVideoDialogVisible.value = false;
