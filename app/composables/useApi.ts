@@ -5,6 +5,7 @@ import type {
   Author,
   Avatar,
   AvatarType,
+  BilibiliVideoInfo,
   BlockedUser,
   BusinessCard,
   BusinessCardType,
@@ -1390,6 +1391,34 @@ export function useApi() {
     );
   };
 
+  const getBilibiliInfo = async (
+    bvid?: string,
+    aid?: number,
+  ): Promise<BilibiliVideoInfo | null> => {
+    try {
+      const query: Record<string, string> = {};
+      if (bvid) query.bvid = bvid;
+      else if (aid) query.aid = String(aid);
+      const response = await $api('/api/articles/bilibili-info', { query });
+      const raw = (response as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
+      if (!raw) return null;
+      return {
+        bvid: typeof raw.bvid === 'string' ? raw.bvid : undefined,
+        aid: typeof raw.aid === 'number' ? raw.aid : undefined,
+        title: typeof raw.title === 'string' ? raw.title : undefined,
+        pic: typeof raw.pic === 'string' ? raw.pic : undefined,
+        duration: typeof raw.duration === 'number' ? raw.duration : undefined,
+        videos: typeof raw.videos === 'number' ? raw.videos : undefined,
+        owner:
+          raw.owner && typeof raw.owner === 'object'
+            ? (raw.owner as { name?: string; mid?: number })
+            : undefined,
+      };
+    } catch {
+      return null;
+    }
+  };
+
   const createArticleDraft = async (payload: {
     title: string;
     text: string;
@@ -2216,6 +2245,7 @@ export function useApi() {
     getProfile,
     getProfileArticles,
     getProfileComments,
+    getBilibiliInfo,
     createArticleDraft,
     updateArticleDraft,
     publishArticleDraft,

@@ -25,6 +25,7 @@ import {
   InboxIcon,
   FilmIcon,
 } from "@heroicons/vue/24/outline";
+import { PlayIcon } from "@heroicons/vue/24/solid";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
 import { isAllowedImage, MAX_IMAGE_SIZE } from "~/utils/upload";
@@ -208,10 +209,13 @@ function parseBilibiliVideo(input: string): ExternalVideo | null {
     p: p ?? null,
     page: p ?? null,
     embedUrl: `https://player.bilibili.com/player.html?${params.toString()}`,
+    coverUrl: null,
+    title: null,
+    duration: null,
   };
 }
 
-function onVideoDialogConfirm(raw: string) {
+async function onVideoDialogConfirm(raw: string) {
   const video = parseBilibiliVideo(raw);
   if (!video) {
     message.error("无法识别该 B 站视频链接，请检查 BV 号或链接格式");
@@ -221,6 +225,14 @@ function onVideoDialogConfirm(raw: string) {
     message.error(`最多只能嵌入 ${MAX_EXTERNAL_VIDEOS} 个视频`);
     return;
   }
+
+  const info = await api.getBilibiliInfo(video.bvid || undefined, video.aid || undefined);
+  if (info?.pic) {
+    video.coverUrl = info.pic;
+    if (info.title) video.title = info.title;
+    if (typeof info.duration === 'number') video.duration = info.duration;
+  }
+
   externalVideos.value.push(video);
   isVideoDialogVisible.value = false;
   markDirty();
@@ -1133,37 +1145,41 @@ if (import.meta.client) {
                   <XMarkIcon style="width:14px;height:14px" />
                 </button>
               </div>
-              <CoverImageAddButton
-                v-if="uploadTasks.length < maxCoverImages"
-                :is-dragging="isDragging"
-                :disabled="externalVideos.length > 0"
-                title="已添加视频，不能再上传图片"
-                @click="openImagePicker"
-              />
-              <CoverVideoAddButton
-                v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS"
-                :is-dragging="false"
-                :disabled="uploadTasks.length > 0"
-                title="已上传图片，不能再添加视频"
-                @click="openVideoDialog"
-              />
-            </div>
-            <div class="ik-media-extras">
               <div
                 v-for="(video, idx) in externalVideos"
                 :key="`video-${idx}`"
-                class="ik-external-video-chip"
+                class="ik-cover-thumb ik-cover-thumb--video"
               >
-                <span class="ik-external-video-chip__label">{{ video.bvid || `av${video.aid}` }}</span>
-                <button
-                  type="button"
-                  class="ik-external-video-chip__remove"
-                  aria-label="移除"
-                  @click="removeExternalVideo(idx)"
-                >
-                  <XMarkIcon style="width:12px;height:12px" />
+                <img
+                  v-if="video.coverUrl"
+                  :src="video.coverUrl"
+                  :alt="video.title || 'B 站视频'"
+                  class="ik-cover-thumb__img"
+                  decoding="async"
+                  draggable="false"
+                  @error="(($event.target as HTMLImageElement).style.display = 'none')"
+                />
+                <div v-if="!video.coverUrl" class="ik-cover-thumb__fallback">
+                  <FilmIcon class="ik-cover-thumb__fallback-icon" />
+                  <span class="ik-cover-thumb__fallback-text">{{ video.bvid || `av${video.aid}` }}</span>
+                </div>
+                <div class="ik-cover-thumb__play">
+                  <PlayIcon class="ik-cover-thumb__play-icon" />
+                </div>
+                <button class="ik-cover-thumb__remove" @click.stop.prevent="removeExternalVideo(idx)" aria-label="移除">
+                  <XMarkIcon style="width:14px;height:14px" />
                 </button>
               </div>
+              <CoverImageAddButton
+                v-if="uploadTasks.length < maxCoverImages && externalVideos.length === 0"
+                :is-dragging="isDragging"
+                @click="openImagePicker"
+              />
+              <CoverVideoAddButton
+                v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS && uploadTasks.length === 0"
+                :is-dragging="false"
+                @click="openVideoDialog"
+              />
             </div>
             <BilibiliVideoDialog
               v-model:visible="isVideoDialogVisible"
@@ -1233,15 +1249,23 @@ if (import.meta.client) {
       <!-- Cover strip (horizontal scroll) -->
       <div class="ik-mobile-cover-strip">
         <button
-          v-if="uploadTasks.length < maxCoverImages"
+          v-if="uploadTasks.length < maxCoverImages && externalVideos.length === 0"
           type="button"
           class="ik-mobile-cover-add"
-          :disabled="externalVideos.length > 0"
-          :title="externalVideos.length > 0 ? '已添加视频，不能再上传图片' : '添加图片'"
+          :title="'添加图片'"
           aria-label="添加图片"
           @click="openImagePicker"
         >
           <PhotoIcon class="ik-mobile-cover-add__icon" />
+        </button>
+        <button
+          v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS && uploadTasks.length === 0"
+          type="button"
+          class="ik-mobile-cover-add"
+          aria-label="添加视频"
+          @click="openVideoDialog"
+        >
+          <FilmIcon class="ik-mobile-cover-add__icon" />
         </button>
         <div
           v-for="(task, idx) in uploadTasks"
@@ -1287,6 +1311,36 @@ if (import.meta.client) {
             class="ik-mobile-cover-tile__remove"
             aria-label="移除"
             @click.stop.prevent="removeUpload(idx)"
+          >
+            <XMarkIcon style="width:12px;height:12px" />
+          </button>
+        </div>
+        <div
+          v-for="(video, idx) in externalVideos"
+          :key="`mobile-video-${idx}`"
+          class="ik-mobile-cover-tile ik-mobile-cover-tile--video"
+        >
+          <img
+            v-if="video.coverUrl"
+            :src="video.coverUrl"
+            :alt="video.title || 'B 站视频'"
+            class="ik-mobile-cover-tile__img"
+            decoding="async"
+            draggable="false"
+            @error="(($event.target as HTMLImageElement).style.display = 'none')"
+          />
+          <div v-if="!video.coverUrl" class="ik-mobile-cover-tile__fallback">
+            <FilmIcon class="ik-mobile-cover-tile__fallback-icon" />
+            <span class="ik-mobile-cover-tile__fallback-text">{{ video.bvid || `av${video.aid}` }}</span>
+          </div>
+          <div class="ik-mobile-cover-tile__play">
+            <PlayIcon class="ik-mobile-cover-tile__play-icon" />
+          </div>
+          <button
+            type="button"
+            class="ik-mobile-cover-tile__remove"
+            aria-label="移除"
+            @click.stop.prevent="removeExternalVideo(idx)"
           >
             <XMarkIcon style="width:12px;height:12px" />
           </button>
@@ -2062,42 +2116,6 @@ if (import.meta.client) {
   outline: none;
 }
 
-/* ── External Videos ─────────────────────── */
-.ik-media-extras {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.ik-external-video-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(191, 255, 9, 0.12);
-  color: #BFFF09;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.ik-external-video-chip__remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  border: none;
-  background: transparent;
-  color: #BFFF09;
-  cursor: pointer;
-  border-radius: 50%;
-}
-
-.ik-external-video-chip__remove:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
 
 .ik-media-add-row {
   display: flex;
@@ -2195,6 +2213,52 @@ if (import.meta.client) {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.ik-cover-thumb--video .ik-cover-thumb__img {
+  filter: brightness(0.72);
+}
+
+.ik-cover-thumb__fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #909090;
+  padding: 12px;
+  text-align: center;
+}
+
+.ik-cover-thumb__fallback-icon {
+  width: 32px;
+  height: 32px;
+  color: #fbfe00;
+}
+
+.ik-cover-thumb__fallback-text {
+  font-size: 11px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.ik-cover-thumb__play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ik-cover-thumb__play-icon {
+  width: 36px;
+  height: 36px;
+  color: #fff;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  opacity: 0.92;
 }
 
 .ik-cover-thumb__overlay {
@@ -2658,6 +2722,46 @@ if (import.meta.client) {
     align-items: center;
     justify-content: center;
     cursor: pointer;
+  }
+  .ik-mobile-cover-tile--video .ik-mobile-cover-tile__img {
+    filter: brightness(0.72);
+  }
+  .ik-mobile-cover-tile__fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: #909090;
+    padding: 8px;
+    text-align: center;
+  }
+  .ik-mobile-cover-tile__fallback-icon {
+    width: 24px;
+    height: 24px;
+    color: #fbfe00;
+  }
+  .ik-mobile-cover-tile__fallback-text {
+    font-size: 10px;
+    font-weight: 700;
+    word-break: break-all;
+  }
+  .ik-mobile-cover-tile__play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .ik-mobile-cover-tile__play-icon {
+    width: 28px;
+    height: 28px;
+    color: #fff;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    opacity: 0.92;
   }
 
   @keyframes ik-mobile-spin {

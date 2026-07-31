@@ -156,6 +156,19 @@ export interface ExternalVideo {
   p?: number | null;
   page?: number | null;
   embedUrl?: string | null;
+  coverUrl?: string | null;
+  title?: string | null;
+  duration?: number | null;
+}
+
+export interface BilibiliVideoInfo {
+  bvid?: string;
+  aid?: number;
+  title?: string;
+  pic?: string;
+  duration?: number;
+  videos?: number;
+  owner?: { name?: string; mid?: number };
 }
 
 /** 委托分类（频道）。GET /api/categories/list 返回完整列表。 */
