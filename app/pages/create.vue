@@ -67,8 +67,7 @@ const hasUnsavedChanges = ref(false);
 const isEditingPublished = ref(false);
 const isAnonymous = ref(false);
 const showImagePickerModal = ref(false);
-const isVideoInputVisible = ref(false);
-const videoInputUrl = ref("");
+const isVideoDialogVisible = ref(false);
 
 /* ── 委托分类（频道）：发布委托必选，默认兜底「综合」 ── */
 const DEFAULT_CATEGORY_SLUG = "general";
@@ -212,8 +211,8 @@ function parseBilibiliVideo(input: string): ExternalVideo | null {
   };
 }
 
-function addExternalVideo() {
-  const video = parseBilibiliVideo(videoInputUrl.value);
+function onVideoDialogConfirm(raw: string) {
+  const video = parseBilibiliVideo(raw);
   if (!video) {
     message.error("无法识别该 B 站视频链接，请检查 BV 号或链接格式");
     return;
@@ -223,9 +222,16 @@ function addExternalVideo() {
     return;
   }
   externalVideos.value.push(video);
-  videoInputUrl.value = "";
-  isVideoInputVisible.value = false;
+  isVideoDialogVisible.value = false;
   markDirty();
+}
+
+function openVideoDialog() {
+  if (uploadTasks.value.length > 0) {
+    message.error("已上传图片的委托不能再添加视频");
+    return;
+  }
+  isVideoDialogVisible.value = true;
 }
 
 function removeExternalVideo(index: number) {
@@ -350,6 +356,10 @@ function openImagePicker() {
     loginDialog.open();
     return;
   }
+  if (externalVideos.value.length > 0) {
+    message.error("已添加视频，不能再上传图片");
+    return;
+  }
   if (remainingCoverSlots.value <= 0) {
     message.error(`当前等级最多上传 ${maxCoverImages.value} 张图片，升级可提升上限`);
     return;
@@ -358,10 +368,18 @@ function openImagePicker() {
 }
 
 function handleImagePickerUpload(files: File[]) {
+  if (externalVideos.value.length > 0) {
+    message.error("已添加视频，不能再上传图片");
+    return;
+  }
   handleFileSelect(files);
 }
 
 function handleImagePickerSelect(uploads: UploadedFile[]) {
+  if (externalVideos.value.length > 0) {
+    message.error("已添加视频，不能再上传图片");
+    return;
+  }
   const existing = new Set(existingUploadIds.value);
   const remaining = remainingCoverSlots.value;
   const available = uploads
@@ -407,6 +425,10 @@ async function executeUploadTask(task: UploadTask) {
 }
 
 function handleFileSelect(files: FileList | File[]) {
+  if (externalVideos.value.length > 0) {
+    message.error("已添加视频，不能再上传图片");
+    return;
+  }
   const fileArray = Array.from(files);
   const remaining = maxCoverImages.value - uploadTasks.value.length;
 
@@ -1114,12 +1136,16 @@ if (import.meta.client) {
               <CoverImageAddButton
                 v-if="uploadTasks.length < maxCoverImages"
                 :is-dragging="isDragging"
+                :disabled="externalVideos.length > 0"
+                title="已添加视频，不能再上传图片"
                 @click="openImagePicker"
               />
               <CoverVideoAddButton
                 v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS"
                 :is-dragging="false"
-                @click="isVideoInputVisible = true"
+                :disabled="uploadTasks.length > 0"
+                title="已上传图片，不能再添加视频"
+                @click="openVideoDialog"
               />
             </div>
             <div class="ik-media-extras">
@@ -1139,17 +1165,11 @@ if (import.meta.client) {
                 </button>
               </div>
             </div>
-            <div v-if="isVideoInputVisible" class="ik-media-add-row">
-              <input
-                v-model="videoInputUrl"
-                type="text"
-                class="ik-media-add-row__input"
-                placeholder="粘贴 B 站链接或 BV 号"
-                @keydown.enter.prevent="addExternalVideo"
-              />
-              <z-button type="button" size="small" @click="addExternalVideo">添加</z-button>
-              <z-button type="button" size="small" @click="isVideoInputVisible = false; videoInputUrl = ''">取消</z-button>
-            </div>
+            <BilibiliVideoDialog
+              v-model:visible="isVideoDialogVisible"
+              @confirm="onVideoDialogConfirm"
+              @cancel="isVideoDialogVisible = false"
+            />
           </div>
 
         </div>
@@ -1216,6 +1236,8 @@ if (import.meta.client) {
           v-if="uploadTasks.length < maxCoverImages"
           type="button"
           class="ik-mobile-cover-add"
+          :disabled="externalVideos.length > 0"
+          :title="externalVideos.length > 0 ? '已添加视频，不能再上传图片' : '添加图片'"
           aria-label="添加图片"
           @click="openImagePicker"
         >
@@ -2546,7 +2568,11 @@ if (import.meta.client) {
     cursor: pointer;
     transition: border-color 160ms ease, background 160ms ease;
   }
-  .ik-mobile-cover-add:active {
+  .ik-mobile-cover-add:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .ik-mobile-cover-add:active:not(:disabled) {
     background: #232323;
     border-color: #3a3a3a;
   }
