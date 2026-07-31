@@ -157,6 +157,7 @@ export interface ExternalVideo {
   page?: number | null;
   embedUrl?: string | null;
   coverUrl?: string | null;
+  coverLoadError?: boolean;
   title?: string | null;
   duration?: number | null;
 }

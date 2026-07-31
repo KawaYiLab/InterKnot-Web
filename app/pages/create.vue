@@ -251,6 +251,12 @@ function removeExternalVideo(index: number) {
   markDirty();
 }
 
+function handleVideoCoverError(event: Event, video: ExternalVideo) {
+  video.coverLoadError = true;
+  const target = event.target as HTMLImageElement | null;
+  if (target) target.style.display = "none";
+}
+
 /* ── Helpers ──────────────────────────────────────── */
 function buildSnapshot(): string {
   return JSON.stringify({
@@ -1151,15 +1157,16 @@ if (import.meta.client) {
                 class="ik-cover-thumb ik-cover-thumb--video"
               >
                 <img
-                  v-if="video.coverUrl"
+                  v-if="video.coverUrl && !video.coverLoadError"
                   :src="video.coverUrl"
                   :alt="video.title || 'B 站视频'"
                   class="ik-cover-thumb__img"
                   decoding="async"
                   draggable="false"
-                  @error="(($event.target as HTMLImageElement).style.display = 'none')"
+                  referrerpolicy="no-referrer"
+                  @error="handleVideoCoverError($event, video)"
                 />
-                <div v-if="!video.coverUrl" class="ik-cover-thumb__fallback">
+                <div v-if="!video.coverUrl || video.coverLoadError" class="ik-cover-thumb__fallback">
                   <FilmIcon class="ik-cover-thumb__fallback-icon" />
                   <span class="ik-cover-thumb__fallback-text">{{ video.bvid || `av${video.aid}` }}</span>
                 </div>
@@ -1321,15 +1328,16 @@ if (import.meta.client) {
           class="ik-mobile-cover-tile ik-mobile-cover-tile--video"
         >
           <img
-            v-if="video.coverUrl"
+            v-if="video.coverUrl && !video.coverLoadError"
             :src="video.coverUrl"
             :alt="video.title || 'B 站视频'"
             class="ik-mobile-cover-tile__img"
             decoding="async"
             draggable="false"
-            @error="(($event.target as HTMLImageElement).style.display = 'none')"
+            referrerpolicy="no-referrer"
+            @error="handleVideoCoverError($event, video)"
           />
-          <div v-if="!video.coverUrl" class="ik-mobile-cover-tile__fallback">
+          <div v-if="!video.coverUrl || video.coverLoadError" class="ik-mobile-cover-tile__fallback">
             <FilmIcon class="ik-mobile-cover-tile__fallback-icon" />
             <span class="ik-mobile-cover-tile__fallback-text">{{ video.bvid || `av${video.aid}` }}</span>
           </div>

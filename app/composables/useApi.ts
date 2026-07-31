@@ -460,6 +460,16 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     coverNsfw = firstCover?.nsfwStatus;
   }
 
+  if (!coverUrl && Array.isArray(data.externalVideos)) {
+    const firstVideoWithCover = data.externalVideos.find(
+      (v: unknown) => v && typeof v === "object" && (v as Record<string, unknown>).coverUrl,
+    ) as Record<string, unknown> | undefined;
+    if (firstVideoWithCover?.coverUrl && typeof firstVideoWithCover.coverUrl === "string") {
+      coverUrl = firstVideoWithCover.coverUrl;
+      covers = [{ url: coverUrl }];
+    }
+  }
+
   return {
     id: String(data.documentId || data.id || ""),
     title: String(data.title || "无标题"),
