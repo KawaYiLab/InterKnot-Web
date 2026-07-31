@@ -6,6 +6,7 @@ import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, isUserBlockedError, resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
+import { toCanonicalUrl, toThumbUrl } from "~/utils/image";
 import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
@@ -135,6 +136,9 @@ const postLikeCount = computed(() => post.value?.likesCount ?? 0);
 const postCommentCount = computed(() => post.value?.commentsCount ?? comments.value.length);
 
 const firstCover = computed(() => covers.value[0] ?? null);
+const firstCoverDisplayUrl = computed(() =>
+  firstCover.value?.url ? toCanonicalUrl(firstCover.value.url) : DEFAULT_COVER_IMAGE,
+);
 const coverAspectRatio = computed(() => {
   const c = firstCover.value;
   if (c?.width && c?.height && c.width > 0 && c.height > 0) return c.width / c.height;
@@ -150,7 +154,12 @@ const syncCommentInputHeight = async () => {
 };
 
 const openCoverPreview = () => {
-  const images = covers.value.map((c) => ({ src: c.url, width: c.width, height: c.height }));
+  const images = covers.value.map((c) => ({
+    src: toCanonicalUrl(c.url),
+    thumb: toThumbUrl(c.url),
+    width: c.width,
+    height: c.height,
+  }));
   if (images.length) openGallery(images, 0);
 };
 
@@ -1020,7 +1029,7 @@ onBeforeUnmount(() => {
                   :style="{ aspectRatio: String(coverAspectRatio) }"
                 >
                   <img
-                    :src="firstCover?.url || DEFAULT_COVER_IMAGE"
+                    :src="firstCoverDisplayUrl"
                     :alt="post.title"
                     class="ik-page__cover"
                     @click="openCoverPreview()"
