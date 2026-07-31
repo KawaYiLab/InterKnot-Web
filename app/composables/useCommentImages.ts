@@ -135,7 +135,7 @@ export function useCommentImages() {
         return false;
       }
       if (file.size > MAX_IMAGE_SIZE) {
-        message.error(`图片 ${file.name} 超过 10MB`);
+        message.error(`图片 ${file.name} 超过 30MB`);
         return false;
       }
       return true;

@@ -398,7 +398,7 @@ useHead({ title: "绳网等级" });
           </div>
         </div>
         <ul class="ik-lv__benefits-notes">
-          <li>单张图片大小上限 10MB，全等级一致。</li>
+          <li>单张图片大小上限 30MB，全等级一致。</li>
           <li>未通过入站考试（Lv.0）暂无法发布委托与评论。</li>
           <li>已发布的内容不受等级调整影响，仅在新建 / 编辑时生效。</li>
         </ul>

@@ -8,7 +8,7 @@ import {
   EllipsisVerticalIcon,
 } from "@heroicons/vue/24/outline";
 import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
-import { toThumbUrl } from "~/utils/image";
+import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
 
 import UserHoverCard from "./UserHoverCard.vue";
 import CommentBody from "./CommentBody.vue";
@@ -69,7 +69,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   if (!images?.length) return;
   openGallery(
     images.map((image) => ({
-      src: image.url,
+      src: toCanonicalUrl(image.url),
       thumb: toThumbUrl(image.url),
       width: image.width,
       height: image.height,
