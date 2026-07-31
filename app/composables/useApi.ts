@@ -13,6 +13,7 @@ import type {
   CoverImage,
   DailyExpStatus,
   DraftArticle,
+  ExternalVideo,
   ExamAttemptReview,
   ExamStartResult,
   ExamStatus,
@@ -464,6 +465,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     body: (data.body as string | undefined) || "",
     bodyText: (data.text as string | undefined) || "",
     rawBodyText: (data.rawBodyText as string | undefined) || "",
+    externalVideos: Array.isArray(data.externalVideos) ? (data.externalVideos as ExternalVideo[]) : undefined,
     covers,
     cover: coverUrl,
     coverNsfwStatus: coverNsfw,
@@ -518,6 +520,7 @@ function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
     title: String(raw.title || ""),
     text: String(raw.text || ""),
     editorState: Array.isArray(raw.editorState) ? raw.editorState : undefined,
+    externalVideos: Array.isArray(raw.externalVideos) ? (raw.externalVideos as ExternalVideo[]) : undefined,
     cover: covers,
     hasPublishedVersion: raw.hasPublishedVersion === true,
     category: toPostCategory(raw.category),
@@ -1391,6 +1394,7 @@ export function useApi() {
     title: string;
     text: string;
     editorState?: unknown[];
+    externalVideos?: ExternalVideo[];
     coverId?: string | string[];
     authorId?: string;
     isAnonymous?: boolean;
@@ -1400,6 +1404,7 @@ export function useApi() {
       title: payload.title,
       text: payload.text,
       editorState: payload.editorState,
+      externalVideos: payload.externalVideos ?? [],
     };
     if (payload.category) {
       data.category = payload.category;
@@ -1429,6 +1434,7 @@ export function useApi() {
       title?: string;
       text?: string;
       editorState?: unknown[];
+      externalVideos?: ExternalVideo[];
       coverId?: string | string[] | null;
       authorId?: string;
       isAnonymous?: boolean;
@@ -1439,6 +1445,7 @@ export function useApi() {
     if (payload.title !== undefined) data.title = payload.title;
     if (payload.text !== undefined) data.text = payload.text;
     data.editorState = payload.editorState;
+    data.externalVideos = payload.externalVideos ?? [];
     if (payload.category) data.category = payload.category;
     if (payload.coverId !== undefined) {
       data.cover = payload.coverId ?? [];

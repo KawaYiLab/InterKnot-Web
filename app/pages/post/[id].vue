@@ -1055,9 +1055,16 @@ onBeforeUnmount(() => {
                   class="ik-page__content"
                   v-html="bodyHtml"
                 ></div>
-                <p v-else class="ik-page__content" style="color: #808080">
+                <p v-else-if="!post.externalVideos?.length" class="ik-page__content" style="color: #808080">
                   啥都木有¯\(°_o)/¯
                 </p>
+                <div v-if="post.externalVideos?.length" class="ik-page__videos">
+                  <BilibiliPlayer
+                    v-for="(video, idx) in post.externalVideos"
+                    :key="`video-${idx}`"
+                    :video="video"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1743,6 +1750,13 @@ onBeforeUnmount(() => {
 }
 .ik-page__content :deep(table tbody tr:nth-child(even)) {
   background: #161616;
+}
+
+.ik-page__videos {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
 }
 
 /* ── Right Column ─────────────────────────────── */

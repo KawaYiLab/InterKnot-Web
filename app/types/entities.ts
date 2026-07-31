@@ -149,6 +149,15 @@ export interface CoverImage {
   nsfwScores?: Record<string, number>;
 }
 
+export interface ExternalVideo {
+  provider: string;
+  bvid?: string | null;
+  aid?: number | null;
+  p?: number | null;
+  page?: number | null;
+  embedUrl?: string | null;
+}
+
 /** 委托分类（频道）。GET /api/categories/list 返回完整列表。 */
 export interface Category {
   documentId?: string;
@@ -171,6 +180,7 @@ export interface Post {
   body?: string;
   bodyText?: string;
   rawBodyText?: string;
+  externalVideos?: ExternalVideo[];
   covers: CoverImage[];
   cover?: string;
   coverNsfwStatus?: NsfwStatus;
@@ -359,6 +369,7 @@ export interface DraftArticle {
   title: string;
   text: string;
   editorState?: unknown[];
+  externalVideos?: ExternalVideo[];
   cover?: CoverImage[];
   hasPublishedVersion: boolean;
   isAnonymous?: boolean;

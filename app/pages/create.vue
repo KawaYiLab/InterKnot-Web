@@ -4,6 +4,7 @@ import { useMessage } from "zenless-ui";
 import type {
   Category,
   DraftArticle,
+  ExternalVideo,
   UploadedFile,
   UploadTask,
   UploadStatus,
@@ -22,6 +23,7 @@ import {
   CheckIcon,
   PlusCircleIcon,
   InboxIcon,
+  FilmIcon,
 } from "@heroicons/vue/24/outline";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
@@ -53,6 +55,7 @@ if (import.meta.client && !auth.isLogin) {
 /* ── Reactive State ───────────────────────────────── */
 const title = ref("");
 const body = ref("");
+const externalVideos = ref<ExternalVideo[]>([]);
 const uploadTasks = ref<UploadTask[]>([]);
 const documentId = ref<string | null>(null);
 const isSavingDraft = ref(false);
@@ -64,6 +67,8 @@ const hasUnsavedChanges = ref(false);
 const isEditingPublished = ref(false);
 const isAnonymous = ref(false);
 const showImagePickerModal = ref(false);
+const isVideoInputVisible = ref(false);
+const videoInputUrl = ref("");
 
 /* ── 委托分类（频道）：发布委托必选，默认兜底「综合」 ── */
 const DEFAULT_CATEGORY_SLUG = "general";
@@ -128,6 +133,7 @@ const hasAnyContent = computed(
   () =>
     title.value.trim().length > 0 ||
     body.value.trim().length > 0 ||
+    externalVideos.value.length > 0 ||
     uploadedImages.value.length > 0,
 );
 
@@ -139,7 +145,7 @@ const canPublish = computed(
     !isCoverUploading.value &&
     !isBodyOverLimit.value &&
     title.value.trim().length > 0 &&
-    (body.value.trim().length > 0 || uploadedImages.value.length > 0),
+    (body.value.trim().length > 0 || externalVideos.value.length > 0 || uploadedImages.value.length > 0),
 );
 
 const coverPayload = computed(() => {
@@ -149,11 +155,90 @@ const coverPayload = computed(() => {
   return imgs.map((i) => i.id);
 });
 
+const MAX_EXTERNAL_VIDEOS = 5;
+const BVID_RE = /^BV[0-9A-Za-z]{10}$/;
+const AVID_RE = /^(?:av)?(\d+)$/i;
+const BILIBILI_URL_RE = /(?:bilibili\.com\/video\/(BV[0-9A-Za-z]{10})|bilibili\.com\/video\/(?:av)?(\d+))/i;
+
+function parseBilibiliVideo(input: string): ExternalVideo | null {
+  const raw = input.trim();
+  if (!raw) return null;
+
+  let bvid: string | undefined;
+  let aid: number | undefined;
+  let p: number | undefined;
+
+  const urlMatch = raw.match(BILIBILI_URL_RE);
+  if (urlMatch) {
+    if (urlMatch[1]) bvid = urlMatch[1];
+    else if (urlMatch[2]) aid = Number.parseInt(urlMatch[2], 10) || undefined;
+
+    const pMatch = raw.match(/[?&]p=(\d+)/);
+    if (pMatch?.[1]) {
+      const parsedP = Number.parseInt(pMatch[1], 10);
+      if (parsedP > 0) p = parsedP;
+    }
+  }
+
+  if (!bvid && !aid) {
+    const bvidMatch = raw.match(BVID_RE);
+    if (bvidMatch) {
+      bvid = bvidMatch[0];
+    } else {
+      const avidMatch = raw.match(AVID_RE);
+      if (avidMatch?.[1]) aid = Number.parseInt(avidMatch[1], 10) || undefined;
+    }
+  }
+
+  if (!bvid && !aid) return null;
+
+  const params = new URLSearchParams();
+  if (bvid) params.set("bvid", bvid);
+  if (aid) params.set("aid", String(aid));
+  if (p) {
+    params.set("p", String(p));
+    params.set("page", String(p));
+  }
+  params.set("autoplay", "0");
+  params.set("highQuality", "1");
+
+  return {
+    provider: "bilibili",
+    bvid: bvid ?? null,
+    aid: aid ?? null,
+    p: p ?? null,
+    page: p ?? null,
+    embedUrl: `https://player.bilibili.com/player.html?${params.toString()}`,
+  };
+}
+
+function addExternalVideo() {
+  const video = parseBilibiliVideo(videoInputUrl.value);
+  if (!video) {
+    message.error("无法识别该 B 站视频链接，请检查 BV 号或链接格式");
+    return;
+  }
+  if (externalVideos.value.length >= MAX_EXTERNAL_VIDEOS) {
+    message.error(`最多只能嵌入 ${MAX_EXTERNAL_VIDEOS} 个视频`);
+    return;
+  }
+  externalVideos.value.push(video);
+  videoInputUrl.value = "";
+  isVideoInputVisible.value = false;
+  markDirty();
+}
+
+function removeExternalVideo(index: number) {
+  externalVideos.value.splice(index, 1);
+  markDirty();
+}
+
 /* ── Helpers ──────────────────────────────────────── */
 function buildSnapshot(): string {
   return JSON.stringify({
     title: title.value.trim(),
     text: body.value.trim(),
+    externalVideos: externalVideos.value,
     cover: coverPayload.value,
     category: selectedCategory.value,
   });
@@ -182,6 +267,7 @@ const performSaveDraft = async (force = false) => {
     const payload = {
       title: title.value.trim(),
       text: body.value.trim(),
+      externalVideos: externalVideos.value,
       coverId: coverPayload.value,
       authorId: authorId || undefined,
       isAnonymous: isAnonymous.value || undefined,
@@ -598,6 +684,7 @@ function applyDraftToEditor(draft: DraftArticle) {
     isEditingPublished.value = !!draft.hasPublishedVersion;
     title.value = draft.title;
     body.value = draft.text;
+    externalVideos.value = draft.externalVideos ?? [];
     isAnonymous.value = !!draft.isAnonymous;
     selectedCategory.value = draft.category?.slug || DEFAULT_CATEGORY_SLUG;
 
@@ -633,6 +720,7 @@ function resetEditor() {
     documentId.value = null;
     title.value = "";
     body.value = "";
+    externalVideos.value = [];
     for (const task of uploadTasks.value) {
       URL.revokeObjectURL(task.previewUrl);
     }
@@ -960,6 +1048,57 @@ if (import.meta.client) {
                 class="ik-create-editor__body"
                 placeholder="请尽情发挥吧..."
               />
+            </div>
+          </div>
+
+          <!-- External Videos section -->
+          <div class="ik-create-section">
+            <div class="ik-create-section__head">
+              <span class="ik-create-section__label">
+                <FilmIcon style="width:14px;height:14px" />
+                视频
+                <span class="ik-create-section__count-pill">{{ externalVideos.length }}/{{ MAX_EXTERNAL_VIDEOS }}</span>
+              </span>
+              <span class="ik-create-section__hint">支持 B 站 BV 号或视频链接</span>
+            </div>
+            <div class="ik-external-videos">
+              <div
+                v-for="(video, idx) in externalVideos"
+                :key="`video-${idx}`"
+                class="ik-external-video-chip"
+              >
+                <span class="ik-external-video-chip__label">{{ video.bvid || `av${video.aid}` }}</span>
+                <button
+                  type="button"
+                  class="ik-external-video-chip__remove"
+                  aria-label="移除"
+                  @click="removeExternalVideo(idx)"
+                >
+                  <XMarkIcon style="width:12px;height:12px" />
+                </button>
+              </div>
+              <div v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS" class="ik-external-video-input">
+                <template v-if="isVideoInputVisible">
+                  <input
+                    v-model="videoInputUrl"
+                    type="text"
+                    class="ik-external-video-input__field"
+                    placeholder="粘贴 B 站链接或 BV 号"
+                    @keydown.enter.prevent="addExternalVideo"
+                  />
+                  <z-button type="button" size="small" @click="addExternalVideo">添加</z-button>
+                  <z-button type="button" size="small" @click="isVideoInputVisible = false; videoInputUrl = ''">取消</z-button>
+                </template>
+                <button
+                  v-else
+                  type="button"
+                  class="ik-external-video-input__add"
+                  @click="isVideoInputVisible = true"
+                >
+                  <PlusCircleIcon style="width:16px;height:16px" />
+                  添加 B 站视频
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1918,6 +2057,85 @@ if (import.meta.client) {
 .ik-create-editor__body :deep(.z-textarea__inner):focus {
   box-shadow: none;
   outline: none;
+}
+
+/* ── External Videos input ─────────────────────── */
+.ik-external-videos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ik-external-video-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(191, 255, 9, 0.12);
+  color: #BFFF09;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ik-external-video-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: #BFFF09;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.ik-external-video-chip__remove:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.ik-external-video-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 240px;
+}
+
+.ik-external-video-input__field {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #050505;
+  color: #e0e0e0;
+  font-size: 14px;
+  outline: none;
+}
+
+.ik-external-video-input__field:focus {
+  border-color: #fbfe00;
+  box-shadow: 0 0 0 1px #fbfe00;
+}
+
+.ik-external-video-input__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #888;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ik-external-video-input__add:hover {
+  border-color: #BFFF09;
+  color: #BFFF09;
 }
 
 /* ── Cover Grid (Flutter SliverGrid maxCrossAxisExtent=160) ── */
