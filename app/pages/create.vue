@@ -174,10 +174,11 @@ function buildBilibiliEmbedUrl(
     params.set("p", String(p));
     params.set("page", String(p));
   }
-  params.set("autoplay", "0");
-  params.set("danmaku", "0");
+  params.set("autoplay", "1");
+  params.set("danmaku", "1");
+  params.set("muted", "0");
+  params.set("fjw", "1");
   params.set("hideCoverInfo", "1");
-  // highQuality 参数在 embed 场景下通常由 B 站根据登录态决定，保留旧 player 兼容逻辑
   return `https://www.bilibili.com/blackboard/html5mobileplayer.html?${params.toString()}`;
 }
 
