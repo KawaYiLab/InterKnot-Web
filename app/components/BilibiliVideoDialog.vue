@@ -5,6 +5,7 @@ const emit = defineEmits<{
   cancel: [];
 }>();
 
+const URL_MAX = 300;
 const input = ref("");
 
 watch(visible, (v) => {
@@ -62,15 +63,24 @@ onBeforeUnmount(() => {
 
               <!-- Body -->
               <div class="ik-dialog__body">
-                <z-input
-                  v-model="input"
-                  placeholder="粘贴 B 站链接或 BV 号"
-                  clearable
-                  @keydown.enter="onConfirm"
-                />
-                <div class="ik-video-dialog__footer">
-                  <z-button :icon="{ error: '#ff4444' }" @click="onCancel">取消</z-button>
+                <IkZzzMarquee />
+                <div class="ik-edit-name__wrapper">
+                  <div class="ik-edit-name">
+                    <div class="ik-edit-name__field">
+                      <z-input
+                        v-model="input"
+                        :maxlength="URL_MAX"
+                        placeholder="粘贴 B 站链接或 BV 号"
+                        clearable
+                        @keydown.enter="onConfirm"
+                      />
+                    </div>
+                    <div class="ik-edit-name__meta">
+                      <span class="ik-edit-name__count">{{ input.trim().length }}/{{ URL_MAX }}</span>
+                    </div>
+                  </div>
                   <z-button
+                    class="ik-edit-name__submit"
                     :icon="{ success: '#00cc0d' }"
                     :disabled="!input.trim()"
                     @click="onConfirm"
@@ -89,7 +99,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* ════════════════════════════════════════════════
-   Overlay + Dialog shell (kept inline so the component is self-contained)
+   Overlay + Dialog shell (copied from ProfileSettingsModal / ConfirmDialog)
    ═══════════════════════════════════════════════ */
 .ik-overlay {
   position: fixed;
@@ -196,14 +206,54 @@ onBeforeUnmount(() => {
   border-radius: 0 0 18px 18px;
 }
 
-.ik-dialog__body :deep(.z-input) {
+/* ── Edit form (matches ProfileSettingsModal edit-name) ── */
+.ik-edit-name {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 32px 20px 45px;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 16px;
+}
+
+.ik-edit-name__field {
+  position: relative;
+}
+
+.ik-edit-name__field :deep(.z-input) {
   width: 100%;
 }
 
-.ik-video-dialog__footer {
+.ik-edit-name__meta {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
+  align-items: center;
+  gap: 8px;
+  margin-top: -6px;
+  width: 100%;
+}
+
+.ik-edit-name__count {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.ik-edit-name__wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.ik-edit-name__wrapper > :deep(.z-button) {
+  margin-top: -18px;
+  position: relative;
+  z-index: 1;
+  min-width: 70px;
 }
 </style>
