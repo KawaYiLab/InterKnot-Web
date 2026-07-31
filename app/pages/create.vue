@@ -1111,6 +1111,16 @@ if (import.meta.client) {
                   <XMarkIcon style="width:14px;height:14px" />
                 </button>
               </div>
+              <CoverImageAddButton
+                v-if="uploadTasks.length < maxCoverImages"
+                :is-dragging="isDragging"
+                @click="openImagePicker"
+              />
+              <CoverVideoAddButton
+                v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS"
+                :is-dragging="false"
+                @click="isVideoInputVisible = true"
+              />
             </div>
             <div class="ik-media-extras">
               <div
@@ -1129,38 +1139,16 @@ if (import.meta.client) {
                 </button>
               </div>
             </div>
-            <div class="ik-media-add-row">
-              <template v-if="isVideoInputVisible">
-                <input
-                  v-model="videoInputUrl"
-                  type="text"
-                  class="ik-media-add-row__input"
-                  placeholder="粘贴 B 站链接或 BV 号"
-                  @keydown.enter.prevent="addExternalVideo"
-                />
-                <z-button type="button" size="small" @click="addExternalVideo">添加</z-button>
-                <z-button type="button" size="small" @click="isVideoInputVisible = false; videoInputUrl = ''">取消</z-button>
-              </template>
-              <template v-else>
-                <button
-                  v-if="uploadTasks.length < maxCoverImages"
-                  type="button"
-                  class="ik-media-add-row__btn"
-                  @click="openImagePicker"
-                >
-                  <PhotoIcon style="width:16px;height:16px" />
-                  +图片
-                </button>
-                <button
-                  v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS"
-                  type="button"
-                  class="ik-media-add-row__btn"
-                  @click="isVideoInputVisible = true"
-                >
-                  <FilmIcon style="width:16px;height:16px" />
-                  +视频
-                </button>
-              </template>
+            <div v-if="isVideoInputVisible" class="ik-media-add-row">
+              <input
+                v-model="videoInputUrl"
+                type="text"
+                class="ik-media-add-row__input"
+                placeholder="粘贴 B 站链接或 BV 号"
+                @keydown.enter.prevent="addExternalVideo"
+              />
+              <z-button type="button" size="small" @click="addExternalVideo">添加</z-button>
+              <z-button type="button" size="small" @click="isVideoInputVisible = false; videoInputUrl = ''">取消</z-button>
             </div>
           </div>
 
