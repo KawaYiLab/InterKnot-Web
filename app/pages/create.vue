@@ -174,10 +174,8 @@ function buildBilibiliEmbedUrl(
     params.set("p", String(p));
     params.set("page", String(p));
   }
-  params.set("autoplay", "1");
-  params.set("danmaku", "1");
-  params.set("muted", "0");
-  params.set("fjw", "1");
+  params.set("autoplay", "0");
+  params.set("danmaku", "0");
   params.set("hideCoverInfo", "1");
   return `https://www.bilibili.com/blackboard/html5mobileplayer.html?${params.toString()}`;
 }
