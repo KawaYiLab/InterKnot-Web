@@ -1,17 +1,32 @@
 const IMAGE_HOST = "https://im.tiwat.cn";
 const LEGACY_IMAGE_HOST_RE = /^https?:\/\/image\.tiwat\.cn/;
 const LEGACY_THUMB_SUFFIX = "-small.webp";
-const WEBP_PROCESS = "format,webp/quality,q_80";
+const CDN_CGI_IMAGE_RE = /^https?:\/\/[^/]+\/cdn-cgi\/image\//;
 
-function getResizeProcess(width: number): string {
-  return `image_process=resize,w_${width}/${WEBP_PROCESS}`;
+const THUMB_OPTIONS = "format=webp,quality=80";
+
+function getThumbOptions(width = 360): string {
+  return `width=${width},${THUMB_OPTIONS}`;
 }
 
-function getNoResizeProcess(): string {
-  return `image_process=${WEBP_PROCESS}`;
+function getNoResizeOptions(): string {
+  return THUMB_OPTIONS;
 }
 
-function stripImageProcess(url: string): string {
+function isInlineUrl(url: string): boolean {
+  return url.startsWith("blob:") || url.startsWith("data:");
+}
+
+function stripLegacyThumbSuffix(url: string): string {
+  if (!url.includes(LEGACY_THUMB_SUFFIX)) return url;
+  const parts = url.split("?");
+  const path = parts[0] ?? "";
+  if (!path.endsWith(LEGACY_THUMB_SUFFIX)) return url;
+  const newPath = path.slice(0, -LEGACY_THUMB_SUFFIX.length);
+  return parts.length > 1 ? `${newPath}?${parts.slice(1).join("?")}` : newPath;
+}
+
+function stripImageProcessQuery(url: string): string {
   if (!url.includes("image_process=")) return url;
   const parts = url.split("?");
   const path = parts[0] ?? "";
@@ -24,22 +39,14 @@ function stripImageProcess(url: string): string {
   return params.length ? `${path}?${params.join("&")}` : path;
 }
 
-function isInlineUrl(url: string): boolean {
-  return url.startsWith("blob:") || url.startsWith("data:");
+function isCdnCgiImageUrl(url: string): boolean {
+  return CDN_CGI_IMAGE_RE.test(url);
 }
 
 function migrateImageUrl(url: string): string {
   if (isInlineUrl(url)) return url;
 
-  const parts = url.split("?");
-  let path = parts[0] ?? "";
-  const rest = parts.slice(1);
-  if (path.endsWith(LEGACY_THUMB_SUFFIX)) {
-    path = path.slice(0, -LEGACY_THUMB_SUFFIX.length);
-  }
-  const query = rest.length ? `?${rest.join("?")}` : "";
-
-  let clean = `${path}${query}`;
+  let clean = stripLegacyThumbSuffix(url);
   clean = clean.replace(/^\/\/image\.tiwat\.cn/, IMAGE_HOST);
   clean = clean.replace(LEGACY_IMAGE_HOST_RE, IMAGE_HOST);
 
@@ -52,6 +59,12 @@ function migrateImageUrl(url: string): string {
   }
 
   return clean;
+}
+
+function buildCdnCgiImageUrl(canonicalUrl: string, options: string): string {
+  const u = new URL(canonicalUrl);
+  u.pathname = `/cdn-cgi/image/${options}${u.pathname}`;
+  return u.toString();
 }
 
 /**
@@ -68,43 +81,57 @@ export function toMediaUrl(url: string | undefined): string {
 }
 
 /**
- * 返回「无 image_process 缩略图参数」的原图 URL，用于正文 / 详情大图。
+ * 返回「无 R2 图像转换参数」的原图 URL，用于正文 / 详情大图。
  */
 export function toCanonicalUrl(url: string | undefined): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
-  return stripImageProcess(migrateImageUrl(url));
+
+  let clean = migrateImageUrl(url);
+
+  try {
+    const u = new URL(clean);
+    if (u.pathname.startsWith("/cdn-cgi/image/")) {
+      u.pathname = u.pathname.replace(/^\/cdn-cgi\/image\/[^/]+\//, "/");
+      clean = u.toString();
+    }
+  } catch {
+    // ignore malformed URLs
+  }
+
+  clean = stripImageProcessQuery(clean);
+  return clean;
 }
 
 /**
- * 生成缩略图 URL：
+ * 生成缩略图 URL（R2 图像转换）：
  * - 本地 blob/data 预览不动
  * - 去掉旧七牛云的 -small.webp 后缀
  * - 将旧 image.tiwat.cn 域名迁移到新 R2 域名 im.tiwat.cn
- * - 避免重复追加 image_process
+ * - 避免重复追加 cdn-cgi/image 参数
  */
 export function toThumbUrl(url: string | undefined, width = 360): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
 
-  const clean = migrateImageUrl(url);
-  if (clean.includes("image_process=")) return clean;
+  let clean = migrateImageUrl(url);
+  if (isCdnCgiImageUrl(clean)) return clean;
 
-  const sep = clean.includes("?") ? "&" : "?";
-  return `${clean}${sep}${getResizeProcess(width)}`;
+  clean = stripImageProcessQuery(clean);
+  return buildCdnCgiImageUrl(clean, getThumbOptions(width));
 }
 
 /**
- * 保持原图尺寸，仅转换为 WebP 并压缩到 q_80 的 URL。
+ * 保持原图尺寸，仅转换为 WebP 并压缩到 quality=80 的 URL。
  * 名片等宽幅图片不适合缩略图时使用，避免被 resize 后模糊。
  */
 export function toNoResizeWebpUrl(url: string | undefined): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
 
-  const clean = migrateImageUrl(url);
-  if (clean.includes("image_process=")) return clean;
+  let clean = migrateImageUrl(url);
+  if (isCdnCgiImageUrl(clean)) return clean;
 
-  const sep = clean.includes("?") ? "&" : "?";
-  return `${clean}${sep}${getNoResizeProcess()}`;
+  clean = stripImageProcessQuery(clean);
+  return buildCdnCgiImageUrl(clean, getNoResizeOptions());
 }

@@ -1,22 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { toCanonicalUrl, toMediaUrl, toNoResizeWebpUrl, toThumbUrl } from "~/utils/image";
 
+const THUMB_PREFIX = "https://im.tiwat.cn/cdn-cgi/image/width=360,format=webp,quality=80";
+const WEBP_PREFIX = "https://im.tiwat.cn/cdn-cgi/image/format=webp,quality=80";
+
 describe("image url helpers", () => {
-  it("toThumbUrl appends image_process for new host", () => {
+  it("toThumbUrl appends R2 image transformation for new host", () => {
     expect(toThumbUrl("https://im.tiwat.cn/uploads/a.png")).toBe(
-      "https://im.tiwat.cn/uploads/a.png?image_process=resize,w_360/format,webp/quality,q_80",
+      `${THUMB_PREFIX}/uploads/a.png`,
     );
   });
 
   it("toThumbUrl migrates legacy host and strips -small.webp", () => {
     expect(toThumbUrl("https://image.tiwat.cn/uploads/a.png-small.webp")).toBe(
-      "https://im.tiwat.cn/uploads/a.png?image_process=resize,w_360/format,webp/quality,q_80",
+      `${THUMB_PREFIX}/uploads/a.png`,
     );
   });
 
   it("toThumbUrl is idempotent", () => {
-    const once =
-      "https://im.tiwat.cn/uploads/a.png?image_process=resize,w_360/format,webp/quality,q_80";
+    const once = `${THUMB_PREFIX}/uploads/a.png`;
     expect(toThumbUrl(once)).toBe(once);
   });
 
@@ -26,16 +28,20 @@ describe("image url helpers", () => {
   });
 
   it("toThumbUrl prefixes relative paths", () => {
-    expect(toThumbUrl("/uploads/a.png")).toBe(
-      "https://im.tiwat.cn/uploads/a.png?image_process=resize,w_360/format,webp/quality,q_80",
-    );
+    expect(toThumbUrl("/uploads/a.png")).toBe(`${THUMB_PREFIX}/uploads/a.png`);
   });
 
-  it("toCanonicalUrl returns full original without image_process", () => {
+  it("toCanonicalUrl returns full original without R2 image transformation", () => {
     expect(
       toCanonicalUrl(
         "https://image.tiwat.cn/uploads/a.png?x=1&image_process=resize,w_360/format,webp/quality,q_80",
       ),
+    ).toBe("https://im.tiwat.cn/uploads/a.png?x=1");
+  });
+
+  it("toCanonicalUrl strips R2 image transformation prefix", () => {
+    expect(
+      toCanonicalUrl(`${THUMB_PREFIX}/uploads/a.png?x=1`),
     ).toBe("https://im.tiwat.cn/uploads/a.png?x=1");
   });
 
@@ -48,7 +54,7 @@ describe("image url helpers", () => {
     expect(toCanonicalUrl("data:image/png;base64,abc")).toBe("data:image/png;base64,abc");
   });
 
-  it("toMediaUrl preserves image_process and migrates host", () => {
+  it("toMediaUrl preserves legacy image_process and migrates host", () => {
     expect(
       toMediaUrl(
         "https://image.tiwat.cn/uploads/a.png?x=1&image_process=resize,w_360/format,webp/quality,q_80",
@@ -58,25 +64,30 @@ describe("image url helpers", () => {
     );
   });
 
+  it("toMediaUrl preserves R2 image transformation prefix", () => {
+    expect(toMediaUrl(`${THUMB_PREFIX}/uploads/a.png?x=1`)).toBe(
+      `${THUMB_PREFIX}/uploads/a.png?x=1`,
+    );
+  });
+
   it("toMediaUrl prefixes relative paths", () => {
     expect(toMediaUrl("/uploads/a.png")).toBe("https://im.tiwat.cn/uploads/a.png");
   });
 
-  it("toNoResizeWebpUrl appends webp/quality process without resize", () => {
+  it("toNoResizeWebpUrl appends webp/quality transformation without resize", () => {
     expect(toNoResizeWebpUrl("https://im.tiwat.cn/uploads/a.png")).toBe(
-      "https://im.tiwat.cn/uploads/a.png?image_process=format,webp/quality,q_80",
+      `${WEBP_PREFIX}/uploads/a.png`,
     );
   });
 
-  it("toNoResizeWebpUrl is idempotent and preserves existing image_process", () => {
-    const once =
-      "https://im.tiwat.cn/uploads/a.png?image_process=format,webp/quality,q_80";
+  it("toNoResizeWebpUrl is idempotent", () => {
+    const once = `${WEBP_PREFIX}/uploads/a.png`;
     expect(toNoResizeWebpUrl(once)).toBe(once);
   });
 
-  it("toNoResizeWebpUrl migrates legacy host and preserves existing query", () => {
+  it("toNoResizeWebpUrl migrates legacy host and preserves query", () => {
     expect(toNoResizeWebpUrl("https://image.tiwat.cn/uploads/a.png-small.webp?x=1")).toBe(
-      "https://im.tiwat.cn/uploads/a.png?x=1&image_process=format,webp/quality,q_80",
+      `${WEBP_PREFIX}/uploads/a.png?x=1`,
     );
   });
 
