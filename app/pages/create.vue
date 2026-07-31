@@ -1051,64 +1051,12 @@ if (import.meta.client) {
             </div>
           </div>
 
-          <!-- External Videos section -->
-          <div class="ik-create-section">
-            <div class="ik-create-section__head">
-              <span class="ik-create-section__label">
-                <FilmIcon style="width:14px;height:14px" />
-                视频
-                <span class="ik-create-section__count-pill">{{ externalVideos.length }}/{{ MAX_EXTERNAL_VIDEOS }}</span>
-              </span>
-              <span class="ik-create-section__hint">支持 B 站 BV 号或视频链接</span>
-            </div>
-            <div class="ik-external-videos">
-              <div
-                v-for="(video, idx) in externalVideos"
-                :key="`video-${idx}`"
-                class="ik-external-video-chip"
-              >
-                <span class="ik-external-video-chip__label">{{ video.bvid || `av${video.aid}` }}</span>
-                <button
-                  type="button"
-                  class="ik-external-video-chip__remove"
-                  aria-label="移除"
-                  @click="removeExternalVideo(idx)"
-                >
-                  <XMarkIcon style="width:12px;height:12px" />
-                </button>
-              </div>
-              <div v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS" class="ik-external-video-input">
-                <template v-if="isVideoInputVisible">
-                  <input
-                    v-model="videoInputUrl"
-                    type="text"
-                    class="ik-external-video-input__field"
-                    placeholder="粘贴 B 站链接或 BV 号"
-                    @keydown.enter.prevent="addExternalVideo"
-                  />
-                  <z-button type="button" size="small" @click="addExternalVideo">添加</z-button>
-                  <z-button type="button" size="small" @click="isVideoInputVisible = false; videoInputUrl = ''">取消</z-button>
-                </template>
-                <button
-                  v-else
-                  type="button"
-                  class="ik-external-video-input__add"
-                  @click="isVideoInputVisible = true"
-                >
-                  <PlusCircleIcon style="width:16px;height:16px" />
-                  添加 B 站视频
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Covers section (grid layout) -->
+          <!-- Media section (images + videos) -->
           <div class="ik-create-section">
             <div class="ik-create-section__head">
               <span class="ik-create-section__label">
                 <PhotoIcon style="width:14px;height:14px" />
-                图片
-                <span class="ik-create-section__count-pill">{{ uploadTasks.length }}/{{ maxCoverImages }}</span>
+                媒体
               </span>
               <span class="ik-create-section__hint">第一张图片为封面</span>
             </div>
@@ -1163,11 +1111,56 @@ if (import.meta.client) {
                   <XMarkIcon style="width:14px;height:14px" />
                 </button>
               </div>
-              <CoverImageAddButton
-                v-if="uploadTasks.length < maxCoverImages"
-                :is-dragging="isDragging"
-                @click="openImagePicker"
-              />
+            </div>
+            <div class="ik-media-extras">
+              <div
+                v-for="(video, idx) in externalVideos"
+                :key="`video-${idx}`"
+                class="ik-external-video-chip"
+              >
+                <span class="ik-external-video-chip__label">{{ video.bvid || `av${video.aid}` }}</span>
+                <button
+                  type="button"
+                  class="ik-external-video-chip__remove"
+                  aria-label="移除"
+                  @click="removeExternalVideo(idx)"
+                >
+                  <XMarkIcon style="width:12px;height:12px" />
+                </button>
+              </div>
+            </div>
+            <div class="ik-media-add-row">
+              <template v-if="isVideoInputVisible">
+                <input
+                  v-model="videoInputUrl"
+                  type="text"
+                  class="ik-media-add-row__input"
+                  placeholder="粘贴 B 站链接或 BV 号"
+                  @keydown.enter.prevent="addExternalVideo"
+                />
+                <z-button type="button" size="small" @click="addExternalVideo">添加</z-button>
+                <z-button type="button" size="small" @click="isVideoInputVisible = false; videoInputUrl = ''">取消</z-button>
+              </template>
+              <template v-else>
+                <button
+                  v-if="uploadTasks.length < maxCoverImages"
+                  type="button"
+                  class="ik-media-add-row__btn"
+                  @click="openImagePicker"
+                >
+                  <PhotoIcon style="width:16px;height:16px" />
+                  +图片
+                </button>
+                <button
+                  v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS"
+                  type="button"
+                  class="ik-media-add-row__btn"
+                  @click="isVideoInputVisible = true"
+                >
+                  <FilmIcon style="width:16px;height:16px" />
+                  +视频
+                </button>
+              </template>
             </div>
           </div>
 
@@ -2059,12 +2052,13 @@ if (import.meta.client) {
   outline: none;
 }
 
-/* ── External Videos input ─────────────────────── */
-.ik-external-videos {
+/* ── External Videos ─────────────────────── */
+.ik-media-extras {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+  margin-top: 12px;
 }
 
 .ik-external-video-chip {
@@ -2095,17 +2089,38 @@ if (import.meta.client) {
   background: rgba(0, 0, 0, 0.3);
 }
 
-.ik-external-video-input {
-  display: inline-flex;
+.ik-media-add-row {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 240px;
+  gap: 12px;
+  margin-top: 14px;
 }
 
-.ik-external-video-input__field {
+.ik-media-add-row__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 200ms, color 200ms, background 200ms;
+}
+
+.ik-media-add-row__btn:hover {
+  border-color: #BFFF09;
+  color: #BFFF09;
+  background: rgba(191, 255, 9, 0.08);
+}
+
+.ik-media-add-row__input {
   flex: 1;
-  min-width: 0;
+  min-width: 180px;
   padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -2115,27 +2130,9 @@ if (import.meta.client) {
   outline: none;
 }
 
-.ik-external-video-input__field:focus {
+.ik-media-add-row__input:focus {
   border-color: #fbfe00;
   box-shadow: 0 0 0 1px #fbfe00;
-}
-
-.ik-external-video-input__add {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: #888;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.ik-external-video-input__add:hover {
-  border-color: #BFFF09;
-  color: #BFFF09;
 }
 
 /* ── Cover Grid (Flutter SliverGrid maxCrossAxisExtent=160) ── */
