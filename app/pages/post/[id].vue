@@ -12,6 +12,7 @@ import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { useCommentSeek } from "~/composables/useCommentSeek";
+import BilibiliPlayer from "~/components/BilibiliPlayer.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -1022,23 +1023,35 @@ onBeforeUnmount(() => {
           <!-- 左栏：封面 + 正文 -->
           <div class="ik-page__left">
             <div class="ik-page__left-scroll" ref="scrollRef">
-              <!-- 封面 -->
-              <div v-if="hasCovers" class="ik-page__cover-wrap">
-                <div
-                  class="ik-page__cover-border"
-                  :style="{ aspectRatio: String(coverAspectRatio) }"
-                >
-                  <img
-                    :src="firstCoverDisplayUrl"
-                    :alt="post.title"
-                    class="ik-page__cover"
-                    @click="openCoverPreview()"
-                    @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
-                  />
-                  <span v-if="covers.length > 1" class="ik-page__cover-count">
-                    {{ covers.length }} 张
-                  </span>
-                </div>
+              <!-- 封面 / 视频 -->
+              <div class="ik-page__cover-wrap" v-if="hasCovers || post.externalVideos?.length">
+                <template v-if="hasCovers">
+                  <div
+                    class="ik-page__cover-border"
+                    :style="{ aspectRatio: String(coverAspectRatio) }"
+                  >
+                    <img
+                      :src="firstCoverDisplayUrl"
+                      :alt="post.title"
+                      class="ik-page__cover"
+                      @click="openCoverPreview()"
+                      @error="($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
+                    />
+                    <span v-if="covers.length > 1" class="ik-page__cover-count">
+                      {{ covers.length }} 张
+                    </span>
+                  </div>
+                </template>
+                <template v-else-if="post.externalVideos?.length">
+                  <div
+                    v-for="(video, idx) in post.externalVideos"
+                    :key="`video-${idx}`"
+                    class="ik-page__cover-border"
+                    :style="{ aspectRatio: String(coverAspectRatio) }"
+                  >
+                    <BilibiliPlayer :video="video" />
+                  </div>
+                </template>
               </div>
 
               <!-- 正文 -->
@@ -1058,7 +1071,7 @@ onBeforeUnmount(() => {
                 <p v-else-if="!post.externalVideos?.length" class="ik-page__content" style="color: #808080">
                   啥都木有¯\(°_o)/¯
                 </p>
-                <div v-if="post.externalVideos?.length" class="ik-page__videos">
+                <div v-if="hasCovers && post.externalVideos?.length" class="ik-page__videos">
                   <BilibiliPlayer
                     v-for="(video, idx) in post.externalVideos"
                     :key="`video-${idx}`"

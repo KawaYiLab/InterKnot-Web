@@ -21,6 +21,7 @@ import { useCommentSeek } from "~/composables/useCommentSeek";
 import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
+import BilibiliPlayer from "./BilibiliPlayer.vue";
 import UserHoverCard from "./UserHoverCard.vue";
 import IkZzzMarquee from "./IkZzzMarquee.vue";
 import CommentItem from "./CommentItem.vue";
@@ -251,6 +252,8 @@ const onCoverImageLoad = (i: number) => {
 const coverAspectRatio = computed(() => {
   const c = firstCover.value;
   if (c?.width && c?.height && c.width > 0 && c.height > 0) return c.width / c.height;
+  // 无图片封面但有 B 站视频时，按 16:9 展示播放器。
+  if (post.value?.externalVideos?.length && !hasCovers.value) return 16 / 9;
   // 无真实封面时优先沿用骨架阶段使用的 coverHint，避免骨架→默认占位图之间的高度跳动。
   if (props.coverHint && props.coverHint > 0) return props.coverHint;
   return 643 / 408;
@@ -1266,14 +1269,14 @@ onBeforeUnmount(() => {
                 <!-- 左栏：封面 + 正文 -->
                 <div class="ik-dialog__left">
                   <div class="ik-dialog__left-scroll" ref="scrollRef">
-                    <!-- 封面 -->
+                    <!-- 封面 / 视频 -->
                     <div class="ik-dialog__cover-wrap">
                       <div
                         class="ik-dialog__cover-border"
                         :style="{ aspectRatio: String(coverAspectRatio) }"
                       >
                         <!-- 单张封面 -->
-                        <template v-if="!hasCovers || covers.length === 1">
+                        <template v-if="hasCovers && covers.length === 1">
                           <div v-if="coverPreviewSrc(0)" class="ik-dialog__cover-preview">
                             <img
                               :ref="setLoadedPreviewImage"
@@ -1287,12 +1290,12 @@ onBeforeUnmount(() => {
                           <NsfwImage
                             :src="firstCover ? coverDisplaySrc(firstCover.url) : DEFAULT_COVER_IMAGE"
                             :status="firstCover?.nsfwStatus"
-                            :alt="hasCovers ? post.title : 'default cover'"
+                            :alt="post.title"
                             img-class="ik-dialog__cover"
                             loading="eager"
                             decoding="async"
                             @load="onCoverImageLoad(0)"
-                            @click="hasCovers && openCoverPreview(0)"
+                            @click="openCoverPreview(0)"
                             @error="onCoverImageLoad(0); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
                           />
                           <div
@@ -1302,8 +1305,8 @@ onBeforeUnmount(() => {
                           ></div>
                         </template>
 
-                        <!-- 多图轮播：使用 Embla Carousel，鼠标/触摸统一走合成器动画 -->
-                        <template v-else>
+                        <!-- 多图轮播 -->
+                        <template v-else-if="hasCovers">
                           <div
                             ref="emblaRef"
                             class="ik-dialog__cover-scroller"
@@ -1385,6 +1388,32 @@ onBeforeUnmount(() => {
                             {{ coverIndex + 1 }} / {{ covers.length }}
                           </span>
                         </template>
+
+                        <!-- 无图片封面但有 B 站视频：在封面区域直接放播放器 -->
+                        <template v-else-if="post.externalVideos?.length">
+                          <BilibiliPlayer
+                            v-for="(video, idx) in post.externalVideos"
+                            :key="`video-${idx}`"
+                            :video="video"
+                          />
+                        </template>
+
+                        <!-- 默认占位图 -->
+                        <template v-else>
+                          <NsfwImage
+                            :src="DEFAULT_COVER_IMAGE"
+                            alt="default cover"
+                            img-class="ik-dialog__cover"
+                            loading="eager"
+                            decoding="async"
+                            @load="onCoverImageLoad(0)"
+                          />
+                          <div
+                            v-if="!isCoverImageLoaded(0)"
+                            class="ik-skel ik-dialog__cover-skel"
+                            aria-hidden="true"
+                          ></div>
+                        </template>
                       </div>
                     </div>
 
@@ -1405,7 +1434,7 @@ onBeforeUnmount(() => {
                       <p v-else-if="!post.externalVideos?.length" class="ik-dialog__content" style="color: #808080">
                         啥都木有¯\(°_o)/¯
                       </p>
-                      <div v-if="post.externalVideos?.length" class="ik-dialog__videos">
+                      <div v-if="hasCovers && post.externalVideos?.length" class="ik-dialog__videos">
                         <BilibiliPlayer
                           v-for="(video, idx) in post.externalVideos"
                           :key="`video-${idx}`"

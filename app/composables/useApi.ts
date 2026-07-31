@@ -445,7 +445,9 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     coverW = typeof data.coverWidth === "number" ? data.coverWidth : undefined;
     coverH = typeof data.coverHeight === "number" ? data.coverHeight : undefined;
     coverNsfw = parseNsfwStatus(data.coverNsfwStatus);
-    covers = coverUrl ? [{ url: coverUrl, width: coverW, height: coverH, nsfwStatus: coverNsfw }] : [];
+    const externalVideos = Array.isArray(data.externalVideos) ? (data.externalVideos as ExternalVideo[]) : [];
+    const isVideoCover = coverUrl && externalVideos.length > 0 && coverUrl === externalVideos[0]?.coverUrl;
+    covers = coverUrl && !isVideoCover ? [{ url: coverUrl, width: coverW, height: coverH, nsfwStatus: coverNsfw }] : [];
   } else {
     covers =
       extractAllMediaMeta(data.cover, apiBaseUrl).length
@@ -466,7 +468,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     ) as Record<string, unknown> | undefined;
     if (firstVideoWithCover?.coverUrl && typeof firstVideoWithCover.coverUrl === "string") {
       coverUrl = firstVideoWithCover.coverUrl;
-      covers = [{ url: coverUrl }];
+      covers = [];
     }
   }
 
