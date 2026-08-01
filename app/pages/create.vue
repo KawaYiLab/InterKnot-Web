@@ -70,6 +70,21 @@ const isAnonymous = ref(false);
 const showImagePickerModal = ref(false);
 const isVideoDialogVisible = ref(false);
 
+// 鼠标悬停/聚焦在「添加图片」或「添加视频」上时，高亮对应类型并禁用另一个入口
+const hoveredMediaType = ref<"image" | "video" | null>(null);
+const activeMediaType = computed(() => {
+  if (isVideoDialogVisible.value || hoveredMediaType.value === "video") return "video";
+  if (showImagePickerModal.value || hoveredMediaType.value === "image") return "image";
+  return null;
+});
+
+function onMediaEnter(type: "image" | "video") {
+  hoveredMediaType.value = type;
+}
+function onMediaLeave(type: "image" | "video") {
+  if (hoveredMediaType.value === type) hoveredMediaType.value = null;
+}
+
 /* ── 委托分类（频道）：发布委托必选，默认兜底「综合」 ── */
 const DEFAULT_CATEGORY_SLUG = "general";
 const categories = ref<Category[]>([]);
@@ -155,7 +170,7 @@ const coverPayload = computed(() => {
   return imgs.map((i) => i.id);
 });
 
-const MAX_EXTERNAL_VIDEOS = 5;
+const MAX_EXTERNAL_VIDEOS = 1;
 const BVID_RE = /^BV[0-9A-Za-z]{10}$/;
 const AVID_RE = /^(?:av)?(\d+)$/i;
 const BILIBILI_URL_RE = /(?:bilibili\.com\/video\/(BV[0-9A-Za-z]{10})|bilibili\.com\/video\/(?:av)?(\d+))/i;
@@ -1197,13 +1212,23 @@ if (import.meta.client) {
                 </button>
               </div>
               <CoverImageAddButton
-                v-if="uploadTasks.length < maxCoverImages && externalVideos.length === 0"
+                v-if="uploadTasks.length < maxCoverImages"
                 :is-dragging="isDragging"
+                :disabled="activeMediaType === 'video' || externalVideos.length > 0"
+                @mouseenter="onMediaEnter('image')"
+                @mouseleave="onMediaLeave('image')"
+                @focus="onMediaEnter('image')"
+                @blur="onMediaLeave('image')"
                 @click="openImagePicker"
               />
               <CoverVideoAddButton
                 v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS && uploadTasks.length === 0"
                 :is-dragging="false"
+                :disabled="activeMediaType === 'image'"
+                @mouseenter="onMediaEnter('video')"
+                @mouseleave="onMediaLeave('video')"
+                @focus="onMediaEnter('video')"
+                @blur="onMediaLeave('video')"
                 @click="openVideoDialog"
               />
             </div>
@@ -1275,11 +1300,16 @@ if (import.meta.client) {
       <!-- Cover strip (horizontal scroll) -->
       <div class="ik-mobile-cover-strip">
         <button
-          v-if="uploadTasks.length < maxCoverImages && externalVideos.length === 0"
+          v-if="uploadTasks.length < maxCoverImages"
           type="button"
           class="ik-mobile-cover-add"
           :title="'添加图片'"
           aria-label="添加图片"
+          :disabled="activeMediaType === 'video' || externalVideos.length > 0"
+          @mouseenter="onMediaEnter('image')"
+          @mouseleave="onMediaLeave('image')"
+          @focus="onMediaEnter('image')"
+          @blur="onMediaLeave('image')"
           @click="openImagePicker"
         >
           <PhotoIcon class="ik-mobile-cover-add__icon" />
@@ -1289,6 +1319,11 @@ if (import.meta.client) {
           type="button"
           class="ik-mobile-cover-add"
           aria-label="添加视频"
+          :disabled="activeMediaType === 'image'"
+          @mouseenter="onMediaEnter('video')"
+          @mouseleave="onMediaLeave('video')"
+          @focus="onMediaEnter('video')"
+          @blur="onMediaLeave('video')"
           @click="openVideoDialog"
         >
           <FilmIcon class="ik-mobile-cover-add__icon" />
