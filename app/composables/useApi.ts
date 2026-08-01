@@ -5,6 +5,7 @@ import type {
   Author,
   Avatar,
   AvatarType,
+  BilibiliVideoInfo,
   BlockedUser,
   BusinessCard,
   BusinessCardType,
@@ -13,6 +14,7 @@ import type {
   CoverImage,
   DailyExpStatus,
   DraftArticle,
+  ExternalVideo,
   ExamAttemptReview,
   ExamStartResult,
   ExamStatus,
@@ -443,7 +445,9 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     coverW = typeof data.coverWidth === "number" ? data.coverWidth : undefined;
     coverH = typeof data.coverHeight === "number" ? data.coverHeight : undefined;
     coverNsfw = parseNsfwStatus(data.coverNsfwStatus);
-    covers = coverUrl ? [{ url: coverUrl, width: coverW, height: coverH, nsfwStatus: coverNsfw }] : [];
+    const externalVideos = Array.isArray(data.externalVideos) ? (data.externalVideos as ExternalVideo[]) : [];
+    const isVideoCover = coverUrl && externalVideos.length > 0 && coverUrl === externalVideos[0]?.coverUrl;
+    covers = coverUrl && !isVideoCover ? [{ url: coverUrl, width: coverW, height: coverH, nsfwStatus: coverNsfw }] : [];
   } else {
     covers =
       extractAllMediaMeta(data.cover, apiBaseUrl).length
@@ -458,12 +462,23 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     coverNsfw = firstCover?.nsfwStatus;
   }
 
+  if (!coverUrl && Array.isArray(data.externalVideos)) {
+    const firstVideoWithCover = data.externalVideos.find(
+      (v: unknown) => v && typeof v === "object" && (v as Record<string, unknown>).coverUrl,
+    ) as Record<string, unknown> | undefined;
+    if (firstVideoWithCover?.coverUrl && typeof firstVideoWithCover.coverUrl === "string") {
+      coverUrl = firstVideoWithCover.coverUrl;
+      covers = [];
+    }
+  }
+
   return {
     id: String(data.documentId || data.id || ""),
     title: String(data.title || "无标题"),
     body: (data.body as string | undefined) || "",
     bodyText: (data.text as string | undefined) || "",
     rawBodyText: (data.rawBodyText as string | undefined) || "",
+    externalVideos: Array.isArray(data.externalVideos) ? (data.externalVideos as ExternalVideo[]) : undefined,
     covers,
     cover: coverUrl,
     coverNsfwStatus: coverNsfw,
@@ -518,6 +533,7 @@ function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
     title: String(raw.title || ""),
     text: String(raw.text || ""),
     editorState: Array.isArray(raw.editorState) ? raw.editorState : undefined,
+    externalVideos: Array.isArray(raw.externalVideos) ? (raw.externalVideos as ExternalVideo[]) : undefined,
     cover: covers,
     hasPublishedVersion: raw.hasPublishedVersion === true,
     category: toPostCategory(raw.category),
@@ -1387,10 +1403,58 @@ export function useApi() {
     );
   };
 
+  const getBilibiliInfo = async (
+    bvid?: string,
+    aid?: number,
+  ): Promise<BilibiliVideoInfo | null> => {
+    try {
+      const query: Record<string, string> = {};
+      if (bvid) query.bvid = bvid;
+      else if (aid) query.aid = String(aid);
+      const response = await $api('/api/articles/bilibili-info', { query });
+      const raw = (response as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
+      if (!raw) return null;
+      const pages = Array.isArray(raw.pages)
+        ? raw.pages
+            .map((p: unknown) => {
+              if (!p || typeof p !== 'object') return null;
+              const item = p as Record<string, unknown>;
+              const cid = typeof item.cid === 'number' ? item.cid : undefined;
+              const page = typeof item.page === 'number' ? item.page : undefined;
+              if (cid === undefined || page === undefined) return null;
+              return {
+                cid,
+                page,
+                part: typeof item.part === 'string' ? item.part : undefined,
+                duration: typeof item.duration === 'number' ? item.duration : undefined,
+              };
+            })
+            .filter((p) => p !== null) as { cid: number; page: number; part?: string; duration?: number }[]
+        : undefined;
+      return {
+        bvid: typeof raw.bvid === 'string' ? raw.bvid : undefined,
+        aid: typeof raw.aid === 'number' ? raw.aid : undefined,
+        title: typeof raw.title === 'string' ? raw.title : undefined,
+        pic: typeof raw.pic === 'string' ? raw.pic : undefined,
+        duration: typeof raw.duration === 'number' ? raw.duration : undefined,
+        cid: typeof raw.cid === 'number' ? raw.cid : undefined,
+        videos: typeof raw.videos === 'number' ? raw.videos : undefined,
+        pages,
+        owner:
+          raw.owner && typeof raw.owner === 'object'
+            ? (raw.owner as { name?: string; mid?: number })
+            : undefined,
+      };
+    } catch {
+      return null;
+    }
+  };
+
   const createArticleDraft = async (payload: {
     title: string;
     text: string;
     editorState?: unknown[];
+    externalVideos?: ExternalVideo[];
     coverId?: string | string[];
     authorId?: string;
     isAnonymous?: boolean;
@@ -1400,6 +1464,7 @@ export function useApi() {
       title: payload.title,
       text: payload.text,
       editorState: payload.editorState,
+      externalVideos: payload.externalVideos ?? [],
     };
     if (payload.category) {
       data.category = payload.category;
@@ -1429,6 +1494,7 @@ export function useApi() {
       title?: string;
       text?: string;
       editorState?: unknown[];
+      externalVideos?: ExternalVideo[];
       coverId?: string | string[] | null;
       authorId?: string;
       isAnonymous?: boolean;
@@ -1439,6 +1505,7 @@ export function useApi() {
     if (payload.title !== undefined) data.title = payload.title;
     if (payload.text !== undefined) data.text = payload.text;
     data.editorState = payload.editorState;
+    data.externalVideos = payload.externalVideos ?? [];
     if (payload.category) data.category = payload.category;
     if (payload.coverId !== undefined) {
       data.cover = payload.coverId ?? [];
@@ -2209,6 +2276,7 @@ export function useApi() {
     getProfile,
     getProfileArticles,
     getProfileComments,
+    getBilibiliInfo,
     createArticleDraft,
     updateArticleDraft,
     publishArticleDraft,

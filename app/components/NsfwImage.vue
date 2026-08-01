@@ -108,6 +108,7 @@ function onRootClick(event: MouseEvent) {
         :decoding="decoding"
         :fetchpriority="fetchpriority"
         :draggable="draggableAttr"
+        referrerpolicy="no-referrer"
         @load="onLoad"
         @error="onError"
       />

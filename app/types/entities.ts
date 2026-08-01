@@ -149,6 +149,39 @@ export interface CoverImage {
   nsfwScores?: Record<string, number>;
 }
 
+export interface ExternalVideo {
+  provider: string;
+  bvid?: string | null;
+  aid?: number | null;
+  cid?: number | null;
+  p?: number | null;
+  page?: number | null;
+  embedUrl?: string | null;
+  coverUrl?: string | null;
+  coverLoadError?: boolean;
+  title?: string | null;
+  duration?: number | null;
+}
+
+export interface BilibiliPage {
+  cid: number;
+  page: number;
+  part?: string;
+  duration?: number;
+}
+
+export interface BilibiliVideoInfo {
+  bvid?: string;
+  aid?: number;
+  title?: string;
+  pic?: string;
+  duration?: number;
+  cid?: number;
+  videos?: number;
+  pages?: BilibiliPage[];
+  owner?: { name?: string; mid?: number };
+}
+
 /** 委托分类（频道）。GET /api/categories/list 返回完整列表。 */
 export interface Category {
   documentId?: string;
@@ -171,6 +204,7 @@ export interface Post {
   body?: string;
   bodyText?: string;
   rawBodyText?: string;
+  externalVideos?: ExternalVideo[];
   covers: CoverImage[];
   cover?: string;
   coverNsfwStatus?: NsfwStatus;
@@ -359,6 +393,7 @@ export interface DraftArticle {
   title: string;
   text: string;
   editorState?: unknown[];
+  externalVideos?: ExternalVideo[];
   cover?: CoverImage[];
   hasPublishedVersion: boolean;
   isAnonymous?: boolean;
