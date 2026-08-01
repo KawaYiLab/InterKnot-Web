@@ -18,6 +18,7 @@
 import { computed, type ComputedRef, type Ref } from "vue";
 import type { ApiClientError } from "~/types/api";
 import type {
+  AiWorkflowEvent,
   DmConversationSummary,
   DmMessage,
   DmMessageKind,
@@ -112,6 +113,9 @@ interface UseDmConversations {
   /** 该消息是否正在流式接收中（3.2.3），用于跳过打字机、直接展示累计文本 */
   isStreamingMessage: (documentId: string) => boolean;
 
+  /** AI 工作流实时事件（3.3）：流式生成期间按 messageId 聚合的事件序列 */
+  workflowEventsOf: (messageId: string) => AiWorkflowEvent[];
+
   markConversationAsRead: (id: string, opts?: { force?: boolean }) => Promise<void>;
   /** 一键已读：清零所有会话（真实 DM + 通知聚合的 pseudo 会话）的未读 */
   markAllAsRead: () => Promise<void>;
@@ -124,6 +128,12 @@ interface UseDmConversations {
 
   /** 重置 AI 对话上下文（3.3.4）：写入 system 分界消息，等效清空记忆开新话题 */
   resetContext: (id: string) => Promise<void>;
+
+  /** 停止 AI 流式生成（2.1）：messageId 为流式占位消息 documentId */
+  stopAiStream: (messageId: string) => Promise<void>;
+
+  /** 重新生成 AI 回复（2.2）：messageId 为会话最后一条 AI 回复 documentId */
+  regenerateAiReply: (messageId: string) => Promise<void>;
 
   /** 发送 typing 状态（节流由调用方控制） */
   sendTyping: (conversationId: string) => void;
@@ -174,6 +184,13 @@ export function useDmConversations(): UseDmConversations {
   const streamingMessageIds = useState<Set<string>>(
     "dm:streamingMessageIds",
     () => new Set(),
+  );
+
+  // AI 工作流（3.3）：流式生成期间的实时事件聚合，messageId → 事件序列。
+  // 定稿（streamingDone）时事件已随消息 workflow 字段落库，实时缓存即清除。
+  const workflowByMessageId = useState<Record<string, AiWorkflowEvent[]>>(
+    "dm:workflowEvents",
+    () => ({}),
   );
 
   const { $api } = useNuxtApp();
@@ -633,11 +650,39 @@ export function useDmConversations(): UseDmConversations {
     });
   }
 
+  /**
+   * 停止 AI 流式生成（2.1）：服务端写入 Redis 停止标志，worker 轮询到后
+   * abort LLM 流并用已生成文本定稿（走正常 streamingDone 事件收尾）。
+   */
+  async function stopAiStream(messageId: string): Promise<void> {
+    await $api("/api/dm/ai/stop", {
+      method: "POST",
+      body: { messageId },
+    });
+  }
+
+  /**
+   * 重新生成 AI 回复（2.2）：服务端软删旧回复（WS message.deleted 会让本地
+   * 气泡消失）并按原触发消息重新入队，新占位消息随 message.created 到达。
+   */
+  async function regenerateAiReply(messageId: string): Promise<void> {
+    await $api("/api/dm/ai/regenerate", {
+      method: "POST",
+      body: { messageId },
+    });
+  }
+
   // ── WS 事件处理 ───────────────────────────────────────
   interface MessageCreatedData { message: DmMessage; streaming?: boolean }
   // streamingDone=true 表示这是流式回复「定稿」事件（占位消息补全），
   // 而非用户真正的编辑——此时不应写入 editedAt，否则气泡会误显示「(已编辑)」。
-  interface MessageEditedData { content: string; editedAt?: string | null; streamingDone?: boolean }
+  interface MessageEditedData {
+    content: string;
+    editedAt?: string | null;
+    streamingDone?: boolean;
+    /** 定稿事件附带的完整消息（含 workflow 事件序列，3.2） */
+    message?: DmMessage;
+  }
   interface MessageDeletedData { deletedAt: string }
   interface ConversationReadData { lastReadAt: string }
   interface ConversationUpdatedData { title?: string }
@@ -751,6 +796,15 @@ export function useDmConversations(): UseDmConversations {
     if (!bucket?.items?.length) return;
     // 流式定稿不是真编辑：保留原 editedAt（占位消息为 null），避免误显示「(已编辑)」。
     const isStreamingFinalize = data.streamingDone === true;
+    // 定稿时把落库的 workflow 事件序列写入消息（权威版本），实时缓存不再需要。
+    // 落库序列缺失时（如广播裁剪）退回实时缓存，保证时间线不消失。
+    const finalWorkflow = isStreamingFinalize
+      ? (Array.isArray(data.message?.workflow) && data.message.workflow.length > 0
+          ? data.message.workflow
+          : workflowByMessageId.value[mid]?.length
+            ? workflowByMessageId.value[mid]
+            : undefined)
+      : undefined;
     patchMessageState(cid, {
       items: bucket.items.map((m) =>
         m.documentId === mid
@@ -758,10 +812,29 @@ export function useDmConversations(): UseDmConversations {
               ...m,
               content: data.content,
               ...(isStreamingFinalize ? {} : { editedAt: data.editedAt ?? null }),
+              ...(finalWorkflow ? { workflow: finalWorkflow } : {}),
             }
           : m,
       ),
     });
+    if (isStreamingFinalize && workflowByMessageId.value[mid]) {
+      const next = { ...workflowByMessageId.value };
+      delete next[mid];
+      workflowByMessageId.value = next;
+    }
+  };
+
+  // AI 工作流事件（3.3）：按 messageId 聚合（seq 去重），驱动时间线实时推进。
+  const onMessageWorkflow = (event: DmWsEvent<{ event: AiWorkflowEvent }>) => {
+    const mid = event.messageId;
+    const ev = event.data?.event;
+    if (!mid || !ev || typeof ev.seq !== "number" || typeof ev.type !== "string") return;
+    const list = workflowByMessageId.value[mid] ?? [];
+    if (list.some((it) => it.seq === ev.seq)) return;
+    workflowByMessageId.value = {
+      ...workflowByMessageId.value,
+      [mid]: [...list, ev].sort((a, b) => a.seq - b.seq),
+    };
   };
 
   // 流式回复增量（message.delta）：实时把累计文本写进对应消息。
@@ -881,6 +954,7 @@ export function useDmConversations(): UseDmConversations {
     unsubscribeAll.push(stream.on<MessageCreatedData>("message.created", onMessageCreated));
     unsubscribeAll.push(stream.on<MessageEditedData>("message.edited", onMessageEdited));
     unsubscribeAll.push(stream.on<{ content: string }>("message.delta", onMessageDelta));
+    unsubscribeAll.push(stream.on<{ event: AiWorkflowEvent }>("message.workflow", onMessageWorkflow));
     unsubscribeAll.push(stream.on<MessageDeletedData>("message.deleted", onMessageDeleted));
     unsubscribeAll.push(stream.on<ConversationReadData>("conversation.read", onConversationRead));
     unsubscribeAll.push(stream.on("conversation.read.all", onConversationReadAll));
@@ -923,10 +997,14 @@ export function useDmConversations(): UseDmConversations {
     activeConversationId.value = null;
     typing.value = {};
     streamingMessageIds.value = new Set();
+    workflowByMessageId.value = {};
   };
 
   const isStreamingMessage = (documentId: string): boolean =>
     streamingMessageIds.value.has(documentId);
+
+  const workflowEventsOf = (messageId: string): AiWorkflowEvent[] =>
+    workflowByMessageId.value[messageId] ?? [];
 
   const totalUnread = computed(() =>
     conversations.value.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
@@ -940,6 +1018,7 @@ export function useDmConversations(): UseDmConversations {
     activeConversationId,
     typingByConversation: computed(() => typing.value),
     isStreamingMessage,
+    workflowEventsOf,
 
     refresh,
     openDirectConversation,
@@ -955,6 +1034,8 @@ export function useDmConversations(): UseDmConversations {
     updateConversation,
     leaveConversation,
     resetContext,
+    stopAiStream,
+    regenerateAiReply,
     sendTyping: stream.sendTyping,
     startStream,
     stopStream,
