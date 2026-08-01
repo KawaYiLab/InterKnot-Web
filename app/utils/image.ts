@@ -38,6 +38,15 @@ function hasImageProcess(url: string): boolean {
   return IMAGE_PROCESS_RE.test(url);
 }
 
+function isAppImageHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "im.tiwat.cn" || host === "image.tiwat.cn";
+  } catch {
+    return false;
+  }
+}
+
 function migrateImageUrl(url: string): string {
   if (isInlineUrl(url)) return url;
 
@@ -158,6 +167,7 @@ export function toCanonicalUrl(url: string | undefined): string {
 /**
  * 生成缩略图 URL：
  * - 若 url 已是 R2 /cdn-cgi/image 或 ESA image_process 缩略图，保持同一服务并替换宽度；
+ * - 若 url 不是本站图片 CDN（如 Bilibili 等外部封面），原样返回；
  * - 否则回退到 ESA 参数（canonical 原图一般由后端包装过，前端不自行决定 R2）。
  */
 export function toThumbUrl(url: string | undefined, width = 360): string {
@@ -172,6 +182,11 @@ export function toThumbUrl(url: string | undefined, width = 360): string {
 
   if (hasImageProcess(clean)) {
     return ensureEsaResizeWidth(clean, width);
+  }
+
+  // 外部封面图（如 Bilibili）不需要/不支持 ESA 处理，直接返回原图。
+  if (!isAppImageHost(clean)) {
+    return clean;
   }
 
   return buildEsaImageUrl(clean, `resize,w_${width}/format,webp/quality,q_80`);

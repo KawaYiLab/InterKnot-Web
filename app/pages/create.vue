@@ -4,6 +4,7 @@ import { useMessage } from "zenless-ui";
 import type {
   Category,
   DraftArticle,
+  ExternalVideo,
   UploadedFile,
   UploadTask,
   UploadStatus,
@@ -22,7 +23,9 @@ import {
   CheckIcon,
   PlusCircleIcon,
   InboxIcon,
+  FilmIcon,
 } from "@heroicons/vue/24/outline";
+import { PlayIcon } from "@heroicons/vue/24/solid";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
 import { isAllowedImage, MAX_IMAGE_SIZE } from "~/utils/upload";
@@ -53,6 +56,7 @@ if (import.meta.client && !auth.isLogin) {
 /* ── Reactive State ───────────────────────────────── */
 const title = ref("");
 const body = ref("");
+const externalVideos = ref<ExternalVideo[]>([]);
 const uploadTasks = ref<UploadTask[]>([]);
 const documentId = ref<string | null>(null);
 const isSavingDraft = ref(false);
@@ -64,6 +68,22 @@ const hasUnsavedChanges = ref(false);
 const isEditingPublished = ref(false);
 const isAnonymous = ref(false);
 const showImagePickerModal = ref(false);
+const isVideoDialogVisible = ref(false);
+
+// 鼠标悬停/聚焦在「添加图片」或「添加视频」上时，高亮对应类型并禁用另一个入口
+const hoveredMediaType = ref<"image" | "video" | null>(null);
+const activeMediaType = computed(() => {
+  if (isVideoDialogVisible.value || hoveredMediaType.value === "video") return "video";
+  if (showImagePickerModal.value || hoveredMediaType.value === "image") return "image";
+  return null;
+});
+
+function onMediaEnter(type: "image" | "video") {
+  hoveredMediaType.value = type;
+}
+function onMediaLeave(type: "image" | "video") {
+  if (hoveredMediaType.value === type) hoveredMediaType.value = null;
+}
 
 /* ── 委托分类（频道）：发布委托必选，默认兜底「综合」 ── */
 const DEFAULT_CATEGORY_SLUG = "general";
@@ -128,6 +148,7 @@ const hasAnyContent = computed(
   () =>
     title.value.trim().length > 0 ||
     body.value.trim().length > 0 ||
+    externalVideos.value.length > 0 ||
     uploadedImages.value.length > 0,
 );
 
@@ -139,7 +160,7 @@ const canPublish = computed(
     !isCoverUploading.value &&
     !isBodyOverLimit.value &&
     title.value.trim().length > 0 &&
-    (body.value.trim().length > 0 || uploadedImages.value.length > 0),
+    (body.value.trim().length > 0 || externalVideos.value.length > 0 || uploadedImages.value.length > 0),
 );
 
 const coverPayload = computed(() => {
@@ -149,11 +170,132 @@ const coverPayload = computed(() => {
   return imgs.map((i) => i.id);
 });
 
+const MAX_EXTERNAL_VIDEOS = 1;
+const BVID_RE = /^BV[0-9A-Za-z]{10}$/;
+const AVID_RE = /^(?:av)?(\d+)$/i;
+const BILIBILI_URL_RE = /(?:bilibili\.com\/video\/(BV[0-9A-Za-z]{10})|bilibili\.com\/video\/(?:av)?(\d+))/i;
+
+function buildBilibiliEmbedUrl(
+  bvid: string | null | undefined,
+  aid: number | null | undefined,
+  cid: number | null | undefined,
+  p: number | null | undefined,
+): string {
+  const params = new URLSearchParams();
+  if (bvid) params.set("bvid", bvid);
+  if (aid) params.set("aid", String(aid));
+  if (cid) params.set("cid", String(cid));
+  if (p && p > 0) {
+    params.set("p", String(p));
+  }
+  params.set("autoplay", "0");
+  params.set("danmaku", "0");
+  params.set("poster", "1");
+  return `https://player.bilibili.com/player.html?${params.toString()}`;
+}
+
+function parseBilibiliVideo(input: string): ExternalVideo | null {
+  const raw = input.trim();
+  if (!raw) return null;
+
+  let bvid: string | undefined;
+  let aid: number | undefined;
+  let p: number | undefined;
+
+  const urlMatch = raw.match(BILIBILI_URL_RE);
+  if (urlMatch) {
+    if (urlMatch[1]) bvid = urlMatch[1];
+    else if (urlMatch[2]) aid = Number.parseInt(urlMatch[2], 10) || undefined;
+
+    const pMatch = raw.match(/[?&]p=(\d+)/);
+    if (pMatch?.[1]) {
+      const parsedP = Number.parseInt(pMatch[1], 10);
+      if (parsedP > 0) p = parsedP;
+    }
+  }
+
+  if (!bvid && !aid) {
+    const bvidMatch = raw.match(BVID_RE);
+    if (bvidMatch) {
+      bvid = bvidMatch[0];
+    } else {
+      const avidMatch = raw.match(AVID_RE);
+      if (avidMatch?.[1]) aid = Number.parseInt(avidMatch[1], 10) || undefined;
+    }
+  }
+
+  if (!bvid && !aid) return null;
+
+  return {
+    provider: "bilibili",
+    bvid: bvid ?? null,
+    aid: aid ?? null,
+    p: p ?? null,
+    page: p ?? null,
+    embedUrl: null,
+    coverUrl: null,
+    title: null,
+    duration: null,
+  };
+}
+
+async function onVideoDialogConfirm(raw: string) {
+  const video = parseBilibiliVideo(raw);
+  if (!video) {
+    message.error("无法识别该 B 站视频链接，请检查 BV 号或链接格式");
+    return;
+  }
+  if (externalVideos.value.length >= MAX_EXTERNAL_VIDEOS) {
+    message.error(`最多只能嵌入 ${MAX_EXTERNAL_VIDEOS} 个视频`);
+    return;
+  }
+
+  const info = await api.getBilibiliInfo(video.bvid || undefined, video.aid || undefined);
+  if (!info?.pic) {
+    message.error("无法获取该 B 站视频信息，请检查 BV 号或链接是否有效");
+    return;
+  }
+
+  const targetP = video.p && video.p > 0 ? video.p : 1;
+  const pageInfo = info.pages?.find((page) => page.page === targetP);
+  const cid = pageInfo?.cid ?? info.cid;
+
+  video.cid = typeof cid === 'number' ? cid : null;
+  video.embedUrl = buildBilibiliEmbedUrl(video.bvid, video.aid, video.cid, video.p);
+  video.coverUrl = info.pic;
+  if (info.title) video.title = info.title;
+  if (typeof info.duration === 'number') video.duration = info.duration;
+
+  externalVideos.value.push(video);
+  isVideoDialogVisible.value = false;
+  markDirty();
+}
+
+function openVideoDialog() {
+  if (uploadTasks.value.length > 0) {
+    message.error("已上传图片的委托不能再添加视频");
+    return;
+  }
+  isVideoDialogVisible.value = true;
+}
+
+function removeExternalVideo(index: number) {
+  externalVideos.value.splice(index, 1);
+  markDirty();
+}
+
+function handleVideoCoverError(event: Event, video: ExternalVideo) {
+  video.coverLoadError = true;
+  const target = event.target as HTMLImageElement | null;
+  if (target) target.style.display = "none";
+}
+
 /* ── Helpers ──────────────────────────────────────── */
 function buildSnapshot(): string {
   return JSON.stringify({
     title: title.value.trim(),
     text: body.value.trim(),
+    externalVideos: externalVideos.value,
     cover: coverPayload.value,
     category: selectedCategory.value,
   });
@@ -182,6 +324,7 @@ const performSaveDraft = async (force = false) => {
     const payload = {
       title: title.value.trim(),
       text: body.value.trim(),
+      externalVideos: externalVideos.value,
       coverId: coverPayload.value,
       authorId: authorId || undefined,
       isAnonymous: isAnonymous.value || undefined,
@@ -264,6 +407,10 @@ function openImagePicker() {
     loginDialog.open();
     return;
   }
+  if (externalVideos.value.length > 0) {
+    message.error("已添加视频，不能再上传图片");
+    return;
+  }
   if (remainingCoverSlots.value <= 0) {
     message.error(`当前等级最多上传 ${maxCoverImages.value} 张图片，升级可提升上限`);
     return;
@@ -272,10 +419,18 @@ function openImagePicker() {
 }
 
 function handleImagePickerUpload(files: File[]) {
+  if (externalVideos.value.length > 0) {
+    message.error("已添加视频，不能再上传图片");
+    return;
+  }
   handleFileSelect(files);
 }
 
 function handleImagePickerSelect(uploads: UploadedFile[]) {
+  if (externalVideos.value.length > 0) {
+    message.error("已添加视频，不能再上传图片");
+    return;
+  }
   const existing = new Set(existingUploadIds.value);
   const remaining = remainingCoverSlots.value;
   const available = uploads
@@ -321,6 +476,10 @@ async function executeUploadTask(task: UploadTask) {
 }
 
 function handleFileSelect(files: FileList | File[]) {
+  if (externalVideos.value.length > 0) {
+    message.error("已添加视频，不能再上传图片");
+    return;
+  }
   const fileArray = Array.from(files);
   const remaining = maxCoverImages.value - uploadTasks.value.length;
 
@@ -598,6 +757,7 @@ function applyDraftToEditor(draft: DraftArticle) {
     isEditingPublished.value = !!draft.hasPublishedVersion;
     title.value = draft.title;
     body.value = draft.text;
+    externalVideos.value = draft.externalVideos ?? [];
     isAnonymous.value = !!draft.isAnonymous;
     selectedCategory.value = draft.category?.slug || DEFAULT_CATEGORY_SLUG;
 
@@ -633,6 +793,7 @@ function resetEditor() {
     documentId.value = null;
     title.value = "";
     body.value = "";
+    externalVideos.value = [];
     for (const task of uploadTasks.value) {
       URL.revokeObjectURL(task.previewUrl);
     }
@@ -963,13 +1124,12 @@ if (import.meta.client) {
             </div>
           </div>
 
-          <!-- Covers section (grid layout) -->
+          <!-- Media section (images + videos) -->
           <div class="ik-create-section">
             <div class="ik-create-section__head">
               <span class="ik-create-section__label">
                 <PhotoIcon style="width:14px;height:14px" />
-                图片
-                <span class="ik-create-section__count-pill">{{ uploadTasks.length }}/{{ maxCoverImages }}</span>
+                媒体
               </span>
               <span class="ik-create-section__hint">第一张图片为封面</span>
             </div>
@@ -1024,12 +1184,58 @@ if (import.meta.client) {
                   <XMarkIcon style="width:14px;height:14px" />
                 </button>
               </div>
+              <div
+                v-for="(video, idx) in externalVideos"
+                :key="`video-${idx}`"
+                class="ik-cover-thumb ik-cover-thumb--video"
+              >
+                <img
+                  v-if="video.coverUrl && !video.coverLoadError"
+                  :src="video.coverUrl"
+                  :alt="video.title || 'B 站视频'"
+                  class="ik-cover-thumb__img"
+                  decoding="async"
+                  draggable="false"
+                  referrerpolicy="no-referrer"
+                  @error="handleVideoCoverError($event, video)"
+                />
+                <div v-if="!video.coverUrl || video.coverLoadError" class="ik-cover-thumb__fallback">
+                  <FilmIcon class="ik-cover-thumb__fallback-icon" />
+                  <span class="ik-cover-thumb__fallback-text">{{ video.bvid || `av${video.aid}` }}</span>
+                </div>
+                <div class="ik-cover-thumb__play">
+                  <PlayIcon class="ik-cover-thumb__play-icon" />
+                </div>
+                <button class="ik-cover-thumb__remove" @click.stop.prevent="removeExternalVideo(idx)" aria-label="移除">
+                  <XMarkIcon style="width:14px;height:14px" />
+                </button>
+              </div>
               <CoverImageAddButton
                 v-if="uploadTasks.length < maxCoverImages"
                 :is-dragging="isDragging"
+                :disabled="activeMediaType === 'video' || externalVideos.length > 0"
+                @mouseenter="onMediaEnter('image')"
+                @mouseleave="onMediaLeave('image')"
+                @focus="onMediaEnter('image')"
+                @blur="onMediaLeave('image')"
                 @click="openImagePicker"
               />
+              <CoverVideoAddButton
+                v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS && uploadTasks.length === 0"
+                :is-dragging="false"
+                :disabled="activeMediaType === 'image'"
+                @mouseenter="onMediaEnter('video')"
+                @mouseleave="onMediaLeave('video')"
+                @focus="onMediaEnter('video')"
+                @blur="onMediaLeave('video')"
+                @click="openVideoDialog"
+              />
             </div>
+            <BilibiliVideoDialog
+              v-model:visible="isVideoDialogVisible"
+              @confirm="onVideoDialogConfirm"
+              @cancel="isVideoDialogVisible = false"
+            />
           </div>
 
         </div>
@@ -1096,10 +1302,30 @@ if (import.meta.client) {
           v-if="uploadTasks.length < maxCoverImages"
           type="button"
           class="ik-mobile-cover-add"
+          :title="'添加图片'"
           aria-label="添加图片"
+          :disabled="activeMediaType === 'video' || externalVideos.length > 0"
+          @mouseenter="onMediaEnter('image')"
+          @mouseleave="onMediaLeave('image')"
+          @focus="onMediaEnter('image')"
+          @blur="onMediaLeave('image')"
           @click="openImagePicker"
         >
           <PhotoIcon class="ik-mobile-cover-add__icon" />
+        </button>
+        <button
+          v-if="externalVideos.length < MAX_EXTERNAL_VIDEOS && uploadTasks.length === 0"
+          type="button"
+          class="ik-mobile-cover-add"
+          aria-label="添加视频"
+          :disabled="activeMediaType === 'image'"
+          @mouseenter="onMediaEnter('video')"
+          @mouseleave="onMediaLeave('video')"
+          @focus="onMediaEnter('video')"
+          @blur="onMediaLeave('video')"
+          @click="openVideoDialog"
+        >
+          <FilmIcon class="ik-mobile-cover-add__icon" />
         </button>
         <div
           v-for="(task, idx) in uploadTasks"
@@ -1145,6 +1371,37 @@ if (import.meta.client) {
             class="ik-mobile-cover-tile__remove"
             aria-label="移除"
             @click.stop.prevent="removeUpload(idx)"
+          >
+            <XMarkIcon style="width:12px;height:12px" />
+          </button>
+        </div>
+        <div
+          v-for="(video, idx) in externalVideos"
+          :key="`mobile-video-${idx}`"
+          class="ik-mobile-cover-tile ik-mobile-cover-tile--video"
+        >
+          <img
+            v-if="video.coverUrl && !video.coverLoadError"
+            :src="video.coverUrl"
+            :alt="video.title || 'B 站视频'"
+            class="ik-mobile-cover-tile__img"
+            decoding="async"
+            draggable="false"
+            referrerpolicy="no-referrer"
+            @error="handleVideoCoverError($event, video)"
+          />
+          <div v-if="!video.coverUrl || video.coverLoadError" class="ik-mobile-cover-tile__fallback">
+            <FilmIcon class="ik-mobile-cover-tile__fallback-icon" />
+            <span class="ik-mobile-cover-tile__fallback-text">{{ video.bvid || `av${video.aid}` }}</span>
+          </div>
+          <div class="ik-mobile-cover-tile__play">
+            <PlayIcon class="ik-mobile-cover-tile__play-icon" />
+          </div>
+          <button
+            type="button"
+            class="ik-mobile-cover-tile__remove"
+            aria-label="移除"
+            @click.stop.prevent="removeExternalVideo(idx)"
           >
             <XMarkIcon style="width:12px;height:12px" />
           </button>
@@ -1920,6 +2177,53 @@ if (import.meta.client) {
   outline: none;
 }
 
+
+.ik-media-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.ik-media-add-row__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 200ms, color 200ms, background 200ms;
+}
+
+.ik-media-add-row__btn:hover {
+  border-color: #BFFF09;
+  color: #BFFF09;
+  background: rgba(191, 255, 9, 0.08);
+}
+
+.ik-media-add-row__input {
+  flex: 1;
+  min-width: 180px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #050505;
+  color: #e0e0e0;
+  font-size: 14px;
+  outline: none;
+}
+
+.ik-media-add-row__input:focus {
+  border-color: #fbfe00;
+  box-shadow: 0 0 0 1px #fbfe00;
+}
+
 /* ── Cover Grid (Flutter SliverGrid maxCrossAxisExtent=160) ── */
 .ik-cover-grid {
   display: grid;
@@ -1970,6 +2274,52 @@ if (import.meta.client) {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.ik-cover-thumb--video .ik-cover-thumb__img {
+  filter: brightness(0.72);
+}
+
+.ik-cover-thumb__fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #909090;
+  padding: 12px;
+  text-align: center;
+}
+
+.ik-cover-thumb__fallback-icon {
+  width: 32px;
+  height: 32px;
+  color: #fbfe00;
+}
+
+.ik-cover-thumb__fallback-text {
+  font-size: 11px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.ik-cover-thumb__play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ik-cover-thumb__play-icon {
+  width: 36px;
+  height: 36px;
+  color: #fff;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  opacity: 0.92;
 }
 
 .ik-cover-thumb__overlay {
@@ -2343,7 +2693,11 @@ if (import.meta.client) {
     cursor: pointer;
     transition: border-color 160ms ease, background 160ms ease;
   }
-  .ik-mobile-cover-add:active {
+  .ik-mobile-cover-add:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .ik-mobile-cover-add:active:not(:disabled) {
     background: #232323;
     border-color: #3a3a3a;
   }
@@ -2429,6 +2783,46 @@ if (import.meta.client) {
     align-items: center;
     justify-content: center;
     cursor: pointer;
+  }
+  .ik-mobile-cover-tile--video .ik-mobile-cover-tile__img {
+    filter: brightness(0.72);
+  }
+  .ik-mobile-cover-tile__fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: #909090;
+    padding: 8px;
+    text-align: center;
+  }
+  .ik-mobile-cover-tile__fallback-icon {
+    width: 24px;
+    height: 24px;
+    color: #fbfe00;
+  }
+  .ik-mobile-cover-tile__fallback-text {
+    font-size: 10px;
+    font-weight: 700;
+    word-break: break-all;
+  }
+  .ik-mobile-cover-tile__play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .ik-mobile-cover-tile__play-icon {
+    width: 28px;
+    height: 28px;
+    color: #fff;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    opacity: 0.92;
   }
 
   @keyframes ik-mobile-spin {
