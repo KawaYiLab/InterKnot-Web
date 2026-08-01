@@ -187,12 +187,11 @@ function buildBilibiliEmbedUrl(
   if (cid) params.set("cid", String(cid));
   if (p && p > 0) {
     params.set("p", String(p));
-    params.set("page", String(p));
   }
   params.set("autoplay", "0");
   params.set("danmaku", "0");
-  params.set("hideCoverInfo", "1");
-  return `https://www.bilibili.com/blackboard/html5mobileplayer.html?${params.toString()}`;
+  params.set("poster", "1");
+  return `https://player.bilibili.com/player.html?${params.toString()}`;
 }
 
 function parseBilibiliVideo(input: string): ExternalVideo | null {
