@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { AiWorkflowEvent } from "~/types/entities";
-import {
-  buildWorkflowSteps,
-  extractCitations,
-  isWorkflowSettled,
-} from "~/utils/workflow";
+import { buildWorkflowSteps, isWorkflowSettled } from "~/utils/workflow";
 
 /**
  * AI 工作流时间线卡（3.3）：渲染在 AI 回答气泡上方（工作流永远在回答上方）。
@@ -22,7 +18,6 @@ const emit = defineEmits<{
 }>();
 
 const steps = computed(() => buildWorkflowSteps(props.events));
-const citations = computed(() => extractCitations(props.events));
 const settled = computed(() => isWorkflowSettled(props.events));
 
 /** 历史回放（已收束）默认折叠；实时进行中默认展开 */
@@ -90,11 +85,6 @@ const hasError = computed(() => steps.value.some((s) => s.status === "error"));
             @open-post="emit('open-post', $event)"
           />
         </ol>
-        <AiCitationList
-          v-if="citations.length > 0"
-          :citations="citations"
-          @open-post="emit('open-post', $event)"
-        />
       </div>
     </div>
   </div>

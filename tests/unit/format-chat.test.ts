@@ -32,6 +32,19 @@ describe("链接处理", () => {
     expect(html).not.toContain('target="_blank"');
   });
 
+  it("把 标题 (/post/xxx) 转换成 markdown 链接并隐藏 URL", () => {
+    const html = formatChatMarkdown("史上最久不复刻之人 (/post/abc123)");
+    expect(html).toContain('href="/post/abc123"');
+    expect(html).toContain("史上最久不复刻之人");
+    expect(html).not.toContain("(/post/abc123)");
+  });
+
+  it("裸 /post/xxx 转换成可点击的查看委托链接", () => {
+    const html = formatChatMarkdown("详见 /post/abc123");
+    expect(html).toContain('href="/post/abc123"');
+    expect(html).toContain("查看委托");
+  });
+
   it("协议相对 // 链接不按站内链接放行", () => {
     const html = formatChatMarkdown("[x](//evil.com)");
     expect(html).not.toContain('href="//evil.com"');

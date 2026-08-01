@@ -67,6 +67,8 @@ export interface EnrichedMessage {
   pendingStream: boolean;
   /** AI 工作流事件（3.3）：落库回放优先，其次实时推送缓存；气泡上方渲染时间线卡 */
   workflowEvents: AiWorkflowEvent[];
+  /** 引用帖子（3.5）：最终回答里出现过的 /post/xxx 去重列表 */
+  citations: WorkflowPostRef[];
   /** 推荐阅读（3.4）：回答定稿后，搜索命中但未被引用的帖子 */
   relatedPosts: WorkflowPostRef[];
   /** 气泡 hover 操作条可复制（1.4）：未撤回的非空文本消息 */

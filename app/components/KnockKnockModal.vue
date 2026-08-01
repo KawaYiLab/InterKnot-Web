@@ -11,7 +11,7 @@ import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entit
 import { resolveErrorMessage } from "~/utils/api-error";
 import { stripMentionsToPlain } from "~/utils/mention";
 import { stripEmotesToPlain } from "~/utils/emote";
-import { extractRelatedPosts, isWorkflowSettled } from "~/utils/workflow";
+import { extractCitations, extractRelatedPosts, isWorkflowSettled } from "~/utils/workflow";
 import type { BubbleRender, EnrichedMessage } from "~/utils/dm-view";
 import type DmComposer from "~/components/DmComposer.vue";
 
@@ -580,6 +580,10 @@ const enrichedMessages = computed<EnrichedMessage[]>(() => {
           (shouldAnimateAiMessage(msg) && !isAiRevealComplete(msg.documentId))),
       pendingStream: isPendingStreamBubble(msg),
       workflowEvents,
+      citations:
+        workflowEvents.length > 0 && isWorkflowSettled(workflowEvents)
+          ? extractCitations(workflowEvents)
+          : [],
       relatedPosts:
         workflowEvents.length > 0 && isWorkflowSettled(workflowEvents)
           ? extractRelatedPosts(workflowEvents)

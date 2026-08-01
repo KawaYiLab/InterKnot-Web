@@ -179,6 +179,31 @@ const SANITIZE_CONFIG = {
 };
 
 /**
+ * AI 回复里的帖子引用常见写法：
+ * - 标题 (/post/documentId)   ← 纯文本模型最爱
+ * - [标题](/post/documentId)  ← 标准 markdown
+ * - 裸 /post/documentId       ← 兜底
+ * 在进 markdown-it 之前统一转成 [标题](/post/documentId)，
+ * 避免消息里直接裸露 URL。
+ */
+const POST_LINK_BARE_RE = /([^\n()\[\]]{1,40}?)\s*\(\s*(\/post\/[A-Za-z0-9_-]+)\s*\)/g;
+const POST_BARE_RE = /(?<!\]\()(\/post\/[A-Za-z0-9_-]+)(?!\))/g;
+
+function normalizePostLinks(text: string): string {
+  if (!text) return text;
+  // 代码块内原样保留，避免误改示例代码里的路径字符串
+  return text
+    .split(/(```[\s\S]*?(?:```|$))/g)
+    .map((part, i) => {
+      if (i % 2 === 1) return part;
+      return part
+        .replace(POST_LINK_BARE_RE, "[$1]($2)")
+        .replace(POST_BARE_RE, "[查看委托]($1)");
+    })
+    .join("");
+}
+
+/**
  * 把 AI 模型输出的（可能不完整的）markdown 渲染为安全 HTML。
  * 流式期间会被反复调用，纯函数无副作用。
  *
@@ -191,6 +216,6 @@ export function formatChatMarkdown(
 ): string {
   if (!text) return "";
   const md = opts?.highlight ? mdHighlight : mdPlain;
-  const rendered = md.render(text);
+  const rendered = md.render(normalizePostLinks(text));
   return DOMPurify.sanitize(rendered, SANITIZE_CONFIG);
 }

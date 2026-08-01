@@ -190,6 +190,12 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
           </span>
         </span>
       </button>
+      <!-- 3.5 引用帖子：回答里出现过的 /post/xxx，始终展示在气泡下方 -->
+      <AiCitationList
+        v-if="entry.aiRich && entry.citations.length > 0"
+        :citations="entry.citations"
+        @open-post="emit('open-post', $event)"
+      />
       <!-- 3.4 推荐阅读：回答定稿后展示搜索命中但未引用的帖子 -->
       <AiRelatedPosts
         v-if="entry.aiRich && !entry.aiStreaming && entry.relatedPosts.length > 0"
