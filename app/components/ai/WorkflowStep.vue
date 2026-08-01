@@ -3,10 +3,10 @@ import { computed, ref } from "vue";
 import type { WorkflowStepView } from "~/utils/workflow";
 
 /**
- * 单条工作流步骤（3.3）：四色状态 + 可交互执行记录。
- * - 等待灰 ○ / 运行蓝 ◉（旋转圈）/ 完成绿 ✓（放大动画）/ 失败红 ✕
- * - 「搜索论坛」显示关键词与命中数，点击展开命中帖子列表；
- *   「阅读帖子」显示《标题》，点击展开已读帖子列表（可打开 postModal）。
+ * 单条工作流步骤（3.3）：纵向时间轴样式，对齐 ChatGPT / Claude 的 reasoning step。
+ * - pending / running / done / error 四态点
+ * - 搜索 / 阅读 步骤可展开命中/已读帖子列表
+ * - 帖子列表带 grid 展开动画
  */
 const props = defineProps<{
   step: WorkflowStepView;
@@ -18,25 +18,33 @@ const emit = defineEmits<{
 
 const expanded = ref(false);
 
-const hasPosts = computed(() => (props.step.posts?.length ?? 0) > 0);
+const hasDetails = computed(() => (props.step.posts?.length ?? 0) > 0);
 
 const detailLabel = computed(() => {
-  if (!hasPosts.value) return "";
+  if (!hasDetails.value) return "";
   if (props.step.kind === "search") return `命中 ${props.step.hits ?? props.step.posts!.length} 篇`;
   return `${props.step.posts!.length} 篇`;
+});
+
+function formatDuration(ms: number): string {
+  if (ms < 100) return "<0.1s";
+  if (ms < 1000) return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+  const m = Math.floor(ms / 60000);
+  const s = Math.round((ms % 60000) / 1000);
+  return `${m}m ${s}s`;
+}
+
+const durationText = computed(() => {
+  if (props.step.status !== "done" || !props.step.durationMs || props.step.durationMs < 50) return "";
+  return formatDuration(props.step.durationMs);
 });
 </script>
 
 <template>
   <li class="ik-aiwf-step" :data-status="step.status">
-    <component
-      :is="hasPosts ? 'button' : 'div'"
-      :type="hasPosts ? 'button' : undefined"
-      class="ik-aiwf-step__row"
-      :class="{ 'is-clickable': hasPosts }"
-      @click="hasPosts && (expanded = !expanded)"
-    >
-      <span class="ik-aiwf-step__dot" aria-hidden="true">
+    <div class="ik-aiwf-step__main">
+      <span class="ik-aiwf-step__dot-wrap" aria-hidden="true">
         <span v-if="step.status === 'running'" class="ik-aiwf-step__spinner" />
         <svg
           v-else-if="step.status === 'done'"
@@ -55,83 +63,103 @@ const detailLabel = computed(() => {
         <span v-else-if="step.status === 'error'" class="ik-aiwf-step__cross">✕</span>
         <span v-else class="ik-aiwf-step__idle">○</span>
       </span>
-      <span class="ik-aiwf-step__label">
-        <span class="ik-aiwf-step__title">{{ step.title }}</span>
-        <span v-if="step.subtitle" class="ik-aiwf-step__sub">{{ step.subtitle }}</span>
-      </span>
-      <span v-if="hasPosts" class="ik-aiwf-step__count">{{ detailLabel }}</span>
-      <svg
-        v-if="hasPosts"
-        class="ik-aiwf-step__chevron"
-        :class="{ 'is-open': expanded }"
-        viewBox="0 0 20 20"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M6 8l4 4 4-4"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-    </component>
 
-    <ul v-if="hasPosts && expanded" class="ik-aiwf-step__posts">
-      <li v-for="post in step.posts" :key="post.documentId">
-        <button
-          type="button"
-          class="ik-aiwf-step__post"
-          @click="emit('open-post', post.documentId)"
-        >
-          {{ post.title || "（无标题）" }}
-        </button>
-      </li>
-    </ul>
+      <div class="ik-aiwf-step__content">
+        <div class="ik-aiwf-step__row">
+          <span class="ik-aiwf-step__title">{{ step.title }}</span>
+          <span v-if="step.subtitle" class="ik-aiwf-step__sub">{{ step.subtitle }}</span>
+          <span v-if="durationText" class="ik-aiwf-step__time">{{ durationText }}</span>
+
+          <button
+            v-if="hasDetails"
+            type="button"
+            class="ik-aiwf-step__expand"
+            @click.stop="expanded = !expanded"
+          >
+            <span>{{ detailLabel }}</span>
+            <svg
+              class="ik-aiwf-step__chevron"
+              :class="{ 'is-open': expanded }"
+              viewBox="0 0 20 20"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M6 8l4 4 4-4"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="hasDetails"
+      class="ik-aiwf-step__details-wrap"
+      :class="{ 'is-open': expanded }"
+    >
+      <ul class="ik-aiwf-step__posts">
+        <li v-for="post in step.posts" :key="post.documentId">
+          <button
+            type="button"
+            class="ik-aiwf-step__post"
+            @click="emit('open-post', post.documentId)"
+          >
+            {{ post.title || "（无标题）" }}
+          </button>
+        </li>
+      </ul>
+    </div>
   </li>
 </template>
 
 <style scoped>
 .ik-aiwf-step {
+  position: relative;
   margin: 0;
 }
 
-.ik-aiwf-step__row {
+.ik-aiwf-step__main {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 2px;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  color: rgba(0, 0, 0, 0.7);
-  text-align: left;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 5px 0;
 }
 
-.ik-aiwf-step__row.is-clickable {
-  cursor: pointer;
-  border-radius: 8px;
-}
-
-.ik-aiwf-step__row.is-clickable:hover {
-  background: rgba(0, 0, 0, 0.045);
-}
-
-/* ── 状态四色 ─────────────────────────── */
-.ik-aiwf-step__dot {
+.ik-aiwf-step__dot-wrap {
+  position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
+/* 时间轴连线：除最后一个 step 外向下延伸 */
+.ik-aiwf-step__dot-wrap::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  width: 2px;
+  height: calc(100% + 10px);
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.ik-aiwf-step:last-child .ik-aiwf-step__dot-wrap::before {
+  display: none;
 }
 
 .ik-aiwf-step__idle {
-  color: rgba(0, 0, 0, 0.3);
-  font-size: 11px;
+  color: rgba(0, 0, 0, 0.28);
+  font-size: 10px;
 }
 
 .ik-aiwf-step__spinner {
@@ -156,40 +184,65 @@ const detailLabel = computed(() => {
   font-weight: 700;
 }
 
-.ik-aiwf-step__label {
+.ik-aiwf-step__content {
   flex: 1;
   min-width: 0;
+  padding-bottom: 4px;
+}
+
+.ik-aiwf-step__row {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  overflow: hidden;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-height: 20px;
 }
 
 .ik-aiwf-step__title {
-  flex: none;
   font-weight: 600;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.85);
 }
 
 .ik-aiwf-step__sub {
-  min-width: 0;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: rgba(0, 0, 0, 0.48);
-  font-size: 12px;
+  max-width: 100%;
 }
 
-.ik-aiwf-step__count {
-  flex: none;
-  color: rgba(0, 0, 0, 0.42);
+.ik-aiwf-step__time {
+  margin-left: auto;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.38);
+}
+
+.ik-aiwf-step__expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2c58e2;
+  font: inherit;
   font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ik-aiwf-step__expand:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .ik-aiwf-step__chevron {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  color: rgba(0, 0, 0, 0.4);
+  width: 13px;
+  height: 13px;
   transition: transform 160ms ease;
 }
 
@@ -197,17 +250,29 @@ const detailLabel = computed(() => {
   transform: rotate(180deg);
 }
 
-/* ── 展开的帖子列表（可点开 postModal） ── */
+/* 帖子列表展开动画 */
+.ik-aiwf-step__details-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease;
+}
+
+.ik-aiwf-step__details-wrap.is-open {
+  grid-template-rows: 1fr;
+}
+
 .ik-aiwf-step__posts {
-  margin: 0 0 4px;
-  padding: 0 0 0 24px;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0 0 8px 28px;
   list-style: none;
 }
 
 .ik-aiwf-step__post {
   display: block;
   width: 100%;
-  padding: 3px 8px;
+  padding: 4px 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -219,6 +284,7 @@ const detailLabel = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: background-color 120ms ease;
 }
 
 .ik-aiwf-step__post:hover {
