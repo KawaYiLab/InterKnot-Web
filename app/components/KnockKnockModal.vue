@@ -5,14 +5,15 @@ import {
   UserIcon,
   UserGroupIcon,
   ChatBubbleLeftIcon,
-  PaperAirplaneIcon,
 } from "@heroicons/vue/24/solid";
-import { DocumentTextIcon, ChevronLeftIcon, ArrowPathIcon } from "@heroicons/vue/24/outline";
+import { ChevronLeftIcon, ChevronDownIcon, ChevronUpIcon, ArrowPathIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
-import { formatTime } from "~/utils/time";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { stripMentionsToPlain } from "~/utils/mention";
 import { stripEmotesToPlain } from "~/utils/emote";
+import { extractCitations, extractRelatedPosts, isWorkflowSettled } from "~/utils/workflow";
+import type { BubbleRender, EnrichedMessage } from "~/utils/dm-view";
+import type DmComposer from "~/components/DmComposer.vue";
 
 const {
   visible,
@@ -64,6 +65,9 @@ const {
   openDirectConversation,
   isStreamingMessage,
   resetContext,
+  stopAiStream,
+  regenerateAiReply,
+  workflowEventsOf,
 } = useDmConversations();
 
 const AI_SLUG_STORAGE_KEY = "ik-knock-ai-slug";
@@ -282,10 +286,10 @@ const peerIsTyping = computed<boolean>(() => {
   return list.some((uid) => uid !== self);
 });
 
-/** 节流发送 typing 状态：2s 内最多触发一次 */
+/** 节流发送 typing 状态：2s 内最多触发一次（DmComposer @typing 触发） */
 let typingThrottleLast = 0;
 let typingThrottleTimer: ReturnType<typeof setTimeout> | null = null;
-const onComposerInput = () => {
+const handleComposerTyping = () => {
   const cid = activeConversationId.value;
   if (!cid) return;
   const now = Date.now();
@@ -355,9 +359,8 @@ const isMine = (msg: DmMessage): boolean => {
  * 返回值约定：
  *  - 字符串：直接 {{ }} 出
  *  - { mode: "rich", content } → 走 <CommentBody>
+ *（类型定义随 Phase 4 拆分移至 ~/utils/dm-view.ts）
  */
-type BubbleRender = string | { mode: "rich"; content: string };
-
 const bubbleText = (msg: DmMessage): BubbleRender => {
   if (msg.deletedAt) return "消息已撤回";
   if (msg.kind === "notification") {
@@ -418,40 +421,8 @@ const bubbleTextForDisplay = (msg: DmMessage): BubbleRender => {
 const isPendingStreamBubble = (msg: DmMessage): boolean =>
   isStreamingMessage(msg.documentId) && !(msg.content && msg.content.trim().length > 0);
 
-// ── AI 回复内链接渲染（markdown 链接 + 裸 /post/xxx 路径均可点击）──
-type BubbleSegment =
-  | { type: "text"; content: string }
-  | { type: "link"; text: string; href: string };
-
-// 匹配 markdown 链接 [text](url) 或裸路径 /post/documentId
-const BUBBLE_LINK_RE = /\[([^\]]+)\]\(([^)]+)\)|\/post\/([a-zA-Z0-9_-]+)/g;
-
-const hasBubbleLinks = (text: string): boolean =>
-  /\[([^\]]+)\]\(([^)]+)\)|\/post\/[a-zA-Z0-9_-]+/.test(text);
-
-const parseBubbleSegments = (text: string): BubbleSegment[] => {
-  const regex = new RegExp(BUBBLE_LINK_RE.source, 'g');
-  const segments: BubbleSegment[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: "text", content: text.slice(lastIndex, match.index) });
-    }
-    if (match[1] && match[2]) {
-      // markdown link: [text](url)
-      segments.push({ type: "link", text: match[1], href: match[2] });
-    } else if (match[3]) {
-      // bare /post/id path → 显示为"查看委托"标签
-      segments.push({ type: "link", text: "查看委托", href: `/post/${match[3]}` });
-    }
-    lastIndex = regex.lastIndex;
-  }
-  if (lastIndex < text.length) {
-    segments.push({ type: "text", content: text.slice(lastIndex) });
-  }
-  return segments;
-};
+// AI 回复内链接解析（hasBubbleLinks / parseBubbleSegments）已随
+// Phase 4 拆分移至 ~/utils/dm-view.ts，由 DmMessageItem 直接消费。
 
 const handleBubbleLink = (href: string, e: Event) => {
   e.preventDefault();
@@ -459,6 +430,11 @@ const handleBubbleLink = (href: string, e: Event) => {
   if (postMatch) {
     postModal.open(postMatch[1]!);
   }
+};
+
+/** AiMessageBody 内点击 /post/xxx 链接 → 打开委托弹窗 */
+const openPostFromBubble = (documentId: string) => {
+  postModal.open(documentId);
 };
 
 /** like-on-comment：通知关联委托+评论时，quote 卡引用「评论原文」而不是委托标题 */
@@ -571,36 +547,48 @@ const canClickAvatar = (msg: DmMessage): boolean => {
  * 函数。100 条消息每次 re-render 节省 ~1000 次函数调用。
  *
  * 注：依赖 activeMessages + knownMessageIds + selfUserId；任一变更 → re-eval。
+ * EnrichedMessage 接口随 Phase 4 拆分定义在 ~/utils/dm-view.ts（DmMessageItem 消费）。
  */
-interface EnrichedMessage {
-  msg: DmMessage;
-  isMine: boolean;
-  isNew: boolean;
-  showTime: boolean;
-  rendered: BubbleRender;
-  quote: {
-    label: string;
-    title: string;
-    article: NonNullable<DmMessage["article"]>;
-  } | null;
-  /** 头像是否可点击跳转个人主页 */
-  avatarClickable: boolean;
-  /** 个人主页 URL（avatarClickable 为 false 时为 null） */
-  profileUrl: string | null;
-}
-
 const enrichedMessages = computed<EnrichedMessage[]>(() => {
   const list = activeMessages.value;
   const known = knownMessageIds.value;
   void aiRevealTick.value;
   return list.map((msg, idx) => {
     const avatarClickable = canClickAvatar(msg);
+    const mine = isMine(msg);
+    const rendered = bubbleTextForDisplay(msg);
+    const aiRich =
+      isAiPeerConversation.value &&
+      !mine &&
+      msg.kind === "text" &&
+      !msg.deletedAt &&
+      typeof rendered === "string";
+    // 工作流事件：定稿后消息自带落库版本（权威）；流式期间读实时推送缓存
+    const workflowEvents = aiRich
+      ? (msg.workflow?.length ? msg.workflow : workflowEventsOf(msg.documentId))
+      : [];
     return {
       msg,
-      isMine: isMine(msg),
+      isMine: mine,
       isNew: !known.has(msg.documentId),
       showTime: shouldShowTime(idx),
-      rendered: bubbleTextForDisplay(msg),
+      rendered,
+      aiRich,
+      aiStreaming:
+        aiRich &&
+        (isStreamingMessage(msg.documentId) ||
+          (shouldAnimateAiMessage(msg) && !isAiRevealComplete(msg.documentId))),
+      pendingStream: isPendingStreamBubble(msg),
+      workflowEvents,
+      citations:
+        workflowEvents.length > 0 && isWorkflowSettled(workflowEvents)
+          ? extractCitations(workflowEvents)
+          : [],
+      relatedPosts:
+        workflowEvents.length > 0 && isWorkflowSettled(workflowEvents)
+          ? extractRelatedPosts(workflowEvents)
+          : [],
+      copyable: canCopyMessage(msg),
       quote: shouldShowQuote(msg) && msg.article
         ? {
             label: quoteLabel(msg),
@@ -617,6 +605,40 @@ const enrichedMessages = computed<EnrichedMessage[]>(() => {
   });
 });
 
+/**
+ * Phase 4 长会话性能：渲染窗口化。
+ * 只渲染最近 renderWindow 条（含最新消息，scrollToBottom / 流式跟随不受影响），
+ * 滚动到顶部附近时扩窗加载更早的消息。相比 content-visibility: auto，
+ * 窗口化不会裁剪气泡操作条（absolute top:-12px 溢出）也无 findPage 复杂度。
+ */
+const RENDER_WINDOW_STEP = 80;
+const renderWindow = ref(RENDER_WINDOW_STEP);
+
+const visibleMessages = computed<EnrichedMessage[]>(() => {
+  const list = enrichedMessages.value;
+  if (list.length <= renderWindow.value) return list;
+  return list.slice(list.length - renderWindow.value);
+});
+
+/** 窗口上方还有未渲染的更早消息（顶部提示条显隐） */
+const hasHiddenAbove = computed(
+  () => enrichedMessages.value.length > renderWindow.value,
+);
+
+/**
+ * 扩窗并保持视口位置：渲染更早消息会增加 scrollHeight，
+ * patch 后把增量补回 scrollTop，用户视野内的消息不跳动。
+ */
+const expandRenderWindow = () => {
+  const el = messagesRef.value;
+  if (!el) return;
+  const prevHeight = el.scrollHeight;
+  renderWindow.value += RENDER_WINDOW_STEP;
+  nextTick(() => {
+    el.scrollTop += el.scrollHeight - prevHeight;
+  });
+};
+
 /** 5 分钟内自己发的、未撤回的文本消息可以编辑/撤回 */
 const EDIT_WINDOW_MS = 5 * 60 * 1000;
 const canModifyMessage = (msg: DmMessage): boolean => {
@@ -627,6 +649,10 @@ const canModifyMessage = (msg: DmMessage): boolean => {
   return ageMs < EDIT_WINDOW_MS;
 };
 
+/** 复制（1.4）：任何未撤回的非空文本消息（AI 消息复制的是原始 markdown） */
+const canCopyMessage = (msg: DmMessage): boolean =>
+  msg.kind === "text" && !msg.deletedAt && !!(msg.content ?? "").trim();
+
 /**
  * 用户在切换/打开会话前是否处于"接近底部"。
  * SSE 触发的新消息只有在 wasNearBottom 时才自动滚动，
@@ -635,6 +661,9 @@ const canModifyMessage = (msg: DmMessage): boolean => {
  */
 const NEAR_BOTTOM_THRESHOLD_PX = 80;
 const wasNearBottom = ref(true);
+
+/** 1.6 用户远离底部期间到达的新消息 → 亮起「回到底部」按钮 */
+const hasUnseenBelow = ref(false);
 
 const isNearBottom = (el: HTMLElement): boolean => {
   return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_THRESHOLD_PX;
@@ -666,9 +695,13 @@ watch(activeConversationId, async (id) => {
   // 切换会话时关闭编辑态
   editingMessageId.value = null;
   editingDraft.value = "";
+  // 渲染窗口与会话内搜索都是会话级状态 → 一并复位
+  renderWindow.value = RENDER_WINDOW_STEP;
+  closeDmSearch();
   if (!id) return;
   // 新会话默认看最新消息
   wasNearBottom.value = true;
+  hasUnseenBelow.value = false;
   // 进入沉降态：隐藏容器直到完成首次滚到底（避免顶部 flash）
   messagesSettling.value = true;
   try {
@@ -716,6 +749,12 @@ const onMessagesScroll = () => {
   const el = messagesRef.value;
   if (!el) return;
   wasNearBottom.value = isNearBottom(el);
+  // 自己滚回底部 → 新消息提示解除
+  if (wasNearBottom.value) hasUnseenBelow.value = false;
+  // 逼近顶部且窗口外还有更早消息 → 扩窗（120px 提前量，滚动不断流）
+  if (el.scrollTop < 120 && hasHiddenAbove.value) {
+    expandRenderWindow();
+  }
 };
 
 /**
@@ -726,7 +765,11 @@ watch(
   () => activeMessages.value.length,
   (next, prev) => {
     if (next <= (prev ?? 0)) return;
-    if (!wasNearBottom.value) return;
+    if (!wasNearBottom.value) {
+      // 用户在读历史 → 不打断，仅亮起「回到底部」（1.6）
+      hasUnseenBelow.value = true;
+      return;
+    }
     nextTick(() => {
       const el = messagesRef.value;
       if (el) scrollToBottom(el);
@@ -789,13 +832,89 @@ watch(aiRevealTick, () => {
   });
 });
 
+/** 当前会话是否有 AI 消息正在流式/打字机输出（1.6 显示回底按钮的条件之一） */
+const activeHasStreaming = computed(() =>
+  enrichedMessages.value.some((e) => e.aiStreaming),
+);
+
+/** 1.6 「回到底部」悬浮按钮：远离底部 且（有新消息 或 AI 正在输出）时显示 */
+const showBackToBottom = computed(
+  () => !wasNearBottom.value && (hasUnseenBelow.value || activeHasStreaming.value),
+);
+
+const handleBackToBottom = () => {
+  const el = messagesRef.value;
+  if (!el) return;
+  scrollToBottom(el);
+  wasNearBottom.value = true;
+  hasUnseenBelow.value = false;
+};
+
+// ── 2.1 停止生成 ───────────────────────────────────────
+/**
+ * 当前会话正在流式接收中的 AI 占位消息 documentId。
+ * 只认 isStreamingMessage（worker 仍在生成）；本地打字机动画不算——
+ * 那时内容已定稿，停止 worker 没有意义。
+ */
+const activeStreamingMessageId = computed<string | null>(() => {
+  for (const e of enrichedMessages.value) {
+    if (e.aiRich && isStreamingMessage(e.msg.documentId)) return e.msg.documentId;
+  }
+  return null;
+});
+
+/** 已发出停止请求（防重复点击）；流式结束（streamingDone）后自动复位 */
+const stoppingAi = ref(false);
+
+const handleStopAi = async () => {
+  const id = activeStreamingMessageId.value;
+  if (!id || stoppingAi.value) return;
+  stoppingAi.value = true;
+  try {
+    await stopAiStream(id);
+  } catch {
+    stoppingAi.value = false; // 失败允许重试
+  }
+};
+
+watch(activeStreamingMessageId, (v) => {
+  if (!v) stoppingAi.value = false;
+});
+
+// ── 2.2 重新生成 ───────────────────────────────────────
+/** 会话最后一条 AI 回复的 documentId：只有它的操作条出现「重新生成」 */
+const lastAiMessageId = computed<string | null>(() => {
+  const list = enrichedMessages.value;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const e = list[i]!;
+    if (e.aiRich) return e.msg.documentId;
+  }
+  return null;
+});
+
+const regeneratingAi = ref(false);
+
+const handleRegenerate = async (msg: DmMessage) => {
+  if (regeneratingAi.value) return;
+  regeneratingAi.value = true;
+  try {
+    await regenerateAiReply(msg.documentId);
+    // 旧气泡消失（message.deleted）与新占位（message.created）都走 WS 事件
+  } catch {
+    // 静默失败：用户可重试
+  } finally {
+    regeneratingAi.value = false;
+  }
+};
+
 // （bubbleBody 已被 bubbleText 取代——见上方，支持富文本 mention 渲染）
 
 // ── 输入 / 发送 / 编辑 / 撤回 ───────────────────────────
 const draft = ref("");
 const sending = ref(false);
 const sendError = ref<string | null>(null);
-const composerRef = ref<HTMLTextAreaElement | null>(null);
+/** DmComposer 实例（Phase 4 拆分）：自动增高/字数提示/Enter 发送已内聚到子组件 */
+const composerRef = ref<InstanceType<typeof DmComposer> | null>(null);
 
 /** 当前正在编辑的消息 documentId（null 表示无）；编辑时输入框临时改为修改模式 */
 const editingMessageId = ref<string | null>(null);
@@ -805,12 +924,13 @@ const editingDraft = ref("");
 const contextMenuMessageId = ref<string | null>(null);
 const contextMenuStyle = ref<Record<string, string>>({});
 const showContextMenu = (e: MouseEvent, msg: DmMessage) => {
-  if (!canModifyMessage(msg)) return;
+  // 可复制或可编辑/撤回其一即可弹出（1.4：所有文本消息支持复制）
+  if (!canCopyMessage(msg) && !canModifyMessage(msg)) return;
   e.preventDefault();
   contextMenuMessageId.value = msg.documentId;
   // 菜单贴近鼠标位置；屏幕边缘 clamp
   const x = Math.min(e.clientX, window.innerWidth - 160);
-  const y = Math.min(e.clientY, window.innerHeight - 100);
+  const y = Math.min(e.clientY, window.innerHeight - 140);
   contextMenuStyle.value = {
     left: `${x}px`,
     top: `${y}px`,
@@ -818,6 +938,38 @@ const showContextMenu = (e: MouseEvent, msg: DmMessage) => {
 };
 const hideContextMenu = () => {
   contextMenuMessageId.value = null;
+};
+
+/** 上下文菜单对应的消息与可用操作（决定菜单项显隐） */
+const contextMenuMessage = computed(() => {
+  const id = contextMenuMessageId.value;
+  if (!id) return null;
+  return activeMessages.value.find((m) => m.documentId === id) ?? null;
+});
+const contextMenuCanCopy = computed(
+  () => !!contextMenuMessage.value && canCopyMessage(contextMenuMessage.value),
+);
+const contextMenuCanModify = computed(
+  () => !!contextMenuMessage.value && canModifyMessage(contextMenuMessage.value),
+);
+
+/** 1.4 复制消息原文到剪贴板（AI 消息即原始 markdown）；气泡操作条 + 上下文菜单共用 */
+const copiedMessageId = ref<string | null>(null);
+let copiedFlashTimer: ReturnType<typeof setTimeout> | null = null;
+const copyMessageText = async (msg: DmMessage) => {
+  hideContextMenu();
+  const text = (msg.content ?? "").trim();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    copiedMessageId.value = msg.documentId;
+    if (copiedFlashTimer) clearTimeout(copiedFlashTimer);
+    copiedFlashTimer = setTimeout(() => {
+      copiedMessageId.value = null;
+    }, 2000);
+  } catch {
+    // 剪贴板权限被拒（非 https / 权限策略）：静默失败，浏览器自身会提示
+  }
 };
 
 const beginEdit = (msg: DmMessage) => {
@@ -845,8 +997,8 @@ const doWithdraw = async (msg: DmMessage) => {
   }
 };
 
-/** 上下文菜单的两种操作的统一入口：根据当前 contextMenuMessageId 查到消息再分发 */
-const onContextMenuAction = (action: "edit" | "withdraw") => {
+/** 上下文菜单操作的统一入口：根据当前 contextMenuMessageId 查到消息再分发 */
+const onContextMenuAction = (action: "copy" | "edit" | "withdraw") => {
   const id = contextMenuMessageId.value;
   if (!id) return;
   const msg = activeMessages.value.find((m) => m.documentId === id);
@@ -854,7 +1006,8 @@ const onContextMenuAction = (action: "edit" | "withdraw") => {
     hideContextMenu();
     return;
   }
-  if (action === "edit") beginEdit(msg);
+  if (action === "copy") void copyMessageText(msg);
+  else if (action === "edit") beginEdit(msg);
   else void doWithdraw(msg);
 };
 
@@ -893,15 +1046,86 @@ const doSend = async () => {
   }
 };
 
-/** Enter 发送，Shift+Enter 换行（与主流 IM 一致） */
-const onComposerKeyDown = (e: KeyboardEvent) => {
-  if (e.key !== "Enter") return;
-  if (e.shiftKey || e.ctrlKey || e.metaKey) return; // 组合键允许换行
-  e.preventDefault();
-  void doSend();
+// ── Phase 4 会话内搜索 ───────────────────────────
+const dmSearchOpen = ref(false);
+const dmSearchQuery = ref("");
+/** 当前定位在第几个命中（0-based；query 变化时复位） */
+const dmSearchIndex = ref(0);
+const dmSearchInputRef = ref<HTMLInputElement | null>(null);
+
+/** 命中消息 documentId 列表（时间正序）：纯文本消息小写包含匹配 */
+const dmSearchHits = computed<string[]>(() => {
+  const q = dmSearchQuery.value.trim().toLowerCase();
+  if (!dmSearchOpen.value || !q) return [];
+  const hits: string[] = [];
+  for (const entry of enrichedMessages.value) {
+    if (entry.msg.deletedAt) continue;
+    if (typeof entry.rendered !== "string") continue;
+    if (entry.rendered.toLowerCase().includes(q)) {
+      hits.push(entry.msg.documentId);
+    }
+  }
+  return hits;
+});
+
+/** 当前命中的消息 documentId：传给 DmMessageItem 打黄圈高亮 */
+const currentSearchHitId = computed<string | null>(
+  () => dmSearchHits.value[dmSearchIndex.value] ?? null,
+);
+
+const closeDmSearch = () => {
+  dmSearchOpen.value = false;
+  dmSearchQuery.value = "";
+  dmSearchIndex.value = 0;
 };
 
-/** ESC 优先关闭：上下文菜单 → 编辑模式 → 弹窗本体 */
+const toggleDmSearch = () => {
+  if (dmSearchOpen.value) {
+    closeDmSearch();
+    return;
+  }
+  dmSearchOpen.value = true;
+  nextTick(() => dmSearchInputRef.value?.focus());
+};
+
+/** 上一条 / 下一条命中（首尾循环） */
+const goToSearchHit = (delta: number) => {
+  const total = dmSearchHits.value.length;
+  if (total === 0) return;
+  dmSearchIndex.value = (dmSearchIndex.value + delta + total) % total;
+};
+
+/** 命中消息在渲染窗口之外时先扩窗到能渲染它（配合窗口化） */
+const ensureMessageRendered = (documentId: string) => {
+  const list = enrichedMessages.value;
+  const idx = list.findIndex((e) => e.msg.documentId === documentId);
+  if (idx === -1) return;
+  const hiddenCount = list.length - renderWindow.value;
+  if (idx < hiddenCount) {
+    renderWindow.value = list.length - idx;
+  }
+};
+
+/** 滚动到当前命中的消息（黄圈高亮由 DmMessageItem 按 searchHit prop 渲染） */
+const scrollToSearchHit = (documentId: string) => {
+  ensureMessageRendered(documentId);
+  nextTick(() => {
+    const target = messagesRef.value?.querySelector(`[data-mid="${documentId}"]`);
+    target?.scrollIntoView({ block: "center" });
+  });
+};
+
+// query 变化 → 复位到第一个命中；命中变化 → 滚动定位
+watch(dmSearchQuery, () => {
+  dmSearchIndex.value = 0;
+});
+watch(currentSearchHitId, (id) => {
+  if (id) scrollToSearchHit(id);
+});
+
+// Enter 发送 / Shift+Enter 换行的键盘处理已随 Phase 4 拆分内聚到 DmComposer
+
+/** ESC 优先关闭：上下文菜单 → 会话内搜索 → 编辑模式 → 弹窗本体 */
 const onKeyDown = (e: KeyboardEvent) => {
   if (e.key !== "Escape" || !visible.value) return;
   // 如果有更上层的弹窗（如委托详情 overlay）处于打开状态，不关闭敲敲
@@ -909,6 +1133,10 @@ const onKeyDown = (e: KeyboardEvent) => {
   if (document.querySelectorAll(".ik-overlay").length > 1) return;
   if (contextMenuMessageId.value) {
     hideContextMenu();
+    return;
+  }
+  if (dmSearchOpen.value) {
+    closeDmSearch();
     return;
   }
   if (editingMessageId.value) {
@@ -1245,6 +1473,18 @@ const handleMobileBack = () => {
                         </span>
                       </Transition>
                     </div>
+                    <!-- Phase 4 会话内搜索：仅选中会话时显示 -->
+                    <button
+                      v-if="activeConversation"
+                      type="button"
+                      class="ik-knock__search-toggle"
+                      :class="{ 'is-active': dmSearchOpen }"
+                      aria-label="搜索聊天记录"
+                      title="搜索聊天记录"
+                      @click="toggleDmSearch"
+                    >
+                      <MagnifyingGlassIcon class="ik-knock__search-toggle-icon" aria-hidden="true" />
+                    </button>
                     <!-- 重置 AI 对话上下文（3.3.4）：仅 AI 会话显示 -->
                     <button
                       v-if="isActiveAiConversation"
@@ -1258,183 +1498,121 @@ const handleMobileBack = () => {
                       <ArrowPathIcon class="ik-knock__reset-icon" aria-hidden="true" />
                     </button>
                   </header>
+                  <!-- Phase 4 会话内搜索条：命中计数 + 上下跳转 -->
+                  <div v-if="dmSearchOpen" class="ik-knock__search-bar">
+                    <MagnifyingGlassIcon class="ik-knock__search-bar-icon" aria-hidden="true" />
+                    <input
+                      ref="dmSearchInputRef"
+                      v-model="dmSearchQuery"
+                      type="text"
+                      class="ik-knock__search-input"
+                      placeholder="搜索聊天记录…"
+                      @keydown.enter.prevent="goToSearchHit(1)"
+                    />
+                    <span class="ik-knock__search-count" aria-live="polite">
+                      {{ dmSearchHits.length ? `${dmSearchIndex + 1}/${dmSearchHits.length}` : (dmSearchQuery.trim() ? "0 条" : "") }}
+                    </span>
+                    <button
+                      type="button"
+                      class="ik-knock__search-nav"
+                      :disabled="!dmSearchHits.length"
+                      aria-label="上一条"
+                      @click="goToSearchHit(-1)"
+                    >
+                      <ChevronUpIcon class="ik-knock__search-nav-icon" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      class="ik-knock__search-nav"
+                      :disabled="!dmSearchHits.length"
+                      aria-label="下一条"
+                      @click="goToSearchHit(1)"
+                    >
+                      <ChevronDownIcon class="ik-knock__search-nav-icon" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      class="ik-knock__search-nav"
+                      aria-label="关闭搜索"
+                      @click="closeDmSearch"
+                    >
+                      <XMarkIcon class="ik-knock__search-nav-icon" aria-hidden="true" />
+                    </button>
+                  </div>
                   <div class="ik-knock__main-body">
-                    <!-- 会话消息流 -->
+                    <!-- 会话消息流（wrap 承载「回到底部」悬浮按钮的定位上下文） -->
                     <div
                       v-if="activeConversation && activeMessages.length"
+                      class="ik-knock__messages-wrap"
+                    >
+                    <div
                       ref="messagesRef"
                       class="ik-knock__messages"
                       :class="{ 'is-settling': messagesSettling }"
                       @scroll.passive="onMessagesScroll"
                     >
-                      <template
-                        v-for="entry in enrichedMessages"
-                        :key="entry.msg.documentId"
+                      <!-- Phase 4 渲染窗口化：更早消息滚顶自动加载（也可点击） -->
+                      <button
+                        v-if="hasHiddenAbove"
+                        type="button"
+                        class="ik-knock__load-earlier"
+                        @click="expandRenderWindow"
                       >
-                        <!-- 时间分隔行：首条或与上条间隔 > 5min 时显示 -->
-                        <div
-                          v-if="entry.showTime"
-                          class="ik-knock__time-divider"
-                          :class="{ 'is-new': entry.isNew }"
-                        >
-                          {{ formatTime(entry.msg.createdAt) }}
-                        </div>
-                        <!-- system 分界（如「对话已重置」3.3.4）：居中提示，不渲染气泡 -->
-                        <div
-                          v-if="entry.msg.kind === 'system'"
-                          class="ik-knock__sys-divider"
-                        >
-                          <span>{{ entry.msg.content }}</span>
-                        </div>
-                        <div
-                          v-else
-                          class="ik-knock__msg"
-                          :class="{
-                            'is-new': entry.isNew,
-                            'is-mine': entry.isMine,
-                          }"
-                          @contextmenu="showContextMenu($event, entry.msg)"
-                        >
-                          <div
-                            class="ik-knock__msg-avatar"
-                            :class="{ 'is-clickable': entry.avatarClickable }"
-                            :role="entry.avatarClickable ? 'button' : undefined"
-                            :tabindex="entry.avatarClickable ? 0 : undefined"
-                            :aria-hidden="entry.avatarClickable ? undefined : 'true'"
-                            :aria-label="entry.avatarClickable ? `查看${entry.msg.sender?.name || '用户'}的主页` : undefined"
-                            @click="goToProfile(entry.profileUrl)"
-                            @keydown.enter="goToProfile(entry.profileUrl)"
-                          >
-                            <img
-                              v-if="entry.msg.sender?.avatar"
-                              :src="entry.msg.sender.avatar"
-                              :alt="entry.msg.sender?.name || ''"
-                              class="ik-knock__msg-avatar-img"
-                              draggable="false"
-                            />
-                            <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__msg-avatar-img" draggable="false" />
-                          </div>
-                          <div class="ik-knock__msg-body">
-                            <div
-                              class="ik-knock__msg-bubble"
-                              :class="{ 'is-deleted': !!entry.msg.deletedAt }"
-                            >
-                              <template v-if="typeof entry.rendered === 'object'">
-                                <CommentBody :content="entry.rendered.content" />
-                              </template>
-                              <span
-                                v-else-if="isPendingStreamBubble(entry.msg)"
-                                class="ik-knock__msg-typing"
-                                aria-label="正在输入"
-                              >
-                                <span class="ik-knock__typing-dot" />
-                                <span class="ik-knock__typing-dot" />
-                                <span class="ik-knock__typing-dot" />
-                              </span>
-                              <template v-else-if="typeof entry.rendered === 'string' && hasBubbleLinks(entry.rendered)">
-                                <template v-for="(seg, si) in parseBubbleSegments(entry.rendered)" :key="si">
-                                  <span v-if="seg.type === 'text'">{{ seg.content }}</span>
-                                  <a
-                                    v-else
-                                    :href="seg.href"
-                                    class="ik-knock__msg-link"
-                                    @click="handleBubbleLink(seg.href, $event)"
-                                  >{{ seg.text }}</a>
-                                </template>
-                              </template>
-                              <template v-else>{{ entry.rendered }}</template>
-                              <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
-                            </div>
-                            <!-- 通知 quote 卡：点击跳到关联委托（postModal） -->
-                            <button
-                              v-if="entry.quote"
-                              type="button"
-                              class="ik-knock__msg-quote"
-                              @click="goPost(entry.msg)"
-                            >
-                              <DocumentTextIcon
-                                class="ik-knock__msg-quote-icon"
-                                aria-hidden="true"
-                              />
-                              <span class="ik-knock__msg-quote-text">
-                                <span class="ik-knock__msg-quote-label">{{ entry.quote.label }}</span>
-                                <span class="ik-knock__msg-quote-title">
-                                  {{ entry.quote.title }}
-                                </span>
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      </template>
+                        加载更早的消息
+                      </button>
+                      <DmMessageItem
+                        v-for="entry in visibleMessages"
+                        :key="entry.msg.documentId"
+                        :entry="entry"
+                        :copied-id="copiedMessageId"
+                        :show-regenerate="entry.aiRich && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
+                        :regenerating="regeneratingAi"
+                        :search-hit="entry.msg.documentId === currentSearchHitId"
+                        @contextmenu="showContextMenu"
+                        @profile="goToProfile"
+                        @open-post="openPostFromBubble"
+                        @bubble-link="handleBubbleLink"
+                        @copy="copyMessageText"
+                        @regenerate="handleRegenerate"
+                        @quote-click="goPost"
+                      />
+                    </div>
+                    <!-- 1.6 回到底部：远离底部且（有新消息 / AI 输出中）时浮现 -->
+                    <Transition name="ik-b2b">
+                      <button
+                        v-if="showBackToBottom"
+                        type="button"
+                        class="ik-knock__back-to-bottom"
+                        aria-label="回到底部"
+                        @click="handleBackToBottom"
+                      >
+                        <ChevronDownIcon class="ik-knock__back-to-bottom-icon" aria-hidden="true" />
+                      </button>
+                    </Transition>
                     </div>
                     <!-- 占位：仅在非加载态时显示，避免切换会话时闪烁 -->
                     <div v-else-if="!activeMessageLoading" class="ik-knock__empty-pill">
                       EMPTY
                     </div>
 
-                    <!-- 输入框：仅在有选中会话且非匿名/系统会话时显示 -->
-                    <div v-if="activeConversation && !composerDisabled" class="ik-knock__composer">
-                      <div
-                        v-if="editingMessageId"
-                        class="ik-knock__composer-edit-banner"
-                      >
-                        <span>正在编辑消息</span>
-                        <button
-                          type="button"
-                          class="ik-knock__composer-edit-cancel"
-                          @click="cancelEdit"
-                        >
-                          取消
-                        </button>
-                      </div>
-                      <div
-                        v-if="sendError"
-                        class="ik-knock__composer-error"
-                        role="alert"
-                      >
-                        {{ sendError }}
-                      </div>
-                      <div
-                        class="ik-knock__composer-row"
-                        :class="{ 'is-disabled': composerDisabled }"
-                      >
-                        <textarea
-                          v-if="editingMessageId"
-                          ref="composerRef"
-                          v-model="editingDraft"
-                          class="ik-knock__composer-input"
-                          placeholder="编辑消息…"
-                          rows="1"
-                          maxlength="4000"
-                          :disabled="composerDisabled"
-                          @keydown="onComposerKeyDown"
-                        />
-                        <textarea
-                          v-else
-                          ref="composerRef"
-                          v-model="draft"
-                          class="ik-knock__composer-input"
-                          :placeholder="composerPlaceholder"
-                          rows="1"
-                          maxlength="4000"
-                          :disabled="composerDisabled"
-                          @keydown="onComposerKeyDown"
-                          @input="onComposerInput"
-                        />
-                        <button
-                          type="button"
-                          class="ik-knock__composer-send"
-                          :disabled="composerDisabled || sending || (editingMessageId ? !editingDraft.trim() : !draft.trim())"
-                          :aria-label="editingMessageId ? '保存编辑' : '发送'"
-                          @click="doSend"
-                        >
-                          <PaperAirplaneIcon
-                            class="ik-knock__composer-send-icon"
-                            aria-hidden="true"
-                          />
-                        </button>
-                      </div>
-                    </div>
+                    <!-- 输入框：仅在有选中会话且非匿名/系统会话时显示（Phase 4 拆分为 DmComposer） -->
+                    <DmComposer
+                      v-if="activeConversation && !composerDisabled"
+                      ref="composerRef"
+                      v-model:draft="draft"
+                      v-model:editing-draft="editingDraft"
+                      :disabled="composerDisabled"
+                      :placeholder="composerPlaceholder"
+                      :sending="sending"
+                      :editing="!!editingMessageId"
+                      :error="sendError"
+                      :streaming="!!activeStreamingMessageId"
+                      :stopping="stoppingAi"
+                      @send="doSend"
+                      @stop="handleStopAi"
+                      @cancel-edit="cancelEdit"
+                      @typing="handleComposerTyping"
+                    />
                   </div>
                 </section>
               </div>
@@ -1459,6 +1637,15 @@ const handleMobileBack = () => {
         @click.stop
       >
         <button
+          v-if="contextMenuCanCopy"
+          type="button"
+          class="ik-knock__context-menu-item"
+          @click="onContextMenuAction('copy')"
+        >
+          复制
+        </button>
+        <button
+          v-if="contextMenuCanModify"
           type="button"
           class="ik-knock__context-menu-item"
           @click="onContextMenuAction('edit')"
@@ -1466,6 +1653,7 @@ const handleMobileBack = () => {
           编辑
         </button>
         <button
+          v-if="contextMenuCanModify"
           type="button"
           class="ik-knock__context-menu-item ik-knock__context-menu-item--danger"
           @click="onContextMenuAction('withdraw')"
@@ -1991,20 +2179,129 @@ const handleMobileBack = () => {
   height: 18px;
 }
 
-/* system 分界提示（如「对话已重置」3.3.4） */
-.ik-knock__sys-divider {
-  display: flex;
+/* ── Phase 4 会话内搜索 ───────────────────── */
+/* header 搜索开关：与 reset 同款按钮语言；靠右（reset 存在时紧挨其左） */
+.ik-knock__search-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  margin: 10px 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #777;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.ik-knock__sys-divider span {
-  font-size: 12px;
-  color: #888;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 3px 12px;
-  border-radius: 10px;
+/* reset 按钮同时存在时由搜索按钮承担 margin-left:auto，reset 紧随其后 */
+.ik-knock__search-toggle + .ik-knock__reset {
+  margin-left: 0;
 }
+
+.ik-knock__search-toggle:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-knock__search-toggle.is-active {
+  color: #000;
+  background: #fbfe00;
+}
+
+.ik-knock__search-toggle-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* 搜索条：header 下方整行；输入 + 命中计数 + 上下跳转 + 关闭 */
+.ik-knock__search-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #161616;
+  border-bottom: 2px solid #202020;
+}
+
+.ik-knock__search-bar-icon {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.ik-knock__search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 140ms ease;
+}
+
+.ik-knock__search-input:focus {
+  border-color: #fbfe00;
+}
+
+.ik-knock__search-input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.ik-knock__search-count {
+  flex-shrink: 0;
+  min-width: 40px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.ik-knock__search-nav {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.ik-knock__search-nav:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-knock__search-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.ik-knock__search-nav-icon {
+  width: 15px;
+  height: 15px;
+}
+
+
+/* system 分界 / 消息气泡 / 引用卡 / 操作条样式随 Phase 4 拆分移至 DmMessageItem.vue */
 
 .ik-knock__main-title {
   font-size: 17px;
@@ -2012,26 +2309,12 @@ const handleMobileBack = () => {
   color: #fff;
 }
 
-/* ── 正在输入指示器 ─────────────────────── */
+/* ── 正在输入指示器（header 标题旁；气泡内加载点样式在 DmMessageItem） ── */
 .ik-knock__typing-indicator {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   height: 14px;
-}
-
-/* 流式占位气泡内的加载点（首个 delta 未到达前） */
-.ik-knock__msg-typing {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 1.2em;
-  vertical-align: middle;
-}
-
-/* 气泡内的加载点需要用深色（默认白色点在白底气泡上不可见） */
-.ik-knock__msg-typing .ik-knock__typing-dot {
-  background: rgba(0, 0, 0, 0.35);
 }
 
 .ik-knock__typing-label {
@@ -2099,6 +2382,56 @@ const handleMobileBack = () => {
 }
 
 /* ── 消息流 ────────────────────────────────── */
+/* wrap：给「回到底部」悬浮按钮提供定位上下文（1.6） */
+.ik-knock__messages-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ik-knock__back-to-bottom {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: #2b2b2e;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.ik-knock__back-to-bottom:hover {
+  background: #fbfe00;
+  color: #000;
+  transform: translateY(-2px);
+}
+
+.ik-knock__back-to-bottom-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.ik-b2b-enter-active,
+.ik-b2b-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.ik-b2b-enter-from,
+.ik-b2b-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 .ik-knock__messages {
   flex: 1;
   min-height: 0;
@@ -2133,211 +2466,29 @@ const handleMobileBack = () => {
   border-radius: 2px;
 }
 
-.ik-knock__msg {
-  display: flex;
-  /* 参考 chat-generator：头像与气泡间留出昵尖角的位置 */
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.ik-knock__msg-avatar {
-  flex-shrink: 0;
-  /* 与侧栏会话列表头像保持同尺寸 */
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  color: #4a4a4a;
-  overflow: hidden;
-}
-
-/* 消息头像可点击跳转个人主页 */
-.ik-knock__msg-avatar.is-clickable {
-  cursor: pointer;
-  transition: opacity 140ms ease;
-}
-
-.ik-knock__msg-avatar.is-clickable:hover {
-  opacity: 0.8;
-}
-
-.ik-knock__msg-avatar.is-clickable:focus-visible {
-  outline: 2px solid #fbfe00;
-  outline-offset: 2px;
-}
-
-.ik-knock__msg-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-.ik-knock__msg-avatar-icon {
-  width: 40px;
-  height: 40px;
-}
-
-.ik-knock__msg-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  /* 限制气泡最大宽度，长消息换行不顶满整列 */
-  max-width: min(560px, 92%);
-}
-
-/* 时间分隔行（QQ 风格）：居中、灰色、小字 */
-.ik-knock__time-divider {
+/* Phase 4 渲染窗口化：顶部「加载更早的消息」提示条（滚顶也会自动扩窗） */
+.ik-knock__load-earlier {
   align-self: center;
-  margin: 6px 0 2px;
-  padding: 2px 10px;
-  color: rgba(255, 255, 255, 0.32);
-  font-size: 12px;
-  letter-spacing: 0.5px;
-  user-select: none;
-}
-
-.ik-knock__msg-bubble {
-  position: relative;
-  /* w-fit 自适应内容宽度 */
-  align-self: flex-start;
-  max-width: 100%;
-  /* 参考 chat-generator： 0.3125em 0.75em、圆角 0.9375em，与气泡字号成比 */
-  padding: 6px 14px;
-  background: #ffffff;
-  border-radius: 16px;
-  color: #4d4d4d;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.4;
-  word-break: break-word;
-  white-space: pre-wrap;
-}
-
-/*
- * 左上昵尖角（bubble nipple）：复用 zenless-tools/chat-generator 原版 webp
- * 参考 ChatGeneratorItemArrow.tsx：top: 0.125em; left: -0.4375em; width/height: 0.75em
- */
-.ik-knock__msg-bubble::before {
-  content: "";
-  position: absolute;
-  top: 0.125em;
-  left: -0.4375em;
-  width: 0.75em;
-  height: 0.75em;
-  background-image: url("/images/chat_message_arrow_left.webp");
-  background-size: contain;
-  background-repeat: no-repeat;
-  pointer-events: none;
-}
-
-/*
- * 白底气泡里的 @mention 芯片需要单独配色：
- * 默认 MentionChip 是「黄绿字 + 透明底」，在白底上几乎不可读。
- * 这里用 :deep 穿透 scoped 边界，把它改成「黄底黑字小标签」——
- * 与 KnockKnock 选中态的 #fbfe00 主色一致，整体语言统一。
- */
-.ik-knock__msg-bubble :deep(.ik-mention) {
-  background-color: #fbfe00;
-  color: #000;
-  padding: 0 6px;
-  border-radius: 4px;
-  font-weight: 700;
-}
-
-.ik-knock__msg-bubble :deep(.ik-mention:hover),
-.ik-knock__msg-bubble :deep(.ik-mention:focus-visible) {
-  background-color: #e8eb00;
-  color: #000;
-}
-
-/* ── 消息入场动画（仅增量到达的新消息，仅动画 transform + opacity 不触发重排） ── */
-@keyframes ik-msg-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-
-.ik-knock__msg.is-new,
-.ik-knock__time-divider.is-new {
-  animation: ik-msg-enter 300ms ease-out both;
-}
-
-/* 引用委托卡片：与正常 DM 区分，hint 标签 + 标题 + 文档图标 */
-.ik-knock__msg-quote {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 100%;
-  margin: 0;
-  padding: 7px 15px;
-  border: 0;
-  border-radius: 999px;
-  background: #000;
-  color: #c8c8c8;
-  cursor: pointer;
-  text-align: left;
-  transition: background-color 140ms ease, box-shadow 140ms ease;
-}
-
-.ik-knock__msg-quote:hover {
-  /* 与侧栏会话项 hover 一致：浅白底 + 黑/白双层 inset ring */
-  background-color: rgba(255, 255, 255, 0.04);
-  box-shadow:
-    inset 0 0 0 1px #000,
-    inset 0 0 0 5px rgba(255, 255, 255, 0.35);
-}
-
-.ik-knock__msg-quote-icon {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  color: rgba(251, 254, 0, 0.85);
-}
-
-.ik-knock__msg-quote-text {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-
-.ik-knock__msg-quote-label {
+  margin: 2px 0 4px;
+  padding: 4px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
-  letter-spacing: 1px;
-}
-
-.ik-knock__msg-quote-title {
-  font-size: 13px;
-  color: #fff;
   font-weight: 600;
-  /* 单行 ellipsis，避免长标题撑爆气泡 */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-/* ── AI 回复内 markdown 链接样式（白底气泡上需要深色链接） ── */
-.ik-knock__msg-link {
-  color: #2c58e2;
-  text-decoration: underline;
-  text-underline-offset: 2px;
   cursor: pointer;
-  transition: color 120ms ease;
+  transition: background 140ms ease, color 140ms ease;
 }
 
-.ik-knock__msg-link:hover {
-  color: #1a3fad;
+.ik-knock__load-earlier:hover {
+  background: rgba(251, 254, 0, 0.12);
+  color: #fbfe00;
 }
+
+/* 消息气泡 / 头像 / 时间分隔 / 引用卡 / 操作条 / is-mine 等
+   消息级样式随 Phase 4 拆分移至 DmMessageItem.vue（scoped 类名不变） */
 
 /* 入场/出场动画统一在 theme.css 的 .ik-overlay-* 全局规则里维护 */
 
@@ -2491,13 +2642,10 @@ const handleMobileBack = () => {
     font-size: 17px;
   }
 
-  /* 消息区 + 输入框：底部安全区留白，避免被 Home 条遮挡 */
+  /* 消息区 + 输入框：底部安全区留白，避免被 Home 条遮挡
+     （composer 的 safe-area 规则随拆分移至 DmComposer.vue） */
   .ik-knock__main-body {
     padding: 14px;
-  }
-
-  .ik-knock__composer {
-    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .ik-knock__empty-pill {
@@ -2508,195 +2656,12 @@ const handleMobileBack = () => {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  /* .ik-overlay-* 动画在 theme.css 全局接管，这里只管本组件专有的 is-new 动画 */
-  .ik-knock__msg.is-new,
-  .ik-knock__time-divider.is-new {
-    animation: none;
-  }
-}
+/* is-new 入场动画的 reduced-motion 豁免随拆分移至 DmMessageItem.vue */
 
 /* ═══════════════════════════════════════════════
-   DM 私聊：自己的消息（右侧） + 编辑/撤回态 + Composer + 上下文菜单
+   DM 私聊：上下文菜单（消息气泡 / Composer 样式已拆分至
+   DmMessageItem.vue / DmComposer.vue）
    ═══════════════════════════════════════════════ */
-
-/* 自己发的消息：头像 + 气泡整体右对齐；nipple 改右上 */
-.ik-knock__msg.is-mine {
-  flex-direction: row-reverse;
-}
-
-.ik-knock__msg.is-mine .ik-knock__msg-body {
-  align-items: flex-end;
-}
-
-.ik-knock__msg.is-mine .ik-knock__msg-bubble {
-  align-self: flex-end;
-  /* 参考 zenless-tools chat-generator：Right 侧 accent-dark (#2c58e2) + 白字
-     是 ZZZ 游戏内蓝色对话框的视觉语言；之前的黄底是项目自创版本，统一回原版 */
-  background: #2c58e2;
-  color: #fff;
-}
-
-/* 右侧 nipple：使用专门的右箭头 webp（zenless-tools chat_message_arrow_right.webp），
-   注意右侧偏移 -0.34375em 与左侧 -0.4375em 不同——原始资源箭头形状不对称 */
-.ik-knock__msg.is-mine .ik-knock__msg-bubble::before {
-  left: auto;
-  right: -0.34375em;
-  background-image: url("/images/chat_message_arrow_right.webp");
-  transform: none;
-}
-
-/* 撤回的消息：灰色斜体小占位 */
-.ik-knock__msg-bubble.is-deleted {
-  background: rgba(255, 255, 255, 0.06) !important;
-  color: rgba(255, 255, 255, 0.45) !important;
-  font-style: italic;
-  font-weight: 500;
-}
-
-.ik-knock__msg-bubble.is-deleted::before {
-  display: none;
-}
-
-/* "(已编辑)" 小标 */
-.ik-knock__msg-edited {
-  margin-left: 6px;
-  color: rgba(0, 0, 0, 0.4);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-/* 自己气泡是蓝底白字 → "(已编辑)" 用半透明白保持层级 */
-.ik-knock__msg.is-mine .ik-knock__msg-edited {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* 对端气泡是白底，"(已编辑)"用浅灰 */
-.ik-knock__msg:not(.is-mine) .ik-knock__msg-edited {
-  color: rgba(0, 0, 0, 0.35);
-}
-
-/* ── Composer ──────────────────────────────── */
-.ik-knock__composer {
-  flex-shrink: 0;
-  margin-top: auto;
-  padding-top: 10px;
-  border-top: 2px solid rgba(255, 255, 255, 0.08);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ik-knock__composer-edit-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: rgba(251, 254, 0, 0.12);
-  color: #fbfe00;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.ik-knock__composer-edit-cancel {
-  border: 0;
-  background: transparent;
-  color: #fbfe00;
-  cursor: pointer;
-  font: inherit;
-  text-decoration: underline;
-  padding: 0;
-}
-
-.ik-knock__composer-error {
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: rgba(255, 80, 80, 0.15);
-  color: #ff8080;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.ik-knock__composer-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
-  transition: border-color 140ms ease;
-}
-
-.ik-knock__composer-row:focus-within {
-  border-color: #fbfe00;
-}
-
-/* pseudo:anonymous / pseudo:system 会话：输入框整体禁用态 */
-.ik-knock__composer-row.is-disabled {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: rgba(255, 255, 255, 0.05);
-  cursor: not-allowed;
-}
-
-.ik-knock__composer-row.is-disabled .ik-knock__composer-input {
-  cursor: not-allowed;
-  color: rgba(255, 255, 255, 0.35);
-}
-
-.ik-knock__composer-input {
-  flex: 1;
-  min-height: 36px;
-  max-height: 140px;
-  padding: 8px 12px;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  font-size: 14px;
-  font-family: inherit;
-  line-height: 1.45;
-  resize: none;
-  outline: none;
-}
-
-.ik-knock__composer-input::placeholder {
-  color: rgba(255, 255, 255, 0.32);
-}
-
-.ik-knock__composer-send {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 999px;
-  background: #fbfe00;
-  color: #000;
-  cursor: pointer;
-  transition: background 140ms ease, transform 100ms ease, opacity 140ms ease;
-}
-
-.ik-knock__composer-send:hover:not(:disabled) {
-  background: #e8eb00;
-}
-
-.ik-knock__composer-send:active:not(:disabled) {
-  transform: scale(0.94);
-}
-
-.ik-knock__composer-send:disabled {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.3);
-  cursor: not-allowed;
-}
-
-.ik-knock__composer-send-icon {
-  width: 18px;
-  height: 18px;
-}
 
 /* ── 上下文菜单（编辑/撤回） ───────────────── */
 /* 全屏遮罩：捕获点击关闭菜单 */

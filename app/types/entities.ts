@@ -646,6 +646,23 @@ export interface DmNotificationCommentRef {
   isAnonymous: boolean;
 }
 
+/**
+ * AI 工作流事件（3.1）：透明化 AI 的「思考→搜索→阅读→回答」过程。
+ * 实时经 WS `message.workflow` 推送；回答定稿后全量落在 DmMessage.workflow
+ * 供刷新后回放时间线。协议与 server/src/utils/agent/workflow-events.ts 一致。
+ */
+export interface AiWorkflowEvent {
+  type: string;
+  /** 同一步骤的 start/item/finish 共享 stepId，前端据此聚合状态 */
+  stepId: string;
+  /** 单调递增序号：断线去重 / 回放排序 */
+  seq: number;
+  /** ISO 时间戳 */
+  at: string;
+  data?: Record<string, unknown>;
+  usage?: { promptTokens?: number; completionTokens?: number };
+}
+
 /** GET /api/dm/conversations/:id/messages 单条消息 */
 export interface DmMessage {
   /**
@@ -666,6 +683,8 @@ export interface DmMessage {
   deletedAt: string | null;
   sender: DmMessageSender | null;
   replyTo: DmMessageReplyTo | null;
+  /** AI 工作流事件序列（3.1）：仅 AI 流式回复定稿后非空，用于回放时间线 */
+  workflow?: AiWorkflowEvent[] | null;
 
   // ── 仅 kind === "notification" 出现的字段 ──────────────────
   /** 通知子类型：决定气泡左侧 / quote 卡 的展示文案 */
@@ -687,6 +706,7 @@ export type DmWsEventType =
   | "message.created"
   | "message.edited"
   | "message.delta"
+  | "message.workflow"
   | "message.deleted"
   | "conversation.read"
   | "conversation.read.all"
