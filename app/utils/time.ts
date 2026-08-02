@@ -12,3 +12,12 @@ export function formatTime(dateStr?: string): string {
   if (days < 30) return `${days}天前`;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/** 完整时间戳（消息时间 hover 详情）：YYYY-MM-DD HH:mm:ss；无效输入返回空串 */
+export function formatFullTime(dateStr?: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
