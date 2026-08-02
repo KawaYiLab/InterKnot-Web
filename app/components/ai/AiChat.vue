@@ -13,12 +13,12 @@ import {
   PlusIcon,
   PencilIcon,
   TrashIcon,
-  ChevronRightIcon,
   XMarkIcon,
+  SparklesIcon,
 } from "@heroicons/vue/24/outline";
 import { PaperAirplaneIcon, StopIcon } from "@heroicons/vue/24/solid";
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
-import { buildWorkflowSteps, extractCitations, isWorkflowSettled } from "~/utils/workflow";
+import { buildWorkflowSteps, extractCitations } from "~/utils/workflow";
 import type { WorkflowStepView } from "~/utils/workflow";
 
 const router = useRouter();
@@ -125,6 +125,18 @@ const activeStreamingMessageId = computed<string | null>(() => {
 
 const isStreaming = computed(() => activeStreamingMessageId.value !== null);
 
+const latestReasoningMessage = computed<DmMessage | null>(() => {
+  const list = messages.value;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const m = list[i];
+    if (!m) continue;
+    if (isAiMessage(m) && (m.workflow?.length || workflowEventsOf(m.documentId).length)) {
+      return m;
+    }
+  }
+  return null;
+});
+
 function isAiMessage(msg: DmMessage): boolean {
   const uid = msg.sender?.userId;
   if (msg.sender?.isAiAgent === true) return true;
@@ -158,34 +170,6 @@ function workflowFor(msg: DmMessage) {
 
 function stepsFor(msg: DmMessage): WorkflowStepView[] {
   return buildWorkflowSteps(workflowFor(msg));
-}
-
-function reasoningTitleFor(msg: DmMessage): string {
-  const steps = stepsFor(msg);
-  const thinks = steps.filter((s) => s.kind === "thinking" || s.kind === "think").length;
-  const tools = steps.filter((s) => s.kind === "tool" || s.kind === "search" || s.kind === "read").length;
-  const parts: string[] = [];
-  if (thinks) parts.push(`思考了 ${thinks} 次`);
-  if (tools) parts.push(`使用了 ${tools} 次工具`);
-  if (!parts.length) return "正在分析…";
-  return parts.join(" · ");
-}
-
-function reasoningDurationFor(msg: DmMessage): string {
-  const events = workflowFor(msg);
-  if (!events.length) return "";
-  const start = new Date(events[0]?.at || 0).getTime();
-  const end = new Date(events[events.length - 1]?.at || 0).getTime();
-  const ms = end - start;
-  if (ms < 1000) return `${Math.round(ms / 100)}0ms`;
-  if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-  const m = Math.floor(ms / 60000);
-  const s = Math.round((ms % 60000) / 1000);
-  return `${m}m ${s}s`;
-}
-
-function isWorkflowRunning(msg: DmMessage): boolean {
-  return !isWorkflowSettled(workflowFor(msg));
 }
 
 function citationsFor(msg: DmMessage) {
@@ -314,6 +298,10 @@ function composerAutoGrow() {
 }
 
 function openReasoning(msg: DmMessage) {
+  if (reasoningMessageId.value === msg.documentId && showReasoningSidebar.value) {
+    showReasoningSidebar.value = false;
+    return;
+  }
   reasoningMessageId.value = msg.documentId;
   showReasoningSidebar.value = true;
 }
@@ -466,13 +454,31 @@ function formatSessionTime(iso: string | null): string {
 
     <main class="ai-chat__main">
       <header class="ai-chat__header">
-        <div v-if="activeSession" class="ai-chat__header-info">
-          <span class="ai-chat__header-title">{{ activeSession.title || activeSession.peer?.name || "新会话" }}</span>
-          <span v-if="activeCard" class="ai-chat__header-sub">{{ activeCard.displayName }}</span>
+        <div class="ai-chat__header-left">
+          <button v-if="activeCard" class="ai-chat__header-avatar" @click="goHome">
+            <img v-if="cardAvatarUrl(activeCard)" :src="cardAvatarUrl(activeCard)!" alt="" />
+            <span v-else class="ai-chat__header-avatar-fallback">{{ (activeCard.displayName || activeCard.slug || "?")[0] }}</span>
+          </button>
+          <div v-if="activeSession" class="ai-chat__header-info">
+            <span class="ai-chat__header-title">{{ activeSession.title || activeSession.peer?.name || "新会话" }}</span>
+            <span v-if="activeCard" class="ai-chat__header-sub">{{ activeCard.displayName }}</span>
+          </div>
+          <div v-else class="ai-chat__header-info">
+            <span class="ai-chat__header-title">AI Chat</span>
+          </div>
         </div>
-        <div v-else class="ai-chat__header-info">
-          <span class="ai-chat__header-title">选择一个会话</span>
-        </div>
+
+        <button
+          v-if="latestReasoningMessage"
+          type="button"
+          class="ai-chat__header-action"
+          :class="{ active: showReasoningSidebar }"
+          title="查看推理过程"
+          @click="openReasoning(latestReasoningMessage)"
+        >
+          <SparklesIcon class="ai-chat__icon" />
+          <span>推理</span>
+        </button>
       </header>
 
       <div ref="messagesRef" class="ai-chat__messages" @scroll="onScroll">
@@ -498,24 +504,19 @@ function formatSessionTime(iso: string | null): string {
               <span v-else class="ai-chat__avatar-fallback">{{ (msg.sender?.name || "AI")[0] }}</span>
             </div>
 
-            <div class="ai-chat__bubble-col">
-              <div v-if="isAiMessage(msg) && stepsFor(msg).length" class="ai-chat__reasoning-head">
-                <button
-                  type="button"
-                  class="ai-chat__reasoning-btn"
-                  @click="openReasoning(msg)"
-                >
-                  <span class="ai-chat__reasoning-title">{{ reasoningTitleFor(msg) }}</span>
-                  <span v-if="!isWorkflowRunning(msg)" class="ai-chat__reasoning-time">{{ reasoningDurationFor(msg) }}</span>
-                  <ChevronRightIcon class="ai-chat__reasoning-chevron" />
-                </button>
-              </div>
+            <div class="ai-chat__bubble-col" :class="{ 'is-user': isMine(msg), 'is-ai': !isMine(msg) }">
+              <AiReasoningBlock
+                v-if="isAiMessage(msg)"
+                :msg="msg"
+                :streaming="isStreamingMessage(msg.documentId)"
+                @open-sidebar="openReasoning"
+              />
 
               <div class="ai-chat__bubble" :class="{ 'is-user': isMine(msg), 'is-ai': !isMine(msg) }">
                 <AiMessageBody
                   v-if="isAiMessage(msg) && !msg.deletedAt"
                   :text="msg.content || ''"
-                  :streaming="isStreamingMessage(msg.documentId) && isAiMessage(msg)"
+                  :streaming="isStreamingMessage(msg.documentId)"
                   @open-post="onOpenPost"
                 />
                 <span v-else-if="msg.deletedAt">消息已撤回</span>
@@ -839,27 +840,92 @@ function formatSessionTime(iso: string | null): string {
 
 .ai-chat__header {
   flex-shrink: 0;
-  padding: 14px 18px;
+  padding: 12px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-chat__header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ai-chat__header-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  background: #2a2a2a;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ai-chat__header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ai-chat__header-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111;
+  background: #bfff09;
 }
 
 .ai-chat__header-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .ai-chat__header-title {
   font-weight: 700;
   font-size: 15px;
   color: #e8e8e8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ai-chat__header-sub {
   font-size: 12px;
   color: #9a9a9a;
+}
+
+.ai-chat__header-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: #9a9a9a;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 120ms ease;
+}
+
+.ai-chat__header-action:hover,
+.ai-chat__header-action.active {
+  background: rgba(191, 255, 9, 0.12);
+  border-color: rgba(191, 255, 9, 0.25);
+  color: #bfff09;
 }
 
 .ai-chat__messages {
@@ -868,8 +934,9 @@ function formatSessionTime(iso: string | null): string {
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   scroll-behavior: smooth;
+  position: relative;
 }
 
 .ai-chat__center {
@@ -910,15 +977,18 @@ function formatSessionTime(iso: string | null): string {
   display: flex;
   gap: 10px;
   align-items: flex-start;
+  max-width: 820px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .ai-chat__row.is-user {
   flex-direction: row-reverse;
-  align-self: flex-end;
+  justify-content: flex-start;
 }
 
 .ai-chat__row.is-ai {
-  align-self: flex-start;
+  justify-content: flex-start;
 }
 
 .ai-chat__avatar {
@@ -953,47 +1023,10 @@ function formatSessionTime(iso: string | null): string {
 }
 
 .ai-chat__bubble-col {
-  max-width: min(720px, 80%);
+  max-width: min(720px, 84%);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.ai-chat__reasoning-head {
-  display: flex;
-}
-
-.ai-chat__reasoning-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  border: 0;
-  background: rgba(255, 255, 255, 0.05);
-  color: #9a9a9a;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 120ms ease;
-}
-
-.ai-chat__reasoning-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e8e8e8;
-}
-
-.ai-chat__reasoning-title {
-  font-weight: 500;
-}
-
-.ai-chat__reasoning-time {
-  font-size: 11px;
-  color: #6a6a6a;
-}
-
-.ai-chat__reasoning-chevron {
-  width: 14px;
-  height: 14px;
+  gap: 2px;
 }
 
 .ai-chat__bubble {
