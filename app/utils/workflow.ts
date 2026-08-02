@@ -25,6 +25,8 @@ export interface WorkflowStepView {
   posts?: WorkflowPostRef[];
   /** 搜索命中数 */
   hits?: number;
+  /** 步骤历时（ms），根据 start/finish 事件 at 字段计算 */
+  durationMs?: number;
 }
 
 /** 白名单外的工具兜底展示名 */
@@ -54,6 +56,7 @@ const asPosts = (v: unknown): WorkflowPostRef[] =>
 export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[] {
   const steps: WorkflowStepView[] = [];
   const byId = new Map<string, WorkflowStepView>();
+  const bounds = new Map<string, { startedAt: number; finishedAt: number }>();
 
   const upsert = (stepId: string, init: Omit<WorkflowStepView, "stepId">): WorkflowStepView => {
     let step = byId.get(stepId);
@@ -65,41 +68,61 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
     return step;
   };
 
+  const touchTimestamp = (step: WorkflowStepView, ts: number) => {
+    let b = bounds.get(step.stepId);
+    if (!b) {
+      b = { startedAt: ts, finishedAt: ts };
+      bounds.set(step.stepId, b);
+    } else {
+      b.startedAt = Math.min(b.startedAt, ts);
+      b.finishedAt = Math.max(b.finishedAt, ts);
+    }
+    step.durationMs = b.finishedAt - b.startedAt;
+  };
+
   for (const ev of [...events].sort((a, b) => a.seq - b.seq)) {
     const d = ev.data ?? {};
+    const ts = ev.at ? new Date(ev.at).getTime() : null;
     switch (ev.type) {
-      case "thinking.start":
-        upsert(ev.stepId, { kind: "thinking", status: "running", title: "分析问题" });
+      case "thinking.start": {
+        const s = upsert(ev.stepId, { kind: "thinking", status: "running", title: "分析问题" });
+        if (ts != null) touchTimestamp(s, ts);
         break;
+      }
       case "thinking.finish": {
         const s = upsert(ev.stepId, { kind: "thinking", status: "done", title: "分析问题" });
         s.status = "done";
+        if (ts != null) touchTimestamp(s, ts);
         break;
       }
-      case "forum.search.start":
-        upsert(ev.stepId, {
+      case "forum.search.start": {
+        const s = upsert(ev.stepId, {
           kind: "search",
           status: "running",
           title: "搜索论坛",
           subtitle: clipQuery(d.query),
         });
+        if (ts != null) touchTimestamp(s, ts);
         break;
+      }
       case "forum.search.finish": {
         const s = upsert(ev.stepId, { kind: "search", status: "done", title: "搜索论坛" });
         s.status = "done";
         s.subtitle = clipQuery(d.query);
         s.hits = typeof d.hits === "number" ? d.hits : asPosts(d.items).length;
         s.posts = asPosts(d.items);
+        if (ts != null) touchTimestamp(s, ts);
         break;
       }
       case "forum.read.start": {
         const title = typeof d.title === "string" && d.title ? `《${d.title}》` : "";
-        upsert(ev.stepId, {
+        const s = upsert(ev.stepId, {
           kind: "read",
           status: "running",
           title: "阅读帖子",
           subtitle: title,
         });
+        if (ts != null) touchTimestamp(s, ts);
         break;
       }
       case "forum.read.item": {
@@ -112,21 +135,24 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
           s.posts = [...(s.posts ?? []).filter((p) => p.documentId !== post.documentId), post];
         }
         if (post.title) s.subtitle = `《${post.title}》`;
+        if (ts != null) touchTimestamp(s, ts);
         break;
       }
       case "forum.read.finish": {
         const s = upsert(ev.stepId, { kind: "read", status: "done", title: "阅读帖子" });
         s.status = "done";
         if (typeof d.title === "string" && d.title) s.subtitle = `《${d.title}》`;
+        if (ts != null) touchTimestamp(s, ts);
         break;
       }
       case "tool.start": {
         const tool = String(d.tool ?? "");
-        upsert(ev.stepId, {
+        const s = upsert(ev.stepId, {
           kind: "tool",
           status: "running",
           title: TOOL_TITLES[tool] ?? tool ?? "调用工具",
         });
+        if (ts != null) touchTimestamp(s, ts);
         break;
       }
       case "tool.finish": {
@@ -137,14 +163,18 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
           title: TOOL_TITLES[tool] ?? tool ?? "调用工具",
         });
         s.status = "done";
+        if (ts != null) touchTimestamp(s, ts);
         break;
       }
-      case "answer.start":
-        upsert(ev.stepId, { kind: "answer", status: "running", title: "生成回答" });
+      case "answer.start": {
+        const s = upsert(ev.stepId, { kind: "answer", status: "running", title: "生成回答" });
+        if (ts != null) touchTimestamp(s, ts);
         break;
+      }
       case "answer.finish": {
         const s = upsert(ev.stepId, { kind: "answer", status: "done", title: "生成回答" });
         s.status = "done";
+        if (ts != null) touchTimestamp(s, ts);
         break;
       }
       case "error": {
