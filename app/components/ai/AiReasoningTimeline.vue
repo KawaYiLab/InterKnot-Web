@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ChevronRightIcon, WrenchIcon, MagnifyingGlassIcon, BookOpenIcon, SparklesIcon, CodeBracketIcon } from "@heroicons/vue/24/outline";
+import { formatChatMarkdown } from "~/utils/format-chat";
 import type { WorkflowStepView } from "~/utils/workflow";
 
 const props = defineProps<{
@@ -48,6 +49,10 @@ function formatJson(v: unknown): string {
     return String(v);
   }
 }
+
+function md(text: string): string {
+  return formatChatMarkdown(text || "", { highlight: false });
+}
 </script>
 
 <template>
@@ -72,7 +77,7 @@ function formatJson(v: unknown): string {
           </span>
         </div>
 
-        <div v-if="step.text" class="ai-timeline__text">{{ step.text }}</div>
+        <div v-if="step.text" class="ai-timeline__text" v-html="md(step.text)" />
 
         <button
           v-if="step.kind === 'tool' || step.kind === 'search' || step.kind === 'read'"
@@ -214,9 +219,34 @@ function formatJson(v: unknown): string {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   color: #b0b0b0;
-  white-space: pre-wrap;
   word-break: break-word;
   font-size: 13px;
+  line-height: 1.55;
+}
+
+.ai-timeline__text :deep(p) {
+  margin: 0 0 0.5em;
+}
+
+.ai-timeline__text :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.ai-timeline__text :deep(code) {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.ai-timeline__text :deep(pre) {
+  background: rgba(0, 0, 0, 0.35);
+  padding: 8px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11.5px;
 }
 
 .ai-timeline__tool-head {
