@@ -52,11 +52,17 @@ const totalDurationMs = computed(() => {
   return new Date(last).getTime() - new Date(first).getTime();
 });
 
+const toolSteps = computed(() => steps.value.filter((s) => s.kind === "tool"));
+
 const headerTitle = computed(() => {
   if (hasError.value) return "执行出错";
   if (!settled.value) {
     if (runningStep.value?.subtitle) return `正在${runningStep.value.title} · ${runningStep.value.subtitle}`;
     return runningStep.value ? `正在${runningStep.value.title}…` : "正在分析…";
+  }
+  // 若存在工具调用，优先展示「使用了 N 次工具」
+  if (toolSteps.value.length > 1 || (toolSteps.value.length === 1 && steps.value.length === toolSteps.value.length)) {
+    return `使用了 ${toolSteps.value.length} 次工具`;
   }
   const stepCount = steps.value.filter((s) => s.kind !== "error").length;
   const citeCount = citations.value.length;

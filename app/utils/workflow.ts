@@ -150,7 +150,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         const s = upsert(ev.stepId, {
           kind: "tool",
           status: "running",
-          title: TOOL_TITLES[tool] ?? tool ?? "调用工具",
+          title: `使用 ${tool} 工具`,
         });
         if (ts != null) touchTimestamp(s, ts);
         break;
@@ -160,7 +160,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         const s = upsert(ev.stepId, {
           kind: "tool",
           status: "done",
-          title: TOOL_TITLES[tool] ?? tool ?? "调用工具",
+          title: `使用 ${tool} 工具`,
         });
         s.status = "done";
         if (ts != null) touchTimestamp(s, ts);
