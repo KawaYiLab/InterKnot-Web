@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { formatChatMarkdown } from "~/utils/format-chat";
 import type { WorkflowStepView } from "~/utils/workflow";
 
 /**
- * 单条工作流步骤（3.3）：纵向时间轴样式，对齐 ChatGPT / Claude 的 reasoning step。
- * - pending / running / done / error 四态点
- * - 搜索 / 阅读 步骤可展开命中/已读帖子列表
- * - 帖子列表带 grid 展开动画
+ * 单条工作流步骤（3.3 / AstrBot ChatUI 对齐）：
+ * - thinking 步骤直接展示 reasoning 文本；
+ * - tool 步骤可折叠展开参数 / 结果；
+ * - search/read 步骤保留命中帖子列表。
  */
 const props = defineProps<{
   step: WorkflowStepView;
@@ -18,12 +19,45 @@ const emit = defineEmits<{
 
 const expanded = ref(false);
 
-const hasDetails = computed(() => (props.step.posts?.length ?? 0) > 0);
+const hasFoldableDetails = computed(() => {
+  const { kind, posts, args, result } = props.step;
+  if ((posts?.length ?? 0) > 0) return true;
+  if (kind === "tool" && (args != null || result != null)) return true;
+  return false;
+});
 
-const detailLabel = computed(() => {
-  if (!hasDetails.value) return "";
+const reasoningHtml = computed(() => {
+  if (props.step.kind !== "thinking" || !props.step.text) return "";
+  return formatChatMarkdown(props.step.text, { highlight: false });
+});
+
+const toolArgsText = computed(() => {
+  if (!props.step.args) return "";
+  try {
+    return JSON.stringify(props.step.args, null, 2);
+  } catch {
+    return String(props.step.args);
+  }
+});
+
+const toolResultText = computed(() => {
+  if (!props.step.result) return "";
+  try {
+    return JSON.stringify(props.step.result, null, 2);
+  } catch {
+    return String(props.step.result);
+  }
+});
+
+const hasToolDetails = computed(
+  () => props.step.kind === "tool" && (toolArgsText.value || toolResultText.value),
+);
+
+const foldLabel = computed(() => {
+  if (!hasFoldableDetails.value) return "";
   if (props.step.kind === "search") return `命中 ${props.step.hits ?? props.step.posts!.length} 篇`;
-  return `${props.step.posts!.length} 篇`;
+  if (props.step.kind === "read") return `${props.step.posts!.length} 篇`;
+  return "详情";
 });
 
 function formatDuration(ms: number): string {
@@ -71,12 +105,12 @@ const durationText = computed(() => {
           <span v-if="durationText" class="ik-aiwf-step__time">{{ durationText }}</span>
 
           <button
-            v-if="hasDetails"
+            v-if="hasFoldableDetails"
             type="button"
             class="ik-aiwf-step__expand"
             @click.stop="expanded = !expanded"
           >
-            <span>{{ detailLabel }}</span>
+            <span>{{ foldLabel }}</span>
             <svg
               class="ik-aiwf-step__chevron"
               :class="{ 'is-open': expanded }"
@@ -94,25 +128,44 @@ const durationText = computed(() => {
             </svg>
           </button>
         </div>
+
+        <div
+          v-if="step.kind === 'thinking' && reasoningHtml"
+          class="ik-aiwf-step__reasoning"
+          v-html="reasoningHtml"
+        />
       </div>
     </div>
 
     <div
-      v-if="hasDetails"
+      v-if="hasFoldableDetails"
       class="ik-aiwf-step__details-wrap"
       :class="{ 'is-open': expanded }"
     >
-      <ul class="ik-aiwf-step__posts">
-        <li v-for="post in step.posts" :key="post.documentId">
-          <button
-            type="button"
-            class="ik-aiwf-step__post"
-            @click="emit('open-post', post.documentId)"
-          >
-            {{ post.title || "（无标题）" }}
-          </button>
-        </li>
-      </ul>
+      <div class="ik-aiwf-step__details-inner">
+        <ul v-if="step.posts?.length" class="ik-aiwf-step__posts">
+          <li v-for="post in step.posts" :key="post.documentId">
+            <button
+              type="button"
+              class="ik-aiwf-step__post"
+              @click="emit('open-post', post.documentId)"
+            >
+              {{ post.title || "（无标题）" }}
+            </button>
+          </li>
+        </ul>
+
+        <div v-if="hasToolDetails" class="ik-aiwf-step__tool">
+          <div v-if="toolArgsText" class="ik-aiwf-step__tool-block">
+            <span class="ik-aiwf-step__tool-label">参数</span>
+            <pre>{{ toolArgsText }}</pre>
+          </div>
+          <div v-if="toolResultText" class="ik-aiwf-step__tool-block">
+            <span class="ik-aiwf-step__tool-label">结果</span>
+            <pre>{{ toolResultText }}</pre>
+          </div>
+        </div>
+      </div>
     </div>
   </li>
 </template>
@@ -219,6 +272,26 @@ const durationText = computed(() => {
   color: rgba(0, 0, 0, 0.38);
 }
 
+.ik-aiwf-step__reasoning {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.ik-aiwf-step__reasoning :deep(p) {
+  margin: 0 0 0.4em;
+}
+
+.ik-aiwf-step__reasoning :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.ik-aiwf-step__reasoning :deep(pre) {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .ik-aiwf-step__expand {
   display: inline-flex;
   align-items: center;
@@ -250,7 +323,7 @@ const durationText = computed(() => {
   transform: rotate(180deg);
 }
 
-/* 帖子列表展开动画 */
+/* 详情展开动画 */
 .ik-aiwf-step__details-wrap {
   display: grid;
   grid-template-rows: 0fr;
@@ -261,9 +334,12 @@ const durationText = computed(() => {
   grid-template-rows: 1fr;
 }
 
-.ik-aiwf-step__posts {
+.ik-aiwf-step__details-inner {
   min-height: 0;
   overflow: hidden;
+}
+
+.ik-aiwf-step__posts {
   margin: 0;
   padding: 0 0 8px 28px;
   list-style: none;
@@ -291,6 +367,39 @@ const durationText = computed(() => {
   background: rgba(44, 88, 226, 0.08);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.ik-aiwf-step__tool {
+  padding: 0 0 8px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ik-aiwf-step__tool-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ik-aiwf-step__tool-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.ik-aiwf-step__tool-block pre {
+  margin: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.7);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
 }
 
 @keyframes ik-aiwf-spin {

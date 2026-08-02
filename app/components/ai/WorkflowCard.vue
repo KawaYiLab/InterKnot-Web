@@ -53,6 +53,7 @@ const totalDurationMs = computed(() => {
 });
 
 const toolSteps = computed(() => steps.value.filter((s) => s.kind === "tool"));
+const thinkingSteps = computed(() => steps.value.filter((s) => s.kind === "thinking"));
 
 const headerTitle = computed(() => {
   if (hasError.value) return "执行出错";
@@ -60,15 +61,16 @@ const headerTitle = computed(() => {
     if (runningStep.value?.subtitle) return `正在${runningStep.value.title} · ${runningStep.value.subtitle}`;
     return runningStep.value ? `正在${runningStep.value.title}…` : "正在分析…";
   }
-  // 若存在工具调用，优先展示「使用了 N 次工具」
-  if (toolSteps.value.length > 1 || (toolSteps.value.length === 1 && steps.value.length === toolSteps.value.length)) {
-    return `使用了 ${toolSteps.value.length} 次工具`;
-  }
+  // AstrBot ChatUI 风格：「思考了 X 次，使用了 Y 次工具」
+  const parts: string[] = [];
+  if (thinkingSteps.value.length > 0) parts.push(`思考了 ${thinkingSteps.value.length} 次`);
+  if (toolSteps.value.length > 0) parts.push(`使用了 ${toolSteps.value.length} 次工具`);
+  if (parts.length > 0) return parts.join(" · ");
   const stepCount = steps.value.filter((s) => s.kind !== "error").length;
   const citeCount = citations.value.length;
-  const parts = [`已分析完成`, `${stepCount} 个步骤`];
-  if (citeCount) parts.push(`引用 ${citeCount} 篇帖子`);
-  return parts.join(" · ");
+  const fallback = [`已分析完成`, `${stepCount} 个步骤`];
+  if (citeCount) fallback.push(`引用 ${citeCount} 篇帖子`);
+  return fallback.join(" · ");
 });
 
 const headerMeta = computed(() => {

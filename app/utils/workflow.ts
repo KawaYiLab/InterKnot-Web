@@ -21,6 +21,11 @@ export interface WorkflowStepView {
   title: string;
   /** 副文案：关键词 / 帖子标题 / 耗时等 */
   subtitle?: string;
+  /** reasoning/thinking 文本（可展开显示） */
+  text?: string;
+  /** 工具参数 / 结果（工具卡片展开用） */
+  args?: unknown;
+  result?: unknown;
   /** 可展开的帖子列表（搜索命中 / 已读帖子），点击可打开 postModal */
   posts?: WorkflowPostRef[];
   /** 搜索命中数 */
@@ -95,6 +100,26 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
+      case "reasoning.start": {
+        const s = upsert(ev.stepId, { kind: "thinking", status: "running", title: "思考" });
+        if (ts != null) touchTimestamp(s, ts);
+        break;
+      }
+      case "reasoning.delta": {
+        const s = upsert(ev.stepId, { kind: "thinking", status: "running", title: "思考" });
+        const text = String(d.text ?? "");
+        if (text) s.text = (s.text ?? "") + text;
+        if (ts != null) touchTimestamp(s, ts);
+        break;
+      }
+      case "reasoning.finish": {
+        const s = upsert(ev.stepId, { kind: "thinking", status: "done", title: "思考" });
+        s.status = "done";
+        const text = String(d.text ?? "");
+        if (text) s.text = text;
+        if (ts != null) touchTimestamp(s, ts);
+        break;
+      }
       case "forum.search.start": {
         const s = upsert(ev.stepId, {
           kind: "search",
@@ -152,6 +177,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
           status: "running",
           title: `使用 ${tool} 工具`,
         });
+        s.args = d.args;
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
@@ -163,6 +189,8 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
           title: `使用 ${tool} 工具`,
         });
         s.status = "done";
+        s.result = d.result;
+        if (typeof d.ms === "number") s.durationMs = d.ms;
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
