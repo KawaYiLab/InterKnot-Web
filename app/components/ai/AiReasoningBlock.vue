@@ -128,8 +128,16 @@ onBeforeUnmount(stopPreviewTimer);
 </script>
 
 <template>
-  <div class="ai-rb">
-    <button type="button" class="ai-rb__head" @click="expanded = !expanded">
+  <div
+    class="ai-rb"
+    :class="{ 'is-expanded': expanded, 'has-preview': !expanded && !!previewText }"
+  >
+    <button
+      type="button"
+      class="ai-rb__head"
+      :aria-expanded="expanded"
+      @click="expanded = !expanded"
+    >
       <span class="ai-rb__status" :class="{ running: !settled }">
         <span v-if="!settled" class="ai-rb__spinner" />
         <svg v-else class="ai-rb__ok" viewBox="0 0 20 20" fill="none">
@@ -153,12 +161,15 @@ onBeforeUnmount(stopPreviewTimer);
       <ArrowTopRightOnSquareIcon class="ai-rb__icon" />
     </button>
 
-    <div v-if="expanded" class="ai-rb__body">
-      <AiReasoningTimeline :steps="steps" />
-    </div>
-
-    <div v-else-if="previewText" class="ai-rb__preview">
-      {{ previewText }}
+    <div class="ai-rb__body-wrap">
+      <div class="ai-rb__body-track">
+        <div class="ai-rb__body">
+          <AiReasoningTimeline :steps="steps" />
+        </div>
+      </div>
+      <div v-if="previewText" class="ai-rb__preview-track">
+        <div class="ai-rb__preview">{{ previewText }}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -180,9 +191,10 @@ onBeforeUnmount(stopPreviewTimer);
 }
 
 .ai-rb__head {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   border: 0;
   padding: 0;
   background: transparent;
@@ -301,14 +313,45 @@ onBeforeUnmount(stopPreviewTimer);
   height: 14px;
 }
 
+.ai-rb__body-wrap {
+  display: grid;
+  grid-template-rows: 0fr 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+
+.ai-rb.is-expanded .ai-rb__body-wrap {
+  grid-template-rows: 1fr 0fr;
+}
+
+.ai-rb.has-preview .ai-rb__body-wrap {
+  grid-template-rows: 0fr 1fr;
+}
+
+.ai-rb.is-expanded.has-preview .ai-rb__body-wrap {
+  grid-template-rows: 1fr 0fr;
+}
+
+.ai-rb__body-track,
+.ai-rb__preview-track {
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  transition: grid-template-rows 220ms ease, visibility 0s 220ms;
+}
+
+.ai-rb.is-expanded .ai-rb__body-track,
+.ai-rb.has-preview .ai-rb__preview-track {
+  visibility: visible;
+  transition: grid-template-rows 220ms ease, visibility 0s;
+}
+
 .ai-rb__body {
-  margin-top: 10px;
-  padding-top: 2px;
-  animation: ai-rb-fade 0.2s ease;
+  min-height: 0;
+  padding-top: 10px;
 }
 
 .ai-rb__preview {
-  margin-top: 6px;
+  min-height: 0;
   max-height: 4.8em;
   overflow: hidden;
   display: -webkit-box;
@@ -318,14 +361,5 @@ onBeforeUnmount(stopPreviewTimer);
   color: #7a7a7a;
   font-size: 12.5px;
   line-height: 1.6;
-}
-
-@keyframes ai-rb-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 </style>
