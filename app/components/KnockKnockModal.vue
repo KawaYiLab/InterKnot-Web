@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { useRouter } from "vue-router";
 import {
   PhoneIcon,
   UserIcon,
@@ -31,6 +32,7 @@ const {
   consumePendingKnockTab,
   updateUrl,
 } = useKnockKnockModal();
+const router = useRouter();
 const auth = useAuthStore();
 const postModal = usePostModal();
 const loginDialog = useLoginDialog();
@@ -1238,11 +1240,14 @@ const handleBackdropMouseDown = (e: MouseEvent) => {
 };
 
 const handleTabClick = async (tab: KnockTab) => {
-  activeTab.value = tab;
   if (tab === "calls") {
-    await openCallsTab();
+    const query: Record<string, string> = {};
+    if (activeAiSlug.value) query.character = activeAiSlug.value;
+    if (activeConversationId.value) query.session = activeConversationId.value;
+    router.push({ path: "/chat", query }).catch(() => undefined);
     return;
   }
+  activeTab.value = tab;
   activeConversationId.value = null;
   activeAiSlug.value = null;
   updateUrl(tab);
