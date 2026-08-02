@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRightIcon, WrenchIcon, MagnifyingGlassIcon, BookOpenIcon, SparklesIcon } from "@heroicons/vue/24/outline";
+import { ChevronRightIcon, WrenchIcon, MagnifyingGlassIcon, BookOpenIcon, SparklesIcon, CodeBracketIcon } from "@heroicons/vue/24/outline";
 import type { WorkflowStepView } from "~/utils/workflow";
 
 const props = defineProps<{
@@ -24,10 +24,13 @@ function formatMs(ms?: number): string {
   return `${m}m ${s}s`;
 }
 
-function toolIcon(kind: string) {
-  if (kind === "search") return MagnifyingGlassIcon;
-  if (kind === "read") return BookOpenIcon;
-  if (kind === "thinking") return SparklesIcon;
+function toolIcon(step: WorkflowStepView) {
+  if (step.status === "running") return "spinner";
+  const name = toolName(step).toLowerCase();
+  if (name.includes("search") || name.includes("搜索")) return MagnifyingGlassIcon;
+  if (name.includes("read") || name.includes("阅读")) return BookOpenIcon;
+  if (name.includes("python") || name.includes("ipython")) return CodeBracketIcon;
+  if (step.kind === "thinking") return SparklesIcon;
   return WrenchIcon;
 }
 
@@ -77,7 +80,8 @@ function formatJson(v: unknown): string {
           class="ai-timeline__tool-head"
           @click="toggle(step.stepId)"
         >
-          <component :is="toolIcon(step.kind)" class="ai-timeline__tool-icon" />
+          <span v-if="toolIcon(step) === 'spinner'" class="ai-timeline__tool-spinner" />
+          <component v-else :is="toolIcon(step)" class="ai-timeline__tool-icon" />
           <span class="ai-timeline__tool-name">{{ toolName(step) }}</span>
           <span v-if="step.durationMs" class="ai-timeline__tool-time">{{ formatMs(step.durationMs) }}</span>
           <ChevronRightIcon
@@ -236,6 +240,22 @@ function formatJson(v: unknown): string {
 .ai-timeline__tool-icon {
   width: 14px;
   height: 14px;
+}
+
+.ai-timeline__tool-spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(191, 255, 9, 0.2);
+  border-top-color: #bfff09;
+  animation: ai-timeline-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes ai-timeline-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .ai-timeline__tool-chevron {

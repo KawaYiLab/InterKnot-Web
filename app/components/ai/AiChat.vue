@@ -386,6 +386,16 @@ function formatSessionTime(iso: string | null): string {
         <span class="ai-chat__brand-text">AI Chat</span>
       </div>
 
+      <button
+        type="button"
+        class="ai-chat__new-session-btn"
+        :disabled="!activeCard || creatingSession"
+        @click="createSession"
+      >
+        <PlusIcon class="ai-chat__icon" />
+        <span>新建会话</span>
+      </button>
+
       <div class="ai-chat__section-title">角色</div>
       <div class="ai-chat__characters">
         <button
@@ -536,14 +546,6 @@ function formatSessionTime(iso: string | null): string {
               </div>
             </div>
 
-            <div v-if="isMine(msg)" class="ai-chat__avatar ai-chat__avatar--user">
-              <img
-                v-if="msg.sender?.avatar"
-                :src="msg.sender.avatar"
-                alt=""
-              />
-              <span v-else class="ai-chat__avatar-fallback">我</span>
-            </div>
           </div>
         </template>
 
@@ -558,6 +560,9 @@ function formatSessionTime(iso: string | null): string {
 
       <div class="ai-chat__composer">
         <div class="ai-chat__composer-inner">
+          <button type="button" class="ai-chat__composer-plus" title="添加附件">
+            <PlusIcon class="ai-chat__icon" />
+          </button>
           <textarea
             ref="composerRef"
             v-model="draft"
@@ -650,6 +655,33 @@ function formatSessionTime(iso: string | null): string {
 .ai-chat__brand-text {
   font-weight: 700;
   font-size: 16px;
+}
+
+.ai-chat__new-session-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 10px 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #b8b8b8;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.ai-chat__new-session-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: #e8e8e8;
+}
+
+.ai-chat__new-session-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .ai-chat__section-title {
@@ -1087,13 +1119,33 @@ function formatSessionTime(iso: string | null): string {
 .ai-chat__composer-inner {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
-  max-width: 800px;
+  gap: 8px;
+  max-width: 760px;
   margin: 0 auto;
   padding: 8px 10px;
-  border-radius: 20px;
+  border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: #111111;
+}
+
+.ai-chat__composer-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: #9a9a9a;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 120ms ease;
+}
+
+.ai-chat__composer-plus:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8e8e8;
 }
 
 .ai-chat__textarea {
