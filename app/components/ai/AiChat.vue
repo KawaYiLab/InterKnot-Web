@@ -506,7 +506,7 @@ function formatSessionTime(iso: string | null): string {
 
             <div class="ai-chat__bubble-col" :class="{ 'is-user': isMine(msg), 'is-ai': !isMine(msg) }">
               <AiReasoningBlock
-                v-if="isAiMessage(msg)"
+                v-if="isAiMessage(msg) && (msg.workflow?.length || workflowEventsOf(msg.documentId).length || isStreamingMessage(msg.documentId))"
                 :msg="msg"
                 :streaming="isStreamingMessage(msg.documentId)"
                 @open-sidebar="openReasoning"
