@@ -15,6 +15,8 @@ import {
   TrashIcon,
   XMarkIcon,
   SparklesIcon,
+  ClipboardDocumentIcon,
+  CheckIcon,
 } from "@heroicons/vue/24/outline";
 import { PaperAirplaneIcon, StopIcon } from "@heroicons/vue/24/solid";
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
@@ -55,6 +57,7 @@ const reasoningMessageId = ref<string | null>(null);
 const showReasoningSidebar = ref(false);
 const creatingSession = ref(false);
 const deletingSessionId = ref<string | null>(null);
+const copiedMessageId = ref<string | null>(null);
 const editingTitleId = ref<string | null>(null);
 const editingTitle = ref("");
 const wasNearBottom = ref(true);
@@ -178,6 +181,19 @@ function citationsFor(msg: DmMessage) {
 
 function onOpenPost(documentId: string) {
   postModal.open(documentId);
+}
+
+async function copyMessage(msg: DmMessage) {
+  const text = msg.content || "";
+  try {
+    await navigator.clipboard.writeText(text);
+    copiedMessageId.value = msg.documentId;
+    setTimeout(() => {
+      if (copiedMessageId.value === msg.documentId) copiedMessageId.value = null;
+    }, 2000);
+  } catch {
+    // fallback
+  }
 }
 
 function scrollToBottom() {
@@ -542,6 +558,18 @@ function formatSessionTime(iso: string | null): string {
                   @click="onOpenPost(cite.documentId)"
                 >
                   {{ cite.title }}
+                </button>
+              </div>
+
+              <div v-if="!isMine(msg) && msg.content" class="ai-chat__msg-actions">
+                <button
+                  type="button"
+                  class="ai-chat__msg-action"
+                  @click="copyMessage(msg)"
+                >
+                  <CheckIcon v-if="copiedMessageId === msg.documentId" class="ai-chat__msg-action-icon" />
+                  <ClipboardDocumentIcon v-else class="ai-chat__msg-action-icon" />
+                  <span>{{ copiedMessageId === msg.documentId ? "已复制" : "复制" }}</span>
                 </button>
               </div>
             </div>
@@ -1108,6 +1136,43 @@ function formatSessionTime(iso: string | null): string {
 
 .ai-chat__citation:hover {
   background: rgba(191, 255, 9, 0.22);
+}
+
+.ai-chat__msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.ai-chat__row:hover .ai-chat__msg-actions,
+.ai-chat__msg-actions:focus-within {
+  opacity: 1;
+}
+
+.ai-chat__msg-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: #6a6a6a;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ai-chat__msg-action:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #b8b8b8;
+}
+
+.ai-chat__msg-action-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .ai-chat__composer {
