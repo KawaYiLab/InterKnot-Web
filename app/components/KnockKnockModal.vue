@@ -832,23 +832,24 @@ const onMessagesScroll = () => {
 };
 
 /**
- * 消息流变化时，如果用户原本就靠底，跟随到新底部。
- * 否则保持当前 scrollTop，让用户继续读历史。
+ * 消息流变化时（新消息加入 / 流式 delta 内容更新），
+ * 如果用户原本靠底则跟随到底；否则仅在有新消息时亮起「回到底部」。
  */
 watch(
-  () => activeMessages.value.length,
+  activeMessages,
   (next, prev) => {
-    if (next <= (prev ?? 0)) return;
-    if (!wasNearBottom.value) {
+    const prevLen = prev?.length ?? 0;
+    const nextLen = next.length;
+    if (nextLen > prevLen && !wasNearBottom.value) {
       // 用户在读历史 → 不打断，仅亮起「回到底部」（1.6）
       hasUnseenBelow.value = true;
       return;
     }
-    nextTick(() => {
-      const el = messagesRef.value;
-      if (el) scrollToBottom(el);
-    });
+    if (!wasNearBottom.value) return;
+    const el = messagesRef.value;
+    if (el) scrollToBottom(el);
   },
+  { flush: 'post' },
 );
 
 /** 补建历史基线：会话 watch 结束时若消息尚未写入缓存，会导致 baseline 为空 + 全员白框 */
