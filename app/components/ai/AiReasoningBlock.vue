@@ -8,7 +8,13 @@ const props = defineProps<{
   msg: DmMessage;
   streaming?: boolean;
   inlineOnly?: boolean;
+  /** 已有最终回答正文时，折叠态不再显示 reasoning 预览（对齐 AstrBot hasNonReasoningContent） */
+  hasAnswerContent?: boolean;
 }>();
+
+const showPreview = computed(
+  () => !props.hasAnswerContent && !expanded.value && !!previewText.value,
+);
 
 const emit = defineEmits<{
   (e: "open-sidebar", msg: DmMessage): void;
@@ -102,11 +108,20 @@ function stopPreviewTimer() {
 }
 
 function syncPreview() {
-  if (props.streaming && !expanded.value && reasoningText.value) {
+  if (
+    props.streaming &&
+    !expanded.value &&
+    !props.hasAnswerContent &&
+    reasoningText.value
+  ) {
     if (!previewTimer && !previewStartTimer) {
       previewStartTimer = setTimeout(() => {
         previewStartTimer = null;
-        if (props.streaming && !expanded.value) {
+        if (
+          props.streaming &&
+          !expanded.value &&
+          !props.hasAnswerContent
+        ) {
           updatePreview();
           previewTimer = setInterval(updatePreview, 1500);
         }
@@ -115,11 +130,11 @@ function syncPreview() {
     return;
   }
   stopPreviewTimer();
-  if (!props.streaming) previewText.value = "";
+  if (!props.streaming || props.hasAnswerContent) previewText.value = "";
 }
 
 watch(
-  () => [props.streaming, expanded.value, reasoningText.value],
+  () => [props.streaming, expanded.value, props.hasAnswerContent, reasoningText.value],
   syncPreview,
   { immediate: true },
 );
@@ -130,7 +145,7 @@ onBeforeUnmount(stopPreviewTimer);
 <template>
   <div
     class="ai-rb"
-    :class="{ 'is-expanded': expanded, 'has-preview': !expanded && !!previewText }"
+    :class="{ 'is-expanded': expanded, 'has-preview': showPreview }"
   >
     <button
       type="button"
@@ -167,7 +182,7 @@ onBeforeUnmount(stopPreviewTimer);
           <AiReasoningTimeline :steps="steps" />
         </div>
       </div>
-      <div v-if="previewText" class="ai-rb__preview-track">
+      <div v-if="showPreview" class="ai-rb__preview-track">
         <div class="ai-rb__preview">{{ previewText }}</div>
       </div>
     </div>

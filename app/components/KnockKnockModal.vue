@@ -832,11 +832,24 @@ const onMessagesScroll = () => {
 };
 
 /**
- * 消息流变化时（新消息加入 / 流式 delta 内容更新），
- * 如果用户原本靠底则跟随到底；否则仅在有新消息时亮起「回到底部」。
+ * 消息流 / 工作流 / 打字机任意视觉变化时，rAF 合并后滚到底。
+ * 用 enrichedMessages 做聚合信号：它比 activeMessages 还多覆盖
+ * workflowEvents / aiRevealTick，避免 reasoning preview / tool 时间线
+ * 展开时高度变化但不触发 activeMessages 的问题。
  */
+let autoScrollRaf: number | null = null;
+const scheduleAutoScroll = () => {
+  if (!wasNearBottom.value || !messagesRef.value) return;
+  if (autoScrollRaf != null) return;
+  autoScrollRaf = requestAnimationFrame(() => {
+    autoScrollRaf = null;
+    const el = messagesRef.value;
+    if (el) scrollToBottom(el);
+  });
+};
+
 watch(
-  activeMessages,
+  enrichedMessages,
   (next, prev) => {
     const prevLen = prev?.length ?? 0;
     const nextLen = next.length;
@@ -845,9 +858,7 @@ watch(
       hasUnseenBelow.value = true;
       return;
     }
-    if (!wasNearBottom.value) return;
-    const el = messagesRef.value;
-    if (el) scrollToBottom(el);
+    scheduleAutoScroll();
   },
   { flush: 'post' },
 );
@@ -895,17 +906,7 @@ watch(
   { immediate: true },
 );
 
-let aiRevealScrollRaf: number | null = null;
-/** 打字机输出时跟随滚底（rAF 合并，避免每 tick 触发 layout） */
-watch(aiRevealTick, () => {
-  if (!wasNearBottom.value || !isAiPeerConversation.value) return;
-  if (aiRevealScrollRaf != null) return;
-  aiRevealScrollRaf = requestAnimationFrame(() => {
-    aiRevealScrollRaf = null;
-    const el = messagesRef.value;
-    if (el) el.scrollTop = el.scrollHeight;
-  });
-});
+/** enrichedMessages 已经覆盖 aiRevealTick，无需单独 watcher。 */
 
 /** 当前会话是否有 AI 消息正在流式/打字机输出（1.6 显示回底按钮的条件之一） */
 const activeHasStreaming = computed(() =>

@@ -99,6 +99,7 @@ const systemLabel = computed(
         :msg="entry.msg"
         :streaming="entry.aiStreaming"
         :inline-only="true"
+        :has-answer-content="!!entry.msg.content?.trim()"
       />
       <div
         class="ik-knock__msg-bubble"
