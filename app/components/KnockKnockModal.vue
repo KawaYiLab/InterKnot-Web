@@ -844,7 +844,7 @@ const scheduleAutoScroll = () => {
   autoScrollRaf = requestAnimationFrame(() => {
     autoScrollRaf = null;
     const el = messagesRef.value;
-    if (el) scrollToBottom(el);
+    if (el) el.scrollTop = el.scrollHeight;
   });
 };
 
