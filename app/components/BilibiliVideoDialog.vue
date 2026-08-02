@@ -23,10 +23,8 @@ function onCancel() {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    onConfirm();
-  } else if (e.key === "Escape") {
+  if (!visible.value) return;
+  if (e.key === "Escape") {
     onCancel();
   }
 }
