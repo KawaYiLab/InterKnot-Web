@@ -94,10 +94,11 @@ const systemLabel = computed(
     </div>
     <div class="ik-knock__msg-body">
       <!-- 3.3 AI 工作流时间线：永远渲染在回答气泡上方 -->
-      <AiWorkflowCard
+      <AiReasoningBlock
         v-if="entry.aiRich && entry.workflowEvents.length > 0"
-        :events="entry.workflowEvents"
-        @open-post="emit('open-post', $event)"
+        :msg="entry.msg"
+        :streaming="entry.aiStreaming"
+        :inline-only="true"
       />
       <div
         class="ik-knock__msg-bubble"

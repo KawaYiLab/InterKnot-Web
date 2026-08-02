@@ -1,24 +1,38 @@
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from "vue";
 import { ChevronRightIcon, ArrowTopRightOnSquareIcon } from "@heroicons/vue/24/outline";
-import type { DmMessage } from "~/types/entities";
+import type { AiWorkflowEvent, DmMessage } from "~/types/entities";
 import { buildWorkflowSteps } from "~/utils/workflow";
 
 const props = defineProps<{
   msg: DmMessage;
   streaming?: boolean;
+  inlineOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "open-sidebar", msg: DmMessage): void;
 }>();
 
+const { workflowEventsOf } = useDmConversations();
+
 const expanded = ref(false);
 const previewText = ref("");
 let previewTimer: ReturnType<typeof setInterval> | null = null;
 let previewStartTimer: ReturnType<typeof setTimeout> | null = null;
 
-const events = computed(() => props.msg.workflow ?? []);
+function mergedEvents(): AiWorkflowEvent[] {
+  const persisted = props.msg.workflow ?? [];
+  const live = workflowEventsOf(props.msg.documentId);
+  if (!live.length) return persisted;
+  if (!persisted.length) return live;
+  const map = new Map<number, AiWorkflowEvent>();
+  for (const ev of persisted) map.set(ev.seq, ev);
+  for (const ev of live) map.set(ev.seq, ev);
+  return Array.from(map.values()).sort((a, b) => a.seq - b.seq);
+}
+
+const events = computed(mergedEvents);
 const steps = computed(() => buildWorkflowSteps(events.value));
 const settled = computed(() => {
   return events.value.some((ev) => ev.type === "answer.finish" || ev.type === "error");
@@ -130,7 +144,7 @@ onBeforeUnmount(stopPreviewTimer);
     </button>
 
     <button
-      v-if="steps.length"
+      v-if="steps.length && !inlineOnly"
       type="button"
       class="ai-rb__open"
       title="在侧边栏打开"
