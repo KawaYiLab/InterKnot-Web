@@ -13,7 +13,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "open-post", documentId: string): void;
+  (e: "follow-up", text: string): void;
 }>();
+
+const followUpText = (title: string) => `关于推荐阅读《${title || "无标题"}》再讲讲：`;
 
 /** 最多展示 5 篇，避免长列表挤占聊天区 */
 const shown = computed(() => props.posts.slice(0, 5));
@@ -33,13 +36,25 @@ const shown = computed(() => props.posts.slice(0, 5));
       推荐阅读
     </div>
     <ul class="ik-aiwf-related__list">
-      <li v-for="post in shown" :key="post.documentId">
+      <li
+        v-for="post in shown"
+        :key="post.documentId"
+        class="ik-aiwf-related__post-item"
+      >
         <button
           type="button"
           class="ik-aiwf-related__item"
           @click="emit('open-post', post.documentId)"
         >
           {{ post.title || "（无标题）" }}
+        </button>
+        <button
+          type="button"
+          class="ik-aiwf-related__follow"
+          :aria-label="`追问《${post.title || '无标题'}》`"
+          @click.stop="emit('follow-up', followUpText(post.title ?? ''))"
+        >
+          追问
         </button>
       </li>
     </ul>
@@ -79,9 +94,15 @@ const shown = computed(() => props.posts.slice(0, 5));
   list-style: none;
 }
 
+.ik-aiwf-related__post-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .ik-aiwf-related__item {
-  display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 3px 2px;
   border: 0;
   border-radius: 6px;
@@ -100,5 +121,31 @@ const shown = computed(() => props.posts.slice(0, 5));
   background: rgba(44, 88, 226, 0.08);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.ik-aiwf-related__follow {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(44, 88, 226, 0.6);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.ik-aiwf-related__post-item:hover .ik-aiwf-related__follow,
+.ik-aiwf-related__follow:focus-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.ik-aiwf-related__follow:hover {
+  background: rgba(44, 88, 226, 0.1);
+  color: #2c58e2;
 }
 </style>

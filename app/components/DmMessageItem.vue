@@ -31,10 +31,25 @@ const emit = defineEmits<{
   (e: "copy", msg: DmMessage): void;
   (e: "regenerate", msg: DmMessage): void;
   (e: "quote-click", msg: DmMessage): void;
+  /** 追问：Workflow/Citation/RelatedPosts 等卡片触发，回填到输入框 */
+  (e: "follow-up", text: string): void;
 }>();
 
 /** 消息时间 hover 详情：气泡 title 显示完整时间戳 */
 const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
+
+/** AI 长消息摘要：取首段前 80 字，作为引导语 */
+const aiSummary = computed(() => {
+  if (!props.entry.aiRich || typeof props.entry.rendered !== "string") return "";
+  const text = props.entry.rendered.trim();
+  if (!text) return "";
+  // 取第一段（按换行或句号分割）
+  const firstBlock = text.split(/\n{2,}|\n/).find((s) => s.trim()) ?? "";
+  const firstSentence = firstBlock.split(/。/).find((s) => s.trim()) ?? firstBlock;
+  const clean = firstSentence.trim().replace(/[#*`_\[\]()]/g, "");
+  if (clean.length <= 60) return "";
+  return clean.slice(0, 80) + (clean.length > 80 ? "…" : "");
+});
 </script>
 
 <template>
@@ -60,6 +75,7 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
     :class="{
       'is-new': entry.isNew,
       'is-mine': entry.isMine,
+      'is-ai': entry.aiRich,
       'is-search-hit': !!searchHit,
     }"
     :data-mid="entry.msg.documentId"
@@ -90,10 +106,18 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
         v-if="entry.aiRich && entry.workflowEvents.length > 0"
         :events="entry.workflowEvents"
         @open-post="emit('open-post', $event)"
+        @follow-up="emit('follow-up', $event)"
       />
+      <!-- AI 长消息摘要：仅对非流式 AI 长文本显示 -->
+      <div
+        v-if="aiSummary && !entry.aiStreaming"
+        class="ik-knock__msg-summary"
+      >
+        {{ aiSummary }}
+      </div>
       <div
         class="ik-knock__msg-bubble"
-        :class="{ 'is-deleted': !!entry.msg.deletedAt }"
+        :class="{ 'is-deleted': !!entry.msg.deletedAt, 'is-ai': entry.aiRich }"
         :title="fullTime || undefined"
       >
         <template v-if="typeof entry.rendered === 'object'">
@@ -195,12 +219,14 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
         v-if="entry.aiRich && entry.citations.length > 0"
         :citations="entry.citations"
         @open-post="emit('open-post', $event)"
+        @follow-up="emit('follow-up', $event)"
       />
       <!-- 3.4 推荐阅读：回答定稿后展示搜索命中但未引用的帖子 -->
       <AiRelatedPosts
         v-if="entry.aiRich && !entry.aiStreaming && entry.relatedPosts.length > 0"
         :posts="entry.relatedPosts"
         @open-post="emit('open-post', $event)"
+        @follow-up="emit('follow-up', $event)"
       />
     </div>
   </div>
@@ -519,6 +545,49 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
 .ik-knock__msg:not(.is-mine) .ik-knock__msg-edited {
   color: rgba(0, 0, 0, 0.35);
 }
+
+/* ── AI 消息阅读体验增强 ────────────────────── */
+/* AI 消息体放宽，让长回答更易阅读（:has 降级到 680px，统一提升到 760px） */
+.ik-knock__msg.is-ai .ik-knock__msg-body,
+.ik-knock__msg-body:has(.ik-ai-md) {
+  max-width: min(760px, 96%);
+}
+
+/* AI 消息摘要：轻量引导语 */
+.ik-knock__msg-summary {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* AI 气泡：柔和背景，降低与深色 modal 的对比 */
+.ik-knock__msg-bubble.is-ai {
+  background: #f7f7f7;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #333;
+  padding: 10px 16px;
+  border-radius: 18px;
+}
+
+/* AI 气泡左侧尖角颜色同步新背景（使用 CSS 三角替代 webp 资源） */
+.ik-knock__msg-bubble.is-ai::before {
+  background-image: none;
+  top: 0.25em;
+  left: -0.5em;
+  width: 0;
+  height: 0;
+  border-top: 0.5em solid transparent;
+  border-bottom: 0.5em solid transparent;
+  border-right: 0.55em solid #f7f7f7;
+}
+
+/* 修复 hover 操作条在 AI 气泡上的颜色：深色按钮在白/浅灰背景上仍合适，保持 */
 
 /* ── 1.4 气泡 hover 操作条（复制）─────────────
    Discord 式：悬浮于气泡右上角、不占布局；触屏无 hover → 长按走上下文菜单 */

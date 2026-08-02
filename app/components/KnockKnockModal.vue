@@ -8,6 +8,7 @@ import {
 } from "@heroicons/vue/24/solid";
 import { ChevronLeftIcon, ChevronDownIcon, ChevronUpIcon, ArrowPathIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
+import AiSuggestedQuestions from "~/components/ai/AiSuggestedQuestions.vue";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { stripMentionsToPlain } from "~/utils/mention";
 import { stripEmotesToPlain } from "~/utils/emote";
@@ -177,6 +178,27 @@ const isActiveAiConversation = computed<boolean>(() => {
   if (!conv) return false;
   const uid = conv.peer?.userId;
   return conv.peer?.isAiAgent === true || (typeof uid === "number" && aiPeerUserIds.value.has(uid));
+});
+
+/** 当前 AI 会话对应的角色卡（用于显示推荐问题等） */
+const activeAiCharacter = computed<AiRoleCard | null>(() => {
+  if (!isActiveAiConversation.value || !activeConversation.value) return null;
+  const uid = activeConversation.value.peer?.userId;
+  if (typeof uid !== "number") return null;
+  return aiCharacters.value.find((c) => c.boundUser?.id === uid) ?? null;
+});
+
+/**
+ * 粗略上下文占用百分比：以 32K 字符作为参考窗口，按当前会话消息总字数估算。
+ * 后端接入真实 token 用量后，可替换为服务端字段。
+ */
+const aiContextUsage = computed<number | null>(() => {
+  if (!isActiveAiConversation.value) return null;
+  const totalChars = activeMessages.value
+    .filter((m) => typeof m.content === "string")
+    .reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
+  const WINDOW = 32000;
+  return Math.min(99, Math.round((totalChars / WINDOW) * 100));
 });
 
 /**
@@ -1011,6 +1033,27 @@ const onContextMenuAction = (action: "copy" | "edit" | "withdraw") => {
   else void doWithdraw(msg);
 };
 
+/** 点击推荐问题：取消编辑态、填入 draft、直接发送 */
+const sendSuggestedQuestion = (question: string) => {
+  if (sending.value || !activeConversationId.value) return;
+  if (editingMessageId.value) cancelEdit();
+  draft.value = question;
+  nextTick(doSend);
+};
+
+/**
+ * Workflow/Citation/RelatedPosts 追问：把预设问题回填到输入框并聚焦，
+ * 不直接发送，让用户可继续编辑。
+ */
+const handleFollowUp = (text: string) => {
+  if (!activeConversationId.value) return;
+  if (editingMessageId.value) cancelEdit();
+  draft.value = text;
+  nextTick(() => {
+    composerRef.value?.focus?.();
+  });
+};
+
 const doSend = async () => {
   if (sending.value) return;
   // 一次性快照所有响应式 ref——await 期间用户可能切会话 / 退出编辑态，
@@ -1575,6 +1618,7 @@ const handleMobileBack = () => {
                         @copy="copyMessageText"
                         @regenerate="handleRegenerate"
                         @quote-click="goPost"
+                        @follow-up="handleFollowUp"
                       />
                     </div>
                     <!-- 1.6 回到底部：远离底部且（有新消息 / AI 输出中）时浮现 -->
@@ -1591,9 +1635,16 @@ const handleMobileBack = () => {
                     </Transition>
                     </div>
                     <!-- 占位：仅在非加载态时显示，避免切换会话时闪烁 -->
-                    <div v-else-if="!activeMessageLoading" class="ik-knock__empty-pill">
-                      EMPTY
-                    </div>
+                    <template v-else-if="!activeMessageLoading">
+                      <AiSuggestedQuestions
+                        v-if="isActiveAiConversation"
+                        :character="activeAiCharacter"
+                        @send="sendSuggestedQuestion"
+                      />
+                      <div v-else class="ik-knock__empty-pill">
+                        EMPTY
+                      </div>
+                    </template>
 
                     <!-- 输入框：仅在有选中会话且非匿名/系统会话时显示（Phase 4 拆分为 DmComposer） -->
                     <DmComposer
@@ -1608,6 +1659,8 @@ const handleMobileBack = () => {
                       :error="sendError"
                       :streaming="!!activeStreamingMessageId"
                       :stopping="stoppingAi"
+                      :is-ai="isActiveAiConversation"
+                      :context-usage="aiContextUsage"
                       @send="doSend"
                       @stop="handleStopAi"
                       @cancel-edit="cancelEdit"

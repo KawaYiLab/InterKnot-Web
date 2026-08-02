@@ -128,6 +128,8 @@ export interface AiRoleCard {
   bio?: string | null;
   avatar?: string | null;
   sortOrder?: number;
+  /** 推荐开场问题（后端可配；前端兜底生成） */
+  suggestedQuestions?: string[] | null;
   boundUser?: {
     id: number;
     login?: string;

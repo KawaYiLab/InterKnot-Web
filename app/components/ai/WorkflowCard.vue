@@ -16,6 +16,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "open-post", documentId: string): void;
+  (e: "follow-up", text: string): void;
 }>();
 
 const steps = computed(() => buildWorkflowSteps(props.events));
@@ -147,6 +148,7 @@ const headerMeta = computed(() => {
             :key="step.stepId"
             :step="step"
             @open-post="emit('open-post', $event)"
+            @follow-up="emit('follow-up', $event)"
           />
         </ol>
       </div>

@@ -19,6 +19,10 @@ const props = defineProps<{
   /** AI 流式生成中（且非编辑态）：发送按钮切换为「停止」 */
   streaming: boolean;
   stopping: boolean;
+  /** 是否为 AI 会话：控制是否展示免责声明与上下文余量 */
+  isAi?: boolean;
+  /** 上下文占用百分比 0-100；null 则不显示 */
+  contextUsage?: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -63,6 +67,14 @@ const sendDisabled = computed(
     props.sending ||
     (props.editing ? !editingDraft.value.trim() : !draft.value.trim()),
 );
+
+/** 上下文余量提示：给入口径，让输入时心中有数 */
+const contextHint = computed(() => {
+  if (!props.isAi || props.contextUsage == null) return null;
+  if (props.contextUsage >= 90) return { text: "上下文余量紧张", level: "danger" as const };
+  if (props.contextUsage >= 70) return { text: "上下文余量一般", level: "warning" as const };
+  return { text: "上下文余量充足", level: "safe" as const };
+});
 
 const onComposerInput = () => {
   autoGrowComposer();
@@ -169,6 +181,19 @@ defineExpose({
           aria-hidden="true"
         />
       </button>
+    </div>
+    <!-- AI 会话底部提示：免责声明 + 上下文余量（Phase 4） -->
+    <div v-if="isAi" class="ik-knock__composer-hints">
+      <span class="ik-knock__composer-disclaimer">
+        AI 生成内容仅供参考，请核实关键信息
+      </span>
+      <span
+        v-if="contextHint"
+        class="ik-knock__composer-context"
+        :class="`is-${contextHint.level}`"
+      >
+        {{ contextHint.text }}
+      </span>
     </div>
   </div>
 </template>
@@ -323,6 +348,39 @@ defineExpose({
 .ik-knock__composer-send-icon {
   width: 18px;
   height: 18px;
+}
+
+/* Phase 4 AI 输入区底部提示：免责声明 + 上下文余量 */
+.ik-knock__composer-hints {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ik-knock__composer-disclaimer {
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 500;
+}
+
+.ik-knock__composer-context {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.ik-knock__composer-context.is-safe {
+  color: #5cd683;
+}
+
+.ik-knock__composer-context.is-warning {
+  color: #fbfe00;
+}
+
+.ik-knock__composer-context.is-danger {
+  color: #ff8080;
 }
 
 @media (max-width: 768px) {

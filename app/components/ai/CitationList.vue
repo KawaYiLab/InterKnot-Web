@@ -14,7 +14,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "open-post", documentId: string): void;
+  (e: "follow-up", text: string): void;
 }>();
+
+const followUpText = (title: string) => `关于来源《${title || "无标题"}》再讲讲：`;
 
 const collapsed = ref(props.citations.length > 3);
 
@@ -85,6 +88,14 @@ const toggle = () => {
             >
               <span class="ik-aiwf-cite__num">{{ idx + 1 }}</span>
               <span class="ik-aiwf-cite__name">{{ post.title || "（无标题）" }}</span>
+            </button>
+            <button
+              type="button"
+              class="ik-aiwf-cite__follow"
+              :aria-label="`追问来源《${post.title || '无标题'}》`"
+              @click.stop="emit('follow-up', followUpText(post.title ?? ''))"
+            >
+              追问
             </button>
           </li>
         </ul>
@@ -180,6 +191,9 @@ const toggle = () => {
 .ik-aiwf-cite__item {
   flex: 0 1 auto;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .ik-aiwf-cite__chip {
@@ -203,6 +217,31 @@ const toggle = () => {
 .ik-aiwf-cite__chip:hover {
   background: rgba(44, 88, 226, 0.1);
   border-color: rgba(44, 88, 226, 0.3);
+}
+
+.ik-aiwf-cite__follow {
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(44, 88, 226, 0.6);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.ik-aiwf-cite__item:hover .ik-aiwf-cite__follow,
+.ik-aiwf-cite__follow:focus-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.ik-aiwf-cite__follow:hover {
+  background: rgba(44, 88, 226, 0.1);
+  color: #2c58e2;
 }
 
 .ik-aiwf-cite__num {

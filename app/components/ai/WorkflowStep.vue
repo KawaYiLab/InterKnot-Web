@@ -14,7 +14,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "open-post", documentId: string): void;
+  /** 追问此帖子：把预设问题回填到输入框 */
+  (e: "follow-up", text: string): void;
 }>();
+
+const followUpText = (title: string) => `关于《${title || "无标题"}》再详细讲讲：`;
 
 const expanded = ref(false);
 
@@ -103,13 +107,25 @@ const durationText = computed(() => {
       :class="{ 'is-open': expanded }"
     >
       <ul class="ik-aiwf-step__posts">
-        <li v-for="post in step.posts" :key="post.documentId">
+        <li
+          v-for="post in step.posts"
+          :key="post.documentId"
+          class="ik-aiwf-step__post-item"
+        >
           <button
             type="button"
             class="ik-aiwf-step__post"
             @click="emit('open-post', post.documentId)"
           >
             {{ post.title || "（无标题）" }}
+          </button>
+          <button
+            type="button"
+            class="ik-aiwf-step__post-follow"
+            :aria-label="`追问《${post.title || '无标题'}》`"
+            @click="emit('follow-up', followUpText(post.title ?? ''))"
+          >
+            追问
           </button>
         </li>
       </ul>
@@ -269,9 +285,15 @@ const durationText = computed(() => {
   list-style: none;
 }
 
+.ik-aiwf-step__post-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .ik-aiwf-step__post {
-  display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 4px 8px;
   border: 0;
   border-radius: 6px;
@@ -291,6 +313,32 @@ const durationText = computed(() => {
   background: rgba(44, 88, 226, 0.08);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.ik-aiwf-step__post-follow {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(44, 88, 226, 0.65);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.ik-aiwf-step__post-item:hover .ik-aiwf-step__post-follow,
+.ik-aiwf-step__post-follow:focus-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.ik-aiwf-step__post-follow:hover {
+  background: rgba(44, 88, 226, 0.1);
+  color: #2c58e2;
 }
 
 @keyframes ik-aiwf-spin {

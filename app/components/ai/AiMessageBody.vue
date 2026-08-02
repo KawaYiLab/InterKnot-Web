@@ -135,7 +135,7 @@ const onClick = async (e: MouseEvent) => {
 
 /* ── 排版 ─────────────────────────────── */
 .ik-ai-md :deep(p) {
-  margin: 0.45em 0;
+  margin: 0.6em 0;
 }
 
 .ik-ai-md :deep(h1),
@@ -144,9 +144,10 @@ const onClick = async (e: MouseEvent) => {
 .ik-ai-md :deep(h4),
 .ik-ai-md :deep(h5),
 .ik-ai-md :deep(h6) {
-  margin: 0.8em 0 0.4em;
+  margin: 1em 0 0.5em;
   font-weight: 700;
   line-height: 1.3;
+  color: #111;
 }
 
 .ik-ai-md :deep(h1) {
@@ -154,11 +155,11 @@ const onClick = async (e: MouseEvent) => {
 }
 
 .ik-ai-md :deep(h2) {
-  font-size: 1.15em;
+  font-size: 1.18em;
 }
 
 .ik-ai-md :deep(h3) {
-  font-size: 1.05em;
+  font-size: 1.08em;
 }
 
 .ik-ai-md :deep(h4),
@@ -169,16 +170,22 @@ const onClick = async (e: MouseEvent) => {
 
 .ik-ai-md :deep(ul),
 .ik-ai-md :deep(ol) {
-  margin: 0.45em 0;
+  margin: 0.55em 0;
   padding-left: 1.4em;
 }
 
 .ik-ai-md :deep(li) {
-  margin: 0.2em 0;
+  margin: 0.35em 0;
 }
 
 .ik-ai-md :deep(li > p) {
-  margin: 0;
+  margin: 0.2em 0;
+}
+
+/* 加粗在浅色 AI 气泡里更突出 */
+.ik-ai-md :deep(strong) {
+  color: #000;
+  font-weight: 700;
 }
 
 .ik-ai-md :deep(blockquote) {
