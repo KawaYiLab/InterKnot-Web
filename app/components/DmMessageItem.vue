@@ -146,14 +146,14 @@ const messageSegments = computed((): string[] | null => {
       <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__msg-avatar-img" draggable="false" />
     </div>
     <div class="ik-knock__msg-body">
-      <!-- 3.3 AI 工作流时间线：永远渲染在回答气泡上方 -->
-      <AiReasoningBlock
+      <!-- 3.3 AI 工作流时间线：隐藏，不向用户暴露 reasoning / tool 详情 -->
+      <!-- <AiReasoningBlock
         v-if="entry.aiRich && entry.workflowEvents.length > 0"
         :msg="entry.msg"
         :streaming="entry.aiStreaming"
         :inline-only="true"
         :has-answer-content="!!entry.msg.content?.trim()"
-      />
+      /> -->
       <template v-if="messageSegments && messageSegments.length">
         <div
           v-for="(seg, segIdx) in messageSegments"
@@ -210,8 +210,8 @@ const messageSegments = computed((): string[] | null => {
         <template v-else>{{ entry.rendered }}</template>
         <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
       </div>
-      <!-- 1.4 气泡外左下角：时间 + 复制 + 重新生成 -->
-      <div class="ik-knock__msg-meta" :class="{ 'is-mine': entry.isMine }">
+      <!-- 1.4 气泡外左下角：时间 + 复制 + 重新生成，仅 AI 消息展示 -->
+      <div v-if="entry.aiRich" class="ik-knock__msg-meta" :class="{ 'is-mine': entry.isMine }">
         <span v-if="entry.msg.createdAt" class="ik-knock__msg-meta-time" :title="fullTime || undefined">
           {{ formatTime(entry.msg.createdAt) }}
         </span>
