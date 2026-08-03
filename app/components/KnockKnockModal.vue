@@ -238,6 +238,14 @@ const onRefreshSuggestions = () => {
   suggestionsOffset.value = (suggestionsOffset.value + 3) % Math.max(len, 1);
 };
 
+/** 当前会话是否已有消息（空会话才显示示例问题） */
+const hasActiveConversationMessages = computed(
+  () => !!activeConversation.value?.lastMessage || activeMessages.value.length > 0,
+);
+
+// 切换 AI 角色时重置示例问题偏移
+watch(() => activeAiCard.value?.slug, () => { suggestionsOffset.value = 0; });
+
 /** 当前 AI 角色的全部会话，按 lastMessageAt 降序 */
 const aiSessionsForActiveCard = computed<DmConversationSummary[]>(() => {
   const card = activeAiCard.value;
@@ -1719,7 +1727,7 @@ const handleMobileBack = () => {
                       :error="sendError"
                       :streaming="!!activeStreamingMessageId"
                       :stopping="stoppingAi"
-                      :suggestions="isActiveAiConversation ? activeAiSuggestions : undefined"
+                      :suggestions="isActiveAiConversation && !hasActiveConversationMessages ? activeAiSuggestions : undefined"
                       @send="doSend"
                       @stop="handleStopAi"
                       @cancel-edit="cancelEdit"
