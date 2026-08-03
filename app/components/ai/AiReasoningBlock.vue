@@ -10,6 +10,8 @@ const props = defineProps<{
   inlineOnly?: boolean;
   /** 已有最终回答正文时，折叠态不再显示 reasoning 预览（对齐 AstrBot hasNonReasoningContent） */
   hasAnswerContent?: boolean;
+  /** 仅展示 header 摘要，不展开 timeline/预览，也不发送详情到前端 */
+  headerOnly?: boolean;
 }>();
 
 const showPreview = computed(
@@ -151,8 +153,10 @@ onBeforeUnmount(stopPreviewTimer);
     <button
       type="button"
       class="ai-rb__head"
-      :aria-expanded="expanded"
-      @click="expanded = !expanded"
+      :class="{ 'is-header-only': headerOnly }"
+      :aria-expanded="headerOnly ? undefined : expanded"
+      :aria-hidden="headerOnly ? true : undefined"
+      @click="headerOnly ? undefined : (expanded = !expanded)"
     >
       <span class="ai-rb__status" :class="{ running: !settled }">
         <span v-if="!settled" class="ai-rb__spinner" />
@@ -164,11 +168,11 @@ onBeforeUnmount(stopPreviewTimer);
         <span class="ai-rb__title">{{ title }}</span>
         <span v-if="durationText" class="ai-rb__duration">{{ durationText }}</span>
       </span>
-      <ChevronRightIcon class="ai-rb__chevron" :class="{ expanded }" />
+      <ChevronRightIcon v-if="!headerOnly" class="ai-rb__chevron" :class="{ expanded }" />
     </button>
 
     <button
-      v-if="steps.length && !inlineOnly"
+      v-if="steps.length && !inlineOnly && !headerOnly"
       type="button"
       class="ai-rb__open"
       title="在侧边栏打开"
@@ -177,7 +181,7 @@ onBeforeUnmount(stopPreviewTimer);
       <ArrowTopRightOnSquareIcon class="ai-rb__icon" />
     </button>
 
-    <div class="ai-rb__body-wrap">
+    <div v-if="!headerOnly" class="ai-rb__body-wrap">
       <div class="ai-rb__body-track">
         <div class="ai-rb__body">
           <AiReasoningTimeline :steps="timelineSteps" />
@@ -219,6 +223,10 @@ onBeforeUnmount(stopPreviewTimer);
   text-align: left;
   user-select: none;
   min-width: 0;
+}
+
+.ai-rb__head.is-header-only {
+  cursor: default;
 }
 
 .ai-rb__head:hover {
