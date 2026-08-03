@@ -167,11 +167,21 @@ const contactsListLoading = computed(
 );
 
 /**
- * 私聊 Tab：排除与官方 AI 角色的 direct 会话（避免与「通话」重复）。
+ * 私聊 Tab：排除与官方 AI 角色的 direct 会话（避免与「通话」重复），
+ * 并按（置顶 desc、lastMessageAt desc）重排，确保发消息后实时置顶。
  */
 const conversations = computed<DmConversationSummary[]>(() => {
   if (activeTab.value !== "contacts" || contactsListLoading.value) return [];
-  return allConversations.value.filter((c) => !isOfficialAiPeer(c));
+  return allConversations.value
+    .filter((c) => !isOfficialAiPeer(c))
+    .sort((a, b) => {
+      const ap = a.self?.pinned ? 1 : 0;
+      const bp = b.self?.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      return bt - at;
+    });
 });
 
 const activeConversation = computed<DmConversationSummary | null>(() => {
