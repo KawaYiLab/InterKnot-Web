@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { formatChatMarkdown } from "~/utils/format-chat";
 
 /**
@@ -43,11 +43,55 @@ const decorateCodeBlocks = (html: string): string =>
 
 const html = computed(() =>
   decorateCodeBlocks(
-    formatChatMarkdown(props.text, { highlight: !props.streaming }),
+    formatChatMarkdown(displayText.value, { highlight: !props.streaming }),
   ),
 );
 
 const rootRef = ref<HTMLElement | null>(null);
+
+// 流式阶段：把高频的字节级更新合并到 requestAnimationFrame，
+// 避免 AGENT_STREAM_MIN_CHARS=1 时 markdown 每字都重排导致气泡抽搐。
+const displayText = ref(props.text);
+let pendingText = props.text;
+let rafHandle: number | null = null;
+const flushText = () => {
+  if (rafHandle == null) return;
+  rafHandle = null;
+  displayText.value = pendingText;
+};
+const scheduleTextUpdate = (value: string) => {
+  pendingText = value;
+  if (rafHandle != null) return;
+  if (typeof requestAnimationFrame === 'undefined') {
+    displayText.value = value;
+    return;
+  }
+  rafHandle = requestAnimationFrame(flushText);
+};
+
+watch(
+  () => props.text,
+  (value) => {
+    if (!props.streaming) {
+      displayText.value = value;
+      pendingText = value;
+      if (rafHandle != null) {
+        cancelAnimationFrame(rafHandle);
+        rafHandle = null;
+      }
+      return;
+    }
+    scheduleTextUpdate(value);
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  if (rafHandle != null) {
+    cancelAnimationFrame(rafHandle);
+    rafHandle = null;
+  }
+});
 
 /** 代码块复制成功的临时反馈（按钮文案 2s 内变「已复制」） */
 const flashCopied = (btn: HTMLButtonElement) => {
