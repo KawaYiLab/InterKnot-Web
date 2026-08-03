@@ -36,12 +36,24 @@ export interface WorkflowStepView {
   durationMs?: number;
 }
 
-/** 白名单外的工具兜底展示名 */
+/** 工具原始名 -> 沉浸式展示文案（会被 AiReasoningBlock 的"正在"前缀包裹） */
 const TOOL_TITLES: Record<string, string> = {
-  get_hot_posts: "查看热门帖子",
-  get_user_info: "查询用户信息",
-  get_post_comments: "查看评论区",
+  // akasha 虚空终端
+  akasha_search: "检索虚空终端",
+  akasha_read: "读取虚空终端档案",
+  akasha_catalog: "浏览虚空终端目录",
+  akasha_skill: "调用虚空终端技能",
+  // 绳网论坛 MCP
+  search_posts: "检索绳网",
+  get_hot_posts: "查看绳网热门",
+  get_user_info: "查询绳网用户",
+  get_post_content: "读取绳网帖子",
+  get_post_comments: "读取绳网评论",
 };
+
+function toolTitle(tool: string): string {
+  return TOOL_TITLES[tool] ?? `使用 ${tool} 工具`;
+}
 
 /** 搜索关键词脱敏：仅展示前 24 字符，避免把长 prompt 泄进时间线 */
 const clipQuery = (q: unknown): string => {
@@ -117,14 +129,14 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         const s = upsert(ev.stepId, {
           kind: "search",
           status: "running",
-          title: "搜索论坛",
+          title: "检索绳网",
           subtitle: clipQuery(d.query),
         });
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
       case "forum.search.finish": {
-        const s = upsert(ev.stepId, { kind: "search", status: "done", title: "搜索论坛" });
+        const s = upsert(ev.stepId, { kind: "search", status: "done", title: "检索绳网" });
         s.status = "done";
         s.subtitle = clipQuery(d.query);
         s.hits = typeof d.hits === "number" ? d.hits : undefined;
@@ -136,21 +148,21 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         const s = upsert(ev.stepId, {
           kind: "read",
           status: "running",
-          title: "阅读帖子",
+          title: "读取绳网帖子",
           subtitle: title,
         });
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
       case "forum.read.item": {
-        const s = upsert(ev.stepId, { kind: "read", status: "running", title: "阅读帖子" });
+        const s = upsert(ev.stepId, { kind: "read", status: "running", title: "读取绳网帖子" });
         const title = typeof d.title === "string" && d.title ? `《${d.title}》` : "";
         if (title) s.subtitle = title;
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
       case "forum.read.finish": {
-        const s = upsert(ev.stepId, { kind: "read", status: "done", title: "阅读帖子" });
+        const s = upsert(ev.stepId, { kind: "read", status: "done", title: "读取绳网帖子" });
         s.status = "done";
         if (typeof d.title === "string" && d.title) s.subtitle = `《${d.title}》`;
         if (ts != null) touchTimestamp(s, ts);
@@ -161,7 +173,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         const s = upsert(ev.stepId, {
           kind: "tool",
           status: "running",
-          title: `使用 ${tool} 工具`,
+          title: toolTitle(tool),
         });
         if (ts != null) touchTimestamp(s, ts);
         break;
@@ -171,7 +183,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         const s = upsert(ev.stepId, {
           kind: "tool",
           status: "done",
-          title: `使用 ${tool} 工具`,
+          title: toolTitle(tool),
         });
         s.status = "done";
         if (typeof d.ms === "number") s.durationMs = d.ms;

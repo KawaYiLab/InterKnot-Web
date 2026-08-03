@@ -18,18 +18,16 @@ function formatMs(ms?: number): string {
 function toolIcon(step: WorkflowStepView) {
   if (step.status === "running") return "spinner";
   const name = toolName(step).toLowerCase();
-  if (name.includes("search") || name.includes("搜索")) return MagnifyingGlassIcon;
-  if (name.includes("read") || name.includes("阅读")) return BookOpenIcon;
+  if (name.includes("search") || name.includes("搜索") || name.includes("检索")) return MagnifyingGlassIcon;
+  if (name.includes("read") || name.includes("阅读") || name.includes("读取") || name.includes("浏览")) return BookOpenIcon;
   if (name.includes("python") || name.includes("ipython")) return CodeBracketIcon;
   if (step.kind === "thinking") return SparklesIcon;
   return WrenchIcon;
 }
 
 function toolName(step: WorkflowStepView): string {
-  if (step.kind === "tool") return step.title.replace(/^使用\s*/, "").replace(/\s*工具$/, "");
-  if (step.kind === "search") return "搜索";
-  if (step.kind === "read") return "阅读";
-  return step.title;
+  // 新的 title 已经是沉浸式文案；兜底去掉旧"使用 x 工具"模板
+  return step.title.replace(/^使用\s*/, "").replace(/\s*工具$/, "");
 }
 
 </script>
