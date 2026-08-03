@@ -146,13 +146,12 @@ const messageSegments = computed((): string[] | null => {
       <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__msg-avatar-img" draggable="false" />
     </div>
     <div class="ik-knock__msg-body">
-      <!-- 3.3 AI 工作流摘要卡：仅展示「思考/工具」计数，不暴露 reasoning / tool 详情 -->
+      <!-- 3.3 AI 工作流摘要卡：可展开查看步骤标题，不暴露 reasoning / tool 详情 -->
       <AiReasoningBlock
         v-if="entry.aiRich && entry.workflowEvents.length > 0"
         :msg="entry.msg"
         :streaming="entry.aiStreaming"
         :has-answer-content="!!entry.msg.content?.trim()"
-        header-only
       />
       <template v-if="messageSegments && messageSegments.length">
         <div

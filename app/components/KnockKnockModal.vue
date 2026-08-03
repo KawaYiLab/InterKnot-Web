@@ -10,10 +10,10 @@ import {
   ChevronLeftIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  PlusIcon,
   TrashIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/vue/24/outline";
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -333,6 +333,18 @@ const deleteAiSession = async (id: string) => {
     }
   } finally {
     deletingSessionId.value = null;
+  }
+};
+
+/** 顶部会话菜单：新建 / 删除 / 返回角色列表 */
+const handleAiSessionMenuCommand = (command: string | number) => {
+  if (command === "new") {
+    void createNewAiSession();
+  } else if (command === "delete") {
+    const id = activeConversationId.value;
+    if (id) void deleteAiSession(id);
+  } else if (command === "back") {
+    backToAiCharacters();
   }
 };
 
@@ -1507,27 +1519,6 @@ const handleMobileBack = () => {
 
                     <!-- 某角色的会话列表 -->
                     <template v-else>
-                      <div class="ik-knock__ai-session-header">
-                        <button
-                          type="button"
-                          class="ik-knock__ai-session-back"
-                          aria-label="返回角色"
-                          @click="backToAiCharacters"
-                        >
-                          <ChevronLeftIcon class="ik-knock__ai-session-back-icon" aria-hidden="true" />
-                        </button>
-                        <span class="ik-knock__ai-session-title">{{ activeAiCard?.displayName || "AI 助手" }}</span>
-                        <button
-                          type="button"
-                          class="ik-knock__new-session"
-                          :disabled="creatingAiSession"
-                          aria-label="新建会话"
-                          title="新建会话"
-                          @click="createNewAiSession"
-                        >
-                          <PlusIcon class="ik-knock__new-session-icon" aria-hidden="true" />
-                        </button>
-                      </div>
                       <button
                         v-for="session in aiSessionsForActiveCard"
                         :key="session.documentId"
@@ -1581,7 +1572,7 @@ const handleMobileBack = () => {
                         v-if="!aiSessionsForActiveCard.length && !creatingAiSession"
                         class="ik-knock__list-empty"
                       >
-                        <span>暂无会话，点击上方 + 新建</span>
+                        <span>暂无会话，从顶部菜单新建</span>
                       </div>
                       <div
                         v-else-if="creatingAiSession"
@@ -1657,30 +1648,30 @@ const handleMobileBack = () => {
                     >
                       <MagnifyingGlassIcon class="ik-knock__search-toggle-icon" aria-hidden="true" />
                     </button>
-                    <!-- AI 会话管理：新建 / 删除 -->
-                    <template v-if="isActiveAiConversation">
+                    <!-- AI 会话管理：下拉菜单（新建 / 删除 / 返回角色列表） -->
+                    <z-dropdown
+                      v-if="isActiveAiConversation"
+                      trigger="click"
+                      size="small"
+                      direction="auto"
+                      class="ik-knock__session-menu"
+                      @command="handleAiSessionMenuCommand"
+                    >
                       <button
                         type="button"
                         class="ik-knock__session-action"
-                        :disabled="creatingAiSession"
-                        aria-label="新建会话"
-                        title="新建会话"
-                        @click="createNewAiSession"
+                        :disabled="creatingAiSession || deletingSessionId === activeConversationId"
+                        aria-label="会话菜单"
+                        title="会话菜单"
                       >
-                        <PlusIcon class="ik-knock__session-action-icon" aria-hidden="true" />
+                        <EllipsisVerticalIcon class="ik-knock__session-action-icon" aria-hidden="true" />
                       </button>
-                      <button
-                        v-if="activeConversationId"
-                        type="button"
-                        class="ik-knock__session-action"
-                        :disabled="deletingSessionId === activeConversationId"
-                        aria-label="删除当前会话"
-                        title="删除当前会话"
-                        @click="deleteAiSession(activeConversationId)"
-                      >
-                        <TrashIcon class="ik-knock__session-action-icon" aria-hidden="true" />
-                      </button>
-                    </template>
+                      <template #dropdown>
+                        <z-dropdown-item command="new" :disabled="creatingAiSession">新建会话</z-dropdown-item>
+                        <z-dropdown-item command="delete" :disabled="!activeConversationId || deletingSessionId === activeConversationId">删除当前会话</z-dropdown-item>
+                        <z-dropdown-item command="back">返回角色列表</z-dropdown-item>
+                      </template>
+                    </z-dropdown>
                   </header>
                   <!-- Phase 4 会话内搜索条：命中计数 + 上下跳转 -->
                   <div v-if="dmSearchOpen" class="ik-knock__search-bar">
@@ -2520,7 +2511,12 @@ const handleMobileBack = () => {
   height: 18px;
 }
 
-.ik-knock__search-toggle + .ik-knock__session-action {
+.ik-knock__session-menu {
+  display: inline-flex;
+  margin-left: 4px;
+}
+
+.ik-knock__search-toggle + .ik-knock__session-menu {
   margin-left: 4px;
 }
 

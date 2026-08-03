@@ -1,20 +1,10 @@
 <script setup lang="ts">
-import { ChevronRightIcon, WrenchIcon, MagnifyingGlassIcon, BookOpenIcon, SparklesIcon, CodeBracketIcon } from "@heroicons/vue/24/outline";
-import { formatChatMarkdown } from "~/utils/format-chat";
+import { WrenchIcon, MagnifyingGlassIcon, BookOpenIcon, SparklesIcon, CodeBracketIcon } from "@heroicons/vue/24/outline";
 import type { WorkflowStepView } from "~/utils/workflow";
 
 const props = defineProps<{
   steps: WorkflowStepView[];
 }>();
-
-const expandedIds = ref<Set<string>>(new Set());
-
-function toggle(id: string) {
-  const next = new Set(expandedIds.value);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  expandedIds.value = next;
-}
 
 function formatMs(ms?: number): string {
   if (!ms || ms < 0) return "";
@@ -42,17 +32,6 @@ function toolName(step: WorkflowStepView): string {
   return step.title;
 }
 
-function formatJson(v: unknown): string {
-  try {
-    return JSON.stringify(v, null, 2);
-  } catch {
-    return String(v);
-  }
-}
-
-function md(text: string): string {
-  return formatChatMarkdown(text || "", { highlight: false });
-}
 </script>
 
 <template>
@@ -77,41 +56,14 @@ function md(text: string): string {
           </span>
         </div>
 
-        <div v-if="step.text" class="ai-timeline__text" v-html="md(step.text)" />
-
-        <button
+        <div
           v-if="step.kind === 'tool' || step.kind === 'search' || step.kind === 'read'"
-          type="button"
           class="ai-timeline__tool-head"
-          @click="toggle(step.stepId)"
         >
           <span v-if="toolIcon(step) === 'spinner'" class="ai-timeline__tool-spinner" />
           <component v-else :is="toolIcon(step)" class="ai-timeline__tool-icon" />
           <span class="ai-timeline__tool-name">{{ toolName(step) }}</span>
           <span v-if="step.durationMs" class="ai-timeline__tool-time">{{ formatMs(step.durationMs) }}</span>
-          <ChevronRightIcon
-            class="ai-timeline__tool-chevron"
-            :class="{ expanded: expandedIds.has(step.stepId) }"
-          />
-        </button>
-
-        <div v-if="expandedIds.has(step.stepId)" class="ai-timeline__details">
-          <div v-if="step.args !== undefined" class="ai-timeline__detail-block">
-            <div class="ai-timeline__detail-label">Args</div>
-            <pre class="ai-timeline__detail-json">{{ formatJson(step.args) }}</pre>
-          </div>
-          <div v-if="step.result !== undefined" class="ai-timeline__detail-block">
-            <div class="ai-timeline__detail-label">Result</div>
-            <pre class="ai-timeline__detail-json">{{ formatJson(step.result) }}</pre>
-          </div>
-          <div v-if="step.posts?.length" class="ai-timeline__detail-block">
-            <div class="ai-timeline__detail-label">Posts</div>
-            <ul class="ai-timeline__posts">
-              <li v-for="post in step.posts" :key="post.documentId" class="ai-timeline__post">
-                {{ post.title }}
-              </li>
-            </ul>
-          </div>
         </div>
       </div>
     </div>
@@ -256,15 +208,9 @@ function md(text: string): string {
   margin-top: 6px;
   padding: 4px 8px;
   border-radius: 8px;
-  border: 0;
   background: rgba(255, 255, 255, 0.05);
   color: #b0b0b0;
   font-size: 12px;
-  cursor: pointer;
-}
-
-.ai-timeline__tool-head:hover {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 .ai-timeline__tool-icon {
@@ -286,16 +232,6 @@ function md(text: string): string {
   to {
     transform: rotate(360deg);
   }
-}
-
-.ai-timeline__tool-chevron {
-  width: 14px;
-  height: 14px;
-  transition: transform 0.2s ease;
-}
-
-.ai-timeline__tool-chevron.expanded {
-  transform: rotate(90deg);
 }
 
 .ai-timeline__details {

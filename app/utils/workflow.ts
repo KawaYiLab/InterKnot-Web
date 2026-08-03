@@ -107,18 +107,9 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
-      case "reasoning.delta": {
-        const s = upsert(ev.stepId, { kind: "thinking", status: "running", title: "思考" });
-        const text = String(d.text ?? "");
-        if (text) s.text = (s.text ?? "") + text;
-        if (ts != null) touchTimestamp(s, ts);
-        break;
-      }
+      case "reasoning.delta":
       case "reasoning.finish": {
-        const s = upsert(ev.stepId, { kind: "thinking", status: "done", title: "思考" });
-        s.status = "done";
-        const text = String(d.text ?? "");
-        if (text) s.text = text;
+        const s = upsert(ev.stepId, { kind: "thinking", status: ev.type === "reasoning.finish" ? "done" : "running", title: "思考" });
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
@@ -136,8 +127,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         const s = upsert(ev.stepId, { kind: "search", status: "done", title: "搜索论坛" });
         s.status = "done";
         s.subtitle = clipQuery(d.query);
-        s.hits = typeof d.hits === "number" ? d.hits : asPosts(d.items).length;
-        s.posts = asPosts(d.items);
+        s.hits = typeof d.hits === "number" ? d.hits : undefined;
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
@@ -154,14 +144,8 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
       }
       case "forum.read.item": {
         const s = upsert(ev.stepId, { kind: "read", status: "running", title: "阅读帖子" });
-        const post = {
-          documentId: String(d.documentId ?? ""),
-          title: String(d.title ?? ""),
-        };
-        if (post.documentId) {
-          s.posts = [...(s.posts ?? []).filter((p) => p.documentId !== post.documentId), post];
-        }
-        if (post.title) s.subtitle = `《${post.title}》`;
+        const title = typeof d.title === "string" && d.title ? `《${d.title}》` : "";
+        if (title) s.subtitle = title;
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
@@ -179,7 +163,6 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
           status: "running",
           title: `使用 ${tool} 工具`,
         });
-        s.args = d.args;
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
@@ -191,7 +174,6 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
           title: `使用 ${tool} 工具`,
         });
         s.status = "done";
-        s.result = d.result;
         if (typeof d.ms === "number") s.durationMs = d.ms;
         if (ts != null) touchTimestamp(s, ts);
         break;
