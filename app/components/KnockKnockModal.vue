@@ -13,7 +13,6 @@ import {
   TrashIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
-  EllipsisVerticalIcon,
 } from "@heroicons/vue/24/outline";
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -306,13 +305,6 @@ const createNewAiSession = async () => {
   }
 };
 
-/** 从会话列表返回 AI 角色选择 */
-const backToAiCharacters = () => {
-  activeAiSlug.value = null;
-  activeConversationId.value = null;
-  updateUrl("calls");
-};
-
 /** 删除指定 AI 会话 */
 const deleteAiSession = async (id: string) => {
   if (!id || deletingSessionId.value === id) return;
@@ -321,30 +313,12 @@ const deleteAiSession = async (id: string) => {
   try {
     await deleteConversation(id);
     if (activeConversationId.value === id) {
-      const remaining = aiSessionsForActiveCard.value.filter((s) => s.documentId !== id);
-      const next = remaining[0];
-      if (next) {
-        activeConversationId.value = next.documentId;
-        updateUrl("calls", next.documentId);
-      } else {
-        activeConversationId.value = null;
-        updateUrl("calls");
-      }
+      activeAiSlug.value = null;
+      activeConversationId.value = null;
+      updateUrl("calls");
     }
   } finally {
     deletingSessionId.value = null;
-  }
-};
-
-/** 顶部会话菜单：新建 / 删除 / 返回角色列表 */
-const handleAiSessionMenuCommand = (command: string | number) => {
-  if (command === "new") {
-    void createNewAiSession();
-  } else if (command === "delete") {
-    const id = activeConversationId.value;
-    if (id) void deleteAiSession(id);
-  } else if (command === "back") {
-    backToAiCharacters();
   }
 };
 
@@ -1470,117 +1444,50 @@ const handleMobileBack = () => {
                     role="listbox"
                   >
                     <!-- 角色选择视图 -->
-                    <template v-if="!activeAiSlug">
-                      <button
-                        v-for="{ card, unread } in aiCharacterRows"
-                        :key="card.slug"
-                        type="button"
-                        role="option"
-                        class="ik-knock__list-item"
-                        :class="{
-                          'is-active': activeAiSlug === card.slug,
-                        }"
-                        :aria-selected="activeAiSlug === card.slug"
-                        @click="selectAiCharacter(card)"
+                    <button
+                      v-for="{ card, unread } in aiCharacterRows"
+                      :key="card.slug"
+                      type="button"
+                      role="option"
+                      class="ik-knock__list-item"
+                      :class="{
+                        'is-active': activeAiSlug === card.slug,
+                      }"
+                      :aria-selected="activeAiSlug === card.slug"
+                      @click="selectAiCharacter(card)"
+                    >
+                      <span class="ik-knock__avatar" aria-hidden="true">
+                        <img
+                          v-if="cardAvatarUrl(card)"
+                          :src="cardAvatarUrl(card)!"
+                          :alt="card.displayName"
+                          class="ik-knock__avatar-img"
+                          draggable="false"
+                        />
+                        <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__avatar-img" draggable="false" />
+                      </span>
+                      <span class="ik-knock__item-text">
+                        <span class="ik-knock__item-title">{{ card.displayName }}</span>
+                        <span class="ik-knock__item-subtitle">
+                          {{ card.bio || "AI 助手" }}
+                        </span>
+                      </span>
+                      <span
+                        v-if="unread > 0"
+                        class="ik-knock__item-badge"
+                        aria-label="未读"
                       >
-                        <span class="ik-knock__avatar" aria-hidden="true">
-                          <img
-                            v-if="cardAvatarUrl(card)"
-                            :src="cardAvatarUrl(card)!"
-                            :alt="card.displayName"
-                            class="ik-knock__avatar-img"
-                            draggable="false"
-                          />
-                          <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__avatar-img" draggable="false" />
-                        </span>
-                        <span class="ik-knock__item-text">
-                          <span class="ik-knock__item-title">{{ card.displayName }}</span>
-                          <span class="ik-knock__item-subtitle">
-                            {{ card.bio || "AI 助手" }}
-                          </span>
-                        </span>
-                        <span
-                          v-if="unread > 0"
-                          class="ik-knock__item-badge"
-                          aria-label="未读"
-                        >
-                          {{ unread > 99 ? "99+" : unread }}
-                        </span>
-                      </button>
-                      <div
-                        v-if="!aiCharacters.length"
-                        class="ik-knock__list-empty"
-                      >
-                        <span v-if="aiCharactersLoading">加载中…</span>
-                        <span v-else-if="aiCharactersError">{{ aiCharactersError }}</span>
-                        <span v-else>暂无 AI 角色</span>
-                      </div>
-                    </template>
-
-                    <!-- 某角色的会话列表 -->
-                    <template v-else>
-                      <button
-                        v-for="session in aiSessionsForActiveCard"
-                        :key="session.documentId"
-                        type="button"
-                        role="option"
-                        class="ik-knock__list-item"
-                        :class="{
-                          'is-active': activeConversationId === session.documentId,
-                          'has-unread': session.unreadCount > 0,
-                        }"
-                        :aria-selected="activeConversationId === session.documentId"
-                        @click="handleConversationClick(session.documentId)"
-                      >
-                        <span class="ik-knock__avatar" aria-hidden="true">
-                          <img
-                            v-if="activeAiCard && cardAvatarUrl(activeAiCard)"
-                            :src="cardAvatarUrl(activeAiCard)!"
-                            :alt="activeAiCard.displayName"
-                            class="ik-knock__avatar-img"
-                            draggable="false"
-                          />
-                          <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__avatar-img" draggable="false" />
-                        </span>
-                        <span class="ik-knock__item-text">
-                          <span class="ik-knock__item-title">{{ session.title || activeAiCard?.displayName || "AI 会话" }}</span>
-                          <span class="ik-knock__item-subtitle">
-                            {{ conversationPreview(session) || "暂无消息" }}
-                          </span>
-                        </span>
-                        <span class="ik-knock__item-actions">
-                          <button
-                            type="button"
-                            class="ik-knock__delete-session"
-                            :disabled="deletingSessionId === session.documentId"
-                            aria-label="删除会话"
-                            title="删除会话"
-                            @click.stop="deleteAiSession(session.documentId)"
-                          >
-                            <TrashIcon class="ik-knock__delete-session-icon" aria-hidden="true" />
-                          </button>
-                        </span>
-                        <span
-                          v-if="session.unreadCount > 0"
-                          class="ik-knock__item-badge"
-                          aria-label="未读"
-                        >
-                          {{ session.unreadCount > 99 ? "99+" : session.unreadCount }}
-                        </span>
-                      </button>
-                      <div
-                        v-if="!aiSessionsForActiveCard.length && !creatingAiSession"
-                        class="ik-knock__list-empty"
-                      >
-                        <span>暂无会话，从顶部菜单新建</span>
-                      </div>
-                      <div
-                        v-else-if="creatingAiSession"
-                        class="ik-knock__list-empty"
-                      >
-                        <span>创建中…</span>
-                      </div>
-                    </template>
+                        {{ unread > 99 ? "99+" : unread }}
+                      </span>
+                    </button>
+                    <div
+                      v-if="!aiCharacters.length"
+                      class="ik-knock__list-empty"
+                    >
+                      <span v-if="aiCharactersLoading">加载中…</span>
+                      <span v-else-if="aiCharactersError">{{ aiCharactersError }}</span>
+                      <span v-else>暂无 AI 角色</span>
+                    </div>
                   </div>
 
                   <!-- 群聊（占位） -->
@@ -1648,30 +1555,18 @@ const handleMobileBack = () => {
                     >
                       <MagnifyingGlassIcon class="ik-knock__search-toggle-icon" aria-hidden="true" />
                     </button>
-                    <!-- AI 会话管理：下拉菜单（新建 / 删除 / 返回角色列表） -->
-                    <z-dropdown
-                      v-if="isActiveAiConversation"
-                      trigger="click"
-                      size="small"
-                      direction="auto"
-                      class="ik-knock__session-menu"
-                      @command="handleAiSessionMenuCommand"
+                    <!-- AI 会话管理：删除当前会话 -->
+                    <button
+                      v-if="isActiveAiConversation && activeConversationId"
+                      type="button"
+                      class="ik-knock__session-action"
+                      :disabled="deletingSessionId === activeConversationId"
+                      aria-label="删除当前会话"
+                      title="删除当前会话"
+                      @click="deleteAiSession(activeConversationId)"
                     >
-                      <button
-                        type="button"
-                        class="ik-knock__session-action"
-                        :disabled="creatingAiSession || deletingSessionId === activeConversationId"
-                        aria-label="会话菜单"
-                        title="会话菜单"
-                      >
-                        <EllipsisVerticalIcon class="ik-knock__session-action-icon" aria-hidden="true" />
-                      </button>
-                      <template #dropdown>
-                        <z-dropdown-item command="new" :disabled="creatingAiSession">新建会话</z-dropdown-item>
-                        <z-dropdown-item command="delete" :disabled="!activeConversationId || deletingSessionId === activeConversationId">删除当前会话</z-dropdown-item>
-                        <z-dropdown-item command="back">返回角色列表</z-dropdown-item>
-                      </template>
-                    </z-dropdown>
+                      <TrashIcon class="ik-knock__session-action-icon" aria-hidden="true" />
+                    </button>
                   </header>
                   <!-- Phase 4 会话内搜索条：命中计数 + 上下跳转 -->
                   <div v-if="dmSearchOpen" class="ik-knock__search-bar">
@@ -2223,125 +2118,6 @@ const handleMobileBack = () => {
   font-size: 13px;
 }
 
-/* AI 会话列表顶部：返回角色、角色名、新建会话 */
-.ik-knock__ai-session-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 2px solid #202020;
-  background: #161616;
-  flex-shrink: 0;
-}
-
-.ik-knock__ai-session-back {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #fff;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.ik-knock__ai-session-back:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ik-knock__ai-session-back-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.ik-knock__ai-session-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 15px;
-  font-weight: 800;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ik-knock__new-session {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #777;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-}
-
-.ik-knock__new-session:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ik-knock__new-session:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.ik-knock__new-session-icon {
-  width: 18px;
-  height: 18px;
-}
-
-/* 单个会话项的删除按钮 */
-.ik-knock__item-actions {
-  display: none;
-  align-items: center;
-  gap: 4px;
-}
-
-.ik-knock__list-item:hover .ik-knock__item-actions {
-  display: inline-flex;
-}
-
-.ik-knock__delete-session {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #777;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-}
-
-.ik-knock__delete-session:hover:not(:disabled) {
-  color: #ff4d4f;
-  background: rgba(255, 77, 79, 0.12);
-}
-
-.ik-knock__delete-session:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.ik-knock__delete-session-icon {
-  width: 15px;
-  height: 15px;
-}
-
 .ik-knock__item-text {
   flex: 1;
   min-width: 0;
@@ -2473,7 +2249,7 @@ const handleMobileBack = () => {
   height: 18px;
 }
 
-/* AI 会话管理按钮（新建 / 删除）：与 reset 同款 */
+/* AI 会话管理按钮（删除）：与 reset 同款 */
 .ik-knock__session-action {
   margin-left: 4px;
   flex-shrink: 0;
@@ -2492,10 +2268,6 @@ const handleMobileBack = () => {
   -webkit-tap-highlight-color: transparent;
 }
 
-.ik-knock__session-action:first-of-type {
-  margin-left: auto;
-}
-
 .ik-knock__session-action:hover:not(:disabled) {
   color: #fff;
   background: rgba(255, 255, 255, 0.08);
@@ -2509,15 +2281,6 @@ const handleMobileBack = () => {
 .ik-knock__session-action-icon {
   width: 18px;
   height: 18px;
-}
-
-.ik-knock__session-menu {
-  display: inline-flex;
-  margin-left: 4px;
-}
-
-.ik-knock__search-toggle + .ik-knock__session-menu {
-  margin-left: 4px;
 }
 
 /* ── Phase 4 会话内搜索 ───────────────────── */
