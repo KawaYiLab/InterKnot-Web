@@ -40,6 +40,7 @@ function mergedEvents(): AiWorkflowEvent[] {
 
 const events = computed(mergedEvents);
 const steps = computed(() => buildWorkflowSteps(events.value));
+const timelineSteps = computed(() => steps.value.filter((s) => s.kind !== "answer"));
 const settled = computed(() => {
   return events.value.some((ev) => ev.type === "answer.finish" || ev.type === "error");
 });
@@ -179,7 +180,7 @@ onBeforeUnmount(stopPreviewTimer);
     <div class="ai-rb__body-wrap">
       <div class="ai-rb__body-track">
         <div class="ai-rb__body">
-          <AiReasoningTimeline :steps="steps" />
+          <AiReasoningTimeline :steps="timelineSteps" />
         </div>
       </div>
       <div v-if="showPreview" class="ai-rb__preview-track">

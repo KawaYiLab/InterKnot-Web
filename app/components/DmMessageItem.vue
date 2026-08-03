@@ -4,6 +4,7 @@ import { DocumentTextIcon, ArrowPathIcon, ClipboardDocumentIcon, CheckIcon } fro
 import type { DmMessage } from "~/types/entities";
 import type { EnrichedMessage } from "~/utils/dm-view";
 import { hasBubbleLinks, parseBubbleSegments } from "~/utils/dm-view";
+import { buildWorkflowSteps, type WorkflowStepView } from "~/utils/workflow";
 import { formatTime, formatFullTime } from "~/utils/time";
 
 /**
@@ -43,6 +44,52 @@ const SYSTEM_LABELS: Record<string, string> = {
 const systemLabel = computed(
   () => SYSTEM_LABELS[props.entry.msg.content?.trim() ?? ''] ?? props.entry.msg.content,
 );
+
+/** 把当前 AI 回复的 answer.delta 段按 partIndex 排序后取出 */
+const answerSegmentSteps = computed(() => {
+  if (!props.entry.aiRich || !props.entry.workflowEvents.length) return [];
+  const steps = buildWorkflowSteps(props.entry.workflowEvents);
+  return steps
+    .filter((s): s is WorkflowStepView & { text: string; partIndex: number } =>
+      s.kind === "answer" &&
+      typeof s.partIndex === "number" &&
+      typeof s.text === "string" &&
+      s.text.length > 0,
+    )
+    .sort((a, b) => a.partIndex - b.partIndex);
+});
+
+/** 将已渲染正文按 answer 段切分，返回多个气泡文本。最后一段允许与 entry.rendered 存在 citation 解析差异。 */
+function splitBySegments(rendered: string, segs: string[]): string[] {
+  const out: string[] = [];
+  let remaining = rendered;
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i]!;
+    if (remaining.startsWith(seg)) {
+      out.push(seg);
+      remaining = remaining.slice(seg.length);
+    } else if (i === segs.length - 1) {
+      // 末段可能经过了 citation/链接解析，正文长度与原始段不同，直接用剩余正文
+      out.push(remaining || seg);
+      remaining = "";
+    } else {
+      // 中间段对不上：回退到直接展示各段原文
+      return segs;
+    }
+  }
+  if (remaining) out.push(remaining);
+  return out;
+}
+
+const messageSegments = computed((): string[] | null => {
+  const steps = answerSegmentSteps.value;
+  if (steps.length <= 1) return null;
+  // 流式中占位消息 content 还是原始累计文本，和清洗后的段可能对不齐，等落稿后再拆分
+  if (props.entry.aiStreaming) return null;
+  const rendered = typeof props.entry.rendered === "string" ? props.entry.rendered : "";
+  const segs = steps.map((s) => s.text);
+  return splitBySegments(rendered, segs);
+});
 </script>
 
 <template>
@@ -101,7 +148,24 @@ const systemLabel = computed(
         :inline-only="true"
         :has-answer-content="!!entry.msg.content?.trim()"
       />
+      <template v-if="messageSegments && messageSegments.length">
+        <div
+          v-for="(seg, segIdx) in messageSegments"
+          :key="segIdx"
+          class="ik-knock__msg-bubble"
+          :class="{ 'is-deleted': !!entry.msg.deletedAt }"
+          :title="fullTime || undefined"
+        >
+          <AiMessageBody
+            :text="seg"
+            :streaming="entry.aiStreaming && segIdx === messageSegments.length - 1"
+            @open-post="emit('open-post', $event)"
+          />
+          <span v-if="segIdx === messageSegments.length - 1 && entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
+        </div>
+      </template>
       <div
+        v-else
         class="ik-knock__msg-bubble"
         :class="{ 'is-deleted': !!entry.msg.deletedAt }"
         :title="fullTime || undefined"

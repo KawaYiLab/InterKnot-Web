@@ -30,6 +30,8 @@ export interface WorkflowStepView {
   posts?: WorkflowPostRef[];
   /** 搜索命中数 */
   hits?: number;
+  /** answer 段序号（用于把单个 AI 回复拆成多个气泡） */
+  partIndex?: number;
   /** 步骤历时（ms），根据 start/finish 事件 at 字段计算 */
   durationMs?: number;
 }
@@ -199,9 +201,20 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
+      case "answer.delta": {
+        const s = upsert(ev.stepId, { kind: "answer", status: "running", title: "生成回答" });
+        const text = typeof d.text === "string" ? d.text : "";
+        if (text) s.text = (s.text ?? "") + text;
+        if (typeof d.partIndex === "number") s.partIndex = d.partIndex;
+        if (ts != null) touchTimestamp(s, ts);
+        break;
+      }
       case "answer.finish": {
         const s = upsert(ev.stepId, { kind: "answer", status: "done", title: "生成回答" });
         s.status = "done";
+        const text = typeof d.text === "string" ? d.text : "";
+        if (text) s.text = (s.text ?? "") + text;
+        if (typeof d.partIndex === "number") s.partIndex = d.partIndex;
         if (ts != null) touchTimestamp(s, ts);
         break;
       }
