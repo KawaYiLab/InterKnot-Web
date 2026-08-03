@@ -736,6 +736,11 @@ const wasNearBottom = ref(true);
 /** 1.6 用户远离底部期间到达的新消息 → 亮起「回到底部」按钮 */
 const hasUnseenBelow = ref(false);
 
+/** 用户手动滚动后的短暂静默期：避免 AI 流式/新消息把用户强制拉回 */
+const USER_SCROLL_PAUSE_MS = 600;
+const isUserScrolling = ref(false);
+let scrollPauseTimer: ReturnType<typeof setTimeout> | null = null;
+
 const isNearBottom = (el: HTMLElement): boolean => {
   return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_THRESHOLD_PX;
 };
@@ -822,6 +827,13 @@ const onMessagesScroll = () => {
   wasNearBottom.value = isNearBottom(el);
   // 自己滚回底部 → 新消息提示解除
   if (wasNearBottom.value) hasUnseenBelow.value = false;
+  // 用户手动滚动时短暂静默，避免流式输出强制拉回
+  isUserScrolling.value = true;
+  if (scrollPauseTimer) clearTimeout(scrollPauseTimer);
+  scrollPauseTimer = setTimeout(() => {
+    isUserScrolling.value = false;
+    scrollPauseTimer = null;
+  }, USER_SCROLL_PAUSE_MS);
   // 逼近顶部且窗口外还有更早消息 → 扩窗（120px 提前量，滚动不断流）
   if (el.scrollTop < 120 && hasHiddenAbove.value) {
     expandRenderWindow();
@@ -836,10 +848,11 @@ const onMessagesScroll = () => {
  */
 let autoScrollRaf: number | null = null;
 const scheduleAutoScroll = () => {
-  if (!wasNearBottom.value || !messagesRef.value) return;
+  if (!wasNearBottom.value || isUserScrolling.value || !messagesRef.value) return;
   if (autoScrollRaf != null) return;
   autoScrollRaf = requestAnimationFrame(() => {
     autoScrollRaf = null;
+    if (!wasNearBottom.value || isUserScrolling.value) return;
     const el = messagesRef.value;
     if (el) el.scrollTop = el.scrollHeight;
   });
