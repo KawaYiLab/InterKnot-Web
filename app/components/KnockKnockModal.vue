@@ -883,15 +883,33 @@ const onMessagesScroll = () => {
  * 展开时高度变化但不触发 activeMessages 的问题。
  */
 let autoScrollRaf: number | null = null;
+let autoScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+const doAutoScroll = () => {
+  if (autoScrollRaf != null) {
+    cancelAnimationFrame(autoScrollRaf);
+    autoScrollRaf = null;
+  }
+  if (!wasNearBottom.value || isUserScrolling.value || !messagesRef.value) return;
+  const el = messagesRef.value;
+  if (el) el.scrollTop = el.scrollHeight;
+};
+
 const scheduleAutoScroll = () => {
   if (!wasNearBottom.value || isUserScrolling.value || !messagesRef.value) return;
-  if (autoScrollRaf != null) return;
-  autoScrollRaf = requestAnimationFrame(() => {
-    autoScrollRaf = null;
-    if (!wasNearBottom.value || isUserScrolling.value) return;
-    const el = messagesRef.value;
-    if (el) el.scrollTop = el.scrollHeight;
-  });
+  if (autoScrollRaf == null) {
+    autoScrollRaf = requestAnimationFrame(() => {
+      autoScrollRaf = null;
+      doAutoScroll();
+    });
+  }
+  if (autoScrollTimer == null) {
+    // 工作流展开/折叠有 220ms CSS transition，等过渡结束后再兜底一次
+    autoScrollTimer = setTimeout(() => {
+      autoScrollTimer = null;
+      doAutoScroll();
+    }, 260);
+  }
 };
 
 watch(
