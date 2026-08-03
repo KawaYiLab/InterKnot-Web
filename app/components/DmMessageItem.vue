@@ -209,7 +209,37 @@ const messageSegments = computed((): string[] | null => {
         <template v-else>{{ entry.rendered }}</template>
         <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
       </div>
-      <!-- 1.4 气泡外左下角：时间 + 复制 + 重新生成，仅 AI 消息展示 -->
+      <!-- 通知 quote 卡：点击跳到关联委托（postModal） -->
+      <button
+        v-if="entry.quote"
+        type="button"
+        class="ik-knock__msg-quote"
+        @click="emit('quote-click', entry.msg)"
+      >
+        <DocumentTextIcon
+          class="ik-knock__msg-quote-icon"
+          aria-hidden="true"
+        />
+        <span class="ik-knock__msg-quote-text">
+          <span class="ik-knock__msg-quote-label">{{ entry.quote.label }}</span>
+          <span class="ik-knock__msg-quote-title">
+            {{ entry.quote.title }}
+          </span>
+        </span>
+      </button>
+      <!-- 3.5 引用帖子：回答里出现过的 /post/xxx，始终展示在气泡下方 -->
+      <AiCitationList
+        v-if="entry.aiRich && entry.citations.length > 0"
+        :citations="entry.citations"
+        @open-post="emit('open-post', $event)"
+      />
+      <!-- 3.4 推荐阅读：回答定稿后展示搜索命中但未引用的帖子 -->
+      <AiRelatedPosts
+        v-if="entry.aiRich && !entry.aiStreaming && entry.relatedPosts.length > 0"
+        :posts="entry.relatedPosts"
+        @open-post="emit('open-post', $event)"
+      />
+      <!-- 1.4 气泡外左下角：时间 + 复制 + 重新生成，仅 AI 消息展示；始终放在消息块最下方 -->
       <div v-if="entry.aiRich" class="ik-knock__msg-meta" :class="{ 'is-mine': entry.isMine }">
         <span v-if="entry.msg.createdAt" class="ik-knock__msg-meta-time" :title="fullTime || undefined">
           {{ formatTime(entry.msg.createdAt) }}
@@ -249,36 +279,6 @@ const messageSegments = computed((): string[] | null => {
           重新生成
         </button>
       </div>
-      <!-- 通知 quote 卡：点击跳到关联委托（postModal） -->
-      <button
-        v-if="entry.quote"
-        type="button"
-        class="ik-knock__msg-quote"
-        @click="emit('quote-click', entry.msg)"
-      >
-        <DocumentTextIcon
-          class="ik-knock__msg-quote-icon"
-          aria-hidden="true"
-        />
-        <span class="ik-knock__msg-quote-text">
-          <span class="ik-knock__msg-quote-label">{{ entry.quote.label }}</span>
-          <span class="ik-knock__msg-quote-title">
-            {{ entry.quote.title }}
-          </span>
-        </span>
-      </button>
-      <!-- 3.5 引用帖子：回答里出现过的 /post/xxx，始终展示在气泡下方 -->
-      <AiCitationList
-        v-if="entry.aiRich && entry.citations.length > 0"
-        :citations="entry.citations"
-        @open-post="emit('open-post', $event)"
-      />
-      <!-- 3.4 推荐阅读：回答定稿后展示搜索命中但未引用的帖子 -->
-      <AiRelatedPosts
-        v-if="entry.aiRich && !entry.aiStreaming && entry.relatedPosts.length > 0"
-        :posts="entry.relatedPosts"
-        @open-post="emit('open-post', $event)"
-      />
     </div>
   </div>
 </template>

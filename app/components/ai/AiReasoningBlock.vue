@@ -19,8 +19,8 @@ const showPreview = computed(
 
 const { workflowEventsOf } = useDmConversations();
 
-// AI 思考阶段默认展开；已有回答正文或思考结束时自动收起
-const expanded = ref(props.streaming && !props.hasAnswerContent);
+// AI 思考阶段默认展开；整个 workflow 完成（answer.finish / error）后自动收起
+const expanded = ref(props.streaming ?? false);
 const previewText = ref("");
 let previewTimer: ReturnType<typeof setInterval> | null = null;
 let previewStartTimer: ReturnType<typeof setTimeout> | null = null;
@@ -43,7 +43,7 @@ const settled = computed(() => {
   return events.value.some((ev) => ev.type === "answer.finish" || ev.type === "error");
 });
 
-watch(() => props.hasAnswerContent, (v) => { if (v) expanded.value = false; });
+// 整个 workflow 完成后再收起，不在单个 reasoning / tool 步骤结束时收起
 watch(() => settled.value, (v) => { if (v) expanded.value = false; });
 
 const thinkSteps = computed(() => steps.value.filter((s) => s.kind === "thinking"));
