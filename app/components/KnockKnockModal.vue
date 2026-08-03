@@ -80,6 +80,15 @@ const {
 
 const AI_SLUG_STORAGE_KEY = "ik-knock-ai-slug";
 const activeAiSlug = ref<string | null>(null);
+
+/** 未配置示例问题时，AI 会话使用的默认示例问题 */
+const DEFAULT_AI_SUGGESTIONS = [
+  "介绍一下你自己",
+  "最近有什么热门委托？",
+  "帮我找一下最新情报",
+  "分析一下当前版本的角色强度",
+  "给我推荐一些值得关注的帖子",
+];
 /** 弹窗打开后 DM 列表 + AI 角色列表均就绪，再渲染私聊 Tab（避免 fairy 闪一下） */
 const knockBootstrapDone = ref(false);
 
@@ -209,6 +218,25 @@ const activeAiCard = computed<AiRoleCard | null>(() => {
   }
   return null;
 });
+
+/** AI 示例问题刷新偏移：点击「换一批」循环切片 */
+const suggestionsOffset = ref(0);
+
+const activeAiSuggestions = computed<string[]>(() => {
+  const card = activeAiCard.value;
+  const all: string[] = card?.suggestedQuestions?.length
+    ? (card.suggestedQuestions as string[])
+    : DEFAULT_AI_SUGGESTIONS;
+  const count = Math.min(3, all.length);
+  const start = suggestionsOffset.value % all.length;
+  return Array.from({ length: count }, (_, i) => all[(start + i) % all.length] as string);
+});
+
+const onRefreshSuggestions = () => {
+  const card = activeAiCard.value;
+  const len = card?.suggestedQuestions?.length || DEFAULT_AI_SUGGESTIONS.length;
+  suggestionsOffset.value = (suggestionsOffset.value + 3) % Math.max(len, 1);
+};
 
 /** 当前 AI 角色的全部会话，按 lastMessageAt 降序 */
 const aiSessionsForActiveCard = computed<DmConversationSummary[]>(() => {
@@ -1691,10 +1719,12 @@ const handleMobileBack = () => {
                       :error="sendError"
                       :streaming="!!activeStreamingMessageId"
                       :stopping="stoppingAi"
+                      :suggestions="isActiveAiConversation ? activeAiSuggestions : undefined"
                       @send="doSend"
                       @stop="handleStopAi"
                       @cancel-edit="cancelEdit"
                       @typing="handleComposerTyping"
+                      @refresh-suggestions="onRefreshSuggestions"
                     />
                   </div>
                 </section>

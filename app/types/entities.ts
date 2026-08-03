@@ -128,6 +128,7 @@ export interface AiRoleCard {
   bio?: string | null;
   avatar?: string | null;
   sortOrder?: number;
+  suggestedQuestions?: string[] | null;
   boundUser?: {
     id: number;
     login?: string;
