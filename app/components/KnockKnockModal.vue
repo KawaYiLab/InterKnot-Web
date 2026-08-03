@@ -42,6 +42,7 @@ const {
   resetSession: resetAiRevealSession,
   revealTick: aiRevealTick,
   isComplete: isAiRevealComplete,
+  isRevealing: isAiRevealing,
 } = useAiDmTypewriter();
 
 /** 打开会话时已有的消息 id；不在此集合内的 AI 新消息才打字机 */
@@ -661,7 +662,7 @@ const enrichedMessages = computed<EnrichedMessage[]>(() => {
       aiStreaming:
         aiRich &&
         (isStreamingMessage(msg.documentId) ||
-          (shouldAnimateAiMessage(msg) && !isAiRevealComplete(msg.documentId))),
+          (shouldAnimateAiMessage(msg) && isAiRevealing(msg.documentId))),
       pendingStream: isPendingStreamBubble(msg),
       workflowEvents,
       citations:

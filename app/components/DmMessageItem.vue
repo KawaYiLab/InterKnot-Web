@@ -84,9 +84,15 @@ function splitBySegments(rendered: string, segs: string[]): string[] {
 const messageSegments = computed((): string[] | null => {
   const steps = answerSegmentSteps.value;
   if (steps.length <= 1) return null;
-  // 流式中占位消息 content 还是原始累计文本，和清洗后的段可能对不齐，等落稿后再拆分
-  if (props.entry.aiStreaming) return null;
   const rendered = typeof props.entry.rendered === "string" ? props.entry.rendered : "";
+  const content = typeof props.entry.msg.content === "string" ? props.entry.msg.content : "";
+  // 流式中或打字机动画进行中：当前展示文本短于最终 content，暂时不拆分
+  if (
+    props.entry.aiStreaming &&
+    (!rendered || !content || rendered.length < content.length)
+  ) {
+    return null;
+  }
   const segs = steps.map((s) => s.text);
   return splitBySegments(rendered, segs);
 });
