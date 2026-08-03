@@ -43,6 +43,9 @@ const TOOL_TITLES: Record<string, string> = {
   akasha_read: "读取虚空终端档案",
   akasha_catalog: "浏览虚空终端目录",
   akasha_skill: "调用虚空终端技能",
+  // 长期记忆
+  recall_long_term_memory: "回忆过往记忆",
+  memorize_long_term_memory: "记录重要信息",
   // 绳网论坛 MCP
   search_posts: "检索绳网",
   get_hot_posts: "查看绳网热门",
