@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { WrenchIcon, MagnifyingGlassIcon, BookOpenIcon, SparklesIcon, CodeBracketIcon } from "@heroicons/vue/24/outline";
 import type { WorkflowStepView } from "~/utils/workflow";
 
 const props = defineProps<{
@@ -13,21 +12,6 @@ function formatMs(ms?: number): string {
   const m = Math.floor(ms / 60000);
   const s = Math.round((ms % 60000) / 1000);
   return `${m}m ${s}s`;
-}
-
-function toolIcon(step: WorkflowStepView) {
-  if (step.status === "running") return "spinner";
-  const name = toolName(step).toLowerCase();
-  if (name.includes("search") || name.includes("搜索") || name.includes("检索")) return MagnifyingGlassIcon;
-  if (name.includes("read") || name.includes("阅读") || name.includes("读取") || name.includes("浏览")) return BookOpenIcon;
-  if (name.includes("python") || name.includes("ipython")) return CodeBracketIcon;
-  if (step.kind === "thinking") return SparklesIcon;
-  return WrenchIcon;
-}
-
-function toolName(step: WorkflowStepView): string {
-  // 新的 title 已经是沉浸式文案；兜底去掉旧"使用 x 工具"模板
-  return step.title.replace(/^使用\s*/, "").replace(/\s*工具$/, "");
 }
 
 </script>
@@ -54,14 +38,7 @@ function toolName(step: WorkflowStepView): string {
           </span>
         </div>
 
-        <div
-          v-if="step.kind === 'tool' || step.kind === 'search' || step.kind === 'read'"
-          class="ai-timeline__tool-head"
-        >
-          <span v-if="toolIcon(step) === 'spinner'" class="ai-timeline__tool-spinner" />
-          <component v-else :is="toolIcon(step)" class="ai-timeline__tool-icon" />
-          <span v-if="step.durationMs" class="ai-timeline__tool-time">{{ formatMs(step.durationMs) }}</span>
-        </div>
+
       </div>
     </div>
   </div>
@@ -198,38 +175,6 @@ function toolName(step: WorkflowStepView): string {
   font-size: 11.5px;
 }
 
-.ai-timeline__tool-head {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #b0b0b0;
-  font-size: 12px;
-}
-
-.ai-timeline__tool-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.ai-timeline__tool-spinner {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 2px solid rgba(191, 255, 9, 0.2);
-  border-top-color: #bfff09;
-  animation: ai-timeline-spin 0.9s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes ai-timeline-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 .ai-timeline__details {
   margin-top: 8px;
