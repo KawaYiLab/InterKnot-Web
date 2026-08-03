@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from "vue";
-import { ChevronRightIcon, ArrowTopRightOnSquareIcon } from "@heroicons/vue/24/outline";
+import { ChevronRightIcon } from "@heroicons/vue/24/outline";
 import type { AiWorkflowEvent, DmMessage } from "~/types/entities";
 import { buildWorkflowSteps } from "~/utils/workflow";
 
 const props = defineProps<{
   msg: DmMessage;
   streaming?: boolean;
-  inlineOnly?: boolean;
   /** 已有最终回答正文时，折叠态不再显示 reasoning 预览（对齐 AstrBot hasNonReasoningContent） */
   hasAnswerContent?: boolean;
   /** 仅展示 header 摘要，不展开 timeline/预览，也不发送详情到前端 */
@@ -17,10 +16,6 @@ const props = defineProps<{
 const showPreview = computed(
   () => !props.hasAnswerContent && !expanded.value && !!previewText.value,
 );
-
-const emit = defineEmits<{
-  (e: "open-sidebar", msg: DmMessage): void;
-}>();
 
 const { workflowEventsOf } = useDmConversations();
 
@@ -171,16 +166,6 @@ onBeforeUnmount(stopPreviewTimer);
       <ChevronRightIcon v-if="!headerOnly" class="ai-rb__chevron" :class="{ expanded }" />
     </button>
 
-    <button
-      v-if="steps.length && !inlineOnly && !headerOnly"
-      type="button"
-      class="ai-rb__open"
-      title="在侧边栏打开"
-      @click="emit('open-sidebar', msg)"
-    >
-      <ArrowTopRightOnSquareIcon class="ai-rb__icon" />
-    </button>
-
     <div v-if="!headerOnly" class="ai-rb__body-wrap">
       <div class="ai-rb__body-track">
         <div class="ai-rb__body">
@@ -303,38 +288,6 @@ onBeforeUnmount(stopPreviewTimer);
 
 .ai-rb__chevron.expanded {
   transform: rotate(90deg);
-}
-
-.ai-rb__open {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #6a6a6a;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-.ai-rb:hover .ai-rb__open {
-  opacity: 1;
-}
-
-.ai-rb__open:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #e8e8e8;
-}
-
-.ai-rb__icon {
-  width: 14px;
-  height: 14px;
 }
 
 .ai-rb__body-wrap {
