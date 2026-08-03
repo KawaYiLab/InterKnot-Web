@@ -43,9 +43,6 @@ const settled = computed(() => {
 });
 
 const thinkSteps = computed(() => steps.value.filter((s) => s.kind === "thinking"));
-const toolSteps = computed(() =>
-  steps.value.filter((s) => s.kind === "tool" || s.kind === "search" || s.kind === "read"),
-);
 
 const reasoningText = computed(() =>
   thinkSteps.value
@@ -55,16 +52,9 @@ const reasoningText = computed(() =>
 );
 
 const title = computed(() => {
-  if (!settled.value) {
-    const running = steps.value.find((s) => s.status === "running");
-    if (running) return `正在${running.title}…`;
-    return "正在分析…";
-  }
-  const parts: string[] = [];
-  if (thinkSteps.value.length) parts.push(`思考了 ${thinkSteps.value.length} 次`);
-  if (toolSteps.value.length) parts.push(`使用了 ${toolSteps.value.length} 次工具`);
-  if (!parts.length) parts.push("思考完成");
-  return parts.join(" · ");
+  if (!settled.value) return "思考中";
+  const t = durationText.value;
+  return t ? `已思考（用时 ${t}）` : "已思考";
 });
 
 const durationText = computed(() => {
@@ -161,7 +151,6 @@ onBeforeUnmount(stopPreviewTimer);
       </span>
       <span class="ai-rb__title-wrap">
         <span class="ai-rb__title">{{ title }}</span>
-        <span v-if="durationText" class="ai-rb__duration">{{ durationText }}</span>
       </span>
       <ChevronRightIcon v-if="!headerOnly" class="ai-rb__chevron" :class="{ expanded }" />
     </button>
