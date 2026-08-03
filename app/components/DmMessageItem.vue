@@ -50,6 +50,14 @@ const aiSummary = computed(() => {
   if (clean.length <= 60) return "";
   return clean.slice(0, 80) + (clean.length > 80 ? "…" : "");
 });
+
+/** 将 system 标记转换为更友好的文案 */
+const SYSTEM_LABELS: Record<string, string> = {
+  '[对话已重置]': '已清空记忆，开始新话题',
+};
+const systemLabel = computed(
+  () => SYSTEM_LABELS[props.entry.msg.content?.trim() ?? ''] ?? props.entry.msg.content,
+);
 </script>
 
 <template>
@@ -67,7 +75,7 @@ const aiSummary = computed(() => {
     class="ik-knock__sys-divider"
     :data-mid="entry.msg.documentId"
   >
-    <span>{{ entry.msg.content }}</span>
+    <span>{{ systemLabel }}</span>
   </div>
   <div
     v-else
@@ -102,9 +110,12 @@ const aiSummary = computed(() => {
     </div>
     <div class="ik-knock__msg-body">
       <!-- 3.3 AI 工作流时间线：永远渲染在回答气泡上方 -->
-      <AiWorkflowCard
+      <AiReasoningBlock
         v-if="entry.aiRich && entry.workflowEvents.length > 0"
-        :events="entry.workflowEvents"
+        :msg="entry.msg"
+        :streaming="entry.aiStreaming"
+        :inline-only="true"
+        :has-answer-content="!!entry.msg.content?.trim()"
         @open-post="emit('open-post', $event)"
         @follow-up="emit('follow-up', $event)"
       />
