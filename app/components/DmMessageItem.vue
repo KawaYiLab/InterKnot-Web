@@ -148,7 +148,7 @@ const messageSegments = computed((): string[] | null => {
     <div class="ik-knock__msg-body">
       <!-- 3.3 AI 工作流摘要卡：可展开查看步骤标题，不暴露 reasoning / tool 详情 -->
       <AiReasoningBlock
-        v-if="entry.aiRich && entry.workflowEvents.length > 0"
+        v-if="entry.aiRich && (entry.aiStreaming || entry.workflowEvents.length > 0)"
         :msg="entry.msg"
         :streaming="entry.aiStreaming"
         :has-answer-content="!!entry.msg.content?.trim()"
