@@ -35,6 +35,14 @@ const emit = defineEmits<{
 
 /** 消息时间 hover 详情：气泡 title 显示完整时间戳 */
 const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
+
+/** 将 system 标记转换为更友好的文案 */
+const SYSTEM_LABELS: Record<string, string> = {
+  '[对话已重置]': '已清空记忆，开始新话题',
+};
+const systemLabel = computed(
+  () => SYSTEM_LABELS[props.entry.msg.content?.trim() ?? ''] ?? props.entry.msg.content,
+);
 </script>
 
 <template>
@@ -52,7 +60,7 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
     class="ik-knock__sys-divider"
     :data-mid="entry.msg.documentId"
   >
-    <span>{{ entry.msg.content }}</span>
+    <span>{{ systemLabel }}</span>
   </div>
   <div
     v-else
@@ -86,10 +94,12 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
     </div>
     <div class="ik-knock__msg-body">
       <!-- 3.3 AI 工作流时间线：永远渲染在回答气泡上方 -->
-      <AiWorkflowCard
+      <AiReasoningBlock
         v-if="entry.aiRich && entry.workflowEvents.length > 0"
-        :events="entry.workflowEvents"
-        @open-post="emit('open-post', $event)"
+        :msg="entry.msg"
+        :streaming="entry.aiStreaming"
+        :inline-only="true"
+        :has-answer-content="!!entry.msg.content?.trim()"
       />
       <div
         class="ik-knock__msg-bubble"
