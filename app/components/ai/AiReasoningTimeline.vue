@@ -60,7 +60,6 @@ function toolName(step: WorkflowStepView): string {
         >
           <span v-if="toolIcon(step) === 'spinner'" class="ai-timeline__tool-spinner" />
           <component v-else :is="toolIcon(step)" class="ai-timeline__tool-icon" />
-          <span class="ai-timeline__tool-name">{{ toolName(step) }}</span>
           <span v-if="step.durationMs" class="ai-timeline__tool-time">{{ formatMs(step.durationMs) }}</span>
         </div>
       </div>
