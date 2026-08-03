@@ -295,12 +295,11 @@ const createNewAiSession = async () => {
   }
 };
 
-/** 切换 AI 会话（header 下拉） */
-const handleAiSessionChange = (e: Event) => {
-  const target = e.target as HTMLSelectElement | null;
-  const id = target?.value;
-  if (!id) return;
-  handleConversationClick(id);
+/** 从会话列表返回 AI 角色选择 */
+const backToAiCharacters = () => {
+  activeAiSlug.value = null;
+  activeConversationId.value = null;
+  updateUrl("calls");
 };
 
 /** 删除指定 AI 会话 */
@@ -1447,50 +1446,139 @@ const handleMobileBack = () => {
                     class="ik-knock__list"
                     role="listbox"
                   >
-                    <button
-                      v-for="{ card, unread } in aiCharacterRows"
-                      :key="card.slug"
-                      type="button"
-                      role="option"
-                      class="ik-knock__list-item"
-                      :class="{
-                        'is-active': activeAiSlug === card.slug,
-                      }"
-                      :aria-selected="activeAiSlug === card.slug"
-                      @click="selectAiCharacter(card)"
-                    >
-                      <span class="ik-knock__avatar" aria-hidden="true">
-                        <img
-                          v-if="cardAvatarUrl(card)"
-                          :src="cardAvatarUrl(card)!"
-                          :alt="card.displayName"
-                          class="ik-knock__avatar-img"
-                          draggable="false"
-                        />
-                        <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__avatar-img" draggable="false" />
-                      </span>
-                      <span class="ik-knock__item-text">
-                        <span class="ik-knock__item-title">{{ card.displayName }}</span>
-                        <span class="ik-knock__item-subtitle">
-                          {{ card.bio || "AI 助手" }}
-                        </span>
-                      </span>
-                      <span
-                        v-if="unread > 0"
-                        class="ik-knock__item-badge"
-                        aria-label="未读"
+                    <!-- 角色选择视图 -->
+                    <template v-if="!activeAiSlug">
+                      <button
+                        v-for="{ card, unread } in aiCharacterRows"
+                        :key="card.slug"
+                        type="button"
+                        role="option"
+                        class="ik-knock__list-item"
+                        :class="{
+                          'is-active': activeAiSlug === card.slug,
+                        }"
+                        :aria-selected="activeAiSlug === card.slug"
+                        @click="selectAiCharacter(card)"
                       >
-                        {{ unread > 99 ? "99+" : unread }}
-                      </span>
-                    </button>
-                    <div
-                      v-if="!aiCharacters.length"
-                      class="ik-knock__list-empty"
-                    >
-                      <span v-if="aiCharactersLoading">加载中…</span>
-                      <span v-else-if="aiCharactersError">{{ aiCharactersError }}</span>
-                      <span v-else>暂无 AI 角色</span>
-                    </div>
+                        <span class="ik-knock__avatar" aria-hidden="true">
+                          <img
+                            v-if="cardAvatarUrl(card)"
+                            :src="cardAvatarUrl(card)!"
+                            :alt="card.displayName"
+                            class="ik-knock__avatar-img"
+                            draggable="false"
+                          />
+                          <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__avatar-img" draggable="false" />
+                        </span>
+                        <span class="ik-knock__item-text">
+                          <span class="ik-knock__item-title">{{ card.displayName }}</span>
+                          <span class="ik-knock__item-subtitle">
+                            {{ card.bio || "AI 助手" }}
+                          </span>
+                        </span>
+                        <span
+                          v-if="unread > 0"
+                          class="ik-knock__item-badge"
+                          aria-label="未读"
+                        >
+                          {{ unread > 99 ? "99+" : unread }}
+                        </span>
+                      </button>
+                      <div
+                        v-if="!aiCharacters.length"
+                        class="ik-knock__list-empty"
+                      >
+                        <span v-if="aiCharactersLoading">加载中…</span>
+                        <span v-else-if="aiCharactersError">{{ aiCharactersError }}</span>
+                        <span v-else>暂无 AI 角色</span>
+                      </div>
+                    </template>
+
+                    <!-- 某角色的会话列表 -->
+                    <template v-else>
+                      <div class="ik-knock__ai-session-header">
+                        <button
+                          type="button"
+                          class="ik-knock__ai-session-back"
+                          aria-label="返回角色"
+                          @click="backToAiCharacters"
+                        >
+                          <ChevronLeftIcon class="ik-knock__ai-session-back-icon" aria-hidden="true" />
+                        </button>
+                        <span class="ik-knock__ai-session-title">{{ activeAiCard?.displayName || "AI 助手" }}</span>
+                        <button
+                          type="button"
+                          class="ik-knock__new-session"
+                          :disabled="creatingAiSession"
+                          aria-label="新建会话"
+                          title="新建会话"
+                          @click="createNewAiSession"
+                        >
+                          <PlusIcon class="ik-knock__new-session-icon" aria-hidden="true" />
+                        </button>
+                      </div>
+                      <button
+                        v-for="session in aiSessionsForActiveCard"
+                        :key="session.documentId"
+                        type="button"
+                        role="option"
+                        class="ik-knock__list-item"
+                        :class="{
+                          'is-active': activeConversationId === session.documentId,
+                          'has-unread': session.unreadCount > 0,
+                        }"
+                        :aria-selected="activeConversationId === session.documentId"
+                        @click="handleConversationClick(session.documentId)"
+                      >
+                        <span class="ik-knock__avatar" aria-hidden="true">
+                          <img
+                            v-if="activeAiCard && cardAvatarUrl(activeAiCard)"
+                            :src="cardAvatarUrl(activeAiCard)!"
+                            :alt="activeAiCard.displayName"
+                            class="ik-knock__avatar-img"
+                            draggable="false"
+                          />
+                          <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__avatar-img" draggable="false" />
+                        </span>
+                        <span class="ik-knock__item-text">
+                          <span class="ik-knock__item-title">{{ session.title || activeAiCard?.displayName || "AI 会话" }}</span>
+                          <span class="ik-knock__item-subtitle">
+                            {{ conversationPreview(session) || "暂无消息" }}
+                          </span>
+                        </span>
+                        <span class="ik-knock__item-actions">
+                          <button
+                            type="button"
+                            class="ik-knock__delete-session"
+                            :disabled="deletingSessionId === session.documentId"
+                            aria-label="删除会话"
+                            title="删除会话"
+                            @click.stop="deleteAiSession(session.documentId)"
+                          >
+                            <TrashIcon class="ik-knock__delete-session-icon" aria-hidden="true" />
+                          </button>
+                        </span>
+                        <span
+                          v-if="session.unreadCount > 0"
+                          class="ik-knock__item-badge"
+                          aria-label="未读"
+                        >
+                          {{ session.unreadCount > 99 ? "99+" : session.unreadCount }}
+                        </span>
+                      </button>
+                      <div
+                        v-if="!aiSessionsForActiveCard.length && !creatingAiSession"
+                        class="ik-knock__list-empty"
+                      >
+                        <span>暂无会话，点击上方 + 新建</span>
+                      </div>
+                      <div
+                        v-else-if="creatingAiSession"
+                        class="ik-knock__list-empty"
+                      >
+                        <span>创建中…</span>
+                      </div>
+                    </template>
                   </div>
 
                   <!-- 群聊（占位） -->
@@ -1546,25 +1634,6 @@ const handleMobileBack = () => {
                         </span>
                       </Transition>
                     </div>
-                    <!-- AI 会话切换下拉：放在 header 里 -->
-                    <select
-                      v-if="activeAiSlug && aiSessionsForActiveCard.length"
-                      class="ik-knock__ai-session-select"
-                      :value="activeConversationId || ''"
-                      aria-label="切换会话"
-                      @change="handleAiSessionChange"
-                    >
-                      <option
-                        v-for="session in aiSessionsForActiveCard"
-                        :key="session.documentId"
-                        :value="session.documentId"
-                      >
-                        {{ session.title || activeAiCard?.displayName || "AI 会话" }}
-                        <template v-if="conversationPreview(session)">
-                          · {{ conversationPreview(session) }}
-                        </template>
-                      </option>
-                    </select>
                     <!-- Phase 4 会话内搜索：仅选中会话时显示 -->
                     <button
                       v-if="activeConversation"
@@ -2152,26 +2221,123 @@ const handleMobileBack = () => {
   font-size: 13px;
 }
 
-/* AI 会话切换下拉（放在 header 里） */
-.ik-knock__ai-session-select {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: 240px;
-  height: 32px;
-  padding: 0 28px 0 10px;
-  border: 2px solid #3a3a3a;
-  border-radius: 8px;
-  background: #1a1a1a;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  appearance: auto;
+/* AI 会话列表顶部：返回角色、角色名、新建会话 */
+.ik-knock__ai-session-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 2px solid #202020;
+  background: #161616;
+  flex-shrink: 0;
 }
 
-.ik-knock__ai-session-select:focus-visible {
-  outline: 2px solid #fbfe00;
-  outline-offset: 2px;
+.ik-knock__ai-session-back {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ik-knock__ai-session-back:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-knock__ai-session-back-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.ik-knock__ai-session-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ik-knock__new-session {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #777;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.ik-knock__new-session:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-knock__new-session:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ik-knock__new-session-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* 单个会话项的删除按钮 */
+.ik-knock__item-actions {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.ik-knock__list-item:hover .ik-knock__item-actions {
+  display: inline-flex;
+}
+
+.ik-knock__delete-session {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #777;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.ik-knock__delete-session:hover:not(:disabled) {
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.12);
+}
+
+.ik-knock__delete-session:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ik-knock__delete-session-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .ik-knock__item-text {
