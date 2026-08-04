@@ -85,6 +85,13 @@ interface UseDmConversations {
   openDirectConversation: (
     targetUserId: number,
   ) => Promise<{ summary: DmConversationSummary; isNew: boolean }>;
+  /** 为指定 AI 用户新建一个独立会话 */
+  createAiSession: (
+    targetUserId: number,
+    title?: string,
+  ) => Promise<DmConversationSummary>;
+  /** 删除/离开当前会话 */
+  deleteConversation: (id: string) => Promise<void>;
 
   /**
    * 取某会话的消息状态。返回 plain object 而非 ComputedRef——调用方在
@@ -323,6 +330,32 @@ export function useDmConversations(): UseDmConversations {
     }
     upsertConversation(resp.data);
     return { summary: resp.data, isNew: !!resp.isNew };
+  }
+
+  interface AiSessionResponse {
+    data: DmConversationSummary;
+  }
+
+  async function createAiSession(
+    targetUserId: number,
+    title?: string,
+  ): Promise<DmConversationSummary> {
+    const resp = await $api<AiSessionResponse>("/api/dm/conversations/ai-session", {
+      method: "POST",
+      body: { targetUserId, title },
+    });
+    if (!resp?.data?.documentId) {
+      throw new Error("invalid ai session response");
+    }
+    upsertConversation(resp.data);
+    return resp.data;
+  }
+
+  async function deleteConversation(id: string): Promise<void> {
+    await $api(`/api/dm/conversations/${encodeURIComponent(id)}/leave`, {
+      method: "POST",
+    });
+    removeConversation(id);
   }
 
   /** 从列表里移除指定会话（连同消息桶） */
@@ -1022,6 +1055,8 @@ export function useDmConversations(): UseDmConversations {
 
     refresh,
     openDirectConversation,
+    createAiSession,
+    deleteConversation,
     messageStateOf: (id: string) =>
       messagesById.value[id] ?? emptyMessageState(),
     ensureMessages,

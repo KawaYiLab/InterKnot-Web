@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { PaperAirplaneIcon, StopIcon } from "@heroicons/vue/24/solid";
+import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 
 /**
  * DM 输入区（Phase 4 拆分自 KnockKnockModal）：
@@ -19,6 +20,8 @@ const props = defineProps<{
   /** AI 流式生成中（且非编辑态）：发送按钮切换为「停止」 */
   streaming: boolean;
   stopping: boolean;
+  /** AI 会话示例问题（空时不显示） */
+  suggestions?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -27,6 +30,8 @@ const emit = defineEmits<{
   (e: "cancel-edit"): void;
   /** 用户敲键盘：父级节流发送 typing 状态 */
   (e: "typing"): void;
+  /** 点击示例问题区的刷新按钮 */
+  (e: "refresh-suggestions"): void;
 }>();
 
 const draft = defineModel<string>("draft", { default: "" });
@@ -63,6 +68,20 @@ const sendDisabled = computed(
     props.sending ||
     (props.editing ? !editingDraft.value.trim() : !draft.value.trim()),
 );
+
+const showSuggestions = computed(
+  () =>
+    props.suggestions &&
+    props.suggestions.length > 0 &&
+    !props.editing &&
+    !props.streaming &&
+    !draft.value.trim(),
+);
+
+const applySuggestion = (text: string) => {
+  draft.value = text;
+  emit("send");
+};
 
 const onComposerInput = () => {
   autoGrowComposer();
@@ -113,6 +132,33 @@ defineExpose({
       aria-live="polite"
     >
       {{ activeDraftLength }}/4000
+    </div>
+    <!-- AI 示例问题：空输入时展示，点击直接发送 -->
+    <div
+      v-if="showSuggestions"
+      class="ik-knock__composer-suggestions"
+    >
+      <span class="ik-knock__composer-suggestions-label">大家都在问</span>
+      <button
+        type="button"
+        class="ik-knock__composer-suggestions-refresh"
+        aria-label="换一批"
+        title="换一批"
+        @click="emit('refresh-suggestions')"
+      >
+        <ArrowPathIcon class="ik-knock__composer-suggestions-refresh-icon" aria-hidden="true" />
+      </button>
+      <div class="ik-knock__composer-suggestions-chips">
+        <button
+          v-for="(q, idx) in suggestions"
+          :key="idx"
+          type="button"
+          class="ik-knock__composer-suggestions-chip"
+          @click="applySuggestion(q)"
+        >
+          {{ q }}
+        </button>
+      </div>
     </div>
     <div
       class="ik-knock__composer-row"
@@ -323,6 +369,72 @@ defineExpose({
 .ik-knock__composer-send-icon {
   width: 18px;
   height: 18px;
+}
+
+/* AI 示例问题：仿 Akasha 大家都在问 */
+.ik-knock__composer-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.ik-knock__composer-suggestions-label {
+  font-weight: 500;
+}
+
+.ik-knock__composer-suggestions-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  padding: 0;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.ik-knock__composer-suggestions-refresh:hover {
+  color: #fbfe00;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ik-knock__composer-suggestions-refresh-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.ik-knock__composer-suggestions-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.ik-knock__composer-suggestions-chip {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12.5px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.ik-knock__composer-suggestions-chip:hover {
+  background: rgba(251, 254, 0, 0.1);
+  border-color: rgba(251, 254, 0, 0.35);
+  color: #fbfe00;
 }
 
 @media (max-width: 768px) {

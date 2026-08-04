@@ -4,6 +4,7 @@ import { DocumentTextIcon, ArrowPathIcon, ClipboardDocumentIcon, CheckIcon } fro
 import type { DmMessage } from "~/types/entities";
 import type { EnrichedMessage } from "~/utils/dm-view";
 import { hasBubbleLinks, parseBubbleSegments } from "~/utils/dm-view";
+import { buildWorkflowSteps, type WorkflowStepView } from "~/utils/workflow";
 import { formatTime, formatFullTime } from "~/utils/time";
 
 /**
@@ -35,6 +36,66 @@ const emit = defineEmits<{
 
 /** 消息时间 hover 详情：气泡 title 显示完整时间戳 */
 const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
+
+/** 将 system 标记转换为更友好的文案 */
+const SYSTEM_LABELS: Record<string, string> = {
+  '[对话已重置]': '已清空记忆，开始新话题',
+};
+const systemLabel = computed(
+  () => SYSTEM_LABELS[props.entry.msg.content?.trim() ?? ''] ?? props.entry.msg.content,
+);
+
+/** 把当前 AI 回复的 answer.delta 段按 partIndex 排序后取出 */
+const answerSegmentSteps = computed(() => {
+  if (!props.entry.aiRich || !props.entry.workflowEvents.length) return [];
+  const steps = buildWorkflowSteps(props.entry.workflowEvents);
+  return steps
+    .filter((s): s is WorkflowStepView & { text: string; partIndex: number } =>
+      s.kind === "answer" &&
+      typeof s.partIndex === "number" &&
+      typeof s.text === "string" &&
+      s.text.length > 0,
+    )
+    .sort((a, b) => a.partIndex - b.partIndex);
+});
+
+/** 将已渲染正文按 answer 段切分，返回多个气泡文本。最后一段允许与 entry.rendered 存在 citation 解析差异。 */
+function splitBySegments(rendered: string, segs: string[]): string[] {
+  const out: string[] = [];
+  let remaining = rendered;
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i]!;
+    if (remaining.startsWith(seg)) {
+      out.push(seg);
+      remaining = remaining.slice(seg.length);
+    } else if (i === segs.length - 1) {
+      // 末段可能经过了 citation/链接解析，正文长度与原始段不同，直接用剩余正文
+      out.push(remaining || seg);
+      remaining = "";
+    } else {
+      // 中间段对不上：回退到直接展示各段原文
+      return segs;
+    }
+  }
+  if (remaining) out.push(remaining);
+  return out;
+}
+
+const messageSegments = computed((): string[] | null => {
+  const steps = answerSegmentSteps.value;
+  if (steps.length <= 1) return null;
+  const rendered = typeof props.entry.rendered === "string" ? props.entry.rendered : "";
+  const content = typeof props.entry.msg.content === "string" ? props.entry.msg.content : "";
+  // 流式中或打字机动画进行中：当前展示文本短于最终 content，暂时不拆分
+  if (
+    props.entry.aiStreaming &&
+    (!rendered || !content || rendered.length < content.length)
+  ) {
+    return null;
+  }
+  const segs = steps.map((s) => s.text);
+  return splitBySegments(rendered, segs);
+});
 </script>
 
 <template>
@@ -52,7 +113,7 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
     class="ik-knock__sys-divider"
     :data-mid="entry.msg.documentId"
   >
-    <span>{{ entry.msg.content }}</span>
+    <span>{{ systemLabel }}</span>
   </div>
   <div
     v-else
@@ -85,13 +146,31 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
       <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__msg-avatar-img" draggable="false" />
     </div>
     <div class="ik-knock__msg-body">
-      <!-- 3.3 AI 工作流时间线：永远渲染在回答气泡上方 -->
-      <AiWorkflowCard
-        v-if="entry.aiRich && entry.workflowEvents.length > 0"
-        :events="entry.workflowEvents"
-        @open-post="emit('open-post', $event)"
+      <!-- 3.3 AI 工作流摘要卡：可展开查看步骤标题，不暴露 reasoning / tool 详情 -->
+      <AiReasoningBlock
+        v-if="entry.aiRich && (entry.aiStreaming || entry.workflowEvents.length > 0)"
+        :msg="entry.msg"
+        :streaming="entry.aiStreaming"
+        :has-answer-content="!!entry.msg.content?.trim()"
       />
+      <template v-if="messageSegments && messageSegments.length">
+        <div
+          v-for="(seg, segIdx) in messageSegments"
+          :key="segIdx"
+          class="ik-knock__msg-bubble"
+          :class="{ 'is-deleted': !!entry.msg.deletedAt }"
+          :title="fullTime || undefined"
+        >
+          <AiMessageBody
+            :text="seg"
+            :streaming="entry.aiStreaming && segIdx === messageSegments.length - 1"
+            @open-post="emit('open-post', $event)"
+          />
+          <span v-if="segIdx === messageSegments.length - 1 && entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
+        </div>
+      </template>
       <div
+        v-else
         class="ik-knock__msg-bubble"
         :class="{ 'is-deleted': !!entry.msg.deletedAt }"
         :title="fullTime || undefined"
@@ -129,48 +208,6 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
         </template>
         <template v-else>{{ entry.rendered }}</template>
         <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
-        <!-- 1.4 气泡 hover 操作条：复制原文（AI 消息为原始 markdown）；
-             absolute 悬浮于气泡右上，不占布局 -->
-        <div
-          v-if="entry.copyable && !entry.aiStreaming"
-          class="ik-knock__msg-actions"
-        >
-          <button
-            type="button"
-            class="ik-knock__msg-action"
-            :class="{ 'is-done': copiedId === entry.msg.documentId }"
-            :aria-label="copiedId === entry.msg.documentId ? '已复制' : '复制消息'"
-            @click.stop="emit('copy', entry.msg)"
-          >
-            <CheckIcon
-              v-if="copiedId === entry.msg.documentId"
-              class="ik-knock__msg-action-icon"
-              aria-hidden="true"
-            />
-            <ClipboardDocumentIcon
-              v-else
-              class="ik-knock__msg-action-icon"
-              aria-hidden="true"
-            />
-            {{ copiedId === entry.msg.documentId ? "已复制" : "复制" }}
-          </button>
-          <!-- 2.2 重新生成：仅会话最后一条 AI 回复、且无流式进行中 -->
-          <button
-            v-if="showRegenerate"
-            type="button"
-            class="ik-knock__msg-action"
-            :disabled="regenerating"
-            aria-label="重新生成"
-            @click.stop="emit('regenerate', entry.msg)"
-          >
-            <ArrowPathIcon
-              class="ik-knock__msg-action-icon"
-              :class="{ 'is-spinning': regenerating }"
-              aria-hidden="true"
-            />
-            重新生成
-          </button>
-        </div>
       </div>
       <!-- 通知 quote 卡：点击跳到关联委托（postModal） -->
       <button
@@ -202,6 +239,46 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
         :posts="entry.relatedPosts"
         @open-post="emit('open-post', $event)"
       />
+      <!-- 1.4 气泡外左下角：时间 + 复制 + 重新生成，仅 AI 消息展示；始终放在消息块最下方 -->
+      <div v-if="entry.aiRich" class="ik-knock__msg-meta" :class="{ 'is-mine': entry.isMine }">
+        <span v-if="entry.msg.createdAt" class="ik-knock__msg-meta-time" :title="fullTime || undefined">
+          {{ formatTime(entry.msg.createdAt) }}
+        </span>
+        <button
+          v-if="entry.copyable && !entry.aiStreaming"
+          type="button"
+          class="ik-knock__msg-meta-action"
+          :class="{ 'is-done': copiedId === entry.msg.documentId }"
+          :aria-label="copiedId === entry.msg.documentId ? '已复制' : '复制消息'"
+          @click.stop="emit('copy', entry.msg)"
+        >
+          <CheckIcon
+            v-if="copiedId === entry.msg.documentId"
+            class="ik-knock__msg-meta-icon"
+            aria-hidden="true"
+          />
+          <ClipboardDocumentIcon
+            v-else
+            class="ik-knock__msg-meta-icon"
+            aria-hidden="true"
+          />
+        </button>
+        <button
+          v-if="showRegenerate"
+          type="button"
+          class="ik-knock__msg-meta-action"
+          :disabled="regenerating"
+          aria-label="重新生成"
+          @click.stop="emit('regenerate', entry.msg)"
+        >
+          <ArrowPathIcon
+            class="ik-knock__msg-meta-icon"
+            :class="{ 'is-spinning': regenerating }"
+            aria-hidden="true"
+          />
+          重新生成
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -520,67 +597,63 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
   color: rgba(0, 0, 0, 0.35);
 }
 
-/* ── 1.4 气泡 hover 操作条（复制）─────────────
-   Discord 式：悬浮于气泡右上角、不占布局；触屏无 hover → 长按走上下文菜单 */
-.ik-knock__msg-actions {
-  position: absolute;
-  top: -12px;
-  right: 8px;
+/* ── 1.4 气泡外左下角：时间 + 复制 + 重新生成 ── */
+.ik-knock__msg-meta {
   display: flex;
-  gap: 4px;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 130ms ease, visibility 130ms ease;
-  /* 覆盖气泡的 pre-wrap，避免按钮文案内空白参与排版 */
-  white-space: nowrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  min-height: 22px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  line-height: 1;
 }
 
-.ik-knock__msg-bubble:hover .ik-knock__msg-actions,
-.ik-knock__msg-actions:focus-within {
-  opacity: 1;
-  visibility: visible;
+.ik-knock__msg-meta-time {
+  user-select: none;
 }
 
-.ik-knock__msg-action {
+.ik-knock__msg-meta-action {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background: #232326;
-  color: rgba(255, 255, 255, 0.78);
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
-  transition: background 120ms ease, color 120ms ease;
+  transition: color 120ms ease, background-color 120ms ease;
 }
 
-.ik-knock__msg-action:hover {
-  background: #fbfe00;
-  color: #000;
+.ik-knock__msg-meta-action:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.ik-knock__msg-action.is-done {
-  background: #52d273;
-  border-color: #52d273;
-  color: #000;
+.ik-knock__msg-meta-action.is-done {
+  color: #52d273;
 }
 
-.ik-knock__msg-action-icon {
-  width: 13px;
-  height: 13px;
+.ik-knock__msg-meta-icon {
+  width: 14px;
+  height: 14px;
 }
 
-/* 2.2 重新生成：请求进行中禁点 + 图标旋转 */
-.ik-knock__msg-action:disabled {
+.ik-knock__msg.is-mine .ik-knock__msg-meta {
+  justify-content: flex-end;
+}
+
+/* 重新生成：请求进行中禁点 + 图标旋转 */
+.ik-knock__msg-meta-action:disabled {
   opacity: 0.55;
   cursor: default;
 }
 
-.ik-knock__msg-action-icon.is-spinning {
+.ik-knock__msg-meta-icon.is-spinning {
   animation: ik-spin 0.8s linear infinite;
 }
 
