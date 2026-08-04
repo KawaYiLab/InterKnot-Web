@@ -227,6 +227,7 @@ const activeAiSuggestions = computed<string[]>(() => {
   const all: string[] = card?.suggestedQuestions?.length
     ? (card.suggestedQuestions as string[])
     : DEFAULT_AI_SUGGESTIONS;
+  if (all.length === 0) return [];
   const count = Math.min(3, all.length);
   const start = suggestionsOffset.value % all.length;
   return Array.from({ length: count }, (_, i) => all[(start + i) % all.length] as string);
@@ -237,11 +238,6 @@ const onRefreshSuggestions = () => {
   const len = card?.suggestedQuestions?.length || DEFAULT_AI_SUGGESTIONS.length;
   suggestionsOffset.value = (suggestionsOffset.value + 3) % Math.max(len, 1);
 };
-
-/** 当前会话是否已有消息（空会话才显示示例问题） */
-const hasActiveConversationMessages = computed(
-  () => !!activeConversation.value?.lastMessage || activeMessages.value.length > 0,
-);
 
 // 切换 AI 角色时重置示例问题偏移
 watch(() => activeAiCard.value?.slug, () => { suggestionsOffset.value = 0; });
@@ -443,6 +439,11 @@ const activeMessageState = computed(() => {
  */
 const activeMessages = computed<DmMessage[]>(
   () => activeMessageState.value?.items ?? [],
+);
+
+/** 当前会话是否已有消息（空会话才显示示例问题） */
+const hasActiveConversationMessages = computed(
+  () => !!activeConversation.value?.lastMessage || activeMessages.value.length > 0,
 );
 
 /** 右栏 loading 占位用：当前会话首次加载消息中且本地尚无缓存 */
@@ -1292,6 +1293,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown);
+  if (autoScrollRaf != null) cancelAnimationFrame(autoScrollRaf);
+  if (autoScrollTimer) clearTimeout(autoScrollTimer);
+  if (scrollPauseTimer) clearTimeout(scrollPauseTimer);
+  if (copiedFlashTimer) clearTimeout(copiedFlashTimer);
 });
 
 const handleClose = () => {
