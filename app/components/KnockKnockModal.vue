@@ -33,6 +33,7 @@ const {
 const auth = useAuthStore();
 const postModal = usePostModal();
 const loginDialog = useLoginDialog();
+const confirmDialog = useConfirmDialog();
 const { characters: aiCharacters, loading: aiCharactersLoading, error: aiCharactersError, refresh: refreshAiCharacters } = useAiCharacters();
 const {
   displayText: aiDisplayText,
@@ -340,7 +341,13 @@ const createNewAiSession = async () => {
 /** 删除指定 AI 会话 */
 const deleteAiSession = async (id: string) => {
   if (!id || deletingSessionId.value === id) return;
-  if (!confirm("确定删除该会话？历史消息将不再出现在列表中。")) return;
+  const ok = await confirmDialog.open({
+    title: "删除会话",
+    message: "确定删除该会话？历史消息将不再出现在列表中。",
+    confirmText: "删除",
+    danger: true,
+  });
+  if (!ok) return;
   deletingSessionId.value = id;
   try {
     await deleteConversation(id);
