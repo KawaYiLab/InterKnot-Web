@@ -33,7 +33,7 @@ describe("buildWorkflowSteps 步骤聚合", () => {
     expect(steps[1]).toMatchObject({ kind: "search", status: "running", subtitle: "绳网热梗" });
   });
 
-  it("search.finish 记录命中数与帖子列表；read.item 收集已读帖子", () => {
+  it("search.finish 记录命中数；read 保留标题摘要但不收集帖子列表", () => {
     const steps = buildWorkflowSteps(
       evs([
         { type: "forum.search.start", stepId: "s1", data: { query: "q" } },
@@ -48,9 +48,9 @@ describe("buildWorkflowSteps 步骤聚合", () => {
       ]),
     );
     expect(steps[0]!.hits).toBe(7);
-    expect(steps[0]!.posts).toEqual([{ documentId: "a1", title: "帖子A" }]);
+    expect(steps[0]!.posts).toBeUndefined();
     expect(steps[1]).toMatchObject({ kind: "read", status: "done", subtitle: "《帖子A》" });
-    expect(steps[1]!.posts).toEqual([{ documentId: "a1", title: "帖子A" }]);
+    expect(steps[1]!.posts).toBeUndefined();
   });
 
   it("乱序事件按 seq 重排后聚合", () => {

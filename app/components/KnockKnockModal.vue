@@ -6,7 +6,14 @@ import {
   UserGroupIcon,
   ChatBubbleLeftIcon,
 } from "@heroicons/vue/24/solid";
-import { ChevronLeftIcon, ChevronDownIcon, ChevronUpIcon, ArrowPathIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/vue/24/outline";
+import {
+  ChevronLeftIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  TrashIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
+} from "@heroicons/vue/24/outline";
 import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { stripMentionsToPlain } from "~/utils/mention";
@@ -34,6 +41,7 @@ const {
   resetSession: resetAiRevealSession,
   revealTick: aiRevealTick,
   isComplete: isAiRevealComplete,
+  isRevealing: isAiRevealing,
 } = useAiDmTypewriter();
 
 /** 打开会话时已有的消息 id；不在此集合内的 AI 新消息才打字机 */
@@ -62,9 +70,9 @@ const {
   sendTyping,
   startStream,
   stopStream,
-  openDirectConversation,
+  createAiSession,
+  deleteConversation,
   isStreamingMessage,
-  resetContext,
   stopAiStream,
   regenerateAiReply,
   workflowEventsOf,
@@ -72,6 +80,15 @@ const {
 
 const AI_SLUG_STORAGE_KEY = "ik-knock-ai-slug";
 const activeAiSlug = ref<string | null>(null);
+
+/** 未配置示例问题时，AI 会话使用的默认示例问题 */
+const DEFAULT_AI_SUGGESTIONS = [
+  "介绍一下你自己",
+  "最近有什么热门委托？",
+  "帮我找一下最新情报",
+  "分析一下当前版本的角色强度",
+  "给我推荐一些值得关注的帖子",
+];
 /** 弹窗打开后 DM 列表 + AI 角色列表均就绪，再渲染私聊 Tab（避免 fairy 闪一下） */
 const knockBootstrapDone = ref(false);
 
@@ -159,11 +176,21 @@ const contactsListLoading = computed(
 );
 
 /**
- * 私聊 Tab：排除与官方 AI 角色的 direct 会话（避免与「通话」重复）。
+ * 私聊 Tab：排除与官方 AI 角色的 direct 会话（避免与「通话」重复），
+ * 并按（置顶 desc、lastMessageAt desc）重排，确保发消息后实时置顶。
  */
 const conversations = computed<DmConversationSummary[]>(() => {
   if (activeTab.value !== "contacts" || contactsListLoading.value) return [];
-  return allConversations.value.filter((c) => !isOfficialAiPeer(c));
+  return allConversations.value
+    .filter((c) => !isOfficialAiPeer(c))
+    .sort((a, b) => {
+      const ap = a.self?.pinned ? 1 : 0;
+      const bp = b.self?.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      return bt - at;
+    });
 });
 
 const activeConversation = computed<DmConversationSummary | null>(() => {
@@ -171,13 +198,66 @@ const activeConversation = computed<DmConversationSummary | null>(() => {
   return allConversations.value.find((c) => c.documentId === activeConversationId.value) ?? null;
 });
 
-/** 当前会话是否为官方 AI 角色（决定是否显示「重置对话」按钮，3.3.4） */
+/** 当前会话是否为官方 AI 角色（决定是否显示会话管理按钮） */
 const isActiveAiConversation = computed<boolean>(() => {
   const conv = activeConversation.value;
   if (!conv) return false;
   const uid = conv.peer?.userId;
   return conv.peer?.isAiAgent === true || (typeof uid === "number" && aiPeerUserIds.value.has(uid));
 });
+
+/** 当前选中的 AI 角色卡（从 slug 或当前会话反推） */
+const activeAiCard = computed<AiRoleCard | null>(() => {
+  if (activeAiSlug.value) {
+    return aiCharacters.value.find((c) => c.slug === activeAiSlug.value) ?? null;
+  }
+  const conv = activeConversation.value;
+  const uid = conv?.peer?.userId;
+  if (typeof uid === "number") {
+    return aiCharacters.value.find((c) => c.boundUser?.id === uid) ?? null;
+  }
+  return null;
+});
+
+/** AI 示例问题刷新偏移：点击「换一批」循环切片 */
+const suggestionsOffset = ref(0);
+
+const activeAiSuggestions = computed<string[]>(() => {
+  const card = activeAiCard.value;
+  const all: string[] = card?.suggestedQuestions?.length
+    ? (card.suggestedQuestions as string[])
+    : DEFAULT_AI_SUGGESTIONS;
+  if (all.length === 0) return [];
+  const count = Math.min(3, all.length);
+  const start = suggestionsOffset.value % all.length;
+  return Array.from({ length: count }, (_, i) => all[(start + i) % all.length] as string);
+});
+
+const onRefreshSuggestions = () => {
+  const card = activeAiCard.value;
+  const len = card?.suggestedQuestions?.length || DEFAULT_AI_SUGGESTIONS.length;
+  suggestionsOffset.value = (suggestionsOffset.value + 3) % Math.max(len, 1);
+};
+
+// 切换 AI 角色时重置示例问题偏移
+watch(() => activeAiCard.value?.slug, () => { suggestionsOffset.value = 0; });
+
+/** 当前 AI 角色的全部会话，按 lastMessageAt 降序 */
+const aiSessionsForActiveCard = computed<DmConversationSummary[]>(() => {
+  const card = activeAiCard.value;
+  const uid = card?.boundUser?.id;
+  if (typeof uid !== "number") return [];
+  return allConversations.value
+    .filter((c) => c.peer?.userId === uid)
+    .sort((a, b) => {
+      const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      return bt - at;
+    });
+});
+
+const creatingAiSession = ref(false);
+const deletingSessionId = ref<string | null>(null);
 
 /**
  * 对端个人主页 URL（不可跳转时为 null）。
@@ -193,29 +273,14 @@ const peerProfileUrl = computed<string | null>(() => {
 /** 当前会话对端是否可跳转个人主页——从 peerProfileUrl 派生 */
 const canClickPeerProfile = computed<boolean>(() => peerProfileUrl.value !== null);
 
-const resettingContext = ref(false);
-
-/** 重置 AI 对话上下文（3.3.4）：清空记忆开新话题；服务端会广播 system 分界消息。 */
-async function handleResetContext() {
-  const id = activeConversationId.value;
-  if (!id || resettingContext.value || !isActiveAiConversation.value) return;
-  resettingContext.value = true;
-  try {
-    await resetContext(id);
-    await ensureMessages(id, true);
-  } catch {
-    // 静默失败：用户可重试
-  } finally {
-    resettingContext.value = false;
-  }
-}
-
-/** 通话 Tab：按 AI boundUserId 索引未读，避免模板里重复 find */
+/** 通话 Tab：按 AI boundUserId 汇总该角色所有会话的未读 */
 const aiUnreadByUserId = computed(() => {
   const map = new Map<number, number>();
   for (const c of allConversations.value) {
     const uid = c.peer?.userId;
-    if (typeof uid === "number") map.set(uid, c.unreadCount ?? 0);
+    if (typeof uid === "number") {
+      map.set(uid, (map.get(uid) ?? 0) + (c.unreadCount ?? 0));
+    }
   }
   return map;
 });
@@ -234,7 +299,8 @@ const cardAvatarUrl = (card: AiRoleCard): string | null => {
   return typeof raw === "string" && raw.trim() ? raw.trim() : null;
 };
 
-const openAiCharacterChat = async (card: AiRoleCard) => {
+/** 选择 AI 角色：自动打开最近会话；没有则新建 */
+const selectAiCharacter = async (card: AiRoleCard) => {
   const uid = card.boundUser?.id;
   if (!uid) return;
   if (!auth.isLogin) {
@@ -245,10 +311,47 @@ const openAiCharacterChat = async (card: AiRoleCard) => {
   if (import.meta.client) {
     localStorage.setItem(AI_SLUG_STORAGE_KEY, card.slug);
   }
-  const { summary } = await openDirectConversation(uid);
-  activeConversationId.value = summary.documentId;
-  updateUrl("calls", summary.documentId);
-  // 消息加载由 watch(activeConversationId) 统一触发，避免重复请求
+  const sessions = aiSessionsForActiveCard.value.filter((s) => s.peer?.userId === uid);
+  const first = sessions[0];
+  if (first) {
+    activeConversationId.value = first.documentId;
+    updateUrl("calls", first.documentId);
+  } else {
+    await createNewAiSession();
+  }
+};
+
+/** 为当前 AI 角色新建一个独立会话 */
+const createNewAiSession = async () => {
+  const card = activeAiCard.value;
+  const uid = card?.boundUser?.id;
+  if (!uid || creatingAiSession.value) return;
+  creatingAiSession.value = true;
+  try {
+    const summary = await createAiSession(uid);
+    if (card) activeAiSlug.value = card.slug;
+    activeConversationId.value = summary.documentId;
+    updateUrl("calls", summary.documentId);
+  } finally {
+    creatingAiSession.value = false;
+  }
+};
+
+/** 删除指定 AI 会话 */
+const deleteAiSession = async (id: string) => {
+  if (!id || deletingSessionId.value === id) return;
+  if (!confirm("确定删除该会话？历史消息将不再出现在列表中。")) return;
+  deletingSessionId.value = id;
+  try {
+    await deleteConversation(id);
+    if (activeConversationId.value === id) {
+      activeAiSlug.value = null;
+      activeConversationId.value = null;
+      updateUrl("calls");
+    }
+  } finally {
+    deletingSessionId.value = null;
+  }
 };
 
 const openCallsTab = async () => {
@@ -336,6 +439,11 @@ const activeMessageState = computed(() => {
  */
 const activeMessages = computed<DmMessage[]>(
   () => activeMessageState.value?.items ?? [],
+);
+
+/** 当前会话是否已有消息（空会话才显示示例问题） */
+const hasActiveConversationMessages = computed(
+  () => !!activeConversation.value?.lastMessage || activeMessages.value.length > 0,
 );
 
 /** 右栏 loading 占位用：当前会话首次加载消息中且本地尚无缓存 */
@@ -577,7 +685,7 @@ const enrichedMessages = computed<EnrichedMessage[]>(() => {
       aiStreaming:
         aiRich &&
         (isStreamingMessage(msg.documentId) ||
-          (shouldAnimateAiMessage(msg) && !isAiRevealComplete(msg.documentId))),
+          (shouldAnimateAiMessage(msg) && isAiRevealing(msg.documentId))),
       pendingStream: isPendingStreamBubble(msg),
       workflowEvents,
       citations:
@@ -665,6 +773,11 @@ const wasNearBottom = ref(true);
 /** 1.6 用户远离底部期间到达的新消息 → 亮起「回到底部」按钮 */
 const hasUnseenBelow = ref(false);
 
+/** 用户手动滚动后的短暂静默期：避免 AI 流式/新消息把用户强制拉回 */
+const USER_SCROLL_PAUSE_MS = 600;
+const isUserScrolling = ref(false);
+let scrollPauseTimer: ReturnType<typeof setTimeout> | null = null;
+
 const isNearBottom = (el: HTMLElement): boolean => {
   return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_THRESHOLD_PX;
 };
@@ -751,6 +864,13 @@ const onMessagesScroll = () => {
   wasNearBottom.value = isNearBottom(el);
   // 自己滚回底部 → 新消息提示解除
   if (wasNearBottom.value) hasUnseenBelow.value = false;
+  // 用户手动滚动时短暂静默，避免流式输出强制拉回
+  isUserScrolling.value = true;
+  if (scrollPauseTimer) clearTimeout(scrollPauseTimer);
+  scrollPauseTimer = setTimeout(() => {
+    isUserScrolling.value = false;
+    scrollPauseTimer = null;
+  }, USER_SCROLL_PAUSE_MS);
   // 逼近顶部且窗口外还有更早消息 → 扩窗（120px 提前量，滚动不断流）
   if (el.scrollTop < 120 && hasHiddenAbove.value) {
     expandRenderWindow();
@@ -758,23 +878,54 @@ const onMessagesScroll = () => {
 };
 
 /**
- * 消息流变化时，如果用户原本就靠底，跟随到新底部。
- * 否则保持当前 scrollTop，让用户继续读历史。
+ * 消息流 / 工作流 / 打字机任意视觉变化时，rAF 合并后滚到底。
+ * 用 enrichedMessages 做聚合信号：它比 activeMessages 还多覆盖
+ * workflowEvents / aiRevealTick，避免 reasoning preview / tool 时间线
+ * 展开时高度变化但不触发 activeMessages 的问题。
  */
+let autoScrollRaf: number | null = null;
+let autoScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+const doAutoScroll = () => {
+  if (autoScrollRaf != null) {
+    cancelAnimationFrame(autoScrollRaf);
+    autoScrollRaf = null;
+  }
+  if (!wasNearBottom.value || isUserScrolling.value || !messagesRef.value) return;
+  const el = messagesRef.value;
+  if (el) el.scrollTop = el.scrollHeight;
+};
+
+const scheduleAutoScroll = () => {
+  if (!wasNearBottom.value || isUserScrolling.value || !messagesRef.value) return;
+  if (autoScrollRaf == null) {
+    autoScrollRaf = requestAnimationFrame(() => {
+      autoScrollRaf = null;
+      doAutoScroll();
+    });
+  }
+  if (autoScrollTimer == null) {
+    // 工作流展开/折叠有 220ms CSS transition，等过渡结束后再兜底一次
+    autoScrollTimer = setTimeout(() => {
+      autoScrollTimer = null;
+      doAutoScroll();
+    }, 260);
+  }
+};
+
 watch(
-  () => activeMessages.value.length,
+  enrichedMessages,
   (next, prev) => {
-    if (next <= (prev ?? 0)) return;
-    if (!wasNearBottom.value) {
+    const prevLen = prev?.length ?? 0;
+    const nextLen = next.length;
+    if (nextLen > prevLen && !wasNearBottom.value) {
       // 用户在读历史 → 不打断，仅亮起「回到底部」（1.6）
       hasUnseenBelow.value = true;
       return;
     }
-    nextTick(() => {
-      const el = messagesRef.value;
-      if (el) scrollToBottom(el);
-    });
+    scheduleAutoScroll();
   },
+  { flush: 'post' },
 );
 
 /** 补建历史基线：会话 watch 结束时若消息尚未写入缓存，会导致 baseline 为空 + 全员白框 */
@@ -820,17 +971,7 @@ watch(
   { immediate: true },
 );
 
-let aiRevealScrollRaf: number | null = null;
-/** 打字机输出时跟随滚底（rAF 合并，避免每 tick 触发 layout） */
-watch(aiRevealTick, () => {
-  if (!wasNearBottom.value || !isAiPeerConversation.value) return;
-  if (aiRevealScrollRaf != null) return;
-  aiRevealScrollRaf = requestAnimationFrame(() => {
-    aiRevealScrollRaf = null;
-    const el = messagesRef.value;
-    if (el) el.scrollTop = el.scrollHeight;
-  });
-});
+/** enrichedMessages 已经覆盖 aiRevealTick，无需单独 watcher。 */
 
 /** 当前会话是否有 AI 消息正在流式/打字机输出（1.6 显示回底按钮的条件之一） */
 const activeHasStreaming = computed(() =>
@@ -1152,6 +1293,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown);
+  if (autoScrollRaf != null) cancelAnimationFrame(autoScrollRaf);
+  if (autoScrollTimer) clearTimeout(autoScrollTimer);
+  if (scrollPauseTimer) clearTimeout(scrollPauseTimer);
+  if (copiedFlashTimer) clearTimeout(copiedFlashTimer);
 });
 
 const handleClose = () => {
@@ -1163,12 +1308,8 @@ const handleBackdropMouseDown = (e: MouseEvent) => {
   if (e.target === e.currentTarget) handleClose();
 };
 
-const handleTabClick = async (tab: KnockTab) => {
+const handleTabClick = (tab: KnockTab) => {
   activeTab.value = tab;
-  if (tab === "calls") {
-    await openCallsTab();
-    return;
-  }
   activeConversationId.value = null;
   activeAiSlug.value = null;
   updateUrl(tab);
@@ -1374,6 +1515,7 @@ const handleMobileBack = () => {
                     class="ik-knock__list"
                     role="listbox"
                   >
+                    <!-- 角色选择视图 -->
                     <button
                       v-for="{ card, unread } in aiCharacterRows"
                       :key="card.slug"
@@ -1384,7 +1526,7 @@ const handleMobileBack = () => {
                         'is-active': activeAiSlug === card.slug,
                       }"
                       :aria-selected="activeAiSlug === card.slug"
-                      @click="openAiCharacterChat(card)"
+                      @click="selectAiCharacter(card)"
                     >
                       <span class="ik-knock__avatar" aria-hidden="true">
                         <img
@@ -1462,7 +1604,7 @@ const handleMobileBack = () => {
                       @keydown.enter="goToProfile(peerProfileUrl)"
                     >
                       <span class="ik-knock__main-title">
-                        {{ activeConversation?.peer?.name || activeConversation?.title || "NoData" }}
+                        {{ activeConversation?.title || activeConversation?.peer?.name || "NoData" }}
                       </span>
                       <Transition name="ik-typing">
                         <span v-if="peerIsTyping" class="ik-knock__typing-indicator" aria-live="polite">
@@ -1485,17 +1627,17 @@ const handleMobileBack = () => {
                     >
                       <MagnifyingGlassIcon class="ik-knock__search-toggle-icon" aria-hidden="true" />
                     </button>
-                    <!-- 重置 AI 对话上下文（3.3.4）：仅 AI 会话显示 -->
+                    <!-- AI 会话管理：删除当前会话 -->
                     <button
-                      v-if="isActiveAiConversation"
+                      v-if="isActiveAiConversation && activeConversationId"
                       type="button"
-                      class="ik-knock__reset"
-                      :disabled="resettingContext"
-                      aria-label="重置对话"
-                      title="清空记忆，开始新话题"
-                      @click="handleResetContext"
+                      class="ik-knock__session-action"
+                      :disabled="deletingSessionId === activeConversationId"
+                      aria-label="删除当前会话"
+                      title="删除当前会话"
+                      @click="deleteAiSession(activeConversationId)"
                     >
-                      <ArrowPathIcon class="ik-knock__reset-icon" aria-hidden="true" />
+                      <TrashIcon class="ik-knock__session-action-icon" aria-hidden="true" />
                     </button>
                   </header>
                   <!-- Phase 4 会话内搜索条：命中计数 + 上下跳转 -->
@@ -1608,10 +1750,12 @@ const handleMobileBack = () => {
                       :error="sendError"
                       :streaming="!!activeStreamingMessageId"
                       :stopping="stoppingAi"
+                      :suggestions="isActiveAiConversation && !hasActiveConversationMessages ? activeAiSuggestions : undefined"
                       @send="doSend"
                       @stop="handleStopAi"
                       @cancel-edit="cancelEdit"
                       @typing="handleComposerTyping"
+                      @refresh-suggestions="onRefreshSuggestions"
                     />
                   </div>
                 </section>
@@ -2175,6 +2319,40 @@ const handleMobileBack = () => {
 }
 
 .ik-knock__reset-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* AI 会话管理按钮（删除）：与 reset 同款 */
+.ik-knock__session-action {
+  margin-left: 4px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #777;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ik-knock__session-action:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-knock__session-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ik-knock__session-action-icon {
   width: 18px;
   height: 18px;
 }
