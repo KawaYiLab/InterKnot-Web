@@ -52,6 +52,10 @@ const TOOL_TITLES: Record<string, string> = {
   get_user_info: "查询绳网用户",
   get_post_content: "读取绳网帖子",
   get_post_comments: "读取绳网评论",
+  get_posts_by_author: "检索绳网作者帖子",
+  search_posts_by_category: "按分类检索绳网",
+  get_user_stats: "查询绳网用户统计",
+  get_related_posts: "检索相关绳网帖子",
 };
 
 function toolTitle(tool: string): string {
