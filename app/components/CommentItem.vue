@@ -90,13 +90,16 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
     >
       <div class="ik-comment__avatar-col">
         <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
-          <img
-            :src="comment.author?.avatar || '/images/default-avatar.webp'"
-            :alt="comment.author?.name || ''"
-            class="ik-comment__avatar"
-            decoding="async"
-            @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-          />
+          <div class="ik-comment__avatar-wrap">
+            <img
+              :src="comment.author?.avatar || '/images/default-avatar.webp'"
+              :alt="comment.author?.name || ''"
+              class="ik-comment__avatar"
+              decoding="async"
+              @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+            />
+            <span v-if="comment.author?.level && comment.author?.documentId" class="ik-comment__level">{{ comment.author.level }}</span>
+          </div>
         </UserHoverCard>
       </div>
 
@@ -108,9 +111,6 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
               {{ comment.author?.name || "匿名用户" }}
             </span>
           </UserHoverCard>
-          <span v-if="comment.author?.level && comment.author?.documentId" class="ik-comment__level">
-            Lv.{{ comment.author.level }}
-          </span>
           <span v-if="comment.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
           <span v-if="comment.isPinned" class="ik-comment__pinned-badge">
             <ArrowUpCircleIcon class="ik-comment__pinned-icon" />
@@ -202,13 +202,16 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
         >
           <div class="ik-comment__reply-avatar-col">
             <UserHoverCard :author-id="reply.author?.documentId" :clickable="!!reply.author?.documentId">
-              <img
-                :src="reply.author?.avatar || '/images/default-avatar.webp'"
-                :alt="reply.author?.name || ''"
-                class="ik-comment__avatar ik-comment__avatar--sm"
-                decoding="async"
-                @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-              />
+              <div class="ik-comment__avatar-wrap">
+                <img
+                  :src="reply.author?.avatar || '/images/default-avatar.webp'"
+                  :alt="reply.author?.name || ''"
+                  class="ik-comment__avatar ik-comment__avatar--sm"
+                  decoding="async"
+                  @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+                />
+                <span v-if="reply.author?.level && reply.author?.documentId" class="ik-comment__level ik-comment__level--sm">{{ reply.author.level }}</span>
+              </div>
             </UserHoverCard>
           </div>
           <div class="ik-comment__reply-content-col">
@@ -218,9 +221,6 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
                   {{ reply.author?.name || "匿名用户" }}
                 </span>
               </UserHoverCard>
-              <span v-if="reply.author?.level && reply.author?.documentId" class="ik-comment__level">
-                Lv.{{ reply.author.level }}
-              </span>
               <span v-if="reply.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
             </div>
             <div class="ik-comment__body ik-comment__body--reply">
@@ -384,6 +384,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   gap: 6px;
 }
 
+.ik-comment__avatar-wrap {
+  position: relative;
+  display: inline-block;
+}
+
 .ik-comment__name {
   font-size: 14px;
   font-weight: 700;
@@ -394,11 +399,32 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 }
 
 .ik-comment__level {
-  font-size: 11px;
-  font-weight: 700;
-  font-style: italic;
-  color: var(--ik-primary);
-  flex-shrink: 0;
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #000;
+  border: 1px solid #000;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.ik-comment__level--sm {
+  top: -2px;
+  left: -2px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  font-size: 8px;
 }
 
 .ik-comment__ai-badge {
