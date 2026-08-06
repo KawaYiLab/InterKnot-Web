@@ -1164,15 +1164,18 @@ onBeforeUnmount(() => {
             <div class="ik-dialog__header">
               <div class="ik-dialog__header-left">
                 <UserHoverCard :author-id="headerAuthor?.documentId" :clickable="!!headerAuthor?.documentId">
-                  <div class="ik-dialog__avatar-shell">
-                    <img
-                      v-if="headerAuthor"
-                      :src="headerAuthor.avatar || '/images/default-avatar.webp'"
-                      :alt="headerAuthor.name || ''"
-                      class="ik-dialog__avatar"
-                      @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-                    />
-                    <div v-else class="ik-skel" style="width:100%;height:100%;border-radius:999px"></div>
+                  <div class="ik-dialog__avatar-wrap">
+                    <div class="ik-dialog__avatar-shell">
+                      <img
+                        v-if="headerAuthor"
+                        :src="headerAuthor.avatar || '/images/default-avatar.webp'"
+                        :alt="headerAuthor.name || ''"
+                        class="ik-dialog__avatar"
+                        @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+                      />
+                      <div v-else class="ik-skel" style="width:100%;height:100%;border-radius:999px"></div>
+                    </div>
+                    <span v-if="headerAuthor?.level && headerAuthor?.documentId" class="ik-dialog__level">{{ headerAuthor.level }}</span>
                   </div>
                 </UserHoverCard>
                 <div v-if="headerAuthor" class="ik-dialog__author-info">
@@ -1182,9 +1185,6 @@ onBeforeUnmount(() => {
                         {{ headerAuthor.name || "匿名用户" }}
                       </span>
                     </UserHoverCard>
-                    <span v-if="headerAuthor.level && headerAuthor.documentId" class="ik-dialog__level">
-                      Lv.{{ headerAuthor.level }}
-                    </span>
                   </div>
                   <span v-if="headerCreatedAt || post?.editedAt" class="ik-dialog__time">
                     <template v-if="headerCreatedAt">{{ formatTime(headerCreatedAt) }}</template>
@@ -1927,13 +1927,30 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-.ik-dialog__level {
-  font-size: 12px;
-  font-weight: 700;
-  font-style: italic;
-  line-height: 20px;
-  color: #BFFF09;
+.ik-dialog__avatar-wrap {
+  position: relative;
+  display: inline-block;
   flex-shrink: 0;
+}
+
+.ik-dialog__level {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #000;
+  border: 2px solid #000;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .ik-dialog__time {
