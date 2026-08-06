@@ -25,7 +25,7 @@ defineProps<{
   padding: 0 4px;
   /* 行内排版，避免一长串 @用户 强制换行打断阅读 */
   white-space: nowrap;
-  /* 主题色：与 .ik-comment__level 一致的亮黄绿 */
+  /* 主题色：亮黄绿 */
   color: #BFFF09;
   font-weight: 600;
   cursor: pointer;

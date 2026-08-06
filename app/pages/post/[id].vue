@@ -987,13 +987,16 @@ onBeforeUnmount(() => {
         <div class="ik-page__header">
           <div class="ik-page__header-left">
             <UserHoverCard :author-id="post.author?.documentId" :clickable="!!post.author?.documentId">
-              <div class="ik-page__avatar-shell">
-                <img
-                  :src="post.author.avatar || '/images/default-avatar.webp'"
-                  :alt="post.author.name || ''"
-                  class="ik-page__avatar"
-                  @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-                />
+              <div class="ik-page__avatar-wrap">
+                <div class="ik-page__avatar-shell">
+                  <img
+                    :src="post.author.avatar || '/images/default-avatar.webp'"
+                    :alt="post.author.name || ''"
+                    class="ik-page__avatar"
+                    @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+                  />
+                </div>
+                <span v-if="post.author.level && post.author.documentId" class="ik-page__level">{{ post.author.level }}</span>
               </div>
             </UserHoverCard>
             <div class="ik-page__author-info">
@@ -1003,9 +1006,6 @@ onBeforeUnmount(() => {
                     {{ post.author.name || "匿名用户" }}
                   </span>
                 </UserHoverCard>
-                <span v-if="post.author.level && post.author.documentId" class="ik-page__level">
-                  Lv.{{ post.author.level }}
-                </span>
               </div>
               <span class="ik-page__time">
                 {{ formatTime(post.createdAt) }}
@@ -1096,7 +1096,6 @@ onBeforeUnmount(() => {
                     <div class="ik-comment-skel__body">
                       <div style="display:flex;align-items:center;gap:6px">
                         <div class="ik-skel" style="width:80px;height:14px;border-radius:3px"></div>
-                        <div class="ik-skel" style="width:32px;height:12px;border-radius:3px"></div>
                       </div>
                       <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
                         <div class="ik-skel" :style="{ width: (95 - n * 10) + '%', height: '14px', borderRadius: '3px' }"></div>
@@ -1551,13 +1550,30 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-.ik-page__level {
-  font-size: 12px;
-  font-weight: 700;
-  font-style: italic;
-  line-height: 20px;
-  color: #BFFF09;
+.ik-page__avatar-wrap {
+  position: relative;
+  display: inline-block;
   flex-shrink: 0;
+}
+
+.ik-page__level {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #000;
+  border: 2px solid #000;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .ik-page__time {
