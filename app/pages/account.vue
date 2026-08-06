@@ -689,15 +689,17 @@ useHead({ title: "账号中心" });
                   :key="user.documentId"
                   class="ik-ac-blocked-item"
                 >
-                  <img
-                    :src="user.avatar || '/images/default-avatar.webp'"
-                    alt=""
-                    class="ik-ac-blocked-avatar"
-                    @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-                  />
+                  <div class="ik-ac-blocked-avatar-wrap">
+                    <img
+                      :src="user.avatar || '/images/default-avatar.webp'"
+                      alt=""
+                      class="ik-ac-blocked-avatar"
+                      @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
+                    />
+                    <span v-if="user.level" class="ik-ac-blocked-level">{{ user.level }}</span>
+                  </div>
                   <div class="ik-ac-blocked-info">
                     <span class="ik-ac-blocked-name">{{ user.name || user.username || '匿名用户' }}</span>
-                    <span v-if="user.level" class="ik-ac-blocked-level">Lv.{{ user.level }}</span>
                   </div>
                   <button class="ik-ac-btn ik-ac-btn--small" @click="unblockUserAction(user)">
                     取消拉黑
@@ -1198,12 +1200,17 @@ useHead({ title: "账号中心" });
   border-radius: 12px;
 }
 
+.ik-ac-blocked-avatar-wrap {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
 .ik-ac-blocked-avatar {
   width: 40px;
   height: 40px;
   border-radius: 999px;
   object-fit: cover;
-  flex-shrink: 0;
 }
 
 .ik-ac-blocked-info {
@@ -1224,10 +1231,23 @@ useHead({ title: "账号中心" });
 }
 
 .ik-ac-blocked-level {
-  color: #bfff09;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #000;
+  border: 2px solid #000;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 /* ── Buttons ── */

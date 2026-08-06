@@ -184,24 +184,24 @@ const onItemMouseDown = (e: MouseEvent, candidate: MentionCandidate) => {
           @mousedown="onItemMouseDown($event, item)"
           @mouseenter="emit('hover', idx)"
         >
-          <span class="ik-mention-picker__avatar">
-            <img
-              v-if="item.avatar"
-              :src="item.avatar"
-              :alt="item.name"
-              class="ik-mention-picker__avatar-img"
-              draggable="false"
-            />
-            <XCircleIcon v-else class="ik-mention-picker__avatar-icon" />
+          <span class="ik-mention-picker__avatar-wrap">
+            <span class="ik-mention-picker__avatar">
+              <img
+                v-if="item.avatar"
+                :src="item.avatar"
+                :alt="item.name"
+                class="ik-mention-picker__avatar-img"
+                draggable="false"
+              />
+              <XCircleIcon v-else class="ik-mention-picker__avatar-icon" />
+            </span>
+            <span v-if="item.level != null" class="ik-mention-picker__level">{{ item.level }}</span>
           </span>
           <span class="ik-mention-picker__text">
             <span class="ik-mention-picker__name">{{ item.name || "匿名用户" }}</span>
             <span v-if="item.username" class="ik-mention-picker__username">
               @{{ item.username }}
             </span>
-          </span>
-          <span v-if="item.level != null" class="ik-mention-picker__level">
-            Lv.{{ item.level }}
           </span>
         </button>
       </div>
@@ -299,9 +299,10 @@ const onItemMouseDown = (e: MouseEvent, candidate: MentionCandidate) => {
   color: rgba(0, 0, 0, 0.55);
 }
 
-.ik-mention-picker__item:hover .ik-mention-picker__level,
-.ik-mention-picker__item.is-active .ik-mention-picker__level {
-  color: #000;
+.ik-mention-picker__avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
 .ik-mention-picker__avatar {
@@ -310,7 +311,6 @@ const onItemMouseDown = (e: MouseEvent, candidate: MentionCandidate) => {
   border-radius: 999px;
   overflow: hidden;
   background: #2a2a2a;
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -355,10 +355,22 @@ const onItemMouseDown = (e: MouseEvent, candidate: MentionCandidate) => {
 }
 
 .ik-mention-picker__level {
-  font-size: 11px;
-  font-weight: 700;
-  font-style: italic;
-  color: #BFFF09;
-  flex-shrink: 0;
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border-radius: 999px;
+  background: #000;
+  border: 1px solid #000;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 </style>
