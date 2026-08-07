@@ -495,6 +495,8 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     hasGivenDenny: data.hasGivenDenny === true,
     isAnonymous: data.isAnonymous === true,
     isHidden: data.isHidden === true,
+    isPinned: data.isPinned === true,
+    pinnedAt: typeof data.pinnedAt === "string" ? data.pinnedAt : null,
     isOwner: data.isOwner === true,
     category: toPostCategory(data.category),
     createdAt: data.createdAt as string | undefined,
@@ -943,6 +945,18 @@ export function useApi() {
     const data = response as Record<string, unknown>;
     const views = Number(data.views);
     return Number.isFinite(views) && views >= 0 ? views : undefined;
+  };
+
+  const pinArticle = async (id: string): Promise<void> => {
+    await $api(`/api/articles/${id}/pin`, { method: "POST", body: {} });
+    invalidate(qk.articles.detail(id));
+    invalidate(qk.articles.searchAll);
+  };
+
+  const unpinArticle = async (id: string): Promise<void> => {
+    await $api(`/api/articles/${id}/unpin`, { method: "POST", body: {} });
+    invalidate(qk.articles.detail(id));
+    invalidate(qk.articles.searchAll);
   };
 
   const getComments = async (
@@ -2256,6 +2270,8 @@ export function useApi() {
     getCategories,
     getPost,
     recordArticleView,
+    pinArticle,
+    unpinArticle,
     getComments,
     addPostComment,
     deleteComment,

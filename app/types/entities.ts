@@ -225,6 +225,10 @@ export interface Post {
   isHidden?: boolean;
   /** 当前登录用户是否为该委托作者（解决匿名委托 author.documentId 为 null 的问题）。 */
   isOwner?: boolean;
+  /** 是否被全局置顶（公告）。 */
+  isPinned?: boolean;
+  /** 置顶时间（ISO 8601）。 */
+  pinnedAt?: string | null;
   category?: PostCategory | null;
   createdAt?: string;
   updatedAt?: string;
