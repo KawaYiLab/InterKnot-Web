@@ -798,9 +798,30 @@ const startReplyToReply = (reply: Comment["replies"][number], parentComment: Com
 };
 
 const isOwner = computed(() => post.value?.isOwner === true);
-const canPin = computed(() => auth.isLogin && (isOwner.value || auth.user?.isAdmin === true));
+const isAdmin = computed(() => auth.isLogin && auth.user?.isAdmin === true);
+const canPin = computed(() => auth.isLogin && (isOwner.value || isAdmin.value));
 
 const deletingArticle = ref(false);
+const pinningArticle = ref(false);
+
+const handlePinArticle = async () => {
+  if (!post.value?.id) return;
+  try {
+    pinningArticle.value = true;
+    if (post.value.isPinned) {
+      await api.unpinArticle(post.value.id);
+      message.success("已取消置顶");
+    } else {
+      await api.pinArticle(post.value.id);
+      message.success("已置顶");
+    }
+    await loadPost();
+  } catch (err) {
+    message.error(resolveErrorMessage(err, post.value.isPinned ? "取消置顶失败" : "置顶失败"));
+  } finally {
+    pinningArticle.value = false;
+  }
+};
 
 const handleDeleteArticle = async () => {
   if (!post.value?.id) return;
@@ -835,6 +856,8 @@ const handleArticleMenuCommand = (command: string | number) => {
     handleEditArticle();
   } else if (command === "report") {
     handleReportArticle();
+  } else if (command === "pin" || command === "unpin") {
+    handlePinArticle();
   }
 };
 
@@ -1617,6 +1640,7 @@ onBeforeUnmount(() => {
                               </button>
                               <template #dropdown>
                                 <z-dropdown-item command="report" :disabled="isOwner">举报委托</z-dropdown-item>
+                                <z-dropdown-item v-if="isAdmin" :command="post?.isPinned ? 'unpin' : 'pin'" :disabled="pinningArticle">{{ post?.isPinned ? '取消置顶' : '置顶' }}</z-dropdown-item>
                                 <z-dropdown-item command="edit" :disabled="!isOwner">编辑委托</z-dropdown-item>
                                 <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除委托</z-dropdown-item>
                               </template>
