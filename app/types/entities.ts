@@ -233,6 +233,7 @@ export interface Post {
   createdAt?: string;
   updatedAt?: string;
   editedAt?: string;
+  publishedAt?: string;
   author: Author;
 }
 
