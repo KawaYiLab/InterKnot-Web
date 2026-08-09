@@ -342,6 +342,98 @@ export interface MihoyoBinding {
   lastSyncedAt: string | null;
 }
 
+export interface ZzzPanelStatValue {
+  flat: number;
+  pct: number;
+}
+
+export interface ZzzPanelProperty {
+  PropertyId: number;
+  PropertyLevel: number;
+  PropertyValue: number;
+  actualValue: number;
+  displayValue: string;
+  meta?: {
+    id: number;
+    name: string;
+    format: string;
+    isPercentage: boolean;
+    statKey: string;
+    elementType?: string;
+    displayName: string;
+  };
+}
+
+export interface ZzzPanelDisc {
+  slot: number;
+  id: number;
+  level: number;
+  rarity: number;
+  mainStat: ZzzPanelProperty[];
+  subStats: ZzzPanelProperty[];
+}
+
+export interface ZzzPanelScore {
+  total: number;
+  max: number;
+  discScores: {
+    slot: number;
+    score: number;
+    maxScore: number;
+    mainStat?: { propertyId: number; statKey: string; weight: number };
+    subStats: { propertyId: number; statKey: string; level: number; weight: number; contribution: number }[];
+  }[];
+}
+
+export interface ZzzPanelDamage {
+  damageIndex: number;
+  finalAtk: number;
+  finalHp: number;
+  finalDef: number;
+  critRate: number;
+  critDmg: number;
+  damageBonus: number;
+  anomalyProficiency: number;
+  anomalyControl: number;
+  impact: number;
+  energyRegen: number;
+}
+
+export interface ZzzPanel {
+  uid: string;
+  region: string;
+  avatar: {
+    id: number;
+    name: string;
+    level: number;
+    promotionLevel: number;
+    mindscape: number;
+    coreSkill: number;
+    profession: string;
+    element: string;
+    weapon: unknown;
+    discs: ZzzPanelDisc[];
+    baseStats: unknown;
+    buildStats: {
+      hp: ZzzPanelStatValue;
+      atk: ZzzPanelStatValue;
+      def: ZzzPanelStatValue;
+      crit_rate: number;
+      crit_dmg: number;
+      pen_ratio: number;
+      pen_delta: number;
+      impact: ZzzPanelStatValue;
+      energy_regen: number;
+      anomaly_proficiency: number;
+      anomaly_control: number;
+      anomaly_accumulation: number;
+      element_dmg: Partial<Record<string, number>>;
+    };
+    score: ZzzPanelScore;
+    damage: ZzzPanelDamage;
+  };
+}
+
 export interface LikeToggleResult {
   liked: boolean;
   likesCount: number;

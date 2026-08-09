@@ -25,6 +25,7 @@ import type {
   PostCategory,
   ArticleFeed,
   ZzzRoleBadge,
+  ZzzPanel,
   LikeToggleResult,
   FavoriteToggleResult,
   FollowToggleResult,
@@ -786,6 +787,20 @@ export function useApi() {
     });
     const data = response as Record<string, unknown>;
     return { success: data.success === true };
+  };
+
+  const getZzzPanel = async (uid: string, avatarId?: number): Promise<ZzzPanel> => {
+    const response = await $api("/api/zzz/panel", {
+      query: { uid, ...(avatarId ? { avatarId } : {}) },
+    });
+    return response as ZzzPanel;
+  };
+
+  const getMyZzzPanel = async (avatarId?: number): Promise<ZzzPanel> => {
+    const response = await $api("/api/zzz/panel/me", {
+      query: avatarId ? { avatarId } : {},
+    });
+    return response as ZzzPanel;
   };
 
   const getSelfUser = async (): Promise<Author> => {
@@ -2342,6 +2357,9 @@ export function useApi() {
     pollMihoyoQr,
     getMihoyoBinding,
     unbindMihoyo,
+    // 绝区零面板
+    getZzzPanel,
+    getMyZzzPanel,
   };
 }
 
