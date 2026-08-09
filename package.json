@@ -24,7 +24,7 @@
     "isomorphic-dompurify": "^3.12.0",
     "lightgallery": "^2.9.0",
     "markdown-it": "^14.2.0",
-    "nuxt": "^4.4.7",
+    "nuxt": "^4.5.1",
     "ofetch": "^1.4.1",
     "pinia": "^3.0.3",
     "qrcode": "^1.5.4",
