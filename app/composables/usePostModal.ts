@@ -22,6 +22,7 @@ export interface PostPreview {
   title?: string;
   author?: Author;
   createdAt?: string;
+  publishedAt?: string;
   category?: { name: string; slug: string } | null;
   cover?: string;
 }
