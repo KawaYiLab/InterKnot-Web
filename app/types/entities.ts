@@ -468,7 +468,7 @@ export interface ZzzPanelAvatar {
   element: string;
   rarity: number;
   rarityName: string;
-  iconUrls: { portrait: string; circle: string; square: string };
+  iconUrls: { portrait: string; circle: string; square: string; select: string };
   skills: ZzzPanelSkill[];
   properties: ZzzPanelProperty[];
   weapon: ZzzPanelWeapon | null;
