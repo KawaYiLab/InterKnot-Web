@@ -21,6 +21,8 @@ import type {
   ExamSubmitResult,
   MihoyoBinding,
   NsfwStatus,
+  ZzzPanel,
+  ZzzPanelsResult,
   Post,
   PostCategory,
   ArticleFeed,
@@ -789,20 +791,24 @@ export function useApi() {
     return { success: data.success === true };
   };
 
-  const getZzzPanel = async (uid: string, avatarId?: number): Promise<ZzzPanel> => {
-    const response = await $api("/api/zzz/panel", {
-      query: { uid, ...(avatarId ? { avatarId } : {}) },
-    });
-    return response as ZzzPanel;
+  // ── 绝区零角色面板 ────────────────────────────────
+  const getZzzPanels = async (uid: string): Promise<ZzzPanelsResult> => {
+    const response = await cachedRead(
+      ["zzz-panels", uid],
+      async () =>
+        $api("/api/zzz/panels", {
+          method: "GET",
+          query: { uid },
+        }) as Promise<ZzzPanelsResult>,
+      STALE_LIST,
+    );
+    return response as ZzzPanelsResult;
   };
 
-  const getMyZzzPanel = async (avatarId?: number): Promise<ZzzPanel> => {
-    const response = await $api("/api/zzz/panel/me", {
-      query: avatarId ? { avatarId } : {},
-    });
-    return response as ZzzPanel;
+  const getMyZzzPanels = async (): Promise<ZzzPanelsResult> => {
+    const response = await $api("/api/zzz/panels/me", { method: "GET" });
+    return response as ZzzPanelsResult;
   };
-
   const getSelfUser = async (): Promise<Author> => {
     return cachedRead(
       qk.me.self,
@@ -2357,9 +2363,9 @@ export function useApi() {
     pollMihoyoQr,
     getMihoyoBinding,
     unbindMihoyo,
-    // 绝区零面板
-    getZzzPanel,
-    getMyZzzPanel,
+    // 绝区零角色面板
+    getZzzPanels,
+    getMyZzzPanels,
   };
 }
 

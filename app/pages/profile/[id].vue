@@ -532,9 +532,14 @@ onBeforeUnmount(() => {
 
             <div class="ik-banner__info">
               <h1 class="ik-banner__name">{{ profile.name || profile.login || "匿名用户" }}</h1>
-              <span v-if="profile.zzz?.nickname" class="ik-banner__zzz-badge" :title="`绝区零 UID ${profile.zzz.uid}`">
+              <NuxtLink
+                v-if="profile.zzz?.nickname"
+                :to="profile.isSelf ? '/zzz-panel' : `/zzz-panel/${profile.zzz.uid}`"
+                class="ik-banner__zzz-badge"
+                :title="`绝区零 UID ${profile.zzz.uid}`"
+              >
                 {{ profile.zzz.regionName || "绝区零" }}<template v-if="profile.zzz.level != null"> · Lv.{{ profile.zzz.level }}</template>
-              </span>
+              </NuxtLink>
             </div>
           </div>
 
@@ -971,10 +976,15 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.5px;
+  text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+.ik-banner__zzz-badge:hover {
+  background: rgba(191, 255, 9, 0.15);
 }
 
 /* Hidden profile badge */
