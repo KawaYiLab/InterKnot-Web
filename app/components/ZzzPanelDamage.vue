@@ -35,8 +35,8 @@ const formatNumber = (n: number) => {
     <h3 class="ik-zzz-damage__title">技能期望伤害</h3>
     <div class="ik-zzz-damage__skills">
       <div
-        v-for="skill in damage.details?.skills || []"
-        :key="skill.type"
+        v-for="(skill, index) in damage.details?.skills || []"
+        :key="`${skill.type}-${index}`"
         class="ik-zzz-damage__skill-row"
       >
         <span class="ik-zzz-damage__skill-name">{{ skill.name }}</span>
@@ -48,8 +48,8 @@ const formatNumber = (n: number) => {
     <h3 class="ik-zzz-damage__title">乘区分布</h3>
     <div class="ik-zzz-damage__areas">
       <div
-        v-for="[name, value] in areas"
-        :key="name"
+        v-for="([name, value], index) in areas"
+        :key="`${name}-${index}`"
         class="ik-zzz-damage__area"
       >
         <span class="ik-zzz-damage__area-name">{{ name }}</span>
