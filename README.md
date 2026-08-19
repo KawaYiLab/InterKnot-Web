@@ -1,6 +1,5 @@
 # 绳网 (InterKnot)
 
-
 <p align="center">
   <img src="icon.webp" alt="Inter-Knot Logo" width="120" />
 </p>
@@ -16,27 +15,18 @@
   <img src="https://img.shields.io/badge/Node-%E2%89%A520.18-339933?logo=nodedotjs&logoColor=white" alt="Node">
 </p>
 
-本项目是 [KawaYiLab/InterKnot-App](https://github.com/KawaYiLab/InterKnot-App) 独立开发的**网页前端**，使用 Nuxt 4 从零构建，模仿绝区零 UI 风格，后端对接自建 Strapi v5。
-
 > 后端：[KawaYiLab/InterKnot-server](https://github.com/KawaYiLab/InterKnot-server)
 
----
 
-## 🛠️ 技术栈
 
-| 层级       | 技术                                                                                                                   |
-| -------- | -------------------------------------------------------------------------------------------------------------------- |
-| **框架**   | [Nuxt 4](https://nuxt.com/)                                                                                          |
-| **语言**   | [TypeScript 5](https://www.typescriptlang.org/)                                                                      |
-| **状态管理** | [Pinia](https://pinia.vuejs.org/)                                                                                    |
-| **数据请求** | [TanStack Vue Query](https://tanstack.com/query/latest/docs/vue/overview) + [ofetch](https://github.com/unjs/ofetch) |
-| **工具库**  | [VueUse](https://vueuse.org/)                                                                                        |
-| **组件库**  | [zenless-ui](https://github.com/ChrisChan13/zenless-ui)                                                              |
-| **图标**   | [Heroicons](https://heroicons.com/)                                                                                  |
-| **图片画廊** | [lightGallery](https://www.lightgalleryjs.com/)                                                                      |
-| **后端**   | [Strapi v5](https://strapi.io/)（RESTful API）                                                                         |
+## 🖥️ 界面预览
 
----
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/ab4689fe-8908-4618-b307-0006985e7ebd" alt="home" width="49%" />
+  <img src="https://github.com/user-attachments/assets/df7ed0f5-dc7a-4ca2-8808-405e699d0dcc" alt="kk" width="49%" />
+</p>
+
+
 
 ## 🚀 快速开始
 
@@ -81,8 +71,6 @@ npm run generate
 npm run preview
 ```
 
----
-
 
 ## ❤️ 致谢
 
@@ -101,4 +89,3 @@ npm run preview
 
 * 所有提交 Issue、Pull Request、反馈问题或提供建议的开发者与用户
 
-同时感谢开源社区以及 AI 工具在开发过程中提供的帮助与支持。
