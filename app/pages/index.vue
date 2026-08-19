@@ -874,7 +874,7 @@ onBeforeUnmount(() => {
       </nav>
 
       <!-- 在线人数：🟢 N 在线 + 头像堆叠 +N -->
-      <div v-if="presenceOnline > 0" class="ik-online" aria-label="在线人数">
+      <div v-if="presenceOnline > 10" class="ik-online" aria-label="在线人数">
         <span class="ik-online__dot" aria-hidden="true" />
         <span class="ik-online__count">{{ presenceOnline }} 在线</span>
         <div v-if="presenceShownAvatars.length" class="ik-online__stack" aria-hidden="true">
