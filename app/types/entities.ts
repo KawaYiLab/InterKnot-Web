@@ -331,6 +331,167 @@ export interface ZzzRoleBadge {
   regionName?: string;
 }
 
+export interface ZzzPanelProperty {
+  propertyId: number;
+  name: string;
+  statKey: string;
+  isPercentage: boolean;
+  base: number;
+  add: number;
+  final: number;
+  baseDisplay: string;
+  addDisplay: string;
+  finalDisplay: string;
+  weightClass: string;
+}
+
+export interface ZzzPanelSkill {
+  index: number;
+  name: string;
+  level: number;
+}
+
+export interface ZzzPanelWeaponStat {
+  propertyId: number;
+  name: string;
+  isPercentage: boolean;
+  value: number;
+  displayValue: string;
+}
+
+export interface ZzzPanelWeapon {
+  id: number;
+  name: string;
+  level: number;
+  rarity: number;
+  rarityName: string;
+  star: number;
+  iconUrl: string;
+  mainStat: ZzzPanelWeaponStat[];
+  subStat: ZzzPanelWeaponStat[];
+}
+
+export interface ZzzPanelDiscMainStat {
+  propertyId: number;
+  name: string;
+  isPercentage: boolean;
+  level: number;
+  value: number;
+  displayValue: string;
+}
+
+export interface ZzzPanelDiscSubStat {
+  propertyId: number;
+  name: string;
+  isPercentage: boolean;
+  level: number;
+  value: number;
+  displayValue: string;
+}
+
+export interface ZzzPanelDisc {
+  slot: number;
+  id: number;
+  level: number;
+  rarity: number;
+  suitId: number;
+  suitName: string;
+  suitIconUrl: string;
+  score: number;
+  comment: string;
+  mainStats: ZzzPanelDiscMainStat[];
+  subStats: ZzzPanelDiscSubStat[];
+}
+
+export interface ZzzPanelScore {
+  total: number;
+  max: number;
+  comment: string;
+  weightRule: string;
+  propertyStats: Array<{
+    propertyId: number;
+    name: string;
+    weight: number;
+    count: number;
+    value: string;
+  }>;
+  proficiencyScore: number;
+  discScores: Array<{
+    slot: number;
+    score: number;
+    maxScore: number;
+    comment?: string;
+    mainStat?: { propertyId: number; statKey: string; weight: number };
+    subStats: Array<{
+      propertyId: number;
+      statKey: string;
+      level: number;
+      weight: number;
+      contribution: number;
+    }>;
+  }>;
+}
+
+export interface ZzzPanelDamageDetails {
+  damageIndex: number;
+  selectedSkill?: { name: string; type: string };
+  skills: Array<{ name: string; type: string; critDMG: number; expectDMG: number }>;
+  areas: Record<string, number>;
+  buffs: Array<{ name: string; source?: string; type: string; value: number }>;
+  panelBuffs: Array<{ name: string; source?: string; type: string; value: number; max: number }>;
+}
+
+export interface ZzzPanelDamage {
+  damageIndex: number;
+  finalAtk: number;
+  finalHp: number;
+  finalDef: number;
+  critRate: number;
+  critDmg: number;
+  damageBonus: number;
+  anomalyProficiency: number;
+  anomalyControl: number;
+  impact: number;
+  energyRegen: number;
+  details?: ZzzPanelDamageDetails;
+}
+
+export interface ZzzPanelAvatar {
+  id: number;
+  name: string;
+  level: number;
+  promotionLevel: number;
+  mindscape: number;
+  coreSkill: number;
+  rank: number;
+  profession: string;
+  element: string;
+  rarity: number;
+  rarityName: string;
+  iconUrls: { portrait: string; circle: string; square: string; select: string };
+  skills: ZzzPanelSkill[];
+  properties: ZzzPanelProperty[];
+  weapon: ZzzPanelWeapon | null;
+  discs: ZzzPanelDisc[];
+  baseStats: unknown;
+  buildStats: unknown;
+  score: ZzzPanelScore;
+  damage: ZzzPanelDamage;
+}
+
+export interface ZzzPanel {
+  uid: string;
+  region: string;
+  avatar: ZzzPanelAvatar;
+}
+
+export interface ZzzPanelsResult {
+  uid: string;
+  region: string;
+  count: number;
+  avatars: ZzzPanelAvatar[];
+}
+
 /** 当前用户的米游社绑定信息 */
 export interface MihoyoBinding {
   aid: string;

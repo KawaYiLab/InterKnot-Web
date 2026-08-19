@@ -21,6 +21,7 @@ import type {
   ExamSubmitResult,
   MihoyoBinding,
   NsfwStatus,
+  ZzzPanelsResult,
   Post,
   PostCategory,
   ArticleFeed,
@@ -788,6 +789,24 @@ export function useApi() {
     return { success: data.success === true };
   };
 
+  // ── 绝区零角色面板 ────────────────────────────────
+  const getZzzPanels = async (uid: string): Promise<ZzzPanelsResult> => {
+    const response = await cachedRead(
+      ["zzz-panels", uid],
+      async () =>
+        $api("/api/zzz/panels", {
+          method: "GET",
+          query: { uid },
+        }) as Promise<ZzzPanelsResult>,
+      STALE_LIST,
+    );
+    return response as ZzzPanelsResult;
+  };
+
+  const getMyZzzPanels = async (): Promise<ZzzPanelsResult> => {
+    const response = await $api("/api/zzz/panels/me", { method: "GET" });
+    return response as ZzzPanelsResult;
+  };
   const getSelfUser = async (): Promise<Author> => {
     return cachedRead(
       qk.me.self,
@@ -2342,6 +2361,9 @@ export function useApi() {
     pollMihoyoQr,
     getMihoyoBinding,
     unbindMihoyo,
+    // 绝区零角色面板
+    getZzzPanels,
+    getMyZzzPanels,
   };
 }
 
