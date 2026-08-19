@@ -24,7 +24,9 @@ export default defineNuxtConfig({
     head: {
       title: "绳网",
       link: [
-        { rel: "icon", type: "image/png", href: "/favicon.png" },
+        // 使用 200×200 的品牌图标，避免搜索引擎和浏览器将 16×16 小图标判定为不可用。
+        { rel: "icon", type: "image/png", sizes: "200x200", href: "/images/zzzicon_200x200.png" },
+        { rel: "apple-touch-icon", sizes: "200x200", href: "/images/zzzicon_200x200.png" },
         // 首屏关键图片预加载：SPA loading 屏的 GIF 与首页底图 main.avif
         // 目的：避免生产环境下 JS 挂载早于 GIF 解码导致 loading 屏一闪而过，
         // 以及 #__nuxt::before 背景图未就绪出现的"黑屏"过渡。
@@ -43,15 +45,27 @@ export default defineNuxtConfig({
         },
         { name: "color-scheme", content: "dark" },
         { name: "theme-color", content: "#000000" },
-        { name: "description", content: "绳网是一个游戏、技术交流平台" },
+        { name: "application-name", content: "绳网" },
+        { name: "description", content: "新艾利都最大的匿名委托中枢。" },
         { property: "og:type", content: "website" },
         { property: "og:site_name", content: "绳网" },
         { property: "og:title", content: "绳网" },
-        { property: "og:description", content: "绳网是一个游戏、技术交流平台" },
+        { property: "og:description", content: "新艾利都最大的匿名委托中枢。" },
         { property: "og:image", content: "/images/zzzicon_200x200.png" },
         { name: "twitter:card", content: "summary_large_image" },
       ],
       script: [
+        {
+          type: "application/ld+json",
+          innerHTML: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: "绳网",
+            alternateName: "INTER-KNOT",
+            description: "新艾利都最大的匿名委托中枢。",
+            url: "https://interk.net/",
+          }),
+        },
         // Cloudflare Web Analytics
         {
           src: "https://static.cloudflareinsights.com/beacon.min.js",
