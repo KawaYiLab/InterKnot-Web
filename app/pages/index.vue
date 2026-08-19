@@ -36,9 +36,9 @@ const presenceOverflow = computed(() =>
 
 useSeoMeta({
   title: "绳网",
-  description: "绳网是一个游戏、技术交流平台，发现并分享有趣的内容。",
+  description: "新艾利都最大的匿名委托中枢。",
   ogTitle: "绳网",
-  ogDescription: "绳网是一个游戏、技术交流平台，发现并分享有趣的内容。",
+  ogDescription: "新艾利都最大的匿名委托中枢。",
 });
 
 const scrollTarget = ref<HTMLElement>();
