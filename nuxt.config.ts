@@ -24,9 +24,14 @@ export default defineNuxtConfig({
     head: {
       title: "绳网",
       link: [
-        // 使用 200×200 的品牌图标，避免搜索引擎和浏览器将 16×16 小图标判定为不可用。
-        { rel: "icon", type: "image/png", sizes: "200x200", href: "/images/zzzicon_200x200.png" },
-        { rel: "apple-touch-icon", sizes: "200x200", href: "/images/zzzicon_200x200.png" },
+        // 浏览器标签页与搜索引擎使用标准 16/32/48 像素图标；高分屏和移动端使用更大尺寸。
+        { rel: "icon", type: "image/png", sizes: "16x16", href: "/icon/icon-16x16.png" },
+        { rel: "icon", type: "image/png", sizes: "32x32", href: "/icon/icon-32x32.png" },
+        { rel: "icon", type: "image/png", sizes: "48x48", href: "/icon/icon-48x48.png" },
+        { rel: "icon", type: "image/png", sizes: "96x96", href: "/icon/icon-96x96.png" },
+        { rel: "icon", type: "image/png", sizes: "192x192", href: "/icon/icon-192x192.png" },
+        { rel: "icon", type: "image/png", sizes: "512x512", href: "/icon/icon-512x512.png" },
+        { rel: "apple-touch-icon", sizes: "180x180", href: "/icon/icon-180x180.png" },
         // 首屏关键图片预加载：SPA loading 屏的 GIF 与首页底图 main.avif
         // 目的：避免生产环境下 JS 挂载早于 GIF 解码导致 loading 屏一闪而过，
         // 以及 #__nuxt::before 背景图未就绪出现的"黑屏"过渡。
@@ -51,7 +56,7 @@ export default defineNuxtConfig({
         { property: "og:site_name", content: "绳网" },
         { property: "og:title", content: "绳网" },
         { property: "og:description", content: "新艾利都最大的匿名委托中枢。" },
-        { property: "og:image", content: "/images/zzzicon_200x200.png" },
+        { property: "og:image", content: "/icon/icon-512x512.png" },
         { name: "twitter:card", content: "summary_large_image" },
       ],
       script: [
