@@ -23,6 +23,7 @@ export interface PostPreview {
   author?: Author;
   createdAt?: string;
   publishedAt?: string;
+  firstPublishedAt?: string | null;
   category?: { name: string; slug: string } | null;
   cover?: string;
 }

@@ -66,7 +66,8 @@ const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
 // 弹窗刚打开时优先展示首页卡片传入的 preview，等接口数据回来后无缝替换。
 const headerAuthor = computed<Author | null>(() => post.value?.author ?? props.preview?.author ?? null);
 const headerCreatedAt = computed<string | undefined>(() =>
-  post.value?.publishedAt || post.value?.createdAt || props.preview?.publishedAt || props.preview?.createdAt
+  post.value?.firstPublishedAt || post.value?.publishedAt || post.value?.createdAt
+  || props.preview?.firstPublishedAt || props.preview?.publishedAt || props.preview?.createdAt
 );
 const headerTitle = computed<string>(() => post.value?.title ?? props.preview?.title ?? "");
 const headerCategory = computed(() => post.value?.category ?? props.preview?.category ?? null);

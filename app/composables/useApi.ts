@@ -503,6 +503,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     updatedAt: data.updatedAt as string | undefined,
     editedAt: data.editedAt as string | undefined,
     publishedAt: data.publishedAt as string | undefined,
+    firstPublishedAt: (data.firstPublishedAt as string | null | undefined) ?? undefined,
     author: toAuthor(data.author, apiBaseUrl),
   };
 }
