@@ -69,6 +69,7 @@ const goArticle = (post: Post, event: MouseEvent) => {
       author: post.author,
       createdAt: post.createdAt,
       publishedAt: post.publishedAt,
+      firstPublishedAt: post.firstPublishedAt,
       cover: post.cover || undefined,
     },
   });

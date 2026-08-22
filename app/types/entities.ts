@@ -234,6 +234,8 @@ export interface Post {
   updatedAt?: string;
   editedAt?: string;
   publishedAt?: string;
+  /** 首次发布时间（ISO 8601）。编辑重发不会改变，用于展示"发布于"。 */
+  firstPublishedAt?: string | null;
   author: Author;
 }
 
