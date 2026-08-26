@@ -1,7 +1,7 @@
 # 绳网 (InterKnot)
 
 <p align="center">
-  <img src="icon.webp" alt="Inter-Knot Logo" width="120" />
+  <img src="https://github.com/user-attachments/assets/0e6f2ca9-440b-4b90-8bc4-402c6078d430" alt="Inter-Knot Logo" width="120" />
 </p>
 
 <p align="center">
