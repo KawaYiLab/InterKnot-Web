@@ -623,6 +623,22 @@ export interface DmConversationSummary {
   pseudoKind?: "user" | "anonymous" | "system" | null;
 }
 
+/**
+ * GET /api/dm/conversations 的分页 meta。
+ *
+ * 老后端不返回 meta，前端按「hasMore = false」降级即可（等价于全量一次拿完）。
+ */
+export interface DmConversationListMeta {
+  hasMore: boolean;
+  /** `${lastMessageAt}|${documentId}` 的 base64url；无更多时为 null */
+  nextCursor: string | null;
+  /**
+   * 仅第一页返回：跨全部会话（含通知聚合桶）的未读总数。
+   * Header / 底栏红点用它作权威值，之后靠 WS 事件与本地操作增量修正。
+   */
+  totalUnread?: number;
+}
+
 /** 单条消息的 sender 简要信息（撤回后仍保留发送者，便于灰条占位） */
 export interface DmMessageSender {
   userId: number | null;
