@@ -59,7 +59,6 @@ onMounted(() => {
 });
 
 const LOAD_MORE_ROOT_MARGIN = "360px 0px";
-const LOAD_MORE_COOLDOWN_MS = 1000;
 // 固定部分（不含 title 高度）：
 //   card padding(8) + body padding-bottom(12) + author-row min-height(32)
 // + body gap(8) + title margin(8) = 68px
@@ -114,8 +113,6 @@ const endCursor = ref("0");
 const hasNextPage = ref(true);
 const requestVersion = ref(0);
 let seenIds = new Set<string>();
-let lastFetchTime = 0;
-let cooldownTimer: ReturnType<typeof setTimeout> | null = null;
 
 // VirtualMasonry 模板引用，用于读取 expose 的 measuredHeights
 const masonryRef = ref<{ measuredHeights: Map<string | number, number>; $el: HTMLElement } | null>(null);
@@ -327,7 +324,6 @@ const fetchList = async (reset = false) => {
   } finally {
     loading.value = false;
     loadingMore.value = false;
-    lastFetchTime = Date.now();
     if (shouldShowPageProgress) {
       pageDataLoading.finish();
     }
@@ -478,23 +474,6 @@ const doLoadMore = () => {
   fetchList(false).catch(() => undefined);
 };
 
-const loadMoreFromObserver = () => {
-  if (loading.value || loadingMore.value || !hasNextPage.value) return;
-
-  const elapsed = Date.now() - lastFetchTime;
-  if (elapsed < LOAD_MORE_COOLDOWN_MS) {
-    if (!cooldownTimer) {
-      cooldownTimer = setTimeout(() => {
-        cooldownTimer = null;
-        doLoadMore();
-      }, LOAD_MORE_COOLDOWN_MS - elapsed);
-    }
-    return;
-  }
-
-  doLoadMore();
-};
-
 const observeLoadMoreSentinel = () => {
   if (!import.meta.client) return;
 
@@ -507,7 +486,7 @@ const observeLoadMoreSentinel = () => {
   const observer = new IntersectionObserver(
     (entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
-        loadMoreFromObserver();
+        doLoadMore();
       }
     },
     {
@@ -825,10 +804,6 @@ onBeforeUnmount(() => {
   stopPolling();
   loadMoreObserverRef.value?.disconnect();
   loadMoreObserverRef.value = null;
-  if (cooldownTimer) {
-    clearTimeout(cooldownTimer);
-    cooldownTimer = null;
-  }
 });
 </script>
 
