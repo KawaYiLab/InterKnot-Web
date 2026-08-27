@@ -6,7 +6,8 @@
  *
  * 责任划分：
  *  - 传输层：`useDmStream`（WS 连接 / 重连 / 收发）；本 composable 仅订阅事件。
- *  - 业务层（本文件）：拉 REST 列表 / 懒加载消息 / 发送 - 编辑 - 撤回 / 标已读
+ *  - 业务层（本文件）：拉 REST 列表（游标分页，见 refresh / loadMoreConversations）
+ *                       / 懒加载消息 / 发送 - 编辑 - 撤回 / 标已读
  *                       / 离开 / 接 WS 事件 patch 缓存（含去重）。
  *
  * 与 useKnockKnockConversations 的核心差异：
@@ -19,6 +20,7 @@ import { computed, type ComputedRef, type Ref } from "vue";
 import type { ApiClientError } from "~/types/api";
 import type {
   AiWorkflowEvent,
+  DmConversationListMeta,
   DmConversationSummary,
   DmMessage,
   DmMessageKind,
@@ -49,8 +51,13 @@ const emptyMessageState = (): ConversationMessageState => ({
   pendingForceReload: false,
 });
 
+/** 会话列表每页条数；与后端 DM_CONV_PAGE_DEFAULT 对齐 */
+const CONVERSATION_PAGE_SIZE = 20;
+
 interface ConversationListResponse {
   data: DmConversationSummary[];
+  /** 老后端不返回；缺失时按「无更多」降级 */
+  meta?: DmConversationListMeta;
 }
 
 interface ConversationDirectResponse {
@@ -72,8 +79,15 @@ interface UseDmConversations {
   conversations: ComputedRef<DmConversationSummary[]>;
   isLoading: ComputedRef<boolean>;
   error: ComputedRef<string | null>;
-  /** 全部未读总和（用于头部红点等场景） */
+  /** 全部未读总和（用于头部红点等场景）——服务端权威值 + 本地增量修正 */
   totalUnread: ComputedRef<number>;
+
+  /** 会话列表是否还有下一页 */
+  hasMoreConversations: ComputedRef<boolean>;
+  /** 正在追加下一页（与首屏 isLoading 分开，避免列表闪空） */
+  isLoadingMoreConversations: ComputedRef<boolean>;
+  /** 追加下一页会话；无更多 / 正在加载时是 no-op */
+  loadMoreConversations: () => Promise<void>;
 
   /** 当前选中会话 id（documentId）；切换会话时设置 */
   activeConversationId: Ref<string | null>;
@@ -170,6 +184,23 @@ export function useDmConversations(): UseDmConversations {
   const isLoading = useState<boolean>("dm:loading", () => false);
   const error = useState<string | null>("dm:error", () => null);
 
+  // ── 会话列表分页（游标）────────────────────────────
+  const convNextCursor = useState<string | null>("dm:convNextCursor", () => null);
+  const convHasMore = useState<boolean>("dm:convHasMore", () => false);
+  const convLoadingMore = useState<boolean>("dm:convLoadingMore", () => false);
+  /**
+   * 已加载的页数。用来判断 refresh() 该「整体替换」还是「只覆盖第一页」——
+   * 静默 refresh 很频繁（新通知 / 切回前台 / 打开弹窗），如果每次都替换成第一页，
+   * 用户滚了几页的列表会被反复截回 20 条，哨兵又立刻进入视口重新翻页。
+   */
+  const convPagesLoaded = useState<number>("dm:convPagesLoaded", () => 0);
+  /**
+   * 未读总数。分页后不能再对 conversations 求和——列表只有已加载的那几页。
+   * 首页响应的 meta.totalUnread 是权威值，之后由 WS 事件 / 本地已读操作增量修正。
+   * null 表示「服务端没给」（老后端），此时回退为对已加载列表求和。
+   */
+  const unreadTotal = useState<number | null>("dm:unreadTotal", () => null);
+
   const messagesById = useState<Record<string, ConversationMessageState>>(
     "dm:messages",
     () => ({}),
@@ -246,6 +277,23 @@ export function useDmConversations(): UseDmConversations {
     });
   };
 
+  /** 列表排序：pinned desc, lastMessageAt desc（与后端 list 同口径）；不改动入参 */
+  const sortConversations = (list: DmConversationSummary[]): DmConversationSummary[] =>
+    [...list].sort((a, b) => {
+      const ap = a.self?.pinned ? 1 : 0;
+      const bp = b.self?.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      return bt - at;
+    });
+
+  /** 未读总数增量修正；服务端没给权威值时（老后端）不做任何事 */
+  const bumpUnreadTotal = (delta: number): void => {
+    if (unreadTotal.value == null || delta === 0) return;
+    unreadTotal.value = Math.max(0, unreadTotal.value + delta);
+  };
+
   /** 把单个 conversation summary 写回列表，按 (pinned desc, lastMessageAt desc) 重排 */
   const upsertConversation = (next: DmConversationSummary): void => {
     const list = conversations.value;
@@ -257,15 +305,7 @@ export function useDmConversations(): UseDmConversations {
     } else {
       copy = [next, ...list];
     }
-    copy.sort((a, b) => {
-      const ap = a.self?.pinned ? 1 : 0;
-      const bp = b.self?.pinned ? 1 : 0;
-      if (ap !== bp) return bp - ap;
-      const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-      const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-      return bt - at;
-    });
-    conversations.value = copy;
+    conversations.value = sortConversations(copy);
   };
 
   const patchConversation = (
@@ -280,20 +320,21 @@ export function useDmConversations(): UseDmConversations {
     // Partial 解构后 TS 会宽化到 Partial<DmConversationSummary>；强制断言回去，
     // 因为 base copy[idx] 提供了全部 required 字段。
     copy[idx] = { ...copy[idx], ...patch } as DmConversationSummary;
-    if (resort) {
-      copy.sort((a, b) => {
-        const ap = a.self?.pinned ? 1 : 0;
-        const bp = b.self?.pinned ? 1 : 0;
-        if (ap !== bp) return bp - ap;
-        const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-        const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-        return bt - at;
-      });
-    }
-    conversations.value = copy;
+    conversations.value = resort ? sortConversations(copy) : copy;
   };
 
   // ── REST 调用 ────────────────────────────────────────
+  /**
+   * 拉会话列表**第一页**。
+   *
+   * 后端 /api/dm/conversations 是游标分页的（默认 20 条），所以这不是「全量刷新」：
+   * 更多会话由 loadMoreConversations 追加。红点用的 meta.totalUnread 是跨全部
+   * 会话的权威值，只在第一页返回，因此每次 refresh 都会顺带把它校正回来。
+   *
+   * 已经翻过页时**不**把列表截回第一页：静默 refresh 由新通知 / 切回前台 / 打开
+   * 弹窗触发，很频繁；截断会让用户滚到的位置反复丢失，还会让底部哨兵立刻重新
+   * 触发翻页。此时只用第一页的权威数据覆盖同 documentId 的项，尾部已加载的页保留。
+   */
   async function refresh(opts?: { silent?: boolean }): Promise<void> {
     const silent = opts?.silent === true;
     if (isLoading.value) return;
@@ -302,8 +343,26 @@ export function useDmConversations(): UseDmConversations {
       error.value = null;
     }
     try {
-      const resp = await $api<ConversationListResponse>("/api/dm/conversations");
-      conversations.value = resp?.data ?? [];
+      const resp = await $api<ConversationListResponse>("/api/dm/conversations", {
+        query: { limit: CONVERSATION_PAGE_SIZE },
+      });
+      const incoming = resp?.data ?? [];
+      if (convPagesLoaded.value > 1) {
+        const byId = new Map(conversations.value.map((c) => [c.documentId, c]));
+        for (const c of incoming) {
+          if (c?.documentId) byId.set(c.documentId, c);
+        }
+        conversations.value = sortConversations([...byId.values()]);
+        // cursor / hasMore 不动：后续页仍接在已加载列表之后
+      } else {
+        conversations.value = incoming;
+        convPagesLoaded.value = 1;
+        // meta 缺失 → 老后端全量返回，按「无更多」降级
+        convHasMore.value = resp?.meta?.hasMore === true;
+        convNextCursor.value = resp?.meta?.nextCursor ?? null;
+      }
+      unreadTotal.value =
+        typeof resp?.meta?.totalUnread === "number" ? resp.meta.totalUnread : null;
     } catch (err) {
       if (!silent) {
         const e = err as ApiClientError;
@@ -315,6 +374,48 @@ export function useDmConversations(): UseDmConversations {
       if (!silent) {
         isLoading.value = false;
       }
+    }
+  }
+
+  /**
+   * 追加下一页会话。
+   *
+   * 合并策略：按 documentId 去重，且**已有项不被新数据覆盖**——列表里的项可能
+   * 已被 WS 事件 patch 过（新消息 / 未读 +1），而分页响应是服务端在更早时刻的
+   * 快照，覆盖回去会丢掉实时状态。
+   */
+  async function loadMoreConversations(): Promise<void> {
+    if (!convHasMore.value || convLoadingMore.value) return;
+    const cursor = convNextCursor.value;
+    if (!cursor) {
+      convHasMore.value = false;
+      return;
+    }
+    convLoadingMore.value = true;
+    try {
+      const resp = await $api<ConversationListResponse>("/api/dm/conversations", {
+        query: { limit: CONVERSATION_PAGE_SIZE, cursor },
+      });
+      const incoming = resp?.data ?? [];
+      if (incoming.length > 0) {
+        const known = new Set(conversations.value.map((c) => c.documentId));
+        const fresh = incoming.filter(
+          (c) => c?.documentId && !known.has(c.documentId),
+        );
+        if (fresh.length > 0) {
+          conversations.value = sortConversations([
+            ...conversations.value,
+            ...fresh,
+          ]);
+        }
+      }
+      convHasMore.value = resp?.meta?.hasMore === true;
+      convNextCursor.value = resp?.meta?.nextCursor ?? null;
+      convPagesLoaded.value += 1;
+    } catch {
+      // 静默失败：保留已加载的页，哨兵下次进入视口时会重试
+    } finally {
+      convLoadingMore.value = false;
     }
   }
 
@@ -355,11 +456,21 @@ export function useDmConversations(): UseDmConversations {
     await $api(`/api/dm/conversations/${encodeURIComponent(id)}/leave`, {
       method: "POST",
     });
-    removeConversation(id);
+    removeConversation(id, { dropUnread: true });
   }
 
-  /** 从列表里移除指定会话（连同消息桶） */
-  function removeConversation(id: string): void {
+  /**
+   * 从列表里移除指定会话（连同消息桶）。
+   *
+   * dropUnread：会话真的从服务端视图消失了（离开 / 删除）时传 true，把它的未读
+   * 从红点总数里扣掉。pseudo 项实质化为真 DM 这种「换身份」的场景不能扣——未读
+   * 还在，只是挂到了新的 documentId 上。
+   */
+  function removeConversation(id: string, opts?: { dropUnread?: boolean }): void {
+    if (opts?.dropUnread) {
+      const conv = conversations.value.find((c) => c.documentId === id);
+      if (conv?.unreadCount) bumpUnreadTotal(-conv.unreadCount);
+    }
     conversations.value = conversations.value.filter((c) => c.documentId !== id);
     if (messagesById.value[id]) {
       const next = { ...messagesById.value };
@@ -604,6 +715,7 @@ export function useDmConversations(): UseDmConversations {
     if (!opts?.force && conv.unreadCount === 0) return;
 
     if (conv.unreadCount !== 0) {
+      bumpUnreadTotal(-conv.unreadCount);
       patchConversation(id, { unreadCount: 0 });
     }
 
@@ -617,14 +729,17 @@ export function useDmConversations(): UseDmConversations {
   }
 
   /**
-   * 一键已读：把列表里所有会话（真实 DM + 通知聚合 pseudo）的 unreadCount 清零。
+   * 一键已读：把所有会话（真实 DM + 通知聚合 pseudo）的未读清零。
    * 乐观本地清零 → 调 /api/dm/read-all；失败静默 refresh 自我修复。
+   *
+   * 服务端清的是全部会话，不只是已加载的那几页，所以红点总数直接归零。
    */
   async function markAllAsRead(): Promise<void> {
     if (totalUnread.value === 0) return;
     conversations.value = conversations.value.map((c) =>
       c.unreadCount ? { ...c, unreadCount: 0 } : c,
     );
+    if (unreadTotal.value != null) unreadTotal.value = 0;
     try {
       await $api("/api/dm/read-all", { method: "POST" });
     } catch {
@@ -662,15 +777,9 @@ export function useDmConversations(): UseDmConversations {
     await $api(`/api/dm/conversations/${encodeURIComponent(id)}/leave`, {
       method: "POST",
     });
-    // 从列表移除
-    conversations.value = conversations.value.filter((c) => c.documentId !== id);
+    // 从列表移除（连同未读扣减与消息缓存）
+    removeConversation(id, { dropUnread: true });
     if (activeConversationId.value === id) activeConversationId.value = null;
-    // 消息缓存也清掉
-    if (messagesById.value[id]) {
-      const next = { ...messagesById.value };
-      delete next[id];
-      messagesById.value = next;
-    }
   }
 
   /**
@@ -790,6 +899,7 @@ export function useDmConversations(): UseDmConversations {
         senderUserId: msg.sender?.userId ?? null,
       };
       const nextUnread = isMine || isActive ? conv.unreadCount : conv.unreadCount + 1;
+      if (nextUnread !== conv.unreadCount) bumpUnreadTotal(1);
       patchConversation(
         cid,
         {
@@ -916,6 +1026,7 @@ export function useDmConversations(): UseDmConversations {
     if (!cid || !data) return;
     const conv = conversations.value.find((c) => c.documentId === cid);
     if (!conv) return;
+    if (conv.unreadCount) bumpUnreadTotal(-conv.unreadCount);
     patchConversation(cid, {
       unreadCount: 0,
       self: { ...conv.self, lastReadAt: data.lastReadAt },
@@ -927,6 +1038,8 @@ export function useDmConversations(): UseDmConversations {
     conversations.value = conversations.value.map((c) =>
       c.unreadCount ? { ...c, unreadCount: 0 } : c,
     );
+    // 服务端清的是全部会话，不只是已加载的页
+    if (unreadTotal.value != null) unreadTotal.value = 0;
   };
 
   const onConversationUpdated = (event: DmWsEvent<ConversationUpdatedData>) => {
@@ -1031,6 +1144,11 @@ export function useDmConversations(): UseDmConversations {
     typing.value = {};
     streamingMessageIds.value = new Set();
     workflowByMessageId.value = {};
+    convNextCursor.value = null;
+    convHasMore.value = false;
+    convLoadingMore.value = false;
+    convPagesLoaded.value = 0;
+    unreadTotal.value = null;
   };
 
   const isStreamingMessage = (documentId: string): boolean =>
@@ -1039,8 +1157,17 @@ export function useDmConversations(): UseDmConversations {
   const workflowEventsOf = (messageId: string): AiWorkflowEvent[] =>
     workflowByMessageId.value[messageId] ?? [];
 
+  /**
+   * 红点用的未读总数。
+   *
+   * 列表是分页的，对 conversations 求和只能覆盖已加载的页，所以优先用服务端在
+   * 第一页给出的权威值（之后由 WS 事件 / 本地已读操作增量修正）。老后端不返回
+   * meta.totalUnread 时回退为求和——那时列表本来就是全量的，结果一致。
+   */
   const totalUnread = computed(() =>
-    conversations.value.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
+    unreadTotal.value != null
+      ? unreadTotal.value
+      : conversations.value.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
   );
 
   return {
@@ -1048,6 +1175,9 @@ export function useDmConversations(): UseDmConversations {
     isLoading: computed(() => isLoading.value),
     error: computed(() => error.value),
     totalUnread,
+    hasMoreConversations: computed(() => convHasMore.value),
+    isLoadingMoreConversations: computed(() => convLoadingMore.value),
+    loadMoreConversations,
     activeConversationId,
     typingByConversation: computed(() => typing.value),
     isStreamingMessage,

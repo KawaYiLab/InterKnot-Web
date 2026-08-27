@@ -59,6 +59,9 @@ const {
   isLoading,
   error: loadError,
   refresh,
+  hasMoreConversations,
+  isLoadingMoreConversations,
+  loadMoreConversations,
   ensureMessages,
   messageStateOf,
   markConversationAsRead,
@@ -129,6 +132,7 @@ watch(visible, async (next) => {
   knockBootstrapDone.value = false;
   aiRevealSessionReady.value = false;
   historyBaselineIds.value = new Set();
+  autoFillUsed.value = 0;
   // 拉列表 + 起 WS（startStream 内部对 SSR / 未登录都做了护栏）
   startStream();
   await Promise.all([refresh(), refreshAiCharacters()]);
@@ -198,6 +202,78 @@ const activeConversation = computed<DmConversationSummary | null>(() => {
   if (!activeConversationId.value) return null;
   return allConversations.value.find((c) => c.documentId === activeConversationId.value) ?? null;
 });
+
+/* ─────────────── 私聊列表分页（滚到底自动加载） ─────────────── */
+
+/** 可见项少于这个数就主动续拉，保证哨兵有机会进入视口 */
+const MIN_VISIBLE_CONVERSATIONS = 12;
+/**
+ * 「可见项太少」这条路径单次打开弹窗内最多自动续拉几页。
+ * 它不需要用户操作就会触发，所以必须封顶，防止「整页都被过滤掉」时无限翻页。
+ * 用户真实滚到底（哨兵进入视口）走另一条路径，不受此限制。
+ */
+const MAX_AUTO_FILL_PAGES = 5;
+
+const autoFillUsed = ref(0);
+const contactsListRef = ref<HTMLElement | null>(null);
+const contactsSentinelRef = ref<HTMLElement | null>(null);
+let contactsObserver: IntersectionObserver | null = null;
+
+const teardownContactsObserver = () => {
+  contactsObserver?.disconnect();
+  contactsObserver = null;
+};
+
+/**
+ * 哨兵进入视口即拉下一页。
+ *
+ * root 取列表容器本身——列表在弹窗内部独立滚动，用 viewport 当 root 永远不会触发。
+ * 列表随 tab 切换 v-if 销毁重建，所以观察对象要跟着 ref 变化重新绑定。
+ */
+watch(contactsSentinelRef, (el) => {
+  teardownContactsObserver();
+  if (!el || !contactsListRef.value) return;
+  contactsObserver = new IntersectionObserver(
+    (entries) => {
+      // 用户真实滚到底：不设页数上限，滚多少加多少
+      if (entries.some((e) => e.isIntersecting)) void loadMoreConversations();
+    },
+    { root: contactsListRef.value, rootMargin: "120px" },
+  );
+  contactsObserver.observe(el);
+});
+
+/**
+ * 过滤穿透保护：私聊 Tab 会把官方 AI 会话过滤掉（它们归「通话」Tab），
+ * 一页 20 条可能只剩几条可见，哨兵挤在首屏之内不会触发 intersection。
+ * 这里在可见项过少时主动续拉，MAX_AUTO_FILL_PAGES 封顶。
+ *
+ * isLoadingMoreConversations 进了依赖：整页都被过滤掉时可见数不变，只靠
+ * conversations.length 无法驱动下一轮；而哨兵持续停在视口内也不会再产生
+ * intersection 回调，续拉链条会在这里断掉。
+ */
+watch(
+  () =>
+    [
+      activeTab.value,
+      conversations.value.length,
+      hasMoreConversations.value,
+      isLoadingMoreConversations.value,
+    ] as const,
+  ([tab, visible, hasMore, loadingMore]) => {
+    if (tab !== "contacts" || !hasMore || loadingMore) return;
+    // 首屏 / 静默 refresh 期间 conversations 被临时清空（contactsListLoading 防闪烁），
+    // 那不是「内容不够」，此时续拉纯属白跑一次后端
+    if (contactsListLoading.value) return;
+    if (visible >= MIN_VISIBLE_CONVERSATIONS) {
+      autoFillUsed.value = 0; // 已经填满一屏，配额还给下一次变稀疏的时候
+      return;
+    }
+    if (autoFillUsed.value >= MAX_AUTO_FILL_PAGES) return;
+    autoFillUsed.value += 1;
+    void loadMoreConversations();
+  },
+);
 
 /** 当前会话是否为官方 AI 角色（决定是否显示会话管理按钮） */
 const isActiveAiConversation = computed<boolean>(() => {
@@ -1300,6 +1376,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown);
+  teardownContactsObserver();
   if (autoScrollRaf != null) cancelAnimationFrame(autoScrollRaf);
   if (autoScrollTimer) clearTimeout(autoScrollTimer);
   if (scrollPauseTimer) clearTimeout(scrollPauseTimer);
@@ -1466,6 +1543,7 @@ const handleMobileBack = () => {
                   <!-- 私聊：原 DM 会话列表 -->
                   <div
                     v-if="activeTab === 'contacts'"
+                    ref="contactsListRef"
                     class="ik-knock__list"
                     role="listbox"
                   >
@@ -1506,11 +1584,21 @@ const handleMobileBack = () => {
                         {{ item.unreadCount > 99 ? "99+" : item.unreadCount }}
                       </span>
                     </button>
+                    <!-- 分页哨兵：进入视口即加载下一页；须常驻 DOM 才能被观察 -->
+                    <div
+                      v-if="hasMoreConversations && conversations.length"
+                      ref="contactsSentinelRef"
+                      class="ik-knock__list-more"
+                      aria-hidden="true"
+                    >
+                      <span v-if="isLoadingMoreConversations">加载中…</span>
+                    </div>
                     <div
                       v-if="!conversations.length"
                       class="ik-knock__list-empty"
                     >
-                      <span v-if="contactsListLoading">加载中…</span>
+                      <!-- 整页都被 AI 过滤掉时自动续拉中，别先闪「暂无消息」 -->
+                      <span v-if="contactsListLoading || isLoadingMoreConversations">加载中…</span>
                       <span v-else-if="loadError">{{ loadError }}</span>
                       <span v-else>暂无消息</span>
                     </div>
@@ -2197,6 +2285,18 @@ const handleMobileBack = () => {
   padding: 24px 0;
   color: rgba(255, 255, 255, 0.4);
   font-size: 13px;
+}
+
+/* 分页哨兵：兼作「加载中」提示，滚到底时进入视口触发下一页。
+   即便没有文案也要占一点高度，否则它会被压成 0px 而无法进入视口。 */
+.ik-knock__list-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 14px 0;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
 }
 
 .ik-knock__item-text {

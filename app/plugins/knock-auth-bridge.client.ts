@@ -4,6 +4,10 @@
  * - DM WebSocket：私信 message.created 等
  * - Knock SSE（/api/knock/stream）：notification.created → 静默刷新 /api/dm/conversations，更新 Header 未读
  * - 切回前台时静默 refresh 兜底（SSE 断线期间）
+ *
+ * 注意 dm.refresh() 只拉会话列表的**第一页**（后端是游标分页的），顺带把跨全部
+ * 会话的权威未读总数（meta.totalUnread）取回来——这正是红点需要的；列表更多内容
+ * 由 KnockKnockModal 滚动到底时按需追加。
  */
 export default defineNuxtPlugin(() => {
   if (!import.meta.client) return;
