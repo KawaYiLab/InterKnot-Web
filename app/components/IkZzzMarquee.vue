@@ -13,7 +13,7 @@ const props = withDefaults(
   { paused: false },
 );
 
-const MARQUEE_LINE = "Remielle Dan ".repeat(3);
+const MARQUEE_LINE = "INTERKNOT ".repeat(3);
 
 /** 等弹窗入场动画结束后再启动，避免与 blur/transform 争抢 GPU */
 const MARQUEE_START_DELAY_MS = 250;
