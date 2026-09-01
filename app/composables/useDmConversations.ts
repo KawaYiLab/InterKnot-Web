@@ -140,10 +140,10 @@ interface UseDmConversations {
   markConversationAsRead: (id: string, opts?: { force?: boolean }) => Promise<void>;
   /** 一键已读：清零所有会话（真实 DM + 通知聚合的 pseudo 会话）的未读 */
   markAllAsRead: () => Promise<void>;
-  /** 设置 muted/pinned；title 仅群聊可用 */
+  /** 设置 muted/pinned；title 与 aiModelKey 仅 AI 会话可用（aiModelKey 传 null 清除选择） */
   updateConversation: (
     id: string,
-    patch: { muted?: boolean; pinned?: boolean; title?: string },
+    patch: { muted?: boolean; pinned?: boolean; title?: string; aiModelKey?: string | null },
   ) => Promise<void>;
   leaveConversation: (id: string) => Promise<void>;
 
@@ -154,7 +154,7 @@ interface UseDmConversations {
   stopAiStream: (messageId: string) => Promise<void>;
 
   /** 重新生成 AI 回复（2.2）：messageId 为会话最后一条 AI 回复 documentId */
-  regenerateAiReply: (messageId: string) => Promise<void>;
+  regenerateAiReply: (messageId: string, aiModelKey?: string | null) => Promise<void>;
 
   /** 发送 typing 状态（节流由调用方控制） */
   sendTyping: (conversationId: string) => void;
@@ -750,7 +750,7 @@ export function useDmConversations(): UseDmConversations {
 
   async function updateConversation(
     id: string,
-    patch: { muted?: boolean; pinned?: boolean; title?: string },
+    patch: { muted?: boolean; pinned?: boolean; title?: string; aiModelKey?: string | null },
   ): Promise<void> {
     await $api(`/api/dm/conversations/${encodeURIComponent(id)}`, {
       method: "PATCH",
@@ -767,6 +767,8 @@ export function useDmConversations(): UseDmConversations {
         {
           self: nextSelf,
           ...(typeof patch.title === "string" ? { title: patch.title } : {}),
+          // aiModelKey 允许显式置 null（清除会话级选择，回落角色卡默认）
+          ...(patch.aiModelKey !== undefined ? { aiModelKey: patch.aiModelKey } : {}),
         },
         typeof patch.pinned === "boolean",
       );
@@ -806,11 +808,13 @@ export function useDmConversations(): UseDmConversations {
   /**
    * 重新生成 AI 回复（2.2）：服务端软删旧回复（WS message.deleted 会让本地
    * 气泡消失）并按原触发消息重新入队，新占位消息随 message.created 到达。
+   *
+   * aiModelKey：换一个模型重生成，只对这一次生效，不改会话级选择。
    */
-  async function regenerateAiReply(messageId: string): Promise<void> {
+  async function regenerateAiReply(messageId: string, aiModelKey?: string | null): Promise<void> {
     await $api("/api/dm/ai/regenerate", {
       method: "POST",
-      body: { messageId },
+      body: aiModelKey ? { messageId, aiModelKey } : { messageId },
     });
   }
 
@@ -827,7 +831,7 @@ export function useDmConversations(): UseDmConversations {
   }
   interface MessageDeletedData { deletedAt: string }
   interface ConversationReadData { lastReadAt: string }
-  interface ConversationUpdatedData { title?: string }
+  interface ConversationUpdatedData { title?: string; aiModelKey?: string | null }
   interface ConversationMemberRemovedData { userId: number }
   interface TypingData { userId: number }
 
@@ -1048,6 +1052,8 @@ export function useDmConversations(): UseDmConversations {
     if (!cid || !data) return;
     patchConversation(cid, {
       ...(typeof data.title === "string" ? { title: data.title } : {}),
+      // 模型切换可能来自本人的另一个端；null 表示回落到角色卡默认
+      ...(data.aiModelKey !== undefined ? { aiModelKey: data.aiModelKey } : {}),
     });
   };
 

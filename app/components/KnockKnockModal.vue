@@ -14,7 +14,7 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
 } from "@heroicons/vue/24/outline";
-import type { AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
+import type { AiModel, AiRoleCard, DmConversationSummary, DmMessage } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { stripMentionsToPlain } from "~/utils/mention";
 import { stripEmotesToPlain } from "~/utils/emote";
@@ -35,6 +35,8 @@ const postModal = usePostModal();
 const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const { characters: aiCharacters, loading: aiCharactersLoading, error: aiCharactersError, refresh: refreshAiCharacters } = useAiCharacters();
+const { models: aiModels, refresh: refreshAiModels } = useAiModels();
+const { usage: agentQuota, refresh: refreshAgentQuota } = useAgentQuota();
 const {
   displayText: aiDisplayText,
   startReveal: startAiReveal,
@@ -80,6 +82,7 @@ const {
   stopAiStream,
   regenerateAiReply,
   workflowEventsOf,
+  updateConversation,
 } = useDmConversations();
 
 const AI_SLUG_STORAGE_KEY = "ik-knock-ai-slug";
@@ -135,7 +138,7 @@ watch(visible, async (next) => {
   autoFillUsed.value = 0;
   // 拉列表 + 起 WS（startStream 内部对 SSR / 未登录都做了护栏）
   startStream();
-  await Promise.all([refresh(), refreshAiCharacters()]);
+  await Promise.all([refresh(), refreshAiCharacters(), refreshAiModels(), refreshAgentQuota()]);
   knockBootstrapDone.value = true;
   // 若是由 UserHoverCard「私信」打开，定位到指定会话
   const pendingDm = consumePendingDmConversationId();
@@ -319,13 +322,75 @@ const onRefreshSuggestions = () => {
 // 切换 AI 角色时重置示例问题偏移
 watch(() => activeAiCard.value?.slug, () => { suggestionsOffset.value = 0; });
 
-/** 当前 AI 角色的全部会话，按 lastMessageAt 降序 */
+/* ─────────────── 模型切换（会话级） ─────────────── */
+
+/**
+ * 当前会话可选模型：非 AI 会话返回 undefined（DmModelPicker 据此整体不渲染）。
+ * 角色卡 allowedModelKeys 为空表示不限制；白名单过滤后为空则同样隐藏，
+ * 避免给出一个点了必被后端拒的列表。
+ */
+const activeModelOptions = computed<AiModel[] | undefined>(() => {
+  if (!isActiveAiConversation.value) return undefined;
+  const list = aiModels.value;
+  if (list.length === 0) return undefined;
+  const allow = activeAiCard.value?.allowedModelKeys;
+  if (!allow || allow.length === 0) return list;
+  const allowSet = new Set(allow);
+  const filtered = list.filter((m) => allowSet.has(m.key));
+  return filtered.length > 0 ? filtered : undefined;
+});
+
+/** 会话级选择（null = 跟随角色卡默认模型） */
+const activeModelKey = computed<string | null>(
+  () => activeConversation.value?.aiModelKey ?? null,
+);
+
+/**
+ * 气泡上的模型标签：message.aiModelKey → displayName。
+ * 消息列表里逐条查，所以先建一次 key → displayName 的映射，避免每条消息都
+ * 线性 find。清单里查不到的 key（模型已删/停用）直接显示 key 本身，
+ * 比什么都不显示更利于排查「这条是谁生成的」。
+ */
+const modelNameByKey = computed(() => {
+  const map = new Map<string, string>();
+  for (const m of aiModels.value) map.set(m.key, m.displayName);
+  return map;
+});
+
+const modelLabelFor = (key?: string | null): string | null => {
+  if (!key) return null;
+  return modelNameByKey.value.get(key) ?? key;
+};
+
+/**
+ * 切换模型：乐观更新由 updateConversation 完成，失败时回落到 sendError 提示
+ * （下一条消息仍会用服务端权威值，不会静默用错模型）。
+ */
+const onSelectModel = async (key: string | null) => {
+  const id = activeConversationId.value;
+  if (!id || id.startsWith("pseudo:")) return;
+  try {
+    await updateConversation(id, { aiModelKey: key });
+  } catch (e: unknown) {
+    sendError.value = resolveErrorMessage(e, "切换模型失败");
+  }
+};
+
+/**
+ * 当前 AI 角色的全部会话，按 lastMessageAt 降序。
+ *
+ * 必须排除 pseudo 项：AI 角色本身是真实用户账号，它给你的评论/回复也会产生通知，
+ * 而通知聚合桶在「与该用户没有活跃 direct 会话」时会以 `pseudo:user:<uid>` 形态
+ * 出现在列表里（后端 notification-merge）。删掉最后一个 AI 会话后就正好是这种状态，
+ * 若不过滤，这个通知桶会被当成「该角色的会话」自动打开 —— 界面变成一串点赞/回复
+ * 通知，而且往里发消息会把它实质化成一条普通私聊。
+ */
 const aiSessionsForActiveCard = computed<DmConversationSummary[]>(() => {
   const card = activeAiCard.value;
   const uid = card?.boundUser?.id;
   if (typeof uid !== "number") return [];
   return allConversations.value
-    .filter((c) => c.peer?.userId === uid)
+    .filter((c) => !c.pseudoKind && c.peer?.userId === uid)
     .sort((a, b) => {
       const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
       const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
@@ -350,10 +415,11 @@ const peerProfileUrl = computed<string | null>(() => {
 /** 当前会话对端是否可跳转个人主页——从 peerProfileUrl 派生 */
 const canClickPeerProfile = computed<boolean>(() => peerProfileUrl.value !== null);
 
-/** 通话 Tab：按 AI boundUserId 汇总该角色所有会话的未读 */
+/** 通话 Tab：按 AI boundUserId 汇总该角色所有会话的未读（pseudo 通知桶不算，见 aiSessionsForActiveCard） */
 const aiUnreadByUserId = computed(() => {
   const map = new Map<number, number>();
   for (const c of allConversations.value) {
+    if (c.pseudoKind) continue;
     const uid = c.peer?.userId;
     if (typeof uid === "number") {
       map.set(uid, (map.get(uid) ?? 0) + (c.unreadCount ?? 0));
@@ -1102,7 +1168,11 @@ const handleStopAi = async () => {
 };
 
 watch(activeStreamingMessageId, (v) => {
-  if (!v) stoppingAi.value = false;
+  if (!v) {
+    stoppingAi.value = false;
+    // token 是回复结束后才扣的，所以定稿这一刻再拉一次额度
+    void refreshAgentQuota();
+  }
 });
 
 // ── 2.2 重新生成 ───────────────────────────────────────
@@ -1710,6 +1780,23 @@ const handleMobileBack = () => {
                         </span>
                       </Transition>
                     </div>
+                    <!-- 模型切换（会话级）：紧贴角色名右侧，无边框，只有模型名 + 下拉箭头 -->
+                    <DmModelPicker
+                      :models="activeModelOptions"
+                      :model-key="activeModelKey"
+                      :default-model-key="activeAiCard?.defaultModelKey ?? null"
+                      :streaming="!!activeStreamingMessageId"
+                      @select="onSelectModel"
+                    />
+                    <!-- 当日额度：紧跟模型选择器，仅 AI 会话且后台确实配了 token 上限时显示 -->
+                    <DmQuotaBar
+                      v-if="activeConversation && !composerDisabled && isActiveAiConversation && agentQuota && !agentQuota.unlimited"
+                      :percent="agentQuota.percent"
+                      :exhausted="agentQuota.exhausted"
+                      :tokens-used="agentQuota.tokensUsed"
+                      :tokens-limit="agentQuota.tokensLimit"
+                      :reset-at="agentQuota.resetAt"
+                    />
                     <!-- Phase 4 会话内搜索：仅选中会话时显示 -->
                     <button
                       v-if="activeConversation"
@@ -1805,6 +1892,7 @@ const handleMobileBack = () => {
                         :show-regenerate="entry.aiRich && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
                         :regenerating="regeneratingAi"
                         :search-hit="entry.msg.documentId === currentSearchHitId"
+                        :model-label="modelLabelFor(entry.msg.aiModelKey)"
                         @contextmenu="showContextMenu"
                         @profile="goToProfile"
                         @open-post="openPostFromBubble"
@@ -2380,6 +2468,12 @@ const handleMobileBack = () => {
   min-width: 0;
 }
 
+/* 额度条自带一条与模型选择器之间的分隔线；后台没配模型清单（选择器整体不渲染）
+   时它会紧贴标题，那条线就没有意义了。子组件根节点带父级 scope id，可以这样选中。 */
+.ik-knock__main-title-wrap + .ik-quota::before {
+  display: none;
+}
+
 /* 会话标题栏：对端可跳转个人主页时的可点击态 */
 .ik-knock__main-title-wrap.is-clickable {
   cursor: pointer;
@@ -2592,6 +2686,10 @@ const handleMobileBack = () => {
   font-size: 17px;
   font-weight: 900;
   color: #fff;
+  /* 标题右侧现在挂着模型选择器与额度条：长标题省略，不把它们挤出去 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── 正在输入指示器（header 标题旁；气泡内加载点样式在 DmMessageItem） ── */

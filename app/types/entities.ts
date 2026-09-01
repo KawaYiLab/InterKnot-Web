@@ -137,6 +137,40 @@ export interface AiRoleCard {
     name?: string;
     avatar?: string | null;
   } | null;
+  /** 该角色默认模型 key；null = 用后端兜底（AstrBot 自身默认 provider） */
+  defaultModelKey?: string | null;
+  /** 该角色允许的模型 key 白名单；null / 缺省 = 不限制（全部启用模型可选） */
+  allowedModelKeys?: string[] | null;
+}
+
+/**
+ * 敲敲可选的 AI 模型（GET /api/agent/models）。
+ * 清单在 Strapi 后台手工维护；`key` 是前后端唯一契约，
+ * AstrBot 侧的 provider id 不出网。
+ */
+export interface AiModel {
+  key: string;
+  displayName: string;
+  description?: string | null;
+  /** 短标签（"快"/"强"/"实验"），气泡与选择器上做角标 */
+  badge?: string | null;
+  sortOrder?: number;
+}
+
+/**
+ * 敲敲当日额度（GET /api/agent/quota，需登录）。
+ *
+ * `tokens.used` 是**当前用户**当天已扣的额度 = 真实 token（prompt + completion）
+ * × 该模型的后台成本倍率，所以 1 倍模型下就是真实 token 数，贵模型会掉得更快。
+ * 全站每日 token 预算不在这个接口里暴露。
+ * `limit <= 0` 表示不限制；`resetAt` 是下一次日切（本地 04:00）的绝对时刻。
+ */
+export interface AgentQuota {
+  globalEnabled: boolean;
+  tokens: { used: number; limit: number };
+  resetAt: string;
+  /** Redis 读不到用量时为 false —— 此时不要把 0 当成「没用过」 */
+  available: boolean;
 }
 
 export type NsfwStatus = 'safe' | 'sensitive' | 'error';
@@ -621,6 +655,13 @@ export interface DmConversationSummary {
    * documentId 为 `pseudo:user:${userId}`。
    */
   pseudoKind?: "user" | "anonymous" | "system" | null;
+  /**
+   * 会话级模型选择（仅 AI 私聊会话非空）。
+   * null = 未选择，跟随角色卡默认模型；改动经
+   * `PATCH /api/dm/conversations/:id { aiModelKey }` 并由 WS
+   * `conversation.updated` 回推。
+   */
+  aiModelKey?: string | null;
 }
 
 /**
@@ -709,6 +750,8 @@ export interface DmMessage {
   replyTo: DmMessageReplyTo | null;
   /** AI 工作流事件序列（3.1）：仅 AI 流式回复定稿后非空，用于回放时间线 */
   workflow?: AiWorkflowEvent[] | null;
+  /** 生成这条 AI 回复时用的模型 key；非 AI 消息为 null */
+  aiModelKey?: string | null;
 
   // ── 仅 kind === "notification" 出现的字段 ──────────────────
   /** 通知子类型：决定气泡左侧 / quote 卡 的展示文案 */
