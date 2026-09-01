@@ -732,12 +732,14 @@ export function useApi() {
   };
 
   // ── 米游社扫码登录 / 绑定 ──────────────────────────
-  // $api 会自动带上 Authorization：已登录时创建的二维码是绑定模式，
-  // 未登录（登录框）则是登录模式，由后端按会话区分。
-  const createMihoyoQr = async (): Promise<MihoyoQrCreateResult> => {
+  // mode 由调用方显式声明：login 时后端会忽略 Authorization（浏览器里残留 token 也不会
+  // 误进绑定模式），bind 时后端要求已登录。
+  const createMihoyoQr = async (
+    mode: "login" | "bind" = "login",
+  ): Promise<MihoyoQrCreateResult> => {
     const response = await $api("/api/auth/mihoyo/qr", {
       method: "POST",
-      body: {},
+      body: { mode },
     });
     const data = response as Record<string, unknown>;
     return {

@@ -22,6 +22,8 @@ const props = defineProps<{
   regenerating: boolean;
   /** 会话内搜索：当前命中消息高亮 */
   searchHit?: boolean;
+  /** 生成这条回复的模型显示名（由父级用 message.aiModelKey 映射） */
+  modelLabel?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -278,6 +280,12 @@ const messageSegments = computed((): string[] | null => {
           />
           重新生成
         </button>
+        <!-- 这条回复用的是哪个模型（message.aiModelKey → displayName） -->
+        <span
+          v-if="modelLabel"
+          class="ik-knock__msg-meta-model"
+          :title="`本条回复由 ${modelLabel} 生成`"
+        >{{ modelLabel }}</span>
       </div>
     </div>
   </div>
@@ -636,6 +644,32 @@ const messageSegments = computed((): string[] | null => {
 
 .ik-knock__msg-meta-action.is-done {
   color: #52d273;
+}
+
+/* 模型标签：弱化的信息位，不抢正文；前面加个小圆点与操作按钮划清界限 */
+.ik-knock__msg-meta-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.2px;
+  user-select: none;
+  transition: color 120ms ease;
+}
+
+.ik-knock__msg-meta-model::before {
+  content: "";
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.ik-knock__msg:hover .ik-knock__msg-meta-model {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .ik-knock__msg-meta-icon {

@@ -35,10 +35,10 @@ const mihoyoFromRegister = ref(false);
 const mihoyoTitle = computed(() => (mihoyoFromRegister.value ? "米游社注册" : "米游社登录"));
 
 const mihoyo = useMihoyoQr({
+  mode: "login",
   isActive: () => isMihoyo.value && visible.value,
   width: 220,
   onConfirmed: async (res) => {
-    if (res.mode !== "login") return;
     if (!res.auth.token) throw new Error("登录失败：未获取到 Token");
     const isNewUser = res.isNewUser;
     await onLoginSuccess(res.auth.token, res.auth.user);
@@ -48,7 +48,7 @@ const mihoyo = useMihoyoQr({
     }
   },
   onError: (err) => {
-    message.error(resolveErrorMessage(err, "获取二维码失败"));
+    message.error(resolveErrorMessage(err, "米游社登录失败"));
   },
 });
 
@@ -61,10 +61,12 @@ const mihoyoStatusText = computed(() => {
     case "loading": return "二维码生成中…";
     case "waiting": return "请使用米游社 App 扫码登录";
     case "scanned": return "已扫码，请在米游社 App 中确认";
+    case "retrying": return "网络不太稳定，正在重试…";
     case "confirmed": return "登录中…";
     case "expired": return "二维码已过期，点击刷新";
     case "cancelled": return "已取消扫码，点击刷新重试";
-    case "error": return "二维码获取失败，点击刷新重试";
+    case "error": return "登录失败，点击刷新重试";
+    default: return "点击刷新重试";
   }
 });
 
@@ -890,6 +892,10 @@ onUnmounted(() => {
 .ik-mihoyo__status.is-scanned,
 .ik-mihoyo__status.is-confirmed {
   color: #bfff09;
+}
+
+.ik-mihoyo__status.is-retrying {
+  color: #ffc14d;
 }
 
 .ik-mihoyo__status.is-expired,

@@ -82,15 +82,15 @@ const onMenuChange = (name: string | number) => {
 
 // ── 米游社绑定 ─────────────────────────────
 const mihoyo = useMihoyoQr({
+  mode: "bind",
   isActive: () => activeMenuKey.value === "mihoyo" && !mihoyoBinding.value,
   width: 200,
   onConfirmed: (res) => {
-    if (res.mode !== "bind") return;
     setMihoyoBinding(res.binding);
     message.success("米游社账号绑定成功");
   },
   onError: (err) => {
-    message.error(resolveErrorMessage(err, "获取二维码失败"));
+    message.error(resolveErrorMessage(err, "米游社绑定失败"));
   },
 });
 
@@ -105,10 +105,12 @@ const mihoyoQrStatusText = computed(() => {
     case "loading": return "二维码生成中…";
     case "waiting": return "请使用米游社 App 扫码绑定";
     case "scanned": return "已扫码，请在米游社 App 中确认";
+    case "retrying": return "网络不太稳定，正在重试…";
     case "confirmed": return "绑定中…";
     case "expired": return "二维码已过期，点击刷新";
     case "cancelled": return "已取消扫码，点击刷新重试";
-    case "error": return "二维码获取失败，点击刷新重试";
+    case "error": return "绑定失败，点击刷新重试";
+    default: return "点击刷新重试";
   }
 });
 
@@ -1159,6 +1161,10 @@ useHead({ title: "账号中心" });
 .ik-ac-qr-status.is-scanned,
 .ik-ac-qr-status.is-confirmed {
   color: #bfff09;
+}
+
+.ik-ac-qr-status.is-retrying {
+  color: #ffc14d;
 }
 
 .ik-ac-qr-status.is-expired,
