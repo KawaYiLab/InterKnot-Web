@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { useEventListener } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import { resolveErrorMessage } from "~/utils/api-error";
 import type { DailyExpStatus } from "~/types/entities";
-import type { CheckInDoneDetail } from "~/composables/useCheckInReminder";
 import {
   LEVEL_THRESHOLDS,
   LEVEL_TITLES,
@@ -159,24 +157,7 @@ const doCheckIn = async () => {
  * 登录提醒弹窗里签完的话，本页仍挂载着——同步成「已签到」，
  * 否则按钮还停在「今日签到」，点下去只会吃一个 409。
  */
-const applyCheckInDone = (detail: CheckInDoneDetail) => {
-  checkInStatus.value.canCheckIn = false;
-  if (detail.totalDays > 0) checkInStatus.value.totalDays = detail.totalDays;
-  if (detail.consecutiveDays > 0) checkInStatus.value.consecutiveDays = detail.consecutiveDays;
-  if (detail.rank > 0) checkInStatus.value.rank = detail.rank;
-  dennyBalance.value = detail.currentDenny;
-  if (dailyExpStatus.value) {
-    dailyExpStatus.value.sources.checkIn = { done: true, exp: detail.reward };
-    dailyExpStatus.value.todaySelfGained += detail.reward;
-  }
-};
-
-if (import.meta.client) {
-  useEventListener(window, "ik:check-in-done", (e: Event) => {
-    const detail = (e as CustomEvent<CheckInDoneDetail>).detail;
-    if (detail) applyCheckInDone(detail);
-  });
-}
+useCheckInDoneSync({ status: checkInStatus, dailyExpStatus, dennyBalance });
 
 // -- Level guide rows --
 const levelGuideRows = Array.from({ length: MAX_LEVEL }, (_, i) => {
