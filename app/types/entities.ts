@@ -160,8 +160,8 @@ export interface AiModel {
 /**
  * 敲敲当日额度（GET /api/agent/quota，需登录）。
  *
- * 后端按「真实 token × 该模型单价」把用量折成钱扣额度，但接口**只回百分比**：
- * 把金额发给前端等于公开每个模型的采购价。所以这里既没有 token 数也没有金额。
+ * 后端按加权 token 扣额度（真实 token × 该模型的倍率），但接口**只回百分比** ——
+ * 额度条要的就是这一个数，token 数与上限都只在后台。
  * `unlimited` = 后台没配上限；`resetAt` 是下一次日切（本地 04:00）的绝对时刻。
  */
 export interface AgentQuota {
