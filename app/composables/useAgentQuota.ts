@@ -32,8 +32,8 @@ export function useAgentQuota() {
   };
 
   /**
-   * 额度条口径：后端按成本（真实 token × 模型单价）扣额度，但只回百分比 ——
-   * 金额和 token 都不下发，前端也就没法反推每个模型的采购价。
+   * 额度条口径：后端按加权 token（真实 token × 该模型的倍率）扣额度，但只回百分比 ——
+   * token 数与上限都不下发，前端不必跟着后台改上限而改口径。
    * 后台没配上限（unlimited）或读不到用量（available=false）时返回 null，额度条整体不渲染。
    */
   const usage = computed(() => {
