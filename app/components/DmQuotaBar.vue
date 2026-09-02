@@ -4,10 +4,15 @@ import { computed } from "vue";
 /**
  * 敲敲当日额度：标题栏里模型选择器右侧的一条内联迷你进度条。
  *
- * 只显示百分比 —— 额度按 token 扣（真实 token × 该模型的倍率），但标题栏没有位置摆
- * 「12345 / 1000000 token」，而且换个倍率不同的模型，同样一句话吃掉的绝对数就变了，
- * 百分比不会看着莫名其妙。
- * 打满时不给数字，直接说「额度已用完」：用户此刻只需要知道这件事和什么时候恢复。
+ * 这条的活儿只有一件 —— 在被拒之前让人看见自己快撞墙了。所以按「够用就好」排版：
+ * - 正常态：迷你条 + 一个裸百分比。「今日」「额度」这些字不进标题栏（那儿还挤着
+ *   返回/搜索/删除），全交给 hover 出来的 title；
+ * - 80% 起转黄、打满转红：颜色是不占地方的提示通道；
+ * - 只有打满时换成一句「额度已用完」—— 此刻用户要的是「AI 不会回了」这个事实，
+ *   不是数字。也只有这一次会撑宽，而它本就该被注意到。
+ *
+ * 额度按 token 扣（真实 token × 该模型的倍率），绝对数不下发也不显示：换一个倍率
+ * 不同的模型，同一句话吃掉的 token 就变了，百分比不会看着莫名其妙。
  */
 const props = defineProps<{
   percent: number;
@@ -16,8 +21,8 @@ const props = defineProps<{
   resetAt: string;
 }>();
 
-/** 标题栏里位置紧张：只给一个百分比，前缀「今日」窄屏还会隐藏（是"已用"还是"剩余"由 title 说清） */
-const label = computed(() => (props.exhausted ? "额度已用完" : `额度 ${props.percent}%`));
+/** 是「已用」还是「剩余」由 title 说清；这里只留数字，省下的宽度还给标题栏的按钮 */
+const label = computed(() => (props.exhausted ? "额度已用完" : `${props.percent}%`));
 
 const resetLabel = computed(() => {
   const t = new Date(props.resetAt);
@@ -42,13 +47,11 @@ const level = computed(() => {
 </script>
 
 <template>
-  <div class="ik-quota" :class="level" :title="detail">
+  <div class="ik-quota" :class="level" :title="detail" :aria-label="detail">
     <span class="ik-quota__track">
       <span class="ik-quota__fill" :style="{ width: `${Math.max(percent, 4)}%` }" />
     </span>
-    <span class="ik-quota__label">
-      <span class="ik-quota__prefix">今日</span>{{ label }}
-    </span>
+    <span class="ik-quota__label">{{ label }}</span>
   </div>
 </template>
 
@@ -56,9 +59,12 @@ const level = computed(() => {
 .ik-quota {
   display: inline-flex;
   align-items: center;
+  /* 组内间距：迷你条与百分比是一个整体，比下面分隔线两侧的 12px 明显窄 */
   gap: 6px;
   min-width: 0;
-  padding: 0 2px;
+  /* 与 ::before 的 margin 一起把「分隔线两侧」和「百分比到右邻按钮」都凑成 12px，
+     算式见 ::before —— 都基于父级 .ik-knock__main-header 的 8px gap */
+  padding: 0 4px;
   user-select: none;
   font-size: 11.5px;
   line-height: 1;
@@ -72,13 +78,20 @@ const level = computed(() => {
   color: rgba(255, 255, 255, 0.62);
 }
 
-/* 与左侧模型选择器之间的细分隔，两个内联小件才不糊成一块 */
+/*
+ * 与左侧模型选择器之间的细分隔。这条线属于额度条（不是标题栏的),
+ * 好处是它跟着额度条一起出现/消失；坏处是两侧留白得手算 —— 它是 flex 首项，
+ * 所以右侧留白 = 这里的 margin + .ik-quota 的 gap，左侧 = 父级 header 的 gap + 自身 padding：
+ *   左 = 8(header gap) + 4(padding) = 12px
+ *   右 = 6(margin)     + 6(gap)     = 12px
+ * 两侧相等且宽于组内的 6px，线才读作「两组之间的边界」而不是又一个部件。
+ */
 .ik-quota::before {
   content: "";
   flex-shrink: 0;
   width: 1px;
   height: 12px;
-  margin-right: 2px;
+  margin-right: 12px;
   background: rgba(255, 255, 255, 0.12);
 }
 
@@ -130,29 +143,20 @@ const level = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  /* 等宽数字：用量跳动时数字不会左右抖 */
+  /* 等宽数字 + 固定最小宽右对齐：0% 一路涨到 100% 都不会把右边的按钮推着走 */
+  min-width: 2.5em;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-.ik-quota__prefix {
-  margin-right: 2px;
-  opacity: 0.75;
-}
-
-/* 「今日额度已用完」是一句整话，不要中间那点字距 */
-.ik-quota.is-full .ik-quota__prefix {
-  margin-right: 0;
-}
-
-/* 窄屏标题栏还挤着返回/搜索/删除：去掉迷你条与「今日」前缀，只留百分比 */
+/* 窄屏标题栏还挤着返回/搜索/删除：去掉迷你条，只留百分比 */
 @media (max-width: 768px) {
   .ik-quota {
     font-size: 11px;
   }
 
-  .ik-quota__track,
-  .ik-quota__prefix {
+  .ik-quota__track {
     display: none;
   }
 }
