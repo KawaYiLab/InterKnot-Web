@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useEventListener } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
+import { resolveErrorMessage } from "~/utils/api-error";
 import type { DailyExpStatus } from "~/types/entities";
+import type { CheckInDoneDetail } from "~/composables/useCheckInReminder";
 import {
   LEVEL_THRESHOLDS,
   LEVEL_TITLES,
@@ -141,16 +144,39 @@ const doCheckIn = async () => {
       dailyExpStatus.value.todaySelfGained += result.reward;
     }
   } catch (err: any) {
-    if (err?.data?.error?.code === "CHECK_IN_ALREADY_TODAY") {
+    if (err?.code === "CHECK_IN_ALREADY_TODAY") {
       message.warning("今日已签到");
       checkInStatus.value.canCheckIn = false;
     } else {
-      message.error(err?.data?.error?.message || "签到失败");
+      message.error(resolveErrorMessage(err, "签到失败"));
     }
   } finally {
     checkInLoading.value = false;
   }
 };
+
+/**
+ * 登录提醒弹窗里签完的话，本页仍挂载着——同步成「已签到」，
+ * 否则按钮还停在「今日签到」，点下去只会吃一个 409。
+ */
+const applyCheckInDone = (detail: CheckInDoneDetail) => {
+  checkInStatus.value.canCheckIn = false;
+  if (detail.totalDays > 0) checkInStatus.value.totalDays = detail.totalDays;
+  if (detail.consecutiveDays > 0) checkInStatus.value.consecutiveDays = detail.consecutiveDays;
+  if (detail.rank > 0) checkInStatus.value.rank = detail.rank;
+  dennyBalance.value = detail.currentDenny;
+  if (dailyExpStatus.value) {
+    dailyExpStatus.value.sources.checkIn = { done: true, exp: detail.reward };
+    dailyExpStatus.value.todaySelfGained += detail.reward;
+  }
+};
+
+if (import.meta.client) {
+  useEventListener(window, "ik:check-in-done", (e: Event) => {
+    const detail = (e as CustomEvent<CheckInDoneDetail>).detail;
+    if (detail) applyCheckInDone(detail);
+  });
+}
 
 // -- Level guide rows --
 const levelGuideRows = Array.from({ length: MAX_LEVEL }, (_, i) => {
@@ -203,7 +229,7 @@ useHead({ title: "绳网等级" });
             <circle
               cx="60" cy="60" r="54"
               fill="none"
-              stroke="url(#ik-lv-gradient)"
+              stroke="#ffde00"
               stroke-width="5"
               stroke-linecap="round"
               :stroke-dasharray="339.29"
@@ -211,12 +237,6 @@ useHead({ title: "绳网等级" });
               transform="rotate(-90 60 60)"
               class="ik-lv__ring-fill"
             />
-            <defs>
-              <linearGradient id="ik-lv-gradient" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#4661fd" />
-                <stop offset="100%" stop-color="#10bff0" />
-              </linearGradient>
-            </defs>
           </svg>
           <img
             :src="userAvatar"
@@ -484,10 +504,7 @@ useHead({ title: "绳网等级" });
 .ik-lv__level-num {
   font-size: 15px;
   font-weight: 800;
-  background: linear-gradient(135deg, #4661fd, #10bff0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #ffde00;
 }
 
 .ik-lv__level-title {
@@ -621,12 +638,12 @@ useHead({ title: "绳网等级" });
   border: none;
   border-radius: 14px;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 800;
   font-family: inherit;
   cursor: pointer;
   transition: transform 0.15s ease, opacity 0.15s ease;
-  background: linear-gradient(135deg, #4661fd 0%, #10bff0 100%);
-  color: #fff;
+  background: #ffde00;
+  color: #000;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -820,7 +837,7 @@ useHead({ title: "绳网等级" });
 }
 
 .ik-lv__level-row.is-current {
-  background: rgba(70, 97, 253, 0.08);
+  background: rgba(255, 222, 0, 0.08);
   margin: 0 -20px;
   padding: 12px 20px;
   border-radius: 12px;
@@ -841,10 +858,7 @@ useHead({ title: "绳网等级" });
 }
 
 .ik-lv__level-row.is-current .ik-lv__level-row-num {
-  background: linear-gradient(135deg, #4661fd, #10bff0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #ffde00;
 }
 
 .ik-lv__level-row-title {
@@ -921,7 +935,7 @@ useHead({ title: "绳网等级" });
 }
 
 .ik-lv__benefits-row.is-current {
-  background: rgba(70, 97, 253, 0.08);
+  background: rgba(255, 222, 0, 0.08);
   margin: 0 -20px;
   padding: 12px 20px;
   border-radius: 12px;
@@ -943,10 +957,7 @@ useHead({ title: "绳网等级" });
 }
 
 .ik-lv__benefits-row.is-current .ik-lv__benefits-num {
-  background: linear-gradient(135deg, #4661fd, #10bff0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #ffde00;
 }
 
 .ik-lv__benefits-title {

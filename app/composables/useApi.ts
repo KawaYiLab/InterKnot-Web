@@ -24,6 +24,7 @@ import type {
   Post,
   PostCategory,
   ArticleFeed,
+  ArticleSort,
   ZzzRoleBadge,
   LikeToggleResult,
   FavoriteToggleResult,
@@ -65,8 +66,8 @@ const qk = {
     list: ["categories", "list"] as QueryKey,
   },
   articles: {
-    search: (query: string, category: string, start: number, limit: number) =>
-      ["articles", "search", query, category, start, limit] as QueryKey,
+    search: (query: string, category: string, start: number, limit: number, sort = "latest") =>
+      ["articles", "search", query, category, start, limit, sort] as QueryKey,
     searchAll: ["articles", "search"] as QueryKey,
     detail: (id: string) => ["articles", "detail", id] as QueryKey,
     detailAll: ["articles", "detail"] as QueryKey,
@@ -807,12 +808,13 @@ export function useApi() {
     endCur = "",
     category = "",
     feed: ArticleFeed = "recommend",
+    sort: ArticleSort = "latest",
   ): Promise<Pagination<Post>> => {
     const start = parseStart(endCur);
     // feed != recommend 时把 feed 折进 category 缓存槽，避免推荐/关注/收藏互相串缓存。
     const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
     return cachedRead(
-      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE),
+      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE, sort),
       async () => {
         const endpoint = query ? "/api/articles/search" : "/api/articles/list";
         const response = await $api(endpoint, {
@@ -820,6 +822,9 @@ export function useApi() {
             ...(query ? { q: query } : {}),
             ...(category ? { category } : {}),
             ...(feed !== "recommend" ? { feed } : {}),
+            // sort 只发给列表接口：/search 的 sort 档另有一档「相关性」且是其默认，
+            // 搜索结果按相关性排最有用，不该被首页的排序选择顶掉。
+            ...(query ? {} : { sort }),
             start: String(start),
             limit: String(DEFAULT_PAGE_SIZE),
           },
@@ -847,13 +852,14 @@ export function useApi() {
     endCur = "",
     category = "",
     feed: ArticleFeed = "recommend",
+    sort: ArticleSort = "latest",
   ): Pagination<Post> | undefined => {
     const qc = $queryClient as QueryClient | undefined;
     if (!qc) return undefined;
     const start = parseStart(endCur);
     const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
     return qc.getQueryData<Pagination<Post>>(
-      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE),
+      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE, sort),
     );
   };
 
@@ -2103,13 +2109,22 @@ export function useApi() {
 
   /**
    * 获取签到状态
+   *
+   * nextConsecutiveDays / nextReward 描述「本签到日这一次签到」：canCheckIn 时是
+   * 现在签到能拿到的，已签到时是今天已经拿到的。它们与 consecutiveDays 不同——
+   * 后者是数据库原始值，断签后不会清零，直接拿去算奖励会偏高。后端未部署这两个
+   * 字段时返回 null，调用方需自行降级。
    */
   const getCheckInStatus = async (): Promise<{
     canCheckIn: boolean;
     totalDays: number;
     consecutiveDays: number;
     rank: number;
+    checkInDay: string | null;
     nextEligibleAt: string | null;
+    currentDenny: number;
+    nextConsecutiveDays: number | null;
+    nextReward: number | null;
   }> => {
     const response = await $api("/api/check-in/status", {
       method: "GET",
@@ -2120,7 +2135,12 @@ export function useApi() {
       totalDays: Number(data.totalDays) || 0,
       consecutiveDays: Number(data.consecutiveDays) || 0,
       rank: Number(data.rank) || 0,
+      checkInDay: typeof data.checkInDay === "string" ? data.checkInDay : null,
       nextEligibleAt: typeof data.nextEligibleAt === "string" ? data.nextEligibleAt : null,
+      currentDenny: Number(data.currentDenny) || 0,
+      nextConsecutiveDays:
+        typeof data.nextConsecutiveDays === "number" ? data.nextConsecutiveDays : null,
+      nextReward: typeof data.nextReward === "number" ? data.nextReward : null,
     };
   };
 

@@ -1788,13 +1788,11 @@ const handleMobileBack = () => {
                       :streaming="!!activeStreamingMessageId"
                       @select="onSelectModel"
                     />
-                    <!-- 当日额度：紧跟模型选择器，仅 AI 会话且后台确实配了 token 上限时显示 -->
+                    <!-- 当日额度：紧跟模型选择器，仅 AI 会话且后台配了上限时显示 -->
                     <DmQuotaBar
-                      v-if="activeConversation && !composerDisabled && isActiveAiConversation && agentQuota && !agentQuota.unlimited"
+                      v-if="activeConversation && !composerDisabled && isActiveAiConversation && agentQuota"
                       :percent="agentQuota.percent"
                       :exhausted="agentQuota.exhausted"
-                      :tokens-used="agentQuota.tokensUsed"
-                      :tokens-limit="agentQuota.tokensLimit"
                       :reset-at="agentQuota.resetAt"
                     />
                     <!-- Phase 4 会话内搜索：仅选中会话时显示 -->

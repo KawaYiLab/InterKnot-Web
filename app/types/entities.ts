@@ -160,14 +160,16 @@ export interface AiModel {
 /**
  * 敲敲当日额度（GET /api/agent/quota，需登录）。
  *
- * `tokens.used` 是**当前用户**当天已扣的额度 = 真实 token（prompt + completion）
- * × 该模型的后台成本倍率，所以 1 倍模型下就是真实 token 数，贵模型会掉得更快。
- * 全站每日 token 预算不在这个接口里暴露。
- * `limit <= 0` 表示不限制；`resetAt` 是下一次日切（本地 04:00）的绝对时刻。
+ * 后端按「真实 token × 该模型单价」把用量折成钱扣额度，但接口**只回百分比**：
+ * 把金额发给前端等于公开每个模型的采购价。所以这里既没有 token 数也没有金额。
+ * `unlimited` = 后台没配上限；`resetAt` 是下一次日切（本地 04:00）的绝对时刻。
  */
 export interface AgentQuota {
   globalEnabled: boolean;
-  tokens: { used: number; limit: number };
+  /** 当日已用百分比（0-100） */
+  percent: number;
+  exhausted: boolean;
+  unlimited: boolean;
   resetAt: string;
   /** Redis 读不到用量时为 false —— 此时不要把 0 当成「没用过」 */
   available: boolean;
@@ -409,6 +411,12 @@ export interface BlockedUser {
 
 /** 首页 feed 模式：推荐 / 我关注的作者 / 我的收藏。 */
 export type ArticleFeed = "recommend" | "following" | "favorites";
+
+/**
+ * 首页排序：最新（纯时间序）/ 热门（纯热度榜）。两条流互斥 ——
+ * 「最新」里不掺热门帖，「热门」里不掺置顶帖，也不接时间序兜底。
+ */
+export type ArticleSort = "latest" | "hot";
 
 export type UploadStatus =
   | "pending"

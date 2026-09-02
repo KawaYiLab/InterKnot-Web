@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDebounceFn, useWindowSize, useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
-import type { ArticleFeed, Category, Post } from "~/types/entities";
+import type { ArticleFeed, ArticleSort, Category, Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import {
   FALLBACK_COVER_ASPECT_RATIO,
@@ -71,9 +71,38 @@ const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
 const POST_CARD_BODY_PADDING_X = 16;
 
 const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
-// 频道筛选：空串 = 最新（推荐流）。Tab 选中后随 list/缓存键一起隔离。
+// 频道筛选：空串 = 全部频道（此时由排序 Tab「最新 / 热门」决定看哪条流）。
 const categories = ref<Category[]>([]);
 const selectedCategory = ref<string>("");
+
+// 排序：最新（纯时间序）/ 热门（纯热度榜）。两条流互斥——用户反馈「热门就只有
+// 热门，最新就只有最新」，所以「最新」下后端不再往列表顶部注入热门帖，热门内容
+// 改由「热门」这条独立的流承载（见 server listLite 的 sort 参数）。
+// 两个 Tab 排在分类栏最前，与分类同款造型 ⇒ 语义也与分类一致：整行单选。
+// 选择记在 localStorage：刷新或下次进站保持上次看的那条流。默认「最新」。
+const SORT_STORAGE_KEY = "ik:home-sort";
+
+const readStoredSort = (): ArticleSort => {
+  if (!import.meta.client) return "latest";
+  try {
+    return localStorage.getItem(SORT_STORAGE_KEY) === "hot" ? "hot" : "latest";
+  } catch {
+    // 隐私模式下读取即抛错，回落默认档
+    return "latest";
+  }
+};
+
+const sortMode = ref<ArticleSort>(readStoredSort());
+
+const setSortMode = (mode: ArticleSort) => {
+  if (mode === sortMode.value) return;
+  sortMode.value = mode;
+  try {
+    localStorage.setItem(SORT_STORAGE_KEY, mode);
+  } catch {
+    // 写入失败（隐私模式 / 配额）只影响下次进站的默认档，本次切换照常生效
+  }
+};
 
 // feed 模式：推荐 / 关注（我关注的作者）/ 收藏（我的收藏）。
 // 关注、收藏需登录；缓存键随 feed 一起隔离（见 useApi.searchArticles）。
@@ -103,6 +132,30 @@ const selectFeed = (mode: Exclude<ArticleFeed, "recommend">) => {
 
 /** 当前生效的搜索词：仅推荐流支持文本搜索，关注/收藏强制走列表流。 */
 const activeQuery = () => (feedMode.value === "recommend" ? query.value.trim() : "");
+
+/** 搜索态：搜索结果按相关性排，排序 Tab 不参与（「热门」Tab 此时不渲染）。 */
+const isSearching = computed(() => !!query.value.trim());
+
+/**
+ * 当前真正生效的排序档：关注 / 收藏各有固定顺序（关注按发布时间、收藏按收藏时间），
+ * 搜索按相关性——这些场景一律收敛到 latest，缓存键与 Tab 高亮都跟着它，
+ * 保证高亮的 Tab 永远等于后端实际在做的事。
+ */
+const activeSort = computed<ArticleSort>(() =>
+  feedMode.value === "recommend" && !isSearching.value ? sortMode.value : "latest",
+);
+
+/**
+ * 排序 Tab（最新 / 热门）：与分类 Tab 同处一行、同款造型，所以语义也一致——整行单选。
+ * 点排序即回到「全部频道 + 推荐流」；反过来点分类 / 关注 / 收藏会把排序落回最新
+ * （见 selectCategory / activeSort），同一时刻只有一个 Tab 亮着。
+ */
+const selectSort = (mode: ArticleSort) => {
+  if (feedMode.value !== "recommend") feedMode.value = "recommend";
+  selectedCategory.value = "";
+  setSortMode(mode);
+};
+
 const loading = ref(false);
 const loadingMore = ref(false);
 const refreshing = ref(false);
@@ -262,7 +315,13 @@ const fetchList = async (reset = false) => {
   // 仅对 reset=true（首屏 / 切回 / 切搜索词）启用；refreshing 是用户明确下拉，不走捷径。
   let cacheHit = false;
   if (reset && !refreshing.value) {
-    const cached = api.peekArticles(activeQuery(), "0", selectedCategory.value, feedMode.value);
+    const cached = api.peekArticles(
+      activeQuery(),
+      "0",
+      selectedCategory.value,
+      feedMode.value,
+      activeSort.value,
+    );
     if (cached) {
       const uniqueNodes = toUniqueNodes(cached.nodes, true);
       enterAnimationIds.value = new Set();
@@ -295,6 +354,7 @@ const fetchList = async (reset = false) => {
       reset ? "0" : endCursor.value,
       selectedCategory.value,
       feedMode.value,
+      activeSort.value,
     );
     if (currentVersion !== requestVersion.value) {
       return;
@@ -409,6 +469,8 @@ const pollLatestArticles = async () => {
   // 仅在推荐流（无搜索词、非关注/收藏）下做轮询
   if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
+  // 「热门」是热度榜：新帖不会一发布就上榜，「有 N 条新内容」在这条流下没有意义
+  if (activeSort.value !== "latest") return;
   // 不与正在进行的请求/刷新冲突
   if (polling || loading.value || refreshing.value || loadingMore.value) return;
   if (import.meta.client && document.visibilityState !== "visible") return;
@@ -419,7 +481,7 @@ const pollLatestArticles = async () => {
   try {
     // 强制失效当前频道空搜索的第一页，让 fetchQuery 真正打到后端
     api.invalidateQueries(["articles", "search", "", selectedCategory.value]);
-    const page = await api.searchArticles("", "", selectedCategory.value);
+    const page = await api.searchArticles("", "", selectedCategory.value, "recommend", "latest");
     if (!page.nodes.length) return;
 
     const knownIds = new Set(list.value.map((d) => d.id));
@@ -427,9 +489,9 @@ const pollLatestArticles = async () => {
     for (const node of page.nodes) {
       if (!node.id) continue;
       // 收集第一页中所有本地未知的 id。
-      // 不能在遇到第一个已知 id 时 break：推荐流顶部会注入热门委托（按热度排序，
-      // 非时间序），这些热门委托已在初始加载时进入 list，若 break 会导致新委托
-      // （排在热门委托之后的普通区）永远检测不到。
+      // 不能在遇到第一个已知 id 时 break：列表顶部会注入置顶帖（全站公告，非时间序），
+      // 它们已在初始加载时进入 list，若 break 会导致新委托（排在置顶帖之后的普通区）
+      // 永远检测不到。
       if (!knownIds.has(node.id)) fresh.push(node.id);
     }
     if (fresh.length) {
@@ -536,20 +598,23 @@ watch(
 const selectCategory = (slug: string) => {
   // 选分类即回到推荐流（关注/收藏是独立筛选，不与分类叠加）。
   if (feedMode.value !== "recommend") feedMode.value = "recommend";
+  // 分类与排序 Tab 同处一行、整行单选：选分类即把排序落回最新，
+  // 否则「热门」会与分类 Tab 同时高亮，而后端此时给的是该分类的时间序。
+  setSortMode("latest");
   if (slug === selectedCategory.value) return;
   selectedCategory.value = slug;
 };
 
-// 缓存恢复时同步 feedMode 会触发下面的 watcher；用此标记跳过那次重拉。
+// 缓存恢复时同步 feedMode / sortMode 会触发下面的 watcher；用此标记跳过那次重拉。
 let skipFeedWatch = false;
 
-// 切换频道或 feed：清空"新委托提示"、重置分页并强制失效缓存后重拉首屏，
-// 确保即使命中旧缓存也会真正打到后端、列表随频道/feed 刷新。
-// 合并 feedMode + selectedCategory 为单个 watcher：切 feed 时常会同时改这两个值
-// （见 selectFeed / selectCategory），合并后同一 flush 周期只触发一次，避免两个独立
-// watcher 各自 ++requestVersion 互相作废导致 fetchList 提前 return、列表不刷新。
+// 切换频道、feed 或排序：清空"新委托提示"、重置分页并强制失效缓存后重拉首屏，
+// 确保即使命中旧缓存也会真正打到后端、列表随之刷新。
+// 合并 feedMode + selectedCategory + sortMode 为单个 watcher：切 feed 时常会同时改
+// 这几个值（见 selectFeed / selectCategory），合并后同一 flush 周期只触发一次，避免
+// 多个独立 watcher 各自 ++requestVersion 互相作废导致 fetchList 提前 return、列表不刷新。
 watch(
-  () => [feedMode.value, selectedCategory.value] as const,
+  () => [feedMode.value, selectedCategory.value, sortMode.value] as const,
   () => {
     if (skipFeedWatch) {
       skipFeedWatch = false;
@@ -591,11 +656,13 @@ let initialFetchPromise: Promise<void>;
 
 // 乐观插入：消费 /create 发布后塞入的 pending 队列，把刚发布的委托
 // unshift 到 list 头部并加入 seenIds，避免后续 fetch 返回相同 id 时被去重逻辑过滤掉。
-// 搜索流 / 关注 / 收藏 feed 下不插入，避免污染这些列表（新委托既未被收藏也未必来自关注作者）。
+// 搜索流 / 关注 / 收藏 feed / 热门排序下不插入，避免污染这些列表（新委托既未被收藏、
+// 未必来自关注作者，也不会一发布就进热度榜）。
 // drain 仅在真正会写入 list 时调用，不能在冷启动 fetchList 之前就 drain——fetchList 会重置 seenIds 和 list。
 const consumePendingPosts = () => {
   if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
+  if (activeSort.value !== "latest") return;
   if (!pendingPost.peek().length) return;
   const pending = pendingPost.drain();
   // 反转后再 unshift：保证 push 顺序最晚的委托排在最顶部
@@ -616,6 +683,11 @@ if (cached && cached.query === query.value && cached.category === selectedCatego
   if (restoredFeed !== feedMode.value) {
     skipFeedWatch = true;
     feedMode.value = restoredFeed;
+  }
+  const restoredSort = cached.sort ?? "latest";
+  if (restoredSort !== sortMode.value) {
+    skipFeedWatch = true;
+    sortMode.value = restoredSort;
   }
   list.value = cached.list;
   endCursor.value = cached.endCursor;
@@ -777,6 +849,7 @@ onBeforeRouteLeave(() => {
     query: query.value,
     category: selectedCategory.value,
     feed: feedMode.value,
+    sort: sortMode.value,
     seenIds,
     measuredHeights: heights ? new Map(heights) : new Map(),
     scrollY: window.scrollY,
@@ -809,19 +882,29 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ik-home-container ik-stack">
-    <!-- 顶部工具条：左侧频道分类，右侧 feed 切换（推荐/关注/收藏），两组错开。 -->
+    <!-- 顶部工具条：左侧频道分类（含最新/热门两个排序 Tab），右侧在线人数。 -->
     <div class="ik-home-toolbar">
-      <!-- 频道 Tab 条：按 order 展示，「最新」恒在最前。
-           恒渲染（不随 categories 异步加载出现/消失），为分类栏预留固定高度，
-           避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
+      <!-- 频道 Tab 条：「最新 / 热门」恒在最前（全部频道下的两条互斥流），
+           其后按 order 排分类。恒渲染（不随 categories 异步加载出现/消失），
+           为分类栏预留固定高度，避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
       <nav class="ik-category-tabs" aria-label="委托频道">
         <button
           type="button"
           class="ik-category-tab"
-          :class="{ 'ik-category-tab--active': selectedCategory === '' }"
-          @click="selectCategory('')"
+          :class="{ 'ik-category-tab--active': selectedCategory === '' && activeSort === 'latest' }"
+          @click="selectSort('latest')"
         >
           最新
+        </button>
+        <!-- 搜索结果按相关性排序，热门榜在这条路径上无意义，故搜索态不渲染 -->
+        <button
+          v-if="!isSearching"
+          type="button"
+          class="ik-category-tab"
+          :class="{ 'ik-category-tab--active': selectedCategory === '' && activeSort === 'hot' }"
+          @click="selectSort('hot')"
+        >
+          热门
         </button>
         <button
           v-for="cat in categories"
