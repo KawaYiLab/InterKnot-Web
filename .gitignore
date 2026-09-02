@@ -9,3 +9,5 @@ playwright-report
 server
 /.windsurf
 .env
+/.zcode
+/.claude
