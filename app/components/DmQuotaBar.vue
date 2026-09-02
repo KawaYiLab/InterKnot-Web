@@ -16,8 +16,8 @@ const props = defineProps<{
   resetAt: string;
 }>();
 
-/** 标题栏里位置紧张：只给一个百分比。带上「已用」二字，否则 42% 读不出是用掉的还是剩下的 */
-const label = computed(() => (props.exhausted ? "额度已用完" : `额度已用 ${props.percent}%`));
+/** 标题栏里位置紧张：只给一个百分比，前缀「今日」窄屏还会隐藏（是"已用"还是"剩余"由 title 说清） */
+const label = computed(() => (props.exhausted ? "额度已用完" : `额度 ${props.percent}%`));
 
 const resetLabel = computed(() => {
   const t = new Date(props.resetAt);
