@@ -94,8 +94,13 @@ const readStoredSort = (): ArticleSort => {
 
 const sortMode = ref<ArticleSort>(readStoredSort());
 
+/**
+ * 用户主动点排序 Tab：既切当前档，也记进 localStorage 作为下次进站的默认。
+ * 不做「值没变就 return」的去重——ref 赋同值本身不会触发 watcher，而点击这个动作
+ * 无论如何都表达了「我以后默认看这条流」（比如先点了分类把当前档带回最新，
+ * 再点「最新」时值没变，但偏好确实该落到最新）。
+ */
 const setSortMode = (mode: ArticleSort) => {
-  if (mode === sortMode.value) return;
   sortMode.value = mode;
   try {
     localStorage.setItem(SORT_STORAGE_KEY, mode);
@@ -138,8 +143,12 @@ const isSearching = computed(() => !!query.value.trim());
 
 /**
  * 当前真正生效的排序档：关注 / 收藏各有固定顺序（关注按发布时间、收藏按收藏时间），
- * 搜索按相关性——这些场景一律收敛到 latest，缓存键与 Tab 高亮都跟着它，
- * 保证高亮的 Tab 永远等于后端实际在做的事。
+ * 搜索按相关性——这些场景后端都不吃 sort，一律收敛到 latest，缓存键与 Tab 高亮
+ * 都跟着它，「热门」不会在后端其实没按热度排的时候还亮着。
+ *
+ * 注意这里是「收敛」不是「等价」：搜索态下 /articles/search 实际按相关性排
+ * （parseSearchSort 默认 relevance），而高亮的是「最新」——「热门」Tab 此时整个
+ * 不渲染，一行里只剩它可亮，比留一个谁都不亮的空档好读。
  */
 const activeSort = computed<ArticleSort>(() =>
   feedMode.value === "recommend" && !isSearching.value ? sortMode.value : "latest",
@@ -600,7 +609,9 @@ const selectCategory = (slug: string) => {
   if (feedMode.value !== "recommend") feedMode.value = "recommend";
   // 分类与排序 Tab 同处一行、整行单选：选分类即把排序落回最新，
   // 否则「热门」会与分类 Tab 同时高亮，而后端此时给的是该分类的时间序。
-  setSortMode("latest");
+  // 只改当前档、不写 localStorage：选分类是「我要看这个频道」，不是「我以后默认看最新」，
+  // 走 setSortMode 会把用户记下的「热门」一并抹掉。
+  sortMode.value = "latest";
   if (slug === selectedCategory.value) return;
   selectedCategory.value = slug;
 };
@@ -684,7 +695,10 @@ if (cached && cached.query === query.value && cached.category === selectedCatego
     skipFeedWatch = true;
     feedMode.value = restoredFeed;
   }
-  const restoredSort = cached.sort ?? "latest";
+  // 快照里的档位优先于 localStorage 里的默认档：sortMode 是按 localStorage 初始化的，
+  // 而「点分类把当前档带回最新」不写 localStorage（见 selectCategory），两者会分叉。
+  // 回到首页要还原用户离开时正在看的那条流，不是他记下的默认档。
+  const restoredSort = cached.sort;
   if (restoredSort !== sortMode.value) {
     skipFeedWatch = true;
     sortMode.value = restoredSort;

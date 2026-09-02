@@ -40,10 +40,14 @@ export function useAgentQuota() {
     const q = quota.value;
     if (!q || !q.available || q.unlimited) return null;
     return {
-      percent: Math.min(100, Math.max(0, Math.round(q.percent))),
+      // Number() 兜底：percent 缺字段时 Math.round(undefined) 会是 NaN，
+      // 一路渗到 `额度 NaN%` 和 `width: NaN%`
+      percent: Math.min(100, Math.max(0, Math.round(Number(q.percent) || 0))),
       /** 已打满：后端会拒绝下一条 */
-      exhausted: q.exhausted,
-      resetAt: q.resetAt,
+      exhausted: q.exhausted === true,
+      // 缺字段时给空串而不是 undefined：DmQuotaBar 的 resetAt 是必填 string，
+      // new Date("") 是 Invalid Date，那边已经会把「04:00 重置」整段省掉
+      resetAt: q.resetAt || "",
     };
   });
 

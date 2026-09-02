@@ -34,7 +34,7 @@ const rolledExp = ref(0);
 const helpVisible = ref(false);
 
 const userName = computed(
-  () => auth.user?.name || auth.user?.username || "代理人",
+  () => auth.user?.name || auth.user?.username || "绳匠",
 );
 
 let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
@@ -181,7 +181,6 @@ onBeforeUnmount(() => {
                     :class="{
                       'is-done': cell.done,
                       'is-today': cell.today,
-                      'is-future': cell.future,
                       'is-claimed': cell.today && phase === 'done',
                     }"
                   >
@@ -242,7 +241,7 @@ onBeforeUnmount(() => {
 
                 <p v-if="phase === 'done'" class="ik-cir__note">
                   <template v-if="rank > 0">
-                    今日第 <strong>{{ rank }}</strong> 位打卡的代理人
+                    今日第 <strong>{{ rank }}</strong> 位签到的绳匠
                   </template>
                   <template v-else>
                     已累计签到 <strong>{{ totalDays }}</strong> 天
@@ -274,10 +273,10 @@ onBeforeUnmount(() => {
                 </button>
               </div>
             </div>
-            </div>
           </div>
         </div>
       </div>
+    </div>
 
     <!-- 签到说明：复用 /profile 页那一份 -->
     <Teleport to="body">
@@ -337,29 +336,38 @@ onBeforeUnmount(() => {
 }
 
 /* ── Dialog Shell ──────────────────────────────── */
+/* max-height / overflow 三层与 BenefitsModal、CheckInHelpModal 逐字一致：
+   横屏手机等矮视口下内容比屏幕高时能滚，否则 __outer/__inner 的 overflow:hidden
+   会把「立即签到」直接裁掉、且没有任何滚动出路。 */
 .ik-dialog {
   position: relative;
   width: 420px;
   max-width: 90%;
+  max-height: 85vh;
+  overflow: hidden;
   will-change: transform;
 }
 
 .ik-dialog__outer {
   width: 100%;
+  max-height: 85vh;
   padding: 4px;
   background: #2d2c2d;
   border-radius: 24px 0 24px 24px;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .ik-dialog__inner {
   width: 100%;
+  max-height: calc(85vh - 8px);
   padding: 4px;
   background: #000;
   border-radius: 22px 0 22px 22px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .ik-dialog__header {
@@ -408,9 +416,23 @@ onBeforeUnmount(() => {
 /* ── Body ──────────────────────────────────────── */
 .ik-dialog__body {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 20px;
   background: #121212;
   border-radius: 0 0 18px 18px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ik-dialog__body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* 内容层统一压在跑马灯（position:absolute; z-index:0）之上 */
@@ -456,6 +478,7 @@ onBeforeUnmount(() => {
 }
 
 .ik-cir__cell-box {
+  position: relative;
   width: 100%;
   max-width: 40px;
   aspect-ratio: 1;
@@ -503,13 +526,29 @@ onBeforeUnmount(() => {
   color: var(--ik-cir-accent);
 }
 
-.ik-cir__cell.is-today .ik-cir__cell-box {
+/* 「今天」那一圈呼吸光晕。用 ::after 单独做一个环、只动 transform + opacity ——
+   这两个属性能整条交给合成器；原先动 box-shadow 每帧都要重绘，而这一层正压在
+   .ik-overlay 的 backdrop-filter 之上，2s 无限循环的重绘就是 app.vue 里
+   overlayOpen 暂停全局跑马灯所要省的那种开销。 */
+.ik-cir__cell.is-today .ik-cir__cell-box::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 2px solid var(--ik-cir-accent);
+  border-radius: 11px;
+  pointer-events: none;
+  will-change: transform, opacity;
   animation: ik-cir-pulse 2s ease-out infinite;
 }
 
 /* 刚签到成功的那一格：停掉呼吸，弹一下 */
 .ik-cir__cell.is-claimed .ik-cir__cell-box {
   animation: ik-cir-claim 460ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ik-cir__cell.is-claimed .ik-cir__cell-box::after {
+  animation: none;
+  opacity: 0;
 }
 
 /* ── 奖励卡 ────────────────────────────────────── */
@@ -699,13 +738,16 @@ onBeforeUnmount(() => {
 }
 
 /* ── Keyframes ─────────────────────────────────── */
+/* 光环从格子边缘向外推 6px（40px 的格子 ⇒ scale 1.3）同时淡出，后 30% 留白当呼吸间隔 */
 @keyframes ik-cir-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 222, 0, 0.4);
+    opacity: 0.5;
+    transform: scale(1);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 6px rgba(255, 222, 0, 0);
+    opacity: 0;
+    transform: scale(1.3);
   }
 }
 
@@ -753,12 +795,18 @@ onBeforeUnmount(() => {
 }
 
 /* 入场 / 出场动画由 theme.css 的 .ik-overlay-* 全局规则接管；
-   这里只关掉本组件自己的强调动效。 */
+   这里只关掉本组件自己的强调动效。呼吸光环直接整个隐掉，而不是停在关键帧首帧 ——
+   否则会留下一圈静止的实心环，看着像多描了一道边。「今天」那格靠日期数字（已签过的
+   是勾）本来就能和往日区分开，不靠这圈光。 */
 @media (prefers-reduced-motion: reduce) {
-  .ik-cir__cell.is-today .ik-cir__cell-box,
   .ik-cir__cell.is-claimed .ik-cir__cell-box,
   .ik-cir__reward.is-revealed .ik-cir__denny {
     animation: none;
+  }
+
+  .ik-cir__cell.is-today .ik-cir__cell-box::after {
+    animation: none;
+    opacity: 0;
   }
 
   .ik-cir__cell-box,
@@ -772,10 +820,18 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 软件渲染路径下逐帧重算 box-shadow / 缩放同样吃 CPU，一并关掉 */
-:global(html.no-gpu) .ik-cir__cell.is-today .ik-cir__cell-box,
-:global(html.no-gpu) .ik-cir__cell.is-claimed .ik-cir__cell-box,
-:global(html.no-gpu) .ik-cir__reward.is-revealed .ik-cir__denny {
+/* 软件渲染路径下逐帧合成 / 缩放同样吃 CPU，一并关掉。
+   注意别写成 `:global(html.no-gpu) .foo` —— Vue 的 scoped 编译器遇到 :global()
+   会把后面的后代部分整段丢掉，只剩 `html.no-gpu`，等于把声明打在 <html> 上
+   （opacity:0 那条会让整页消失）。scoped 块里直接写 html.no-gpu .foo 就好，
+   编译成 `html.no-gpu .foo[data-v-x]`，同 account.vue 里那批降级规则。 */
+html.no-gpu .ik-cir__cell.is-claimed .ik-cir__cell-box,
+html.no-gpu .ik-cir__reward.is-revealed .ik-cir__denny {
   animation: none;
+}
+
+html.no-gpu .ik-cir__cell.is-today .ik-cir__cell-box::after {
+  animation: none;
+  opacity: 0;
 }
 </style>

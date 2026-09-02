@@ -2,19 +2,22 @@
  * 签到奖励与连签轨道的纯计算，与后端 check-in 控制器同规则
  * （server/src/api/check-in/controllers/check-in.ts 的 rewardForConsecutiveDays）。
  * 抽成 util 是为了能单测，弹窗组件里只剩呈现。
+ *
+ * 奖励规则的三个数字不导出：外部要的是 checkInRewardForDay() 这个口径，
+ * 拿走常数自己算就等于把规则复制了一份。
  */
 
 /** 每次签到的基础绳网信用 */
-export const CHECK_IN_BASE_REWARD = 6;
+const CHECK_IN_BASE_REWARD = 6;
 /** 连签加成上限：每多连签 1 天 +1，最多 +4（连签 5 天起恒为 10） */
-export const CHECK_IN_MAX_STREAK_BONUS = 4;
-/** 每次签到固定发放的丁尼 */
-export const CHECK_IN_DENNY_REWARD = 10;
+const CHECK_IN_MAX_STREAK_BONUS = 4;
+/** 「今天」在轨道里的目标索引；连签超过它之后整条轨道开始向前滑动 */
+const CHECK_IN_TRACK_TODAY_OFFSET = 3;
 
+/** 每次签到固定发放的丁尼（弹窗在拿到后端返回前先按这个数占位） */
+export const CHECK_IN_DENNY_REWARD = 10;
 /** 连签轨道的格子数 */
 export const CHECK_IN_TRACK_SIZE = 7;
-/** 「今天」在轨道里的目标索引；连签超过它之后整条轨道开始向前滑动 */
-export const CHECK_IN_TRACK_TODAY_OFFSET = 3;
 
 /** 连签第 N 天签到发放的绳网信用 */
 export function checkInRewardForDay(consecutiveDays: number): number {
