@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useEventListener } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Avatar, BusinessCard, DailyExpStatus, Post, Profile } from "~/types/entities";
+import type { CheckInDoneDetail } from "~/composables/useCheckInReminder";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 
@@ -157,17 +159,36 @@ const doCheckIn = async () => {
       dailyExpStatus.value.todaySelfGained += result.reward;
     }
   } catch (err: any) {
-    if (err?.data?.error?.code === 'CHECK_IN_ALREADY_TODAY') {
+    if (err?.code === "CHECK_IN_ALREADY_TODAY") {
       message.warning("今日已签到");
       checkInStatus.value.canCheckIn = false;
       void loadCheckInStatus();
     } else {
-      message.error(err?.data?.error?.message || "签到失败");
+      message.error(resolveErrorMessage(err, "签到失败"));
     }
   } finally {
     checkInLoading.value = false;
   }
 };
+
+/**
+ * 登录提醒弹窗里签完的话，本页仍挂载着——同步成「已签到」，
+ * 否则按钮还停在「今日签到」，点下去只会吃一个 409。
+ */
+if (import.meta.client) {
+  useEventListener(window, "ik:check-in-done", (e: Event) => {
+    const detail = (e as CustomEvent<CheckInDoneDetail>).detail;
+    if (!detail) return;
+    checkInStatus.value.canCheckIn = false;
+    if (detail.totalDays > 0) checkInStatus.value.totalDays = detail.totalDays;
+    if (detail.consecutiveDays > 0) checkInStatus.value.consecutiveDays = detail.consecutiveDays;
+    if (detail.rank > 0) checkInStatus.value.rank = detail.rank;
+    if (dailyExpStatus.value) {
+      dailyExpStatus.value.sources.checkIn = { done: true, exp: detail.reward };
+      dailyExpStatus.value.todaySelfGained += detail.reward;
+    }
+  });
+}
 
 /** 当前 profile 与访客之间是否存在任一方向的拉黑关系 */
 const isBlockedRelationship = computed<boolean>(() => {

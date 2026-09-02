@@ -32,26 +32,18 @@ export function useAgentQuota() {
   };
 
   /**
-   * 额度条口径：只有 token 一条 —— 每人每天的 token 额度。
-   *
-   * 后端记的是「真实 token × 模型倍率」，所以贵模型掉得更快；1 倍模型下
-   * 这个数就等于真实 token。全站还有一条预算，但那不是用户能左右的事，
-   * 也不该暴露给用户；真被全站预算拦下时会走发送失败提示，不体现在这条进度上。
+   * 额度条口径：后端按成本（真实 token × 模型单价）扣额度，但只回百分比 ——
+   * 金额和 token 都不下发，前端也就没法反推每个模型的采购价。
+   * 后台没配上限（unlimited）或读不到用量（available=false）时返回 null，额度条整体不渲染。
    */
   const usage = computed(() => {
     const q = quota.value;
-    if (!q || !q.available) return null;
-    const { used, limit } = q.tokens;
-    const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+    if (!q || !q.available || q.unlimited) return null;
     return {
-      percent,
-      /** 是否已经打满（后端会拒绝下一条） */
-      exhausted: limit > 0 && used >= limit,
-      tokensUsed: used,
-      tokensLimit: limit,
+      percent: Math.min(100, Math.max(0, Math.round(q.percent))),
+      /** 已打满：后端会拒绝下一条 */
+      exhausted: q.exhausted,
       resetAt: q.resetAt,
-      /** 没配上限（<= 0）时不必显示额度条 */
-      unlimited: limit <= 0,
     };
   });
 

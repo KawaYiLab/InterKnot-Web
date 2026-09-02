@@ -6,7 +6,7 @@
  *
  * 依赖关系：measuredHeights 确保重建后布局完全一致 → scrollY 可直接定位。
  */
-import type { ArticleFeed, Post } from "~/types/entities";
+import type { ArticleFeed, ArticleSort, Post } from "~/types/entities";
 
 export interface HomeStateSnapshot {
   list: Post[];
@@ -15,6 +15,7 @@ export interface HomeStateSnapshot {
   query: string;
   category: string;
   feed: ArticleFeed;
+  sort: ArticleSort;
   seenIds: Set<string>;
   measuredHeights: Map<string | number, number>;
   /** 路由离开瞬间的 window.scrollY（DOM 完好时采集，值精确） */

@@ -7,6 +7,7 @@ const router = useRouter();
 const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
 const benefitsModal = useBenefitsModal();
+const checkInReminder = useCheckInReminder();
 const gpuAccelerated = useGpuAccelerated();
 
 if (import.meta.client) {
@@ -123,7 +124,11 @@ const showMobileBottomNav = computed(
 // 弹窗 backdrop-filter 模糊之后 → 迫使模糊每帧重算。此时暂停它（弹窗自带的
 // 那份跑马灯照常显示），缓解「点开弹窗卡顿」。
 const overlayOpen = computed(
-  () => postModal.isOpen.value || knockModal.visible.value || benefitsModal.visible.value,
+  () =>
+    postModal.isOpen.value ||
+    knockModal.visible.value ||
+    benefitsModal.visible.value ||
+    checkInReminder.visible.value,
 );
 </script>
 
@@ -159,6 +164,15 @@ const overlayOpen = computed(
       <Teleport to="body">
         <Transition name="ik-overlay" appear>
           <LazyBenefitsModal v-if="benefitsModal.visible.value" />
+        </Transition>
+      </Teleport>
+    </ClientOnly>
+
+    <!-- 登录后的今日签到提醒（触发闸门在 plugins/check-in-reminder.client.ts） -->
+    <ClientOnly>
+      <Teleport to="body">
+        <Transition name="ik-overlay" appear>
+          <LazyCheckInReminderModal v-if="checkInReminder.visible.value" />
         </Transition>
       </Teleport>
     </ClientOnly>

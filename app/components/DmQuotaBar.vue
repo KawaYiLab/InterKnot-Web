@@ -4,33 +4,19 @@ import { computed } from "vue";
 /**
  * 敲敲当日额度：标题栏里模型选择器右侧的一条内联迷你进度条。
  *
- * 只有一条口径 —— 每人每天的 token 额度（贵模型按后台倍率多扣，1 倍模型
- * 就是真实 token；倍率一事放进 tooltip，正文不解释）。打满时不给数字，
- * 直接说「额度已用完」：用户此刻只需要知道这件事和什么时候恢复。
+ * 只显示百分比 —— 额度按真实成本（token × 该模型单价）扣，但把金额或 token 摆到
+ * 台面上等于公开采购价，而且供应商调价后用户看到的数会莫名其妙地变。
+ * 打满时不给数字，直接说「额度已用完」：用户此刻只需要知道这件事和什么时候恢复。
  */
 const props = defineProps<{
   percent: number;
   exhausted: boolean;
-  tokensUsed: number;
-  tokensLimit: number;
   /** 下一次日切（本地 04:00）的 ISO 时刻 */
   resetAt: string;
 }>();
 
-/** 大数收成 42.0万 / 100万：标题栏里放不下九位数，也不需要精确到个位 */
-const compact = (n: number): string => {
-  if (n >= 10_000) {
-    const w = n / 10_000;
-    return `${w >= 100 ? Math.round(w) : w.toFixed(1)}万`;
-  }
-  return String(Math.round(n));
-};
-
-/** 标题栏里位置紧张：只给一组数字，前缀「今日」窄屏还会隐藏 */
-const label = computed(() => {
-  if (props.exhausted) return "额度已用完";
-  return `${compact(props.tokensUsed)}/${compact(props.tokensLimit)} token`;
-});
+/** 标题栏里位置紧张：只给一个百分比，前缀「今日」窄屏还会隐藏 */
+const label = computed(() => (props.exhausted ? "额度已用完" : `额度 ${props.percent}%`));
 
 const resetLabel = computed(() => {
   const t = new Date(props.resetAt);
@@ -42,11 +28,8 @@ const resetLabel = computed(() => {
 });
 
 const detail = computed(() => {
-  const parts = [
-    `今日 token ${props.tokensUsed.toLocaleString()}/${props.tokensLimit.toLocaleString()}（贵模型按倍率折算）`,
-  ];
-  if (resetLabel.value) parts.push(resetLabel.value);
-  return parts.join(" · ");
+  const head = props.exhausted ? "今日额度已用完" : `今日额度已用 ${props.percent}%`;
+  return resetLabel.value ? `${head} · ${resetLabel.value}` : head;
 });
 
 /** 80% 起转黄、打满转红：颜色本身就是提示，不用额外文案 */
@@ -161,7 +144,7 @@ const level = computed(() => {
   margin-right: 0;
 }
 
-/* 窄屏标题栏还挤着返回/搜索/删除：去掉迷你条与「今日」前缀，只留数字 */
+/* 窄屏标题栏还挤着返回/搜索/删除：去掉迷你条与「今日」前缀，只留百分比 */
 @media (max-width: 768px) {
   .ik-quota {
     font-size: 11px;
