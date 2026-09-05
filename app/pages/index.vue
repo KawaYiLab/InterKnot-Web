@@ -171,7 +171,11 @@ const refreshing = ref(false);
 
 const list = shallowRef<Post[]>([]);
 const enterAnimationIds = shallowRef(new Set<string>());
-const endCursor = ref("0");
+// 信息流游标：只负责存下来原样回传，绝不做算术（内容是「已加载条数 + 后端不透明 token」，
+// 由 utils/pagination 负责拼和拆）。空串 = 第一页；切游标之前这里的哨兵是 "0"（数字 offset
+// 的起点），状态快照里可能还留着，useApi 的 resolveCursor 把 "0" 也当第一页认，
+// 所以恢复旧快照不会把它当游标发出去。
+const endCursor = ref("");
 const hasNextPage = ref(true);
 const requestVersion = ref(0);
 let seenIds = new Set<string>();
@@ -326,7 +330,7 @@ const fetchList = async (reset = false) => {
   if (reset && !refreshing.value) {
     const cached = api.peekArticles(
       activeQuery(),
-      "0",
+      "",
       selectedCategory.value,
       feedMode.value,
       activeSort.value,
@@ -360,7 +364,7 @@ const fetchList = async (reset = false) => {
   try {
     const page = await api.searchArticles(
       activeQuery(),
-      reset ? "0" : endCursor.value,
+      reset ? "" : endCursor.value,
       selectedCategory.value,
       feedMode.value,
       activeSort.value,
@@ -632,7 +636,7 @@ watch(
       return;
     }
     newArticleIds.value = [];
-    endCursor.value = "0";
+    endCursor.value = "";
     hasNextPage.value = true;
     requestVersion.value++;
     api.invalidateQueries(["articles", "search"]);
