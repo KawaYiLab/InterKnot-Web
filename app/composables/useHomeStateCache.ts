@@ -10,6 +10,12 @@ import type { ArticleFeed, ArticleSort, Post } from "~/types/entities";
 
 export interface HomeStateSnapshot {
   list: Post[];
+  /**
+   * 信息流分页游标，原样存原样回传（形状不变，仍是字符串）。
+   * 新格式是 `"<已加载条数>~<后端给的不透明 token>"`（见 utils/pagination 的 composeCursor：
+   * 条数是为了后端回滚成 offset 版本时能接着翻），空串 = 第一页；快照里也可能留着切游标
+   * 之前的 "0" 或裸 token，useApi 的 resolveCursor 三种都认，旧快照恢复后不会翻页错位。
+   */
   endCursor: string;
   hasNextPage: boolean;
   query: string;

@@ -18,6 +18,7 @@ import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import type { EmoteRange } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
+import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
 import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
@@ -209,7 +210,12 @@ const covers = computed(() => post.value?.covers ?? []);
 const hasCovers = computed(() => covers.value.length > 0);
 const isCommentEditorActive = computed(() => commentInputFocused.value);
 const postLikeCount = computed(() => post.value?.likesCount ?? 0);
-const postCommentCount = computed(() => post.value?.commentsCount ?? comments.value.length);
+// 兜底分支（详情接口没给 commentsCount）要把回复也算上，且必须按 totalRepliesOf 取回复总数：
+// 回复分页后 replies 只有前 3 条，拿 replies.length 会明显少算。
+const postCommentCount = computed(() =>
+  post.value?.commentsCount
+  ?? comments.value.reduce((sum, comment) => sum + 1 + totalRepliesOf(comment), 0),
+);
 
 const syncCommentInputHeight = async () => {
   await nextTick();
@@ -461,6 +467,8 @@ const { seek, highlightedCommentId } = useCommentSeek({
   commentsHasNext,
   loadComments,
   commentsVisible,
+  // 目标可能是一条还没展开的回复（列表只内联前 3 条），交给 seek 按需展开。
+  loadMoreReplies: api.loadMoreReplies,
 });
 
 // 同委托切换 commentId（如从通知再打开同一篇委托的另一条评论）时重新定位
@@ -552,6 +560,9 @@ const sendComment = async () => {
           author: localAuthor,
           images: localImages,
         });
+        // 「展开更多回复(N)」的 N 是 repliesCount - replies.length，乐观插入必须同步抬计数，
+        // 否则刚回复一条就把 N 少算 1（甚至把最后一页的按钮提前藏掉）。
+        parent.repliesCount = Math.max(parent.replies.length, (parent.repliesCount ?? 0) + 1);
       }
     } else {
       const pinnedIndex = comments.value.findIndex((c) => c.isPinned);
@@ -946,7 +957,7 @@ const handleDeleteComment = async (comment: Comment) => {
     await api.deleteComment(comment.id);
     comments.value = comments.value.filter((c) => c.id !== comment.id);
     if (post.value) {
-      post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1 - (comment.replies?.length ?? 0));
+      post.value.commentsCount = commentsCountAfterDelete(post.value.commentsCount, comment);
     }
     message.success("评论已删除");
   } catch (err) {
@@ -960,6 +971,11 @@ const handleDeleteReply = async (reply: Comment["replies"][number], parentCommen
   try {
     await api.deleteComment(reply.id);
     parentComment.replies = parentComment.replies.filter((r) => r.id !== reply.id);
+    // 回复总数跟着减，否则「展开更多回复(N)」会多算一条；下限压在已加载条数上。
+    parentComment.repliesCount = Math.max(
+      parentComment.replies.length,
+      (parentComment.repliesCount ?? parentComment.replies.length + 1) - 1,
+    );
     if (post.value) {
       post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1);
     }

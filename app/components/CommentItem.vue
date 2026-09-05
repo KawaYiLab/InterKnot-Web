@@ -77,6 +77,61 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
     index,
   );
 };
+
+// ── 回复分页 ──────────────────────────────────────
+// 评论列表接口只内联前 3 条回复，剩下的点「展开更多」按需拉。展开到的回复由
+// api.loadMoreReplies 直接 append 到 comment.replies（翻页游标记在评论对象上），
+// 所以这里只留纯 UI 状态：加载中 / 出错 / 已到底。
+const api = useApi();
+const repliesLoading = ref(false);
+const repliesError = ref(false);
+const repliesExhausted = ref(false);
+
+/** 还没展开的回复条数。后端没给 repliesCount 时算出来是 0，按钮自然不出现。 */
+const hiddenRepliesCount = computed(() =>
+  Math.max(0, (props.comment.repliesCount ?? 0) - (props.comment.replies?.length ?? 0)),
+);
+
+const canExpandReplies = computed(
+  () =>
+    !repliesExhausted.value
+    && (props.comment.repliesHasMore === true || hiddenRepliesCount.value > 0),
+);
+
+const expandRepliesLabel = computed(() => {
+  if (repliesLoading.value) return "加载中…";
+  if (repliesError.value) return "加载失败，点击重试";
+  return hiddenRepliesCount.value > 0
+    ? `展开更多回复(${hiddenRepliesCount.value})`
+    : "展开更多回复";
+});
+
+const expandReplies = async () => {
+  if (repliesLoading.value) return;
+  repliesLoading.value = true;
+  repliesError.value = false;
+  try {
+    const added = await api.loadMoreReplies(props.comment);
+    // 到底了就收起按钮。只看 hiddenRepliesCount 不够：repliesCount 与实际可见条数存在
+    // 口径差时（隐藏/拉黑过滤），差值永远大于 0，按钮会一直挂在那儿点不动。
+    if (!added || props.comment.repliesHasMore !== true) repliesExhausted.value = true;
+  } catch {
+    repliesError.value = true;
+  } finally {
+    repliesLoading.value = false;
+  }
+};
+
+// 组件实例被复用到另一条评论上时（列表重排/复用 key）重置展开态，避免把上一条的
+// 「已到底」错带给新评论。
+watch(
+  () => props.comment.id,
+  () => {
+    repliesLoading.value = false;
+    repliesError.value = false;
+    repliesExhausted.value = false;
+  },
+);
 </script>
 
 <template>
@@ -192,7 +247,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
     </div>
 
     <!-- ── Replies ─────────────────────────── -->
-    <div v-if="comment.replies?.length" class="ik-comment__replies">
+    <div v-if="comment.replies?.length || canExpandReplies" class="ik-comment__replies">
         <div
           v-for="reply in comment.replies"
           :key="reply.id"
@@ -285,6 +340,17 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
               </div>
             </div>
           </div>
+        </div>
+        <div v-if="canExpandReplies" class="ik-comment__replies-more">
+          <button
+            type="button"
+            class="ik-comment__replies-more-btn"
+            :class="{ 'ik-comment__replies-more-btn--error': repliesError }"
+            :disabled="repliesLoading"
+            @click="expandReplies"
+          >
+            {{ expandRepliesLabel }}
+          </button>
         </div>
     </div>
   </div>
@@ -626,6 +692,35 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 .ik-comment__reply-content-col {
   flex: 1;
   min-width: 0;
+}
+
+/* ── 「展开更多回复」 ──────────────────────────── */
+.ik-comment__replies-more {
+  padding: 8px 0 2px;
+}
+
+.ik-comment__replies-more-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #888;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: var(--ik-cursor-pointer);
+  transition: color 140ms ease;
+}
+
+.ik-comment__replies-more-btn:hover:not(:disabled) {
+  color: var(--ik-primary);
+}
+
+.ik-comment__replies-more-btn:disabled {
+  color: #666;
+  cursor: default;
+}
+
+.ik-comment__replies-more-btn--error {
+  color: #ff6b6b;
 }
 
 /* ── Mobile ────────────────────────────────────── */

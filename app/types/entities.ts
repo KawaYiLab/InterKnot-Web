@@ -294,6 +294,14 @@ export interface Comment {
   createdAt?: string;
   author: Author;
   replies: CommentReply[];
+  /**
+   * 该顶层评论的可见回复总数（后端已扣掉隐藏/拉黑）。
+   * 列表接口只带前 3 条回复，replies.length 不再等于回复总数，凡是要「回复有多少条」的
+   * 地方都得用这个字段。后端尚未部署时缺省，由 toComment 用 replies.length 兜底。
+   */
+  repliesCount?: number;
+  /** 是否还有没加载的回复（repliesCount > replies.length）。缺省时按 false 处理。 */
+  repliesHasMore?: boolean;
   articleId?: string;
   articleTitle?: string;
   /** 是否被置顶（仅顶层评论可能为 true）。 */

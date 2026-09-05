@@ -11,6 +11,7 @@ import type {
   BusinessCardType,
   Category,
   Comment,
+  CommentReply,
   CoverImage,
   DailyExpStatus,
   DraftArticle,
@@ -35,10 +36,13 @@ import type {
   UploadedFile,
 } from "~/types/entities";
 import {
+  buildCursorPagination,
   buildPagination,
   type BackendPaginationMeta,
   DEFAULT_PAGE_SIZE,
+  extractCursorMeta,
   parseStart,
+  resolveCursor,
 } from "~/utils/pagination";
 import type { MentionCandidate } from "~/composables/useMentionInput";
 import { toMediaUrl } from "~/utils/image";
@@ -66,8 +70,10 @@ const qk = {
     list: ["categories", "list"] as QueryKey,
   },
   articles: {
-    search: (query: string, category: string, start: number, limit: number, sort = "latest") =>
-      ["articles", "search", query, category, start, limit, sort] as QueryKey,
+    // page 兼容两种分页模式：offset 模式传数字 start，游标模式传不透明游标串（空串=第一页）。
+    // 两种模式下每页各占一个缓存槽，不会互相覆盖；第一页的键与切游标之前逐字节一致。
+    search: (query: string, category: string, page: string | number, limit: number, sort = "latest") =>
+      ["articles", "search", query, category, page, limit, sort] as QueryKey,
     searchAll: ["articles", "search"] as QueryKey,
     detail: (id: string) => ["articles", "detail", id] as QueryKey,
     detailAll: ["articles", "detail"] as QueryKey,
@@ -144,6 +150,8 @@ export type MihoyoQrPollResult =
       status: "confirmed";
       mode: "bind";
       binding: MihoyoBinding | null;
+      /** 这个米游社号原先挂在一个误建的空壳号上，绑定时已被接管并清理 */
+      takeover: { fromUsername: string } | null;
     }
   | {
       status: "confirmed";
@@ -352,6 +360,23 @@ function extractPaginationMeta(payload: unknown): BackendPaginationMeta | undefi
     total: typeof p.total === "number" ? p.total : undefined,
     pageCount: typeof p.pageCount === "number" ? p.pageCount : undefined,
   };
+}
+
+/**
+ * 退回 offset 分页时给 buildPagination 用的 meta。
+ * 只做一件事：`total === 0` 而这一页明明有数据时，把 total 抹成"未知"。
+ * 游标模式下后端对 start/total/pageCount 的口径是「不承诺」，明确回 `total: 0`
+ * （controllers/article.ts:1738）；一旦这样的响应又缺了 cursorFields（尾项 bumpedAt 为空
+ * 的脏数据分支），拿 total=0 算 hasNextPage 会得到 false，信息流被无声截断在半路。
+ * 有数据却 total=0 本身是自相矛盾的口径，任何接口都不该拿它做算术。
+ */
+function offsetMetaOf(
+  meta: BackendPaginationMeta | undefined,
+  nodeCount: number,
+): BackendPaginationMeta | undefined {
+  if (!meta || meta.total !== 0 || nodeCount === 0) return meta;
+  const { total: _ignored, ...rest } = meta;
+  return rest;
 }
 
 const VALID_CARD_TYPES = new Set(["character", "city", "news"]);
@@ -588,10 +613,60 @@ function getImageDimensions(file: File): Promise<{ width: number; height: number
   });
 }
 
+/**
+ * 单条回复的映射。抽出来是因为回复现在有两个来源：评论列表内联的前 3 条，
+ * 以及「展开更多」走的 /api/comments/:id/replies —— 契约保证两处的 Reply 形状一字不差，
+ * 映射也必须是同一份，不能各写一遍。
+ */
+function toCommentReply(raw: unknown, apiBaseUrl: string): CommentReply {
+  const reply = (raw || {}) as Record<string, unknown>;
+  return {
+    id: String(reply.documentId || reply.id || ""),
+    content: String(reply.content || ""),
+    images: extractAllMediaMeta(reply.images, apiBaseUrl),
+    liked: reply.liked === true,
+    likesCount: Number(reply.likesCount ?? 0),
+    createdAt: reply.createdAt as string | undefined,
+    author: toAuthor(reply.author, apiBaseUrl),
+  };
+}
+
+/**
+ * 每条顶层评论「已展开到第几页回复」的游标。用 WeakMap 挂在评论对象上，而不是塞进 Comment
+ * 类型：游标是纯客户端翻页状态，不该混进后端返回的实体形状；评论列表被重建（切帖 / 刷新 /
+ * 置顶后重拉）时旧对象随之回收，游标自动失效，不用到处手动重置。
+ */
+const repliesCursors = new WeakMap<
+  Comment,
+  { cursor: string; done: boolean; inflight?: Promise<number> }
+>();
+
+/** 顶层评论的可见回复总数：优先用后端口径的 repliesCount（列表接口只内联前 3 条回复）。 */
+export function totalRepliesOf(comment: Pick<Comment, "replies" | "repliesCount">): number {
+  const loaded = comment.replies?.length ?? 0;
+  const total = comment.repliesCount;
+  return typeof total === "number" && total > loaded ? total : loaded;
+}
+
+/**
+ * 删掉一条顶层评论后帖子剩下的评论总数。回复分页后 comment.replies 只有前 3 条，
+ * 按 replies.length 扣减会漏掉没展开的回复（删一条有 20 条回复的评论只减 4），必须按
+ * repliesCount 扣。
+ */
+export function commentsCountAfterDelete(
+  commentsCount: number | undefined,
+  comment: Pick<Comment, "replies" | "repliesCount">,
+): number {
+  return Math.max(0, (commentsCount ?? 0) - 1 - totalRepliesOf(comment));
+}
+
 function toComment(raw: unknown, apiBaseUrl: string): Comment {
   const data = (raw || {}) as Record<string, unknown>;
   const repliesRaw = Array.isArray(data.replies) ? data.replies : [];
   const articleRaw = data.article as Record<string, unknown> | null | undefined;
+  const replies = repliesRaw.map((item) => toCommentReply(item, apiBaseUrl));
+  // 后端未部署回复分页时这两个字段缺省：回复本来就是全量给的，按「全部已加载」兜底。
+  const repliesCount = typeof data.repliesCount === "number" ? data.repliesCount : replies.length;
   return {
     id: String(data.documentId || data.id || ""),
     content: String(data.content || ""),
@@ -600,18 +675,12 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
     likesCount: Number(data.likesCount ?? 0),
     createdAt: data.createdAt as string | undefined,
     author: toAuthor(data.author, apiBaseUrl),
-    replies: repliesRaw.map((item) => {
-      const reply = item as Record<string, unknown>;
-      return {
-        id: String(reply.documentId || reply.id || ""),
-        content: String(reply.content || ""),
-        images: extractAllMediaMeta(reply.images, apiBaseUrl),
-        liked: reply.liked === true,
-        likesCount: Number(reply.likesCount ?? 0),
-        createdAt: reply.createdAt as string | undefined,
-        author: toAuthor(reply.author, apiBaseUrl),
-      };
-    }),
+    replies,
+    repliesCount,
+    repliesHasMore:
+      typeof data.repliesHasMore === "boolean"
+        ? data.repliesHasMore
+        : repliesCount > replies.length,
     articleId: articleRaw ? String(articleRaw.documentId || "") : undefined,
     articleTitle: articleRaw ? String(articleRaw.title || "") : undefined,
     isPinned: data.isPinned === true,
@@ -763,7 +832,14 @@ export function useApi() {
     }
     const binding = (data.binding as MihoyoBinding | null) ?? null;
     if (data.mode === "bind") {
-      return { status: "confirmed", mode: "bind", binding };
+      const raw = data.takeover as { fromUsername?: unknown } | null | undefined;
+      const fromUsername = typeof raw?.fromUsername === "string" ? raw.fromUsername : "";
+      return {
+        status: "confirmed",
+        mode: "bind",
+        binding,
+        takeover: raw ? { fromUsername } : null,
+      };
     }
     clearAllCache();
     return {
@@ -810,11 +886,13 @@ export function useApi() {
     feed: ArticleFeed = "recommend",
     sort: ArticleSort = "latest",
   ): Promise<Pagination<Post>> => {
-    const start = parseStart(endCur);
+    // 信息流走游标分页：endCur 原样当 cursor 发。后端还没部署游标时它是 buildPagination
+    // 攒出来的数字 offset，resolveCursor 把两种形态分开，避免把 "20" 当游标发出去。
+    const { cursor, start } = resolveCursor(endCur);
     // feed != recommend 时把 feed 折进 category 缓存槽，避免推荐/关注/收藏互相串缓存。
     const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
     return cachedRead(
-      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE, sort),
+      qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort),
       async () => {
         const endpoint = query ? "/api/articles/search" : "/api/articles/list";
         const response = await $api(endpoint, {
@@ -825,13 +903,25 @@ export function useApi() {
             // sort 只发给列表接口：/search 的 sort 档另有一档「相关性」且是其默认，
             // 搜索结果按相关性排最有用，不该被首页的排序选择顶掉。
             ...(query ? {} : { sort }),
+            // 第一页和 offset 模式仍旧只发 start，请求与切游标之前逐字节一致（老后端不能退化）。
+            // 游标模式下 cursor 与 start **一起**发：契约里 cursor 优先，新后端直接忽略 start
+            // （controllers/article.ts:1281「两个都传时 start 被忽略」）；而老后端反过来忽略
+            // cursor、按 start 给出对应窗口 —— 灰度/回滚到没有游标的实例时这一页就不会退回
+            // 第一页（否则 20 条全被 seenIds 去重，列表一条不长，看着像信息流卡死）。
+            ...(cursor ? { cursor } : {}),
             start: String(start),
             limit: String(DEFAULT_PAGE_SIZE),
           },
         });
+        const cursorMeta = extractCursorMeta(response);
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
-        const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
+        const nodes = data.map((item) => toPost(item, apiBaseUrl));
+        // 后端给了 nextCursor 就走游标；没给（未部署，或搜索接口仍是 offset）退回旧路径。
+        // 回退时 start 用游标串里带的「已加载条数」，续传位置不会掉回第一页。
+        const page = cursorMeta
+          ? buildCursorPagination(nodes, cursorMeta, start)
+          : buildPagination(nodes, start, offsetMetaOf(meta, nodes.length));
         // 列表/搜索接口已对登录用户内联 isRead（权威态）；这里仅用本地乐观已读集合
         // 补齐「标记请求尚未落库」窗口内的节点，避免切分类重拉时已读短暂闪回未读。
         seedReadStatus(page.nodes);
@@ -856,10 +946,11 @@ export function useApi() {
   ): Pagination<Post> | undefined => {
     const qc = $queryClient as QueryClient | undefined;
     if (!qc) return undefined;
-    const start = parseStart(endCur);
+    // 缓存槽的算法必须与 searchArticles 完全一致，否则预填永远命中不到。
+    const { cursor, start } = resolveCursor(endCur);
     const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
     return qc.getQueryData<Pagination<Post>>(
-      qk.articles.search(query, cacheCategory, start, DEFAULT_PAGE_SIZE, sort),
+      qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort),
     );
   };
 
@@ -1005,6 +1096,71 @@ export function useApi() {
       },
       STALE_LIST,
     );
+  };
+
+  /**
+   * 某条顶层评论的回复分页（GET /api/comments/:documentId/replies）。
+   * 刻意不进 TanStack 缓存：回复是「按需往下展开」的增量数据，缓存了反而要为发/删回复
+   * 维护一堆 invalidate，而每次展开都拉新数据本身就是想要的行为。
+   */
+  const getCommentReplies = async (
+    commentId: string,
+    endCur = "",
+    limit = DEFAULT_PAGE_SIZE,
+  ): Promise<Pagination<CommentReply>> => {
+    const response = await $api(`/api/comments/${encodeURIComponent(commentId)}/replies`, {
+      query: {
+        // 空串 = 从头开始，此时不带 cursor 参数
+        ...(endCur ? { cursor: endCur } : {}),
+        limit: String(limit),
+      },
+    });
+    const data = unwrapData<unknown[]>(response) || [];
+    const nodes = data.map((item) => toCommentReply(item, apiBaseUrl));
+    // 这个路由是随回复分页一起新增的，只有游标一种模式；meta 缺失时按「到底了」处理。
+    return buildCursorPagination(nodes, extractCursorMeta(response) ?? { nextCursor: null });
+  };
+
+  /**
+   * 展开某条顶层评论的下一页回复：原地 append 到 comment.replies，并同步 repliesHasMore /
+   * repliesCount。返回本次真正新增的条数，0 表示到底了 —— 「展开更多」按钮和 useCommentSeek
+   * 的自动展开都靠这个返回值收手，别改成返回 void。
+   *
+   * 同一条评论并发展开（seek 的自动展开撞上用户点「展开更多」）会合流到同一个请求上：
+   * 两路各发一次的话，两边拿到的是同一页（游标还没推进），后完成的那路按 id 去重后新增 0 条，
+   * 调用方会把 0 当成「到底了」—— 按钮从此永久消失、seek 也会把这条评论标记成已翻完。
+   */
+  const loadMoreReplies = async (comment: Comment): Promise<number> => {
+    const state = repliesCursors.get(comment) ?? { cursor: "", done: false };
+    repliesCursors.set(comment, state);
+    if (state.done) return 0;
+    if (state.inflight) return state.inflight;
+    const run = async () => {
+      const page = await getCommentReplies(comment.id, state.cursor);
+      state.cursor = page.endCursor;
+      state.done = !page.hasNextPage;
+      // 首次展开时 cursor 为空、后端从头给，前几条与列表接口已内联的重合；按 id 去重再 append。
+      // 本地乐观插入的回复也在这里被认出来，不会变成两条。
+      const existing = new Set(comment.replies.map((r) => r.id));
+      const fresh = page.nodes.filter((r) => r.id && !existing.has(r.id));
+      comment.replies.push(...fresh);
+      // 乐观插入的回复是 push 到数组末尾的，而这里 append 的是比它更早的历史回复，直接拼会
+      // 让「我刚发的那条」夹在中间。createdAt 齐全时按时间重排一次，与后端 asc 口径对齐。
+      if (comment.replies.every((r) => typeof r.createdAt === "string")) {
+        comment.replies.sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+      }
+      comment.repliesHasMore = page.hasNextPage;
+      // 已加载条数反超后端口径（乐观插入 / 隐藏过滤口径差）时抬上去，否则「展开更多(N)」会算出负数。
+      if ((comment.repliesCount ?? 0) < comment.replies.length) {
+        comment.repliesCount = comment.replies.length;
+      }
+      return fresh.length;
+    };
+    const inflight = run().finally(() => {
+      state.inflight = undefined;
+    });
+    state.inflight = inflight;
+    return inflight;
   };
 
   const addPostComment = async ({
@@ -2297,6 +2453,8 @@ export function useApi() {
     pinArticle,
     unpinArticle,
     getComments,
+    getCommentReplies,
+    loadMoreReplies,
     addPostComment,
     deleteComment,
     pinComment,

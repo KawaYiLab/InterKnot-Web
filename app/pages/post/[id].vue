@@ -12,6 +12,7 @@ import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { useCommentSeek } from "~/composables/useCommentSeek";
+import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
 import BilibiliPlayer from "~/components/BilibiliPlayer.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
@@ -134,7 +135,13 @@ const covers = computed(() => post.value?.covers ?? []);
 const hasCovers = computed(() => covers.value.length > 0);
 const isCommentEditorActive = computed(() => commentInputFocused.value);
 const postLikeCount = computed(() => post.value?.likesCount ?? 0);
-const postCommentCount = computed(() => post.value?.commentsCount ?? comments.value.length);
+// 兜底分支（详情接口没给 commentsCount）要把回复也算上，且必须按 totalRepliesOf 取回复总数：
+// 回复分页后 replies 只有前 3 条，拿 comments.length 会只数顶层、明显少算。
+const postCommentCount = computed(
+  () =>
+    post.value?.commentsCount ??
+    comments.value.reduce((sum, comment) => sum + 1 + totalRepliesOf(comment), 0),
+);
 
 const firstCover = computed(() => covers.value[0] ?? null);
 const firstCoverDisplayUrl = computed(() =>
@@ -224,6 +231,8 @@ const { seek, highlightedCommentId } = useCommentSeek({
   comments,
   commentsHasNext,
   loadComments,
+  // 回复分页后目标回复可能不在已内联的前 3 条里，seek 需要能按需展开
+  loadMoreReplies: api.loadMoreReplies,
 });
 
 // 路由 query 中的 comment 参数变化时重新定位
@@ -300,6 +309,9 @@ const sendComment = async () => {
           author: localAuthor,
           images: localImages,
         });
+        // 「展开更多回复(N)」的 N = repliesCount - replies.length，乐观插入必须同步抬计数，
+        // 否则刚发的那条回复会把 N 顶成负数、按钮直接消失。
+        parent.repliesCount = Math.max(parent.replies.length, (parent.repliesCount ?? 0) + 1);
       }
     } else {
       const pinnedIndex = comments.value.findIndex((c) => c.isPinned);
@@ -766,7 +778,9 @@ const handleDeleteComment = async (comment: Comment) => {
     await api.deleteComment(comment.id);
     comments.value = comments.value.filter((c) => c.id !== comment.id);
     if (post.value) {
-      post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1 - (comment.replies?.length ?? 0));
+      // 回复分页后 comment.replies 只有前 3 条，减 replies.length 会少减：
+      // 删一条有 20 条回复的评论，计数只会减 4。必须按 repliesCount 的总数减。
+      post.value.commentsCount = commentsCountAfterDelete(post.value.commentsCount, comment);
     }
     message.success("评论已删除");
   } catch (err) {
@@ -780,6 +794,12 @@ const handleDeleteReply = async (reply: Comment["replies"][number], parentCommen
   try {
     await api.deleteComment(reply.id);
     parentComment.replies = parentComment.replies.filter((r) => r.id !== reply.id);
+    // 「展开更多回复(N)」的 N = repliesCount - replies.length，删掉一条要同步降计数，
+    // 否则按钮会一直显示一个永远展开不出来的数字。下限取已加载条数，不能低于它。
+    parentComment.repliesCount = Math.max(
+      parentComment.replies.length,
+      (parentComment.repliesCount ?? parentComment.replies.length + 1) - 1,
+    );
     if (post.value) {
       post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1);
     }
