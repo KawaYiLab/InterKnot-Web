@@ -10,11 +10,13 @@ import {
   NoSymbolIcon,
   UserIcon,
 } from "@heroicons/vue/24/outline";
-import { resolveErrorMessage } from "~/utils/api-error";
+import { normalizeApiError, resolveErrorMessage } from "~/utils/api-error";
 
 const auth = useAuthStore();
 const api = useApi();
 const message = useMessage();
+const route = useRoute();
+const confirmDialog = useConfirmDialog();
 const loginDialog = useLoginDialog();
 const accountData = useAccountData();
 
@@ -87,6 +89,16 @@ const mihoyo = useMihoyoQr({
   width: 200,
   onConfirmed: (res) => {
     setMihoyoBinding(res.binding);
+    if (res.takeover) {
+      // 之前未登录时扫码误建过一个号，绑定时已把它清掉，得说清楚免得用户以为丢号了
+      const from = res.takeover.fromUsername;
+      message.success(
+        from
+          ? `绑定成功，已从之前误创建的账号「${from}」转移过来`
+          : "绑定成功，已从之前误创建的账号转移过来",
+      );
+      return;
+    }
     message.success("米游社账号绑定成功");
   },
   onError: (err) => {
@@ -123,6 +135,15 @@ const unbindMihoyo = async () => {
   await unbindMihoyoAction();
   void startMihoyoQr();
 };
+
+/**
+ * 「只能靠米游社扫码登录」的账号：没有真邮箱、也没自设密码。
+ * 这种号找不回、也解不了绑（服务端 unbind 会拒），是未登录扫码误建出来的典型形态。
+ * 条件与服务端 unbind 的判定保持一致。
+ */
+const mihoyoOnlyAccount = computed(
+  () => security.value?.provider === "mihoyo" && !security.value?.hasBoundEmail,
+);
 
 // ── 账号安全 ─────────────────────────────────
 const bindEmailInput = ref("");
@@ -195,6 +216,29 @@ const goBack = () => {
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
+/**
+ * 邮箱被别的账号占用，且当前号只能扫码登录——这几乎一定是同一个人：
+ * 他填的是自己主账号的邮箱。只回一句「已被占用」帮不上忙，
+ * 直接给出可行路径：退出去用邮箱登录主账号，再扫码绑定，这个号会被接管并清理。
+ */
+const isEmailTakenByOwnAccount = (err: unknown) =>
+  normalizeApiError(err).code === "EMAIL_ALREADY_TAKEN" && mihoyoOnlyAccount.value;
+
+const handleEmailTakenByOwnAccount = async () => {
+  const relogin = await confirmDialog.open({
+    title: "这个邮箱属于另一个账号",
+    message:
+      "如果那才是你的主账号，就不用在这里绑定邮箱了：退出登录后用邮箱登录主账号，" +
+      "再到「米哈游账号」里扫码绑定即可，当前这个账号会被自动清理。",
+    confirmText: "退出并登录主账号",
+    cancelText: "换个邮箱",
+  });
+  if (!relogin) return;
+  auth.clearSession();
+  await navigateTo("/");
+  loginDialog.open();
+};
+
 const sendBindEmailCode = async () => {
   const email = bindEmailInput.value.trim();
   if (!isValidEmail(email)) {
@@ -207,7 +251,11 @@ const sendBindEmailCode = async () => {
     message.success("验证码已发送");
     startCodeCooldown(res.cooldown || 60);
   } catch (err) {
-    message.error(resolveErrorMessage(err, "发送验证码失败"));
+    if (isEmailTakenByOwnAccount(err)) {
+      await handleEmailTakenByOwnAccount();
+    } else {
+      message.error(resolveErrorMessage(err, "发送验证码失败"));
+    }
   } finally {
     bindEmailLoading.value = false;
   }
@@ -239,7 +287,11 @@ const confirmBindEmail = async () => {
     message.success("邮箱绑定成功");
     goBack();
   } catch (err) {
-    message.error(resolveErrorMessage(err, "绑定邮箱失败"));
+    if (isEmailTakenByOwnAccount(err)) {
+      await handleEmailTakenByOwnAccount();
+    } else {
+      message.error(resolveErrorMessage(err, "绑定邮箱失败"));
+    }
   } finally {
     bindEmailLoading.value = false;
   }
@@ -306,6 +358,11 @@ const blacklistMetaText = computed(() => {
 onMounted(() => {
   if (!auth.isLogin) return;
   void ensureLoaded();
+  // 米游社建号引导（LoginDialog）会带 ?view=email 过来，直接落在绑定邮箱页
+  if (route.query.view === "email") {
+    activeMenuKey.value = "account";
+    activeSubView.value = "email";
+  }
 });
 
 useHead({ title: "账号中心" });
@@ -350,6 +407,16 @@ useHead({ title: "账号中心" });
 
       <div class="ik-account-page__panel">
         <div class="ik-account-page__panel-body">
+          <!--
+            只能扫码登录的账号常驻提醒。放在 Transition 外面，切面板时不重播动画。
+            这类号找不回也解不了绑，越早补上邮箱越省事。
+          -->
+          <div v-if="mihoyoOnlyAccount" class="ik-ac-alert">
+            <p class="ik-ac-alert__text">
+              当前账号只能通过米游社扫码登录。绑定邮箱后才能找回账号、解除米游社绑定。
+            </p>
+            <z-button class="ik-ac-alert__btn" @click="openEmail">绑定邮箱</z-button>
+          </div>
           <Transition :name="panelTransitionName" mode="out-in">
           <div :key="panelKey" class="ik-ac-panel-state">
           <!-- 移动端首屏：单栏分组列表 -->
@@ -631,9 +698,12 @@ useHead({ title: "账号中心" });
                     <span class="ik-ac-mihoyo-value">{{ mihoyoBinding.zzzRegionName }}</span>
                   </div>
                 </div>
+                <p v-if="mihoyoOnlyAccount" class="ik-ac-security-send-hint">
+                  当前账号只能通过米游社扫码登录，解绑后将无法登录。请先绑定邮箱。
+                </p>
                 <z-button
                   class="ik-ac-unbind-btn"
-                  :disabled="mihoyoUnbinding"
+                  :disabled="mihoyoUnbinding || mihoyoOnlyAccount"
                   @click="unbindMihoyo"
                 >
                   {{ mihoyoUnbinding ? "解绑中…" : "解除绑定" }}
@@ -856,6 +926,38 @@ useHead({ title: "账号中心" });
   border: 4px solid #000;
   border-radius: 22px 0 22px 22px;
   overflow: hidden;
+}
+
+/* ── 只能扫码登录的账号提醒 ── */
+.ik-ac-alert {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 193, 77, 0.08);
+  border: 1px solid rgba(255, 193, 77, 0.28);
+  border-radius: 12px 0 12px 12px;
+}
+
+.ik-ac-alert__text {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #ffc14d;
+}
+
+.ik-ac-alert__btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .ik-ac-alert {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
 }
 
 /* ── Section rows ── */

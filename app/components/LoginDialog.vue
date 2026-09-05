@@ -5,6 +5,7 @@ import { resolveErrorMessage } from "~/utils/api-error";
 const api = useApi();
 const auth = useAuthStore();
 const { visible, close } = useLoginDialog();
+const confirmDialog = useConfirmDialog();
 const message = useMessage();
 const form = reactive({
   email: "",
@@ -42,15 +43,39 @@ const mihoyo = useMihoyoQr({
     if (!res.auth.token) throw new Error("登录失败：未获取到 Token");
     const isNewUser = res.isNewUser;
     await onLoginSuccess(res.auth.token, res.auth.user);
-    if (isNewUser) {
-      message.success("完成入站考试后即可解锁发布委托、评论等功能");
-      await navigateTo("/exam");
-    }
+    if (isNewUser) await onMihoyoSignedUp(res.auth.user.name || res.auth.user.username || "");
   },
   onError: (err) => {
     message.error(resolveErrorMessage(err, "米游社登录失败"));
   },
 });
+
+/**
+ * 米游社扫码建了新号之后的引导。
+ *
+ * 这个号此刻唯一的凭据就是米游社扫码：没有可用邮箱，密码是随机生成的。
+ * 用户很容易是「本来就有邮箱账号、只是没登录就扫了码」，于是白得一个换不回去的小号。
+ * 所以先把「这是个新号」说清楚，并把补邮箱放在主按钮上——补上之后账号可找回、
+ * 米游社也能解绑，后面所有换绑/找回的麻烦都不会发生。不强制，只是默认引导。
+ */
+const onMihoyoSignedUp = async (username: string) => {
+  // 登录已经成功，二维码这一层先收掉，免得引导弹窗压在还在淡出的扫码遮罩下面
+  exitMihoyoMode();
+  const bindEmail = await confirmDialog.open({
+    title: "已创建新的绳网账号",
+    message:
+      `已为你创建${username ? `新账号「${username}」` : "一个新账号"}。` +
+      `它目前只能通过米游社扫码登录：没有邮箱既无法找回账号，也无法解除米游社绑定，` +
+      `建议现在花一分钟绑定邮箱。` +
+      `如果你原本就有绳网账号，请改用邮箱登录那个账号，再去账号设置里扫码绑定米游社。`,
+    confirmText: "绑定邮箱",
+    cancelText: "先去考试",
+  });
+  await navigateTo(bindEmail ? "/account?view=email" : "/exam");
+  if (!bindEmail) {
+    message.success("完成入站考试后即可解锁发布委托、评论等功能");
+  }
+};
 
 const mihoyoQrDataUrl = mihoyo.qrDataUrl;
 const mihoyoStatus = mihoyo.qrStatus;
@@ -488,7 +513,8 @@ onUnmounted(() => {
                               {{ mihoyoStatusText }}
                             </p>
                             <p class="ik-mihoyo__hint">
-                              确认后将自动登录，新用户将自动创建绳网账号
+                              首次使用米游社登录会创建<strong>新的</strong>绳网账号。
+                              已有账号请先用邮箱登录，再到账号设置里绑定米游社。
                             </p>
                           </div>
                         </div>
@@ -907,8 +933,15 @@ onUnmounted(() => {
 .ik-mihoyo__hint {
   margin: 0;
   font-size: 12px;
+  line-height: 1.6;
   color: rgba(255, 255, 255, 0.4);
   text-align: center;
+}
+
+/* 「新的」是这段提示的重点：用户最容易犯的错就是没登录就扫码，白得一个小号 */
+.ik-mihoyo__hint strong {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
 }
 
 /* prefers-reduced-motion 由 theme.css 全局接管 */
