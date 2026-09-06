@@ -566,6 +566,9 @@ function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
     externalVideos: Array.isArray(raw.externalVideos) ? (raw.externalVideos as ExternalVideo[]) : undefined,
     cover: covers,
     hasPublishedVersion: raw.hasPublishedVersion === true,
+    // 必须映射：草稿列表与详情都走这里，漏掉它 → applyDraftToEditor 里 isAnonymous 一律置
+    // false → 自动保存把 false 写回后端 → 用户勾过的匿名被静默清掉，发布时真名出面。
+    isAnonymous: raw.isAnonymous === true,
     category: toPostCategory(raw.category),
     createdAt: raw.createdAt as string | undefined,
     updatedAt: raw.updatedAt as string | undefined,

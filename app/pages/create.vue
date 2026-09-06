@@ -26,11 +26,23 @@ import {
   FilmIcon,
 } from "@heroicons/vue/24/outline";
 import { PlayIcon } from "@heroicons/vue/24/solid";
-import { resolveErrorMessage } from "~/utils/api-error";
+import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
 import { isAllowedImage, MAX_IMAGE_SIZE } from "~/utils/upload";
+import {
+  buildDraftPayload,
+  buildDraftSnapshot,
+  type DraftEditorContent,
+} from "~/utils/draft-snapshot";
 
-const AUTO_SAVE_DELAY = 800;
+// 自动保存的防抖延迟（trailing-only：每次输入都会重排定时器，所以这个值就是「停手多久落一次
+// 保存」）。原来是 800ms —— 正常打字的自然停顿就够触发，生产上一次编辑能打出十几次 PUT。
+// 每一次都让 strapi-plugin-meilisearch 回落读一次库（未发布的草稿必然读不到 published 行，
+// 于是刷出一对 warn+info 日志）、并把 /api/articles* 的缓存整片清掉；编辑**已发布**的帖时更贵：
+// 会把内容毫无变化的 published 版本重推一次 Meilisearch，那次 HTTP 就 await 在这次 PUT 上。
+const AUTO_SAVE_DELAY = 2500;
+// 一直打字不停手时的强制落盘上限：光有防抖会把保存无限往后推，加上它才有下界。
+const AUTO_SAVE_MAX_WAIT = 10000;
 
 const api = useApi();
 const auth = useAuthStore();
@@ -110,6 +122,22 @@ const selectedCategoryName = computed(() => {
 
 const suppressTracking = ref(false);
 const lastSavedSnapshot = ref("");
+// 正在飞的那次保存对应的指纹。在途期间「服务端即将成为的样子」是它而不是 lastSavedSnapshot
+// （后者要等响应落地才前移），markDirty 判脏必须以它为基准 —— 否则「敲一个字 → 保存发出 →
+// 立刻 Ctrl+Z 撤销」会算出「与已保存内容相同」而把 hasUnsavedChanges 清成 false，
+// 此刻切换草稿 / 新建就再没有任何路径会把撤销后的内容发出去，服务端永久定格在被撤销的那版。
+const inFlightSnapshot = ref<string | null>(null);
+
+// 编辑目标的「身份纪元」：只在切换目标时 +1（applyDraftToEditor / resetEditor 是唯一入口）。
+// 在途保存靠它判断落地时目标是否已经变了 —— 单比对 documentId 不够：新建期间用户又点
+// 新建时是 null → null，分辨不出来。响应属于旧目标却往下写，会把 documentId 拨回旧草稿，
+// 之后每一次保存都写错文档（用户在 B 里打字，内容进了 A）。
+const draftEpoch = ref(0);
+
+// 在途的「新建草稿」请求。force 会穿透下方的在途闸门，那一刻 documentId 还是空的，
+// 不等它就会再发一次 createArticleDraft —— 凭空多出一篇草稿，用户手里这份内容还留在
+// 被丢弃的那个 id 上。
+let pendingCreate: Promise<unknown> | null = null;
 
 // Draft list
 const drafts = ref<DraftArticle[]>([]);
@@ -291,14 +319,23 @@ function handleVideoCoverError(event: Event, video: ExternalVideo) {
 }
 
 /* ── Helpers ──────────────────────────────────────── */
-function buildSnapshot(): string {
-  return JSON.stringify({
-    title: title.value.trim(),
-    text: body.value.trim(),
+// 指纹与 payload 的唯一数据源。两者共用一次采集，既保证「payload 有的字段指纹一定有」，
+// 也保证在途那几十毫秒里用户又敲的字不会让两者描述不同的内容。
+function editorContent(): DraftEditorContent {
+  return {
+    title: title.value,
+    text: body.value,
     externalVideos: externalVideos.value,
     cover: coverPayload.value,
-    category: selectedCategory.value,
-  });
+    // 在这里一次兜底，指纹与 payload 都用这个值：分开兜底会让「空分类」在指纹里
+    // 与默认分类不同、在 payload 里相同，白发一次零变更 PUT。
+    category: selectedCategory.value || DEFAULT_CATEGORY_SLUG,
+    isAnonymous: isAnonymous.value,
+  };
+}
+
+function buildSnapshot(): string {
+  return buildDraftSnapshot(editorContent());
 }
 
 function syncSnapshot() {
@@ -311,33 +348,55 @@ function syncSnapshot() {
 /* ── Auto-save ────────────────────────────────────── */
 const performSaveDraft = async (force = false) => {
   if (!auth.isLogin) return;
-  if (isSavingDraft.value && !force) return;
+  // 在途时不能静默丢掉这次保存：@vueuse 的 debounce 在 trailing 触发时已经把 timer 与
+  // maxTimer 一并作废，这里直接 return 就再没有任何定时器会重试 —— 用户停手后那段输入只能
+  // 等下一次按键 / 发布 / 切换草稿才有机会落盘，关标签页直接丢（全 app 无 beforeunload 兜底）。
+  // 所以推后一个防抖周期重排。debouncedSave 在下方声明，靠闭包延迟求值，调用时早已初始化。
+  if (isSavingDraft.value && !force) {
+    debouncedSave();
+    return;
+  }
   if (!documentId.value && !hasAnyContent.value) return;
 
-  const snapshot = buildSnapshot();
+  // force 穿透了在途闸门：若此刻有一次新建在飞，documentId 还是空的，直接往下走会再
+  // POST 一次，草稿箱里凭空多一篇。等它落地把 id 填好，下面就自然走 update 分支。
+  // 放在采集内容之前：等完再采，指纹与 payload 描述的就都是最新那一版。
+  if (force && pendingCreate && !documentId.value) {
+    await pendingCreate.catch(() => undefined);
+  }
+
+  const content = editorContent();
+  const snapshot = buildDraftSnapshot(content);
   if (!force && snapshot === lastSavedSnapshot.value) return;
 
   isSavingDraft.value = true;
+  inFlightSnapshot.value = snapshot;
+  // 这次请求发出时的目标。落地时必须比对纪元：期间用户可能切了草稿、点了新建，或走过
+  // 404 清空 —— 那时编辑器里已经是另一篇，任何回写都是污染。
+  const epoch = draftEpoch.value;
+  const targetId = documentId.value;
+  const isCreate = !targetId;
 
   try {
     const authorId = auth.user?.authorId || auth.user?.documentId;
-    const payload = {
-      title: title.value.trim(),
-      text: body.value.trim(),
-      externalVideos: externalVideos.value,
-      coverId: coverPayload.value,
-      authorId: authorId || undefined,
-      isAnonymous: isAnonymous.value || undefined,
-      category: selectedCategory.value || DEFAULT_CATEGORY_SLUG,
-    };
+    const payload = buildDraftPayload(content, authorId || undefined);
 
     let result: DraftArticle;
-    const isCreate = !documentId.value;
     if (isCreate) {
-      result = await api.createArticleDraft(payload);
+      const creating = api.createArticleDraft(payload);
+      pendingCreate = creating;
+      try {
+        result = await creating;
+      } finally {
+        if (pendingCreate === creating) pendingCreate = null;
+      }
     } else {
-      result = await api.updateArticleDraft(documentId.value!, payload);
+      result = await api.updateArticleDraft(targetId!, payload);
     }
+
+    // 目标在途期间被换掉了：这次响应属于旧文档，编辑器状态一概不能碰（连草稿列表也不同步
+    // —— 下面那段读的 isEditingPublished 已经是新目标的标志）。
+    if (draftEpoch.value !== epoch) return;
 
     if (result.documentId) {
       documentId.value = result.documentId;
@@ -355,23 +414,78 @@ const performSaveDraft = async (force = false) => {
       }
     }
 
-    syncSnapshot();
+    // 用**发送前**那份 snapshot，而不是重新 buildSnapshot()。这次 PUT 在途的几十到几百毫秒里
+    // 用户完全可能又敲了几个字：重新 build 会把那些还没发出去的改动一起标成「已保存」，
+    // 它们既过不了下一次的指纹比对，也过不了三个兜底 force-save 的 hasUnsavedChanges 门
+    // （全 app 没有 localStorage / beforeunload 兜底）—— 改动就这么静默没了。
+    lastSavedSnapshot.value = snapshot;
+    hasUnsavedChanges.value = buildSnapshot() !== snapshot;
   } catch (err) {
     hasUnsavedChanges.value = true;
+    // 目标草稿已不存在。后端现在对已删除的 documentId 返 404（原来是 200 + data:null，
+    // 把「一个字也没写进去」伪装成保存成功），继续往这个 id 上写只会每 2.5 秒刷一个 toast。
+    // 清掉过期 id 转新建，把用户手里这份内容另存成新草稿。
+    // 两个前置条件都不能省：!isCreate（新建请求返 404 是路由/网关问题，清掉别人刚填进来
+    // 的 id 只会雪上加霜）、纪元未变（否则清的是用户已经切过去的那篇）。targetId 与
+    // !isCreate 同义，写出来是为了让 TS 收窄。
+    if (isNotFoundError(err) && !isCreate && draftEpoch.value === epoch && targetId) {
+      const wasEditingPublished = isEditingPublished.value;
+      documentId.value = null;
+      isEditingPublished.value = false;
+      draftEpoch.value++;
+      drafts.value = drafts.value.filter((d) => d.documentId !== targetId);
+      lastSavedSnapshot.value = "";
+      if (wasEditingPublished) {
+        // 编辑已发布委托时不能把「更新原委托」悄悄降级成「发一篇新委托」：publish() 紧接着
+        // 会拿新 id 去 publishArticleDraft，用户以为在改旧帖，实际会多发一篇。内容照旧转存
+        // 为新草稿（这次 debouncedSave 会落盘），但发布必须失败并说清楚。
+        debouncedSave();
+        if (force) {
+          throw new Error("原委托已不存在，内容已转存为新草稿，请确认后重新发布");
+        }
+        message.warning("原委托已不存在，内容已转存为新草稿");
+        return;
+      }
+      if (force) {
+        // publish() 靠这次 force 保存产出 documentId（拿不到就抛「草稿保存后仍缺少
+        // documentId」）。id 已清掉，立刻重跑一次走 createArticleDraft —— force 会穿透
+        // 上面那道在途闸门，不用等 finally。
+        return await performSaveDraft(true);
+      }
+      message.warning("原草稿已不存在，内容将另存为新草稿");
+      debouncedSave();
+      return;
+    }
     if (force) throw err;
     message.error(resolveErrorMessage(err, "草稿保存失败"));
   } finally {
     isSavingDraft.value = false;
+    // 只清自己那次：force 穿透在途闸门时可能有两次保存同时在飞，别把对方的基准抹掉。
+    if (inFlightSnapshot.value === snapshot) {
+      inFlightSnapshot.value = null;
+    }
   }
 };
 
-const debouncedSave = useDebounceFn(() => {
-  performSaveDraft().catch(() => undefined);
-}, AUTO_SAVE_DELAY);
+const debouncedSave = useDebounceFn(
+  () => {
+    performSaveDraft().catch(() => undefined);
+  },
+  AUTO_SAVE_DELAY,
+  { maxWait: AUTO_SAVE_MAX_WAIT },
+);
 
 function markDirty() {
   if (suppressTracking.value) return;
-  hasUnsavedChanges.value = true;
+  // 按指纹判脏，而不是无条件置 true：suppressTracking 拦不住 title / body 那两个 watch
+  // （默认 flush:'pre'，回调跑在 applyDraftToEditor 的 finally 复位**之后**），所以载入
+  // 草稿后这个标志会被错误地拉成 true 并一直留着。openDraft / newDraft / onBeforeUnmount
+  // 三个兜底都以它为门，于是每次切换草稿、新建、离开页面都白发一次 force PUT
+  // —— force 绕过下面的指纹比对，内容一模一样也照发。
+  // 基准取 inFlightSnapshot 优先：在途那次 PUT 一旦落地，服务端就是那份内容，
+  // 拿 lastSavedSnapshot 比会把「撤销回上一次已保存的样子」误判成干净。
+  hasUnsavedChanges.value =
+    buildSnapshot() !== (inFlightSnapshot.value ?? lastSavedSnapshot.value);
   debouncedSave();
 }
 
@@ -753,6 +867,8 @@ async function openDraft(draft: DraftArticle) {
 function applyDraftToEditor(draft: DraftArticle) {
   suppressTracking.value = true;
   try {
+    // 换目标：作废所有在途保存的回写（见 draftEpoch 声明处）
+    draftEpoch.value++;
     documentId.value = draft.documentId;
     isEditingPublished.value = !!draft.hasPublishedVersion;
     title.value = draft.title;
@@ -790,6 +906,8 @@ function applyDraftToEditor(draft: DraftArticle) {
 function resetEditor() {
   suppressTracking.value = true;
   try {
+    // 换目标：作废所有在途保存的回写（见 draftEpoch 声明处）
+    draftEpoch.value++;
     documentId.value = null;
     title.value = "";
     body.value = "";
