@@ -69,6 +69,15 @@ describe("resolveErrorMessage", () => {
     );
   });
 
+  it("策略拒绝换成中文，而不是把 Strapi 的 \"Policy Failed\" 摔给用户", () => {
+    const e = makeError({
+      code: "PolicyError",
+      message: "Policy Failed",
+      statusCode: 403,
+    });
+    expect(resolveErrorMessage(e)).toBe("没有权限执行该操作");
+  });
+
   it("兜底使用 fallback", () => {
     expect(resolveErrorMessage(makeError({}), "自定义兜底")).toBe("自定义兜底");
   });

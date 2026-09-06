@@ -39,6 +39,11 @@ export function resolveErrorMessage(error: unknown, fallback = "请求失败"): 
   if (e.code === "REGISTER_CODE_INVALID" && typeof attemptsRemaining === "number") {
     return `验证码错误，还可尝试 ${attemptsRemaining} 次`;
   }
+  // Strapi 策略拒绝（is-owner / is-comment-author 等）。后端抛的是无参 PolicyError，
+  // message 固定为英文 "Policy Failed"，直接展示等于把内部错误名摔给用户。
+  if (e.code === "PolicyError") {
+    return "没有权限执行该操作";
+  }
   // 网络错误：无 statusCode 且命中网络错误特征
   if (!statusCode && NETWORK_ERROR_PATTERNS.some((pattern) => message.includes(pattern))) {
     return "网络异常，请稍后重试";
