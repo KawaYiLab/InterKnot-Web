@@ -220,8 +220,8 @@ const overlayOpen = computed(
   height: 1px;
   pointer-events: none;
   opacity: 0;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   /* 永久性 will-change 让浏览器把这个层一直保留在 GPU 上，
      与委托弹窗共用 backdrop-filter 着色器管线 */
   will-change: backdrop-filter;

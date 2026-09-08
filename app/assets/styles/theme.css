@@ -487,8 +487,8 @@ body.is-page-blurred .ik-header-tab.is-active .ik-tab-highlight {
 @media (max-width: 1024px) {
   /* 用 body 前缀提高优先级，覆盖各组件 scoped style 中的 .ik-overlay 声明 */
   body .ik-overlay {
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     background: rgba(0, 0, 0, 0.88);
   }
 
@@ -552,8 +552,8 @@ html.no-gpu .ik-card__views-icon {
 /* 关闭所有元素的 backdrop-filter，覆盖 ik-overlay / ik-img-overlay
    以及各组件 scoped style 中的声明。 */
 html.no-gpu * {
-  backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 /* 用更深的纯色遮罩替代毛玻璃，保证可读性；同时覆盖 PostOverlay 变量。 */
