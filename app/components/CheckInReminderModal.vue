@@ -310,8 +310,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 /* 「签到说明」子弹窗自己声明了 z-index:9000，但 Vue 会把本组件的 scoped 作用域

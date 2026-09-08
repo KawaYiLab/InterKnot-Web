@@ -1805,8 +1805,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   background: transparent;
   --ik-overlay-bg: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 /* 独立背景层：承载遮罩颜色，用 opacity 过渡替代 .ik-overlay 的 background-color 过渡。
@@ -2966,8 +2966,8 @@ onBeforeUnmount(() => {
 @media (max-width: 1024px) {
   .ik-overlay.ik-overlay {
     --ik-overlay-bg: rgba(0, 0, 0, 0.88);
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }
 
