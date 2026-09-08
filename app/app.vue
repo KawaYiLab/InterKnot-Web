@@ -233,7 +233,7 @@ const overlayOpen = computed(
 .ik-global-marquee {
   position: fixed !important;
   inset: 0;
-  z-index: -9999;
+  z-index: -9999 !important;
 }
 
 /* 仅放大作为全屏背景的这一实例（桌面端）；移动端弹窗由组件自身 @media 放大 */

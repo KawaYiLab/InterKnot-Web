@@ -74,6 +74,8 @@ const year = new Date().getFullYear();
 
 <style scoped>
 .app-footer {
+  position: relative;
+  z-index: 1;
   width: 100%;
   background: #0d0d0d;
   border-top: 1px solid #1e1e1e;
