@@ -87,5 +87,8 @@ npm run preview
 * Alver 提供的部分 UI 设计参考与图片资源
   https://zenless.tools/
 
+* 橙汁本色 开源的 DSH 项目
+  https://github.com/Chengzhibense/Fairy-DSH
+
 * 所有提交 Issue、Pull Request、反馈问题或提供建议的开发者与用户
 
