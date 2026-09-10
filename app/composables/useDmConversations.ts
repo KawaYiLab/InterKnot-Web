@@ -159,6 +159,9 @@ interface UseDmConversations {
   /** 发送 typing 状态（节流由调用方控制） */
   sendTyping: (conversationId: string) => void;
 
+  /** 手动清除指定会话的 typing 状态（可选指定 userId，默认清空整个会话） */
+  clearTyping: (conversationId: string, userId?: number | null) => void;
+
   /** 启停：通常由 KnockKnockModal 在打开/关闭时调用 */
   startStream: () => void;
   stopStream: () => void;
@@ -174,7 +177,9 @@ interface UseDmConversations {
 let unsubscribeAll: Array<() => void> = [];
 let subscribed = false;
 let typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const TYPING_TTL_MS = 4_000;
+const TYPING_TTL_MS = 3_000;
+let finalizedAtByConv = new Map<string, number>();
+const TYPING_IGNORE_AFTER_FINALIZE_MS = 1_500;
 
 export function useDmConversations(): UseDmConversations {
   const conversations = useState<DmConversationSummary[]>(
@@ -243,6 +248,46 @@ export function useDmConversations(): UseDmConversations {
   });
 
   // ── 基础工具 ────────────────────────────────────────
+  /**
+   * 立即清除指定会话（及对应用户）的 typing 状态并取消定时器。
+   * 当流式完成（streamingDone）或新消息到达（message.created）时主动调用，
+   * 杜绝依靠 3s/4s 超时定时器自然过期导致的“消息已发完但仍然显示输入中”的高延迟体验。
+   */
+  const clearConversationTyping = (cid: string, uid?: number | null) => {
+    if (!cid) return;
+    if (typeof uid === "number") {
+      const key = `${cid}:${uid}`;
+      const timer = typingTimers.get(key);
+      if (timer) {
+        clearTimeout(timer);
+        typingTimers.delete(key);
+      }
+      const list = typing.value[cid];
+      if (list && list.includes(uid)) {
+        const next = list.filter((id) => id !== uid);
+        if (next.length === 0) {
+          const copy = { ...typing.value };
+          delete copy[cid];
+          typing.value = copy;
+        } else {
+          typing.value = { ...typing.value, [cid]: next };
+        }
+      }
+    } else {
+      for (const [key, timer] of typingTimers.entries()) {
+        if (key.startsWith(`${cid}:`)) {
+          clearTimeout(timer);
+          typingTimers.delete(key);
+        }
+      }
+      if (typing.value[cid]) {
+        const copy = { ...typing.value };
+        delete copy[cid];
+        typing.value = copy;
+      }
+    }
+  };
+
   const ensureMessageBucket = (id: string): ConversationMessageState => {
     let bucket = messagesById.value[id];
     if (!bucket) {
@@ -640,6 +685,12 @@ export function useDmConversations(): UseDmConversations {
     const created = resp?.data;
     if (!created?.documentId) throw new Error("send returned no message");
 
+    // 用户发出了新消息，解除上一轮对话定稿的 typing 忽略，并清理本人在此会话的 typing
+    finalizedAtByConv.delete(actualId);
+    if (typeof selfUserId.value === "number") {
+      clearConversationTyping(actualId, selfUserId.value);
+    }
+
     // 立即写入本地缓存（WS message.created 到达时会按 documentId dedup）
     // 无条件写入：即使 bucket 尚未 hydrated（pseudo 实质化时 ensureMessages
     // 可能还在加载中），也要把消息写入 items。ensureMessages 完成时会用
@@ -799,6 +850,10 @@ export function useDmConversations(): UseDmConversations {
    * abort LLM 流并用已生成文本定稿（走正常 streamingDone 事件收尾）。
    */
   async function stopAiStream(messageId: string): Promise<void> {
+    if (activeConversationId.value) {
+      finalizedAtByConv.set(activeConversationId.value, Date.now());
+      clearConversationTyping(activeConversationId.value);
+    }
     await $api("/api/dm/ai/stop", {
       method: "POST",
       body: { messageId },
@@ -812,6 +867,10 @@ export function useDmConversations(): UseDmConversations {
    * aiModelKey：换一个模型重生成，只对这一次生效，不改会话级选择。
    */
   async function regenerateAiReply(messageId: string, aiModelKey?: string | null): Promise<void> {
+    if (activeConversationId.value) {
+      finalizedAtByConv.delete(activeConversationId.value);
+      clearConversationTyping(activeConversationId.value);
+    }
     await $api("/api/dm/ai/regenerate", {
       method: "POST",
       body: aiModelKey ? { messageId, aiModelKey } : { messageId },
@@ -842,6 +901,18 @@ export function useDmConversations(): UseDmConversations {
 
     const senderUserId = msg.sender?.userId;
     const isMine = selfUserId.value != null && senderUserId === selfUserId.value;
+
+    // 普通新消息（非流式）到达时，立即清除该发送者的 typing 状态；非本人发送时记录定稿时间防残余 typing
+    if (event.data?.streaming !== true) {
+      if (typeof senderUserId === "number") {
+        clearConversationTyping(cid, senderUserId);
+      } else {
+        clearConversationTyping(cid);
+      }
+      if (!isMine) {
+        finalizedAtByConv.set(cid, Date.now());
+      }
+    }
 
     // ── M3 通知融合边界 ──
     // 如果 recipient 列表里只有 pseudo:user:senderId（之前只有通知历史，从未
@@ -939,10 +1010,15 @@ export function useDmConversations(): UseDmConversations {
       next.delete(mid);
       streamingMessageIds.value = next;
     }
+    // 流式定稿：立即清空该会话所有 typing 状态与计时器，杜绝“字都吐完了半天还在输入中”的高延迟；
+    // 同时记录定稿时间戳，防止紧随其后到达的残余心跳包导致输入中再次闪现
+    const isStreamingFinalize = data.streamingDone === true;
+    if (isStreamingFinalize) {
+      finalizedAtByConv.set(cid, Date.now());
+      clearConversationTyping(cid);
+    }
     const bucket = messagesById.value[cid];
     if (!bucket?.items?.length) return;
-    // 流式定稿不是真编辑：保留原 editedAt（占位消息为 null），避免误显示「(已编辑)」。
-    const isStreamingFinalize = data.streamingDone === true;
     // 定稿时把落库的 workflow 事件序列写入消息（权威版本），实时缓存不再需要。
     // 落库序列缺失时（如广播裁剪）退回实时缓存，保证时间线不消失。
     const finalWorkflow = isStreamingFinalize
@@ -1070,12 +1146,19 @@ export function useDmConversations(): UseDmConversations {
     const cid = event.conversationId;
     const uid = event.data?.userId;
     if (!cid || typeof uid !== "number") return;
+
+    // 若会话在不久前刚定稿（如 AI 刚输出完毕）且用户尚未发起新发送，忽略网络延迟到达的残余心跳 typing
+    const finalizeAt = finalizedAtByConv.get(cid);
+    if (finalizeAt && Date.now() - finalizeAt < TYPING_IGNORE_AFTER_FINALIZE_MS) {
+      return;
+    }
+
     // 加入 typing 集合
     const current = typing.value[cid] ?? [];
     if (!current.includes(uid)) {
       typing.value = { ...typing.value, [cid]: [...current, uid] };
     }
-    // 4s 后自动移除（与服务端的 typing 心跳节奏匹配）
+    // 3s 后自动移除（与服务端的 typing 心跳节奏匹配）
     const key = `${cid}:${uid}`;
     const oldTimer = typingTimers.get(key);
     if (oldTimer) clearTimeout(oldTimer);
@@ -1126,6 +1209,7 @@ export function useDmConversations(): UseDmConversations {
     // 下次打开会显示"对方正在输入..."
     for (const t of typingTimers.values()) clearTimeout(t);
     typingTimers.clear();
+    finalizedAtByConv.clear();
     typing.value = {};
 
     // WS 断开后缓存可能过期（关闭弹窗期间对方发的消息前端收不到）。
@@ -1208,6 +1292,7 @@ export function useDmConversations(): UseDmConversations {
     stopAiStream,
     regenerateAiReply,
     sendTyping: stream.sendTyping,
+    clearTyping: clearConversationTyping,
     startStream,
     stopStream,
     reset,

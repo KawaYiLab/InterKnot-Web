@@ -21,6 +21,7 @@ import { stripEmotesToPlain } from "~/utils/emote";
 import { extractCitations, extractRelatedPosts, isWorkflowSettled } from "~/utils/workflow";
 import type { BubbleRender, EnrichedMessage } from "~/utils/dm-view";
 import type DmComposer from "~/components/DmComposer.vue";
+import FairyMascotEye from "~/components/fairy/FairyMascotEye.vue";
 
 const {
   visible,
@@ -83,6 +84,7 @@ const {
   regenerateAiReply,
   workflowEventsOf,
   updateConversation,
+  clearTyping,
 } = useDmConversations();
 
 const AI_SLUG_STORAGE_KEY = "ik-knock-ai-slug";
@@ -297,6 +299,22 @@ const activeAiCard = computed<AiRoleCard | null>(() => {
     return aiCharacters.value.find((c) => c.boundUser?.id === uid) ?? null;
   }
   return null;
+});
+
+/** 是否为 Fairy 专属 AI 对话 */
+const isFairyConversation = computed(() => {
+  if (!isActiveAiConversation.value) return false;
+  const slug = (activeAiCard.value?.slug || "").toLowerCase();
+  const displayName = (activeAiCard.value?.displayName || activeConversation.value?.peer?.name || "").toLowerCase();
+  return slug === "fairy" || slug.includes("fairy") || displayName.includes("fairy") || displayName.includes("斐林");
+});
+
+/** Fairy Mascot 动态表情状态：normal 待机 | thinking 思考中 */
+const fairyMascotState = computed<"normal" | "thinking">(() => {
+  if (activeStreamingMessageId.value || peerIsTyping.value) {
+    return "thinking";
+  }
+  return "normal";
 });
 
 /** AI 示例问题刷新偏移：点击「换一批」循环切片 */
@@ -950,7 +968,10 @@ const scrollToBottom = (el: HTMLElement) => {
 };
 
 /** 选中会话时：懒加载消息 → 批量 mark-read → 滚到最新消息 */
-watch(activeConversationId, async (id) => {
+watch(activeConversationId, async (id, oldId) => {
+  if (oldId) {
+    clearTyping(oldId);
+  }
   aiRevealSessionReady.value = false;
   historyBaselineIds.value = new Set();
   resetAiRevealSession();
@@ -1170,6 +1191,10 @@ const handleStopAi = async () => {
 watch(activeStreamingMessageId, (v) => {
   if (!v) {
     stoppingAi.value = false;
+    const cid = activeConversationId.value;
+    if (cid) {
+      clearTyping(cid);
+    }
     // token 是回复结束后才扣的，所以定稿这一刻再拉一次额度
     void refreshAgentQuota();
   }
@@ -1867,55 +1892,69 @@ const handleMobileBack = () => {
                       v-if="activeConversation && activeMessages.length"
                       class="ik-knock__messages-wrap"
                     >
-                    <div
-                      ref="messagesRef"
-                      class="ik-knock__messages"
-                      :class="{ 'is-settling': messagesSettling }"
-                      @scroll.passive="onMessagesScroll"
-                    >
-                      <!-- Phase 4 渲染窗口化：更早消息滚顶自动加载（也可点击） -->
-                      <button
-                        v-if="hasHiddenAbove"
-                        type="button"
-                        class="ik-knock__load-earlier"
-                        @click="expandRenderWindow"
-                      >
-                        加载更早的消息
-                      </button>
-                      <DmMessageItem
-                        v-for="entry in visibleMessages"
-                        :key="entry.msg.documentId"
-                        :entry="entry"
-                        :copied-id="copiedMessageId"
-                        :show-regenerate="entry.aiRich && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
-                        :regenerating="regeneratingAi"
-                        :search-hit="entry.msg.documentId === currentSearchHitId"
-                        :model-label="modelLabelFor(entry.msg.aiModelKey)"
-                        @contextmenu="showContextMenu"
-                        @profile="goToProfile"
-                        @open-post="openPostFromBubble"
-                        @bubble-link="handleBubbleLink"
-                        @copy="copyMessageText"
-                        @regenerate="handleRegenerate"
-                        @quote-click="goPost"
+                      <!-- Fairy 专属半透明背景水印（不阻碍消息选择与滚动） -->
+                      <FairyMascotEye
+                        v-if="isFairyConversation"
+                        mode="watermark"
+                        :state="fairyMascotState"
                       />
-                    </div>
-                    <!-- 1.6 回到底部：远离底部且（有新消息 / AI 输出中）时浮现 -->
-                    <Transition name="ik-b2b">
-                      <button
-                        v-if="showBackToBottom"
-                        type="button"
-                        class="ik-knock__back-to-bottom"
-                        aria-label="回到底部"
-                        @click="handleBackToBottom"
+                      <div
+                        ref="messagesRef"
+                        class="ik-knock__messages"
+                        :class="{ 'is-settling': messagesSettling }"
+                        @scroll.passive="onMessagesScroll"
                       >
-                        <ChevronDownIcon class="ik-knock__back-to-bottom-icon" aria-hidden="true" />
-                      </button>
-                    </Transition>
+                        <!-- Phase 4 渲染窗口化：更早消息滚顶自动加载（也可点击） -->
+                        <button
+                          v-if="hasHiddenAbove"
+                          type="button"
+                          class="ik-knock__load-earlier"
+                          @click="expandRenderWindow"
+                        >
+                          加载更早的消息
+                        </button>
+                        <DmMessageItem
+                          v-for="entry in visibleMessages"
+                          :key="entry.msg.documentId"
+                          :entry="entry"
+                          :copied-id="copiedMessageId"
+                          :show-regenerate="entry.aiRich && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
+                          :regenerating="regeneratingAi"
+                          :search-hit="entry.msg.documentId === currentSearchHitId"
+                          :model-label="modelLabelFor(entry.msg.aiModelKey)"
+                          @contextmenu="showContextMenu"
+                          @profile="goToProfile"
+                          @open-post="openPostFromBubble"
+                          @bubble-link="handleBubbleLink"
+                          @copy="copyMessageText"
+                          @regenerate="handleRegenerate"
+                          @quote-click="goPost"
+                        />
+                      </div>
+                      <!-- 1.6 回到底部：远离底部且（有新消息 / AI 输出中）时浮现 -->
+                      <Transition name="ik-b2b">
+                        <button
+                          v-if="showBackToBottom"
+                          type="button"
+                          class="ik-knock__back-to-bottom"
+                          aria-label="回到底部"
+                          @click="handleBackToBottom"
+                        >
+                          <ChevronDownIcon class="ik-knock__back-to-bottom-icon" aria-hidden="true" />
+                        </button>
+                      </Transition>
                     </div>
                     <!-- 占位：仅在非加载态时显示，避免切换会话时闪烁 -->
-                    <div v-else-if="!activeMessageLoading" class="ik-knock__empty-pill">
-                      EMPTY
+                    <div v-else-if="!activeMessageLoading" class="ik-knock__empty-stage">
+                      <FairyMascotEye
+                        v-if="isFairyConversation"
+                        mode="hero"
+                        :state="fairyMascotState"
+                        interactive
+                      />
+                      <div v-else class="ik-knock__empty-pill">
+                        EMPTY
+                      </div>
                     </div>
 
                     <!-- 输入框：仅在有选中会话且非匿名/系统会话时显示（Phase 4 拆分为 DmComposer） -->
@@ -2747,6 +2786,19 @@ const handleMobileBack = () => {
   overflow: hidden;
 }
 
+.ik-knock__empty-stage {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  padding: 12px;
+  overflow: visible;
+  position: relative;
+}
+
 .ik-knock__empty-pill {
   /* 空态在主区域内居中 */
   margin: auto;
@@ -2770,6 +2822,7 @@ const handleMobileBack = () => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .ik-knock__back-to-bottom {
@@ -2814,6 +2867,8 @@ const handleMobileBack = () => {
 }
 
 .ik-knock__messages {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   display: flex;
