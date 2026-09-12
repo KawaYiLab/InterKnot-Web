@@ -62,14 +62,12 @@ const onMihoyoSignedUp = async (username: string) => {
   // 登录已经成功，二维码这一层先收掉，免得引导弹窗压在还在淡出的扫码遮罩下面
   exitMihoyoMode();
   const bindEmail = await confirmDialog.open({
-    title: "已创建新的绳网账号",
+    title: "欢迎来到绳网！",
     message:
-      `已为你创建${username ? `新账号「${username}」` : "一个新账号"}。` +
-      `它目前只能通过米游社扫码登录：没有邮箱既无法找回账号，也无法解除米游社绑定，` +
-      `建议现在花一分钟绑定邮箱。` +
-      `如果你原本就有绳网账号，请改用邮箱登录那个账号，再去账号设置里扫码绑定米游社。`,
+      `为了保障您的账号安全` +
+      `建议绑定安全邮箱，完成入站考试后即可正式加入绳网社区！`,
     confirmText: "绑定邮箱",
-    cancelText: "先去考试",
+    cancelText: "入站考试",
   });
   await navigateTo(bindEmail ? "/account?view=email" : "/exam");
   if (!bindEmail) {
@@ -513,8 +511,7 @@ onUnmounted(() => {
                               {{ mihoyoStatusText }}
                             </p>
                             <p class="ik-mihoyo__hint">
-                              首次使用米游社登录会创建<strong>新的</strong>绳网账号。
-                              已有账号请先用邮箱登录，再到账号设置里绑定米游社。
+                              首次使用米游社登录将自动创建绳网账号。
                             </p>
                           </div>
                         </div>
