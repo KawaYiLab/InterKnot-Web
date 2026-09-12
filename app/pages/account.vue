@@ -226,11 +226,10 @@ const isEmailTakenByOwnAccount = (err: unknown) =>
 
 const handleEmailTakenByOwnAccount = async () => {
   const relogin = await confirmDialog.open({
-    title: "这个邮箱属于另一个账号",
+    title: "可是这个邮箱属于另一个账号欸",
     message:
-      "如果那才是你的主账号，就不用在这里绑定邮箱了：退出登录后用邮箱登录主账号，" +
-      "再到「米哈游账号」里扫码绑定即可，当前这个账号会被自动清理。",
-    confirmText: "退出并登录主账号",
+      "如果那才是你的主账号，请直接在那个账号绑定米游社",
+    confirmText: "退出登录",
     cancelText: "换个邮箱",
   });
   if (!relogin) return;
@@ -407,16 +406,6 @@ useHead({ title: "账号中心" });
 
       <div class="ik-account-page__panel">
         <div class="ik-account-page__panel-body">
-          <!--
-            只能扫码登录的账号常驻提醒。放在 Transition 外面，切面板时不重播动画。
-            这类号找不回也解不了绑，越早补上邮箱越省事。
-          -->
-          <div v-if="mihoyoOnlyAccount" class="ik-ac-alert">
-            <p class="ik-ac-alert__text">
-              当前账号只能通过米游社扫码登录。绑定邮箱后才能找回账号、解除米游社绑定。
-            </p>
-            <z-button class="ik-ac-alert__btn" @click="openEmail">绑定邮箱</z-button>
-          </div>
           <Transition :name="panelTransitionName" mode="out-in">
           <div :key="panelKey" class="ik-ac-panel-state">
           <!-- 移动端首屏：单栏分组列表 -->
@@ -698,9 +687,6 @@ useHead({ title: "账号中心" });
                     <span class="ik-ac-mihoyo-value">{{ mihoyoBinding.zzzRegionName }}</span>
                   </div>
                 </div>
-                <p v-if="mihoyoOnlyAccount" class="ik-ac-security-send-hint">
-                  当前账号只能通过米游社扫码登录，解绑后将无法登录。请先绑定邮箱。
-                </p>
                 <z-button
                   class="ik-ac-unbind-btn"
                   :disabled="mihoyoUnbinding || mihoyoOnlyAccount"
@@ -926,38 +912,6 @@ useHead({ title: "账号中心" });
   border: 4px solid #000;
   border-radius: 22px 0 22px 22px;
   overflow: hidden;
-}
-
-/* ── 只能扫码登录的账号提醒 ── */
-.ik-ac-alert {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  background: rgba(255, 193, 77, 0.08);
-  border: 1px solid rgba(255, 193, 77, 0.28);
-  border-radius: 12px 0 12px 12px;
-}
-
-.ik-ac-alert__text {
-  flex: 1;
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #ffc14d;
-}
-
-.ik-ac-alert__btn {
-  flex-shrink: 0;
-}
-
-@media (max-width: 640px) {
-  .ik-ac-alert {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
 }
 
 /* ── Section rows ── */
