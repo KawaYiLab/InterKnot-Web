@@ -1,7 +1,9 @@
+import { parseAuthSessions, requireAccountSuccess } from "~/utils/account-response";
 import type { QueryClient, QueryKey } from "@tanstack/vue-query";
 import type { ApiClientError, Pagination } from "~/types/api";
 import type {
   AccountSecurity,
+  AuthSessionItem,
   Author,
   Avatar,
   AvatarType,
@@ -2042,6 +2044,10 @@ export function useApi() {
   const getMySecurity = async (): Promise<AccountSecurity> => {
     const response = await $api("/api/me/security");
     const data = response as Record<string, unknown>;
+    if (!data || typeof data.email !== "string" || typeof data.hasBoundEmail !== "boolean" ||
+        typeof data.hasPassword !== "boolean" || !["local", "mihoyo"].includes(String(data.provider))) {
+      throw new Error("账号安全信息响应无效，请重试");
+    }
     return {
       email: String(data.email || ""),
       provider: data.provider === "local" ? "local" : "mihoyo",
@@ -2078,6 +2084,35 @@ export function useApi() {
       hasBoundEmail: data.hasBoundEmail === true,
       hasPassword: data.hasPassword === true,
     };
+  };
+
+  const deleteAccount = async (params: { password?: string; confirmText?: string }): Promise<{ success: boolean }> => {
+    const response = await $api("/api/me/delete-account", {
+      method: "POST",
+      body: params,
+    });
+    return requireAccountSuccess(response, "success");
+  };
+
+  // ── 已登录设备与会话（/api/auth/sessions） ─────────────────
+
+  const getMySessions = async (): Promise<AuthSessionItem[]> => {
+    const response = await $api("/api/auth/sessions");
+    return parseAuthSessions(response);
+  };
+
+  const revokeSession = async (id: number): Promise<{ ok: boolean }> => {
+    const response = await $api(`/api/auth/sessions/${id}`, {
+      method: "DELETE",
+    });
+    return requireAccountSuccess(response, "ok");
+  };
+
+  const revokeOtherSessions = async (): Promise<{ ok: boolean }> => {
+    const response = await $api("/api/auth/sessions/others", {
+      method: "DELETE",
+    });
+    return requireAccountSuccess(response, "ok");
   };
 
   const getPinnedArticles = async (
@@ -2503,6 +2538,11 @@ export function useApi() {
     getMySecurity,
     sendBindEmailCode,
     bindEmail,
+    deleteAccount,
+    // 已登录设备与会话
+    getMySessions,
+    revokeSession,
+    revokeOtherSessions,
     getPinnedArticles,
     updatePinnedArticles,
     searchAuthors,

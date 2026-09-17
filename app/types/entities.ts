@@ -24,6 +24,21 @@ export interface AccountSecurity {
   hasPassword: boolean;
 }
 
+/** 已登录设备与会话（/api/auth/sessions） */
+export interface AuthSessionItem {
+  id: number;
+  deviceId?: string | null;
+  userAgent?: string | null;
+  ip?: string;
+  location?: string | null;
+  loginMethod?: "password" | "mihoyo" | "email_code" | "password_change" | "password_reset" | "oauth" | null;
+  loginAt?: string | null;
+  isCurrent?: boolean;
+  lastSeenAt: string | null;
+  createdAt?: string | null;
+  expiresAt?: string | null;
+}
+
 export interface DailyExpSource {
   done: boolean;
   exp: number;

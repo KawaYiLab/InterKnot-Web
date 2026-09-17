@@ -5,7 +5,11 @@ import {
   type FetchResponse,
 } from "ofetch";
 import type { ApiClientError } from "~/types/api";
-import { shouldAttachToken } from "~/utils/request-auth";
+import {
+  isTokenNearExpiry,
+  shouldAttachToken,
+} from "~/utils/request-auth";
+import { LOGOUT_KEY, staleAuthError, withAuthCookieLock } from "~/utils/auth-session";
 
 function toApiError(statusCode: number | undefined, data: unknown): ApiClientError {
   const error = new Error("请求失败") as ApiClientError;
@@ -32,72 +36,14 @@ function toApiError(statusCode: number | undefined, data: unknown): ApiClientErr
 
 // ── Token renewal helpers ──────────────────────────
 const TOKEN_KEY = "access_token";
-const RENEW_ENDPOINT = "/api/auth/renew";
+const RENEW_ENDPOINT = "/api/auth/session/refresh";
 // Renew proactively when token has less than this many ms remaining
-const RENEW_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+const RENEW_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes (V2 access tokens expire in 15 minutes)
 // Check interval for proactive renewal
-const RENEW_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-
-let _renewPromise: Promise<string | null> | null = null;
-let _renewTimer: ReturnType<typeof setInterval> | null = null;
-
-function decodeJwtExp(token: string): number | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]!.replace(/-/g, "+").replace(/_/g, "/")));
-    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
-  } catch {
-    return null;
-  }
-}
-
-function isTokenNearExpiry(token: string): boolean {
-  const exp = decodeJwtExp(token);
-  if (!exp) return false;
-  return exp - Date.now() < RENEW_THRESHOLD_MS;
-}
-
-function isTokenExpired(token: string): boolean {
-  const exp = decodeJwtExp(token);
-  if (!exp) return false;
-  return Date.now() >= exp;
-}
-
-async function doRenewToken(baseURL: string): Promise<string | null> {
-  const currentToken = localStorage.getItem(TOKEN_KEY);
-  if (!currentToken) return null;
-
-  try {
-    const res = await $fetch<{ jwt?: string }>(RENEW_ENDPOINT, {
-      baseURL,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${currentToken}`,
-      },
-    });
-    const newToken = res?.jwt;
-    if (typeof newToken === "string" && newToken) {
-      localStorage.setItem(TOKEN_KEY, newToken);
-      return newToken;
-    }
-  } catch {
-    // Renewal failed — token is invalid or server error
-  }
-  return null;
-}
-
-function renewToken(baseURL: string): Promise<string | null> {
-  if (!_renewPromise) {
-    _renewPromise = doRenewToken(baseURL).finally(() => {
-      _renewPromise = null;
-    });
-  }
-  return _renewPromise;
-}
+const RENEW_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 export default defineNuxtPlugin(() => {
+  const auth = useAuthStore();
   const config = useRuntimeConfig();
   const baseURL = config.public.apiBaseUrl;
 
@@ -116,6 +62,8 @@ export default defineNuxtPlugin(() => {
 
   const baseApi = $fetch.create({
     baseURL,
+    credentials: "include",
+    retry: 0,
     headers: {
       "Content-Type": "application/json",
     },
@@ -137,10 +85,9 @@ export default defineNuxtPlugin(() => {
           shouldAttachToken(path, method, token) ||
           (Boolean(token) && articleFeed)
         ) {
-          options.headers = {
-            ...options.headers,
-            Authorization: `Bearer ${token}`,
-          };
+          const headers = new Headers(options.headers as HeadersInit);
+          headers.set("Authorization", `Bearer ${token}`);
+          options.headers = headers;
         }
       }
     },
@@ -151,9 +98,20 @@ export default defineNuxtPlugin(() => {
 
   // Wrapper that intercepts 401 for automatic token renewal + retry
   const api = (async (request: any, options?: any) => {
+    const generation = auth.generation;
+    const requestToken = auth.token;
+    const cookieMutation = (String(request).startsWith("/api/auth/") && options?.method !== undefined) ||
+      String(request) === "/api/me/delete-account";
+    const perform = async () => {
+      if (auth.generation !== generation) throw staleAuthError();
+      const result = await baseApi(request, options);
+      if (auth.generation !== generation) throw staleAuthError();
+      return result;
+    };
     try {
-      return await baseApi(request, options);
+      return await (cookieMutation ? withAuthCookieLock(perform) : perform());
     } catch (err: any) {
+      if (auth.generation !== generation) throw staleAuthError();
       // 未通过入站考试的写操作被后端拒绝：广播事件，由 app.vue 引导去 /exam
       if (import.meta.client && err?.statusCode === 403 && err?.code === "EXAM_REQUIRED") {
         window.dispatchEvent(new Event("exam:required"));
@@ -161,25 +119,13 @@ export default defineNuxtPlugin(() => {
       if (
         import.meta.client &&
         err?.statusCode === 401 &&
-        !String(request).includes(RENEW_ENDPOINT)
+        !String(request).includes(RENEW_ENDPOINT) &&
+        !String(request).includes("/api/auth/session/logout")
       ) {
-        const currentToken = localStorage.getItem(TOKEN_KEY);
-        if (currentToken) {
-          const newToken = await renewToken(baseURL);
-          if (newToken) {
-            // Retry the original request with the fresh token
-            return await baseApi(request, {
-              ...options,
-              headers: {
-                ...(options?.headers || {}),
-                Authorization: `Bearer ${newToken}`,
-              },
-            });
-          }
-          // Renewal failed — clear session and notify store
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem("user_id");
-          window.dispatchEvent(new Event("auth:session-expired"));
+        if (requestToken && shouldAttachToken(String(request), (options?.method || "GET").toUpperCase(), requestToken)) {
+          const newToken = auth.token !== requestToken ? auth.token : await auth.renewToken();
+          if (auth.generation !== generation) throw staleAuthError();
+          if (newToken) return await (cookieMutation ? withAuthCookieLock(perform) : perform());
         }
       }
       throw err;
@@ -190,14 +136,27 @@ export default defineNuxtPlugin(() => {
   if (import.meta.client) {
     const proactiveRenew = () => {
       const token = localStorage.getItem(TOKEN_KEY);
-      if (token && isTokenNearExpiry(token) && !isTokenExpired(token)) {
-        renewToken(baseURL);
+      if (token && isTokenNearExpiry(token, RENEW_THRESHOLD_MS)) {
+        void auth.renewToken();
       }
     };
 
     // Initial check after a short delay
     setTimeout(proactiveRenew, 5000);
-    _renewTimer = setInterval(proactiveRenew, RENEW_CHECK_INTERVAL_MS);
+    setInterval(proactiveRenew, RENEW_CHECK_INTERVAL_MS);
+    window.addEventListener("online", () => {
+      if (!auth.isLogin && localStorage.getItem(LOGOUT_KEY) === "pending") void auth.logout();
+    });
+    window.addEventListener("storage", (event) => {
+      if (event.key === TOKEN_KEY && event.newValue !== auth.token) {
+        // Invalidate pending requests before hydrating the other tab's login.
+        auth.generation += 1;
+        auth.user = null;
+        auth.token = event.newValue || "";
+        window.dispatchEvent(new CustomEvent("auth:logout"));
+        if (auth.token) void auth.fetchSelfUser();
+      }
+    });
   }
 
   return {

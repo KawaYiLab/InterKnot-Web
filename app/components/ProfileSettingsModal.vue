@@ -70,7 +70,8 @@ const closeLogout = () => {
   closeSub();
 };
 const confirmLogout = async () => {
-  authStore.clearSession();
+  const revoked = await authStore.logout();
+  if (!revoked) message.warning("已退出本机登录，网络恢复后会重试撤销服务器会话");
   emit("close");
   await router.replace("/");
 };
