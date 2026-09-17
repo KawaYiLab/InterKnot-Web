@@ -6,8 +6,11 @@ node_modules
 coverage
 test-results
 playwright-report
+.playwright-cli
+output/playwright
 server
 /.windsurf
 .env
 /.zcode
 /.claude
+/.agents

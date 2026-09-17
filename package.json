@@ -8,6 +8,8 @@
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
+    "typecheck": "vue-tsc --noEmit",
+    "type-check": "vue-tsc --noEmit",
     "test": "npm run test:unit",
     "test:unit": "nuxt prepare && vitest run",
     "test:watch": "nuxt prepare && vitest",

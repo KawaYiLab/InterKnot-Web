@@ -41,39 +41,12 @@ const mihoyo = useMihoyoQr({
   width: 220,
   onConfirmed: async (res) => {
     if (!res.auth.token) throw new Error("登录失败：未获取到 Token");
-    const isNewUser = res.isNewUser;
     await onLoginSuccess(res.auth.token, res.auth.user);
-    if (isNewUser) await onMihoyoSignedUp(res.auth.user.name || res.auth.user.username || "");
   },
   onError: (err) => {
     message.error(resolveErrorMessage(err, "米游社登录失败"));
   },
 });
-
-/**
- * 米游社扫码建了新号之后的引导。
- *
- * 这个号此刻唯一的凭据就是米游社扫码：没有可用邮箱，密码是随机生成的。
- * 用户很容易是「本来就有邮箱账号、只是没登录就扫了码」，于是白得一个换不回去的小号。
- * 所以先把「这是个新号」说清楚，并把补邮箱放在主按钮上——补上之后账号可找回、
- * 米游社也能解绑，后面所有换绑/找回的麻烦都不会发生。不强制，只是默认引导。
- */
-const onMihoyoSignedUp = async (username: string) => {
-  // 登录已经成功，二维码这一层先收掉，免得引导弹窗压在还在淡出的扫码遮罩下面
-  exitMihoyoMode();
-  const bindEmail = await confirmDialog.open({
-    title: "欢迎来到绳网！",
-    message:
-      `为了保障您的账号安全` +
-      `建议绑定安全邮箱，完成入站考试后即可正式加入绳网社区！`,
-    confirmText: "绑定邮箱",
-    cancelText: "入站考试",
-  });
-  await navigateTo(bindEmail ? "/account?view=email" : "/exam");
-  if (!bindEmail) {
-    message.success("完成入站考试后即可解锁发布委托、评论等功能");
-  }
-};
 
 const mihoyoQrDataUrl = mihoyo.qrDataUrl;
 const mihoyoStatus = mihoyo.qrStatus;
@@ -146,12 +119,7 @@ const onLoginSuccess = async (token: string, user: Awaited<ReturnType<typeof api
   close();
   message.success(`登录成功，${user.name || user.username || "欢迎回来"}`);
   // Asynchronously fetch full user info (with author relation) in background
-  try {
-    const fullUser = await api.getSelfUser();
-    auth.setSession(token, fullUser);
-  } catch {
-    // silently ignore — basic user info already stored
-  }
+  await auth.fetchSelfUser();
 };
 
 const validateRegisterBase = () => {
@@ -511,7 +479,7 @@ onUnmounted(() => {
                               {{ mihoyoStatusText }}
                             </p>
                             <p class="ik-mihoyo__hint">
-                              首次使用米游社登录将自动创建绳网账号。
+                              未绑定过的米游社账号首次登录才会创建绳网账号；已有绑定会登录原账号。
                             </p>
                           </div>
                         </div>

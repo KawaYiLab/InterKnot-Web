@@ -4,13 +4,21 @@ import { useMessage } from "zenless-ui";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  ComputerDesktopIcon,
   EnvelopeIcon,
+  ExclamationTriangleIcon,
   LinkIcon,
   LockClosedIcon,
   NoSymbolIcon,
+  ShieldCheckIcon,
+  TrashIcon,
   UserIcon,
 } from "@heroicons/vue/24/outline";
 import { normalizeApiError, resolveErrorMessage } from "~/utils/api-error";
+import { formatFullTime } from "~/utils/time";
+import { parseUserAgent } from "~/utils/device";
+import { groupSessionsByDate } from "~/utils/session-display";
+import type { AuthSessionItem } from "~/types/entities";
 
 const auth = useAuthStore();
 const api = useApi();
@@ -23,6 +31,9 @@ const accountData = useAccountData();
 const {
   security,
   securityLoading,
+  securityLoaded,
+  securityError,
+  ensureSecurity,
   mihoyoBinding,
   mihoyoLoading,
   mihoyoLoaded,
@@ -31,9 +42,18 @@ const {
   blockedLoading,
   blockedLoaded,
   blockedHasNext,
+  sessions,
+  sessionsLoading,
+  sessionsError,
+  sessionsLoaded,
+  sessionsRevoking,
   ensureLoaded,
   ensureMihoyo,
   ensureBlocked,
+  ensureSessions,
+  fetchSessions,
+  revokeSingleSession,
+  revokeOtherSessions,
   loadBlocked,
   setSecurity,
   setPasswordDone,
@@ -42,15 +62,9 @@ const {
   unblockUser: unblockUserAction,
 } = accountData;
 
-// -- Auth guard --
-if (import.meta.client && !auth.isLogin) {
-  loginDialog.open();
-  navigateTo("/");
-}
-
 // ── 页面视图 ─────────────────────────────────
-type AccountMenuKey = "account" | "mihoyo" | "blacklist";
-type AccountSubView = "" | "email" | "password";
+type AccountMenuKey = "account" | "devices" | "mihoyo" | "blacklist";
+type AccountSubView = "" | "email" | "password" | "delete";
 const activeMenuKey = ref<AccountMenuKey>("account");
 const activeSubView = ref<AccountSubView>("");
 const panelTransitionName = ref("ik-ac-fade");
@@ -67,7 +81,9 @@ const onMenuChange = (name: string | number) => {
   panelTransitionName.value = isMobile.value && atRoot.value ? "ik-ac-slide-right" : "ik-ac-fade";
   activeMenuKey.value = key;
   activeSubView.value = "";
-  if (key === "mihoyo") {
+  if (key === "devices") {
+    void ensureSessions();
+  } else if (key === "mihoyo") {
     if (!mihoyoLoaded.value) {
       ensureMihoyo().then(() => {
         if (!mihoyoBinding.value && activeMenuKey.value === "mihoyo") {
@@ -89,16 +105,6 @@ const mihoyo = useMihoyoQr({
   width: 200,
   onConfirmed: (res) => {
     setMihoyoBinding(res.binding);
-    if (res.takeover) {
-      // 之前未登录时扫码误建过一个号，绑定时已把它清掉，得说清楚免得用户以为丢号了
-      const from = res.takeover.fromUsername;
-      message.success(
-        from
-          ? `绑定成功，已从之前误创建的账号「${from}」转移过来`
-          : "绑定成功，已从之前误创建的账号转移过来",
-      );
-      return;
-    }
     message.success("米游社账号绑定成功");
   },
   onError: (err) => {
@@ -132,6 +138,19 @@ const mihoyoMetaText = computed(() => {
 });
 
 const unbindMihoyo = async () => {
+  if (mihoyoOnlyAccount.value) {
+    message.warning("当前账号仅可通过米游社登录，解绑将导致账号失联。请先绑定邮箱，或在「账号」中注销当前账号");
+    return;
+  }
+  const confirmed = await confirmDialog.open({
+    title: "解除米哈游账号绑定",
+    message: "解绑后将无法再使用该米哈游账号登录此绳网账号，确定解除绑定吗？",
+    confirmText: "确认解绑",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!confirmed) return;
+
   await unbindMihoyoAction();
   void startMihoyoQr();
 };
@@ -202,6 +221,48 @@ const openPassword = () => {
   setPasswordConfirmInput.value = "";
 };
 
+const deletePasswordInput = ref("");
+const deleteConfirmTextInput = ref("");
+const deleteLoading = ref(false);
+
+const openDeleteAccount = () => {
+  panelTransitionName.value = "ik-ac-slide-right";
+  activeMenuKey.value = "account";
+  activeSubView.value = "delete";
+  deletePasswordInput.value = "";
+  deleteConfirmTextInput.value = "";
+  void ensureSecurity(true);
+};
+
+const handleDeleteAccount = async () => {
+  if (!securityLoaded.value || securityLoading.value || securityError.value || deleteLoading.value) return;
+  const generation = auth.generation;
+  const confirmed = await confirmDialog.open({
+    title: "注销账号确认",
+    message: "确定要注销此账号吗？注销后数据将被脱敏，所有第三方登录凭据与邮箱将立即释放，此操作不可撤回！",
+    confirmText: "确认注销",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!confirmed || generation !== auth.generation) return;
+
+  deleteLoading.value = true;
+  try {
+    await api.deleteAccount({
+      password: deletePasswordInput.value || undefined,
+      confirmText: deleteConfirmTextInput.value || undefined,
+    });
+    if (generation !== auth.generation) return;
+    message.success("账号已成功注销");
+    auth.clearSession();
+    await navigateTo("/");
+  } catch (err: any) {
+    message.error(resolveErrorMessage(err, "注销账号失败"));
+  } finally {
+    deleteLoading.value = false;
+  }
+};
+
 const goBack = () => {
   panelTransitionName.value = "ik-ac-slide-left";
   stopMihoyoQr();
@@ -212,30 +273,29 @@ const goBack = () => {
   setPasswordCodeInput.value = "";
   setPasswordInput.value = "";
   setPasswordConfirmInput.value = "";
+  deletePasswordInput.value = "";
+  deleteConfirmTextInput.value = "";
 };
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 /**
  * 邮箱被别的账号占用，且当前号只能扫码登录——这几乎一定是同一个人：
- * 他填的是自己主账号的邮箱。只回一句「已被占用」帮不上忙，
- * 直接给出可行路径：退出去用邮箱登录主账号，再扫码绑定，这个号会被接管并清理。
+ * 他填的是自己主账号的邮箱。告知用户需在当前页面注销小号释放米游社绑定后再登主账号绑定。
  */
 const isEmailTakenByOwnAccount = (err: unknown) =>
   normalizeApiError(err).code === "EMAIL_ALREADY_TAKEN" && mihoyoOnlyAccount.value;
 
 const handleEmailTakenByOwnAccount = async () => {
-  const relogin = await confirmDialog.open({
-    title: "可是这个邮箱属于另一个账号欸",
+  const proceedToDelete = await confirmDialog.open({
+    title: "该邮箱属于你的另一个账号",
     message:
-      "如果那才是你的主账号，请直接在那个账号绑定米游社",
-    confirmText: "退出登录",
+      "该邮箱已绑定在你的另一个账号上。若你想将当前的米游社账号绑定至该主账号，因米游社账号同一时间只能绑定一个绳网账号，请先在当前页面完成「注销账号」以释放绑定，然后再登录主账号进行绑定。",
+    confirmText: "前往注销账号",
     cancelText: "换个邮箱",
   });
-  if (!relogin) return;
-  auth.clearSession();
-  await navigateTo("/");
-  loginDialog.open();
+  if (!proceedToDelete) return;
+  openDeleteAccount();
 };
 
 const sendBindEmailCode = async () => {
@@ -347,6 +407,54 @@ const confirmSetPassword = async () => {
   }
 };
 
+// ── 设备与会话管理 ─────────────────────────────
+const devicesMetaText = computed(() => {
+  if (sessionsLoading.value && !sessions.value.length) return "加载中";
+  if (!sessionsLoaded.value && !sessions.value.length) return "管理登录设备";
+  return sessions.value.length ? `${sessions.value.length} 个会话` : "0 个会话";
+});
+
+const sessionGroups = computed(() => groupSessionsByDate(sessions.value));
+
+const hasOtherSessions = computed(() => {
+  return sessions.value.some((s) => !s.isCurrent);
+});
+
+const handleRevokeSingle = async (session: AuthSessionItem) => {
+  if (session.isCurrent) return;
+  const generation = auth.generation;
+
+  const uaInfo = parseUserAgent(session.userAgent);
+  const ok = await confirmDialog.open({
+    title: "下线设备",
+    message: `确定要下线该设备（${uaInfo.label}）吗？下线后该设备需要重新登录。`,
+    confirmText: "下线",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok || generation !== auth.generation) return;
+  await revokeSingleSession(session.id);
+};
+
+const handleRevokeOthers = async () => {
+  const generation = auth.generation;
+  const otherCount = sessions.value.filter((s) => !s.isCurrent).length;
+  if (otherCount === 0) {
+    message.warning("当前没有其他已登录设备");
+    return;
+  }
+
+  const ok = await confirmDialog.open({
+    title: "下线其他所有设备",
+    message: `确定要下线除当前设备外的全部 ${otherCount} 个会话吗？这些设备将立即失效并需要重新登录。`,
+    confirmText: "确认",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok || generation !== auth.generation) return;
+  await revokeOtherSessions();
+};
+
 // ── 黑名单管理 ─────────────────────────────
 const blacklistMetaText = computed(() => {
   if (blockedLoading.value) return "加载中";
@@ -354,13 +462,21 @@ const blacklistMetaText = computed(() => {
   return blockedUsers.value.length ? `${blockedUsers.value.length} 个用户` : "0 个用户";
 });
 
-onMounted(() => {
-  if (!auth.isLogin) return;
+onMounted(async () => {
+  await auth.hydrateFromStorage();
+  if (!auth.isLogin) {
+    loginDialog.open();
+    await navigateTo("/");
+    return;
+  }
   void ensureLoaded();
-  // 米游社建号引导（LoginDialog）会带 ?view=email 过来，直接落在绑定邮箱页
+  // 支持通过链接直接打开绑定邮箱或设备会话页。
   if (route.query.view === "email") {
     activeMenuKey.value = "account";
     activeSubView.value = "email";
+  } else if (route.query.view === "devices") {
+    activeMenuKey.value = "devices";
+    void ensureSessions();
   }
 });
 
@@ -369,7 +485,8 @@ useHead({ title: "账号中心" });
 
 <template>
   <section class="ik-account-page">
-    <div class="ik-account-page__columns">
+    <p v-if="!auth.hydrationReady" class="ik-ac-loading">正在恢复登录状态…</p>
+    <div v-else-if="auth.isLogin" class="ik-account-page__columns">
       <aside v-if="!isMobile" class="ik-account-page__nav">
         <z-menu class="ik-account-menu" :model-value="activeMenuKey" @change="onMenuChange">
           <z-menu-item name="account">
@@ -378,6 +495,16 @@ useHead({ title: "账号中心" });
               <div class="ik-account-menu__text">
                 <span class="ik-account-menu__title">账号</span>
                 <span class="ik-account-menu__meta">{{ accountMetaText }}</span>
+              </div>
+            </div>
+          </z-menu-item>
+
+          <z-menu-item name="devices">
+            <div class="ik-account-menu__content">
+              <ComputerDesktopIcon class="ik-account-menu__icon" />
+              <div class="ik-account-menu__text">
+                <span class="ik-account-menu__title">已登录设备与会话</span>
+                <span class="ik-account-menu__meta">{{ devicesMetaText }}</span>
               </div>
             </div>
           </z-menu-item>
@@ -440,6 +567,32 @@ useHead({ title: "账号中心" });
                 >
                   {{ securityLoading ? '加载中' : security?.hasPassword ? '已设置' : '未设置' }}
                 </span>
+                <span class="ik-ac-row__chevron" aria-hidden="true">
+                  <ChevronRightIcon aria-hidden="true" />
+                </span>
+              </button>
+              <button class="ik-ac-row ik-ac-row--danger" @click="openDeleteAccount">
+                <span class="ik-ac-row__label ik-ac-row__label--danger">
+                  <TrashIcon class="ik-ac-row__icon" aria-hidden="true" />
+                  注销账号
+                </span>
+                <span class="ik-ac-row__value is-danger">永久注销</span>
+                <span class="ik-ac-row__chevron" aria-hidden="true">
+                  <ChevronRightIcon aria-hidden="true" />
+                </span>
+              </button>
+            </div>
+
+            <div class="ik-ac-section">
+              <div class="ik-ac-section__head">
+                <span class="ik-ac-section__label">设备与安全</span>
+              </div>
+              <button class="ik-ac-row" @click="onMenuChange('devices')">
+                <span class="ik-ac-row__label">
+                  <ComputerDesktopIcon class="ik-ac-row__icon" aria-hidden="true" />
+                  已登录设备与会话
+                </span>
+                <span class="ik-ac-row__value">{{ devicesMetaText }}</span>
                 <span class="ik-ac-row__chevron" aria-hidden="true">
                   <ChevronRightIcon aria-hidden="true" />
                 </span>
@@ -519,6 +672,17 @@ useHead({ title: "账号中心" });
                   >
                     {{ securityLoading ? '加载中' : security?.hasPassword ? '已设置' : '未设置' }}
                   </span>
+                  <span class="ik-ac-row__chevron" aria-hidden="true">
+                    <ChevronRightIcon aria-hidden="true" />
+                  </span>
+                </button>
+
+                <button class="ik-ac-row ik-ac-row--danger" @click="openDeleteAccount">
+                  <span class="ik-ac-row__label ik-ac-row__label--danger">
+                    <TrashIcon class="ik-ac-row__icon" aria-hidden="true" />
+                    注销账号
+                  </span>
+                  <span class="ik-ac-row__value is-danger">永久注销</span>
                   <span class="ik-ac-row__chevron" aria-hidden="true">
                     <ChevronRightIcon aria-hidden="true" />
                   </span>
@@ -651,6 +815,162 @@ useHead({ title: "账号中心" });
                 </template>
               </div>
             </template>
+
+            <template v-else-if="activeSubView === 'delete'">
+              <header class="ik-ac-detail-header ik-ac-detail-header--stacked">
+                <button class="ik-ac-back" aria-label="返回" @click="goBack">
+                  <ChevronLeftIcon aria-hidden="true" />
+                </button>
+                <h2 class="ik-ac-detail-title">注销账号</h2>
+                <div class="ik-ac-detail-spacer" />
+              </header>
+
+              <div class="ik-ac-detail-body ik-ac-detail-body--pushed">
+                <div class="ik-ac-delete-warning">
+                  <ExclamationTriangleIcon class="ik-ac-delete-warning__icon" aria-hidden="true" />
+                  <div class="ik-ac-delete-warning__text">
+                    <p class="ik-ac-delete-warning__title">注销操作不可逆</p>
+                    <p class="ik-ac-delete-warning__desc">
+                      注销后，账号将被永久冻结，所有设备会话立即失效。
+                    </p>
+                  </div>
+                </div>
+
+                <p v-if="securityLoading" class="ik-ac-loading">正在加载安全信息…</p>
+                <div v-else-if="securityError" role="alert">
+                  <p>{{ securityError }}</p>
+                  <z-button @click="ensureSecurity(true)">重试</z-button>
+                </div>
+                <z-form v-else-if="securityLoaded" class="ik-ac-form" label-position="top">
+                  <template v-if="security?.hasPassword">
+                    <z-form-item label="密码核验">
+                      <z-input
+                        v-model="deletePasswordInput"
+                        type="password"
+                        placeholder="请输入当前账号密码"
+                      />
+                    </z-form-item>
+                  </template>
+                  <template v-else>
+                    <z-form-item label="注销确认">
+                      <z-input
+                        v-model="deleteConfirmTextInput"
+                        placeholder="请输入“确认注销”以核验身份"
+                      />
+                    </z-form-item>
+                  </template>
+                </z-form>
+
+                <div class="ik-ac-form-actions">
+                  <z-button
+                    :disabled="deleteLoading"
+                    @click="goBack"
+                  >
+                    取消
+                  </z-button>
+                  <z-button
+                    class="ik-ac-btn--danger"
+                    :icon="{ error: '#ff4444' }"
+                    :disabled="!securityLoaded || securityLoading || !!securityError || deleteLoading || (security?.hasPassword ? !deletePasswordInput.trim() : deleteConfirmTextInput.trim() !== '确认注销')"
+                    @click="handleDeleteAccount"
+                  >
+                    {{ deleteLoading ? '注销中…' : '确认' }}
+                  </z-button>
+                </div>
+              </div>
+            </template>
+          </template>
+
+          <!-- 设备与会话管理 -->
+          <template v-else-if="activeMenuKey === 'devices'">
+            <header class="ik-ac-detail-header ik-ac-detail-header--devices">
+              <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
+                <ChevronLeftIcon aria-hidden="true" />
+              </button>
+              <div class="ik-ac-detail-title-wrap">
+                <h2 class="ik-ac-detail-title">已登录设备与会话</h2>
+                <p class="ik-ac-detail-desc">以下是您近期的操作日志详情 ，若存在异常记录，建议尽快修改密码</p>
+              </div>
+              <div v-if="isMobile" class="ik-ac-detail-spacer" />
+            </header>
+
+            <div class="ik-ac-devices-toolbar">
+              <span class="ik-ac-devices-count">
+                {{ sessionsLoading ? "加载中…" : sessionsError ? "加载失败" : sessions.length ? `共 ${sessions.length} 个活跃会话` : "暂无活跃会话" }}
+              </span>
+              <button
+                v-if="hasOtherSessions"
+                type="button"
+                class="ik-ac-revoke-others-btn"
+                :disabled="sessionsLoading || sessionsRevoking !== null"
+                @click="handleRevokeOthers"
+              >
+                {{ sessionsRevoking === 'others' ? '正在下线…' : '下线其他设备' }}
+              </button>
+            </div>
+
+            <div class="ik-ac-detail-body">
+              <template v-if="sessionsLoading && !sessions.length">
+                <p class="ik-ac-loading">加载设备会话列表中…</p>
+              </template>
+
+              <template v-else-if="sessionsError">
+                <div class="ik-ac-empty" role="alert">
+                  <p>{{ sessionsError }}</p>
+                  <z-button @click="fetchSessions(true)">重试</z-button>
+                </div>
+              </template>
+
+              <template v-else-if="!sessions.length">
+                <div class="ik-ac-empty">
+                  <ComputerDesktopIcon class="ik-ac-empty__icon" aria-hidden="true" />
+                  <span>暂无已记录的设备会话</span>
+                </div>
+              </template>
+
+              <div v-else class="ik-ac-sessions-list">
+                <section v-for="group in sessionGroups" :key="group.key" class="ik-ac-session-group">
+                  <h3 class="ik-ac-session-group__date">{{ group.label }}</h3>
+                  <ul class="ik-ac-session-group__list">
+                    <li
+                      v-for="item in group.items"
+                      :key="item.session.id"
+                      class="ik-ac-session-card"
+                    >
+                      <div class="ik-ac-session-card__title-row">
+                        <span class="ik-ac-session-card__title">{{ item.title }}</span>
+                        <span v-if="item.session.isCurrent" class="ik-ac-current-badge">当前设备</span>
+                      </div>
+                      <button
+                        v-if="!item.session.isCurrent"
+                        type="button"
+                        class="ik-ac-session-card__revoke"
+                        :disabled="sessionsRevoking !== null"
+                        :aria-label="`下线${item.browser}设备，${item.location}，${item.ip}`"
+                        @click="handleRevokeSingle(item.session)"
+                      >
+                        {{ sessionsRevoking === item.session.id ? '下线中…' : '下线' }}
+                      </button>
+                      <div class="ik-ac-session-card__meta">
+                        <span class="ik-ac-session-card__browser">{{ item.browser }}</span>
+                        <span class="ik-ac-session-card__separator" aria-hidden="true">|</span>
+                        <span class="ik-ac-session-card__location">
+                          {{ item.location }} <span class="ik-ac-session-card__ip">({{ item.ip }})</span>
+                        </span>
+                      </div>
+                      <time
+                        class="ik-ac-session-card__time"
+                        :datetime="item.datetime || undefined"
+                        :title="`${item.timeLabel} ${formatFullTime(item.datetime)}`"
+                      >
+                        <span v-if="item.timeLabel === '最近活跃'" class="ik-ac-session-card__time-label">最近活跃</span>
+                        {{ item.time }}
+                      </time>
+                    </li>
+                  </ul>
+                </section>
+              </div>
+            </div>
           </template>
 
           <!-- 连接 / 米游社 -->
@@ -689,11 +1009,14 @@ useHead({ title: "账号中心" });
                 </div>
                 <z-button
                   class="ik-ac-unbind-btn"
-                  :disabled="mihoyoUnbinding || mihoyoOnlyAccount"
+                  :disabled="mihoyoUnbinding"
                   @click="unbindMihoyo"
                 >
                   {{ mihoyoUnbinding ? "解绑中…" : "解除绑定" }}
                 </z-button>
+                <p v-if="mihoyoOnlyAccount" class="ik-ac-security-send-hint is-warning">
+                  当前账号未绑定邮箱，解绑后将无法登录。请先在「账号」中绑定邮箱，或注销当前账号。
+                </p>
               </template>
 
               <template v-else>
@@ -996,6 +1319,62 @@ useHead({ title: "账号中心" });
 
 .ik-ac-row__value.is-empty {
   color: #555;
+}
+
+.ik-ac-row__label--danger {
+  color: #ff5252;
+}
+
+.ik-ac-row__label--danger .ik-ac-row__icon {
+  color: #ff5252;
+}
+
+.ik-ac-row__value.is-danger {
+  color: #ff5252;
+  font-size: 13px;
+}
+
+.ik-ac-delete-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  background: rgba(255, 68, 68, 0.08);
+  border: 1px solid rgba(255, 68, 68, 0.25);
+  border-radius: 12px;
+}
+
+.ik-ac-delete-warning__icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: #ff5252;
+  margin-top: 2px;
+}
+
+.ik-ac-delete-warning__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ik-ac-delete-warning__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ff5252;
+  margin: 0 0 4px 0;
+}
+
+.ik-ac-delete-warning__desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #bbb;
+  margin: 0;
+}
+
+.ik-ac-security-send-hint.is-warning {
+  color: #ff9800;
+  margin-top: 8px;
 }
 
 .ik-ac-row__chevron {
@@ -1369,6 +1748,210 @@ useHead({ title: "账号中心" });
   font-size: 13px;
   color: #555;
   text-align: center;
+}
+
+/* ── 设备与会话管理 ── */
+.ik-ac-detail-header--devices {
+  align-items: flex-start;
+}
+
+.ik-ac-detail-title-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ik-ac-detail-header--devices .ik-ac-detail-title {
+  text-align: left;
+}
+
+.ik-ac-detail-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #888;
+  line-height: 1.4;
+}
+
+.ik-ac-devices-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ik-ac-devices-count {
+  font-size: 13px;
+  color: #888;
+  font-weight: 500;
+}
+
+.ik-ac-revoke-others-btn {
+  min-height: 36px;
+  padding: 6px 0 6px 8px;
+  border: 0;
+  background: transparent;
+  color: #dca0a3;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ik-ac-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+}
+
+.ik-ac-session-group__date {
+  margin: 0 0 12px;
+  padding-left: 4px;
+  color: #dedee3;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.ik-ac-session-group__list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.ik-ac-session-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 16px 18px;
+  background: #232326;
+  border-radius: 12px;
+}
+
+.ik-ac-session-card__title-row {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.ik-ac-session-card__title {
+  color: #f1f1f4;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.ik-ac-current-badge {
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(191, 255, 9, 0.09);
+  color: #bfff09;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.ik-ac-session-card__meta {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+  color: #a4a4b0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.ik-ac-session-card__browser {
+  white-space: nowrap;
+}
+
+.ik-ac-session-card__ip {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.ik-ac-session-card__separator {
+  color: #55555f;
+}
+
+.ik-ac-session-card__location {
+  overflow-wrap: anywhere;
+}
+
+.ik-ac-session-card__time {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: end;
+  color: #a4a4b0;
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ik-ac-session-card__time-label {
+  margin-right: 5px;
+}
+
+.ik-ac-session-card__revoke {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  min-height: 28px;
+  padding: 2px 0 2px 12px;
+  border: 0;
+  background: transparent;
+  color: #dca0a3;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ik-ac-session-card__revoke:hover,
+.ik-ac-revoke-others-btn:hover {
+  color: #ffb6ba;
+}
+
+.ik-ac-session-card__revoke:focus-visible,
+.ik-ac-revoke-others-btn:focus-visible {
+  outline: 2px solid var(--ik-primary);
+  outline-offset: 4px;
+}
+
+.ik-ac-session-card__revoke:disabled,
+.ik-ac-revoke-others-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .ik-ac-session-card {
+    gap: 8px 12px;
+    padding: 14px;
+  }
+
+  .ik-ac-session-card__time-label {
+    display: block;
+    margin: 0;
+  }
+
 }
 
 /* ═══════════════════════════════════════════════
