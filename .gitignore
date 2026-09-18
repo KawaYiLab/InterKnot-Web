@@ -8,6 +8,7 @@ test-results
 playwright-report
 .playwright-cli
 output/playwright
+output/*.tar.gz
 server
 /.windsurf
 .env
