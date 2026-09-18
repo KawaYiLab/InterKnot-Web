@@ -143,7 +143,7 @@ export interface MihoyoQrCreateResult {
   qrUrl: string;
   ticket: string;
   expiresIn: number;
-  mode: "login" | "bind";
+  mode: "login" | "bind" | "delete";
 }
 
 export type MihoyoQrPollResult =
@@ -161,6 +161,12 @@ export type MihoyoQrPollResult =
       isNewUser: boolean;
       binding: MihoyoBinding | null;
       auth: AuthResult;
+    }
+  | {
+      status: "confirmed";
+      mode: "delete";
+      /** 扫到的米游社账号是否就是当前账号本人；false 时前端提示换号重扫 */
+      matched: boolean;
     };
 
 interface SendRegisterCodeResult {
@@ -810,18 +816,20 @@ export function useApi() {
   // mode 由调用方显式声明：login 时后端会忽略 Authorization（浏览器里残留 token 也不会
   // 误进绑定模式），bind 时后端要求已登录。
   const createMihoyoQr = async (
-    mode: "login" | "bind" = "login",
+    mode: "login" | "bind" | "delete" = "login",
   ): Promise<MihoyoQrCreateResult> => {
     const response = await $api("/api/auth/mihoyo/qr", {
       method: "POST",
       body: { mode },
     });
     const data = response as Record<string, unknown>;
+    const resolvedMode =
+      data.mode === "bind" ? "bind" : data.mode === "delete" ? "delete" : "login";
     return {
       qrUrl: String(data.qrUrl || ""),
       ticket: String(data.ticket || ""),
       expiresIn: Number(data.expiresIn || 180),
-      mode: data.mode === "bind" ? "bind" : "login",
+      mode: resolvedMode,
     };
   };
 
@@ -834,6 +842,13 @@ export function useApi() {
     const status = String(data.status || "expired");
     if (status !== "confirmed") {
       return { status: status as "waiting" | "scanned" | "expired" | "cancelled" };
+    }
+    if (data.mode === "delete") {
+      return {
+        status: "confirmed",
+        mode: "delete",
+        matched: data.matched === true,
+      };
     }
     const binding = (data.binding as MihoyoBinding | null) ?? null;
     if (data.mode === "bind") {
@@ -2086,7 +2101,22 @@ export function useApi() {
     };
   };
 
-  const deleteAccount = async (params: { password?: string; confirmText?: string }): Promise<{ success: boolean }> => {
+  const sendDeleteAccountCode = async (): Promise<SendRegisterCodeResult> => {
+    const response = await $api("/api/me/delete-account/send-code", {
+      method: "POST",
+      body: {},
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      email: String(data.email || ""),
+      sent: data.sent === true,
+      expiresIn: Number(data.expiresIn || 600),
+      cooldown: Number(data.cooldown || 60),
+    };
+  };
+
+  // 注销核验：有真实邮箱的账号传 code（邮箱验证码），纯米游社扫码号传 ticket（重新扫码结果）。
+  const deleteAccount = async (params: { code?: string; ticket?: string }): Promise<{ success: boolean }> => {
     const response = await $api("/api/me/delete-account", {
       method: "POST",
       body: params,
@@ -2538,6 +2568,7 @@ export function useApi() {
     getMySecurity,
     sendBindEmailCode,
     bindEmail,
+    sendDeleteAccountCode,
     deleteAccount,
     // 已登录设备与会话
     getMySessions,
