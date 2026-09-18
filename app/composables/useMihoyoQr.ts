@@ -12,7 +12,7 @@ export type MihoyoQrStatus =
   | "cancelled"
   | "error";
 
-export type MihoyoQrMode = "login" | "bind";
+export type MihoyoQrMode = "login" | "bind" | "delete";
 
 type ConfirmedResult<M extends MihoyoQrMode> = Extract<
   MihoyoQrPollResult,
@@ -300,5 +300,11 @@ export function useMihoyoQr<M extends MihoyoQrMode>(options: UseMihoyoQrOptions<
     /** 手动开始 / 刷新二维码（会重置自动换码计数） */
     startQr: () => beginQr(false),
     stopQr,
+    /**
+     * 当前正在轮询 / 刚 Confirmed 的 ticket。
+     * delete 模式核验通过后要凭它调用注销接口——ticket 只在闭包里，onConfirmed 时仍有效
+     * （clearTimer 不清 ticket，只有 stopQr 才清），故用 getter 而非 ref 暴露。
+     */
+    getTicket: () => ticket,
   };
 }

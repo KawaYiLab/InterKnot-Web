@@ -132,6 +132,72 @@ const mihoyoQrStatusText = computed(() => {
   }
 });
 
+// ── 注销专用：重新扫码核验米游社账号 ─────────────
+const deleteMihoyo = useMihoyoQr({
+  mode: "delete",
+  isActive: () =>
+    activeMenuKey.value === "account" &&
+    activeSubView.value === "delete" &&
+    deleteNeedsScan.value,
+  width: 200,
+  onConfirmed: (res) => {
+    // res.matched=true 表示扫到的就是当前账号本人；false 则提示换号重扫
+    if (res.matched) {
+      deleteScanVerified.value = true;
+    } else {
+      deleteScanVerified.value = false;
+      message.error("扫码的米游社账号与当前账号不一致，请使用当前账号绑定的米游社扫码");
+    }
+  },
+  onError: (err) => {
+    deleteScanVerified.value = false;
+    message.error(resolveErrorMessage(err, "扫码核验失败，请刷新重试"));
+  },
+});
+
+const deleteQrDataUrl = deleteMihoyo.qrDataUrl;
+const deleteQrStatus = deleteMihoyo.qrStatus;
+const deleteQrNeedRefresh = deleteMihoyo.qrNeedRefresh;
+
+// Confirmed 但未匹配也算「需重扫」：状态停在 confirmed，但核验没过
+const deleteScanNeedRefresh = computed(
+  () => deleteQrNeedRefresh.value || (deleteQrStatus.value === "confirmed" && !deleteScanVerified.value),
+);
+
+const deleteQrStatusText = computed(() => {
+  if (deleteScanVerified.value) return "核验通过，请点击下方「确认注销」";
+  // Confirmed 但未 verified = 扫到的不是本人：明确提示换号重扫，不能显示「核验中…」
+  if (deleteQrStatus.value === "confirmed") return "扫码账号与当前账号不一致，请刷新后用本账号绑定的米游社重扫";
+  switch (deleteQrStatus.value) {
+    case "loading": return "二维码生成中…";
+    case "waiting": return "请使用米游社 App 扫码核验";
+    case "scanned": return "已扫码，请在米游社 App 中确认";
+    case "retrying": return "网络不太稳定，正在重试…";
+    case "expired": return "二维码已过期，点击刷新";
+    case "cancelled": return "已取消扫码，点击刷新重试";
+    case "error": return "核验失败，点击刷新重试";
+    default: return "点击刷新重试";
+  }
+});
+
+const refreshDeleteQr = () => {
+  deleteScanVerified.value = false;
+  void deleteMihoyo.startQr();
+};
+
+// 进入/离开注销页且为纯扫码号时，自动起停扫码轮询
+watch(
+  () => activeMenuKey.value === "account" && activeSubView.value === "delete" && deleteNeedsScan.value,
+  (needScan) => {
+    if (needScan) {
+      deleteScanVerified.value = false;
+      void deleteMihoyo.startQr();
+    } else {
+      deleteMihoyo.stopQr();
+    }
+  },
+);
+
 const mihoyoMetaText = computed(() => {
   if (mihoyoLoading.value) return "加载中";
   return mihoyoBinding.value ? (mihoyoBinding.value.zzzNickname || "已绑定") : "未绑定";
@@ -174,28 +240,41 @@ const setPasswordInput = ref("");
 const setPasswordConfirmInput = ref("");
 const setPasswordLoading = ref(false);
 
-const codeCooldown = ref(0);
-let codeCooldownTimer: ReturnType<typeof setInterval> | null = null;
+// ── 注销核验 ─────────────────────────────────
+// 注销核验方式由账号是否有真实邮箱决定：
+//  - 有邮箱 → 邮箱验证码（deleteCodeInput）
+//  - 纯米游社扫码号 → 重新扫码同一米游社账号（deleteMihoyo）
+const deleteCodeInput = ref("");
+const deleteCodeLoading = ref(false);
+// 纯扫码号：无绑定真实邮箱（占位邮箱不算）
+const deleteNeedsScan = computed(
+  () => securityLoaded.value && !security.value?.hasBoundEmail,
+);
+// 扫码核验通过（matched）后待用户点「确认」才真正注销；ticket 从 composable 取
+const deleteScanVerified = ref(false);
 
-const startCodeCooldown = (seconds: number) => {
-  if (codeCooldownTimer) {
-    clearInterval(codeCooldownTimer);
-    codeCooldownTimer = null;
-  }
-  codeCooldown.value = seconds;
-  codeCooldownTimer = setInterval(() => {
-    codeCooldown.value -= 1;
-    if (codeCooldown.value <= 0 && codeCooldownTimer) {
-      clearInterval(codeCooldownTimer);
-      codeCooldownTimer = null;
+// 发码冷却按用途各自独立：服务端冷却是按 (email, purpose) 计的，绑定邮箱 / 设置密码 /
+// 注销三处发码互不影响，共用一个计数会让一处发码把另两处的「发送」按钮误锁住。
+type CodePurpose = "bind" | "password" | "delete";
+const codeCooldowns = reactive<Record<CodePurpose, number>>({ bind: 0, password: 0, delete: 0 });
+const codeCooldownTimers: Partial<Record<CodePurpose, ReturnType<typeof setInterval>>> = {};
+
+const startCodeCooldown = (purpose: CodePurpose, seconds: number) => {
+  const existing = codeCooldownTimers[purpose];
+  if (existing) clearInterval(existing);
+  codeCooldowns[purpose] = seconds;
+  codeCooldownTimers[purpose] = setInterval(() => {
+    codeCooldowns[purpose] -= 1;
+    if (codeCooldowns[purpose] <= 0) {
+      clearInterval(codeCooldownTimers[purpose]);
+      delete codeCooldownTimers[purpose];
     }
   }, 1000);
 };
 
 onBeforeUnmount(() => {
-  if (codeCooldownTimer) {
-    clearInterval(codeCooldownTimer);
-    codeCooldownTimer = null;
+  for (const timer of Object.values(codeCooldownTimers)) {
+    if (timer) clearInterval(timer);
   }
 });
 
@@ -221,26 +300,55 @@ const openPassword = () => {
   setPasswordConfirmInput.value = "";
 };
 
-const deletePasswordInput = ref("");
-const deleteConfirmTextInput = ref("");
 const deleteLoading = ref(false);
 
 const openDeleteAccount = () => {
   panelTransitionName.value = "ik-ac-slide-right";
   activeMenuKey.value = "account";
   activeSubView.value = "delete";
-  deletePasswordInput.value = "";
-  deleteConfirmTextInput.value = "";
+  deleteCodeInput.value = "";
+  deleteScanVerified.value = false;
+  // 起停扫码交给 watch(deleteNeedsScan) 处理，这里只需刷新安全信息
   void ensureSecurity(true);
+};
+
+// 向本人已绑定的真实邮箱发送注销验证码（纯扫码号无真实邮箱，UI 不会显示此按钮）
+const sendDeleteCode = async () => {
+  if (!security.value?.hasBoundEmail) {
+    message.warning("当前账号未绑定邮箱，请通过重新扫码米游社账号注销");
+    return;
+  }
+  deleteCodeLoading.value = true;
+  try {
+    const res = await api.sendDeleteAccountCode();
+    message.success("验证码已发送");
+    startCodeCooldown("delete", res.cooldown || 60);
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "发送验证码失败"));
+  } finally {
+    deleteCodeLoading.value = false;
+  }
 };
 
 const handleDeleteAccount = async () => {
   if (!securityLoaded.value || securityLoading.value || securityError.value || deleteLoading.value) return;
+
+  // 提交前的本地校验：邮箱路径要有验证码，扫码路径要已核验通过
+  if (deleteNeedsScan.value) {
+    if (!deleteScanVerified.value) {
+      message.warning("请先使用当前账号绑定的米游社扫码核验");
+      return;
+    }
+  } else if (!deleteCodeInput.value.trim()) {
+    message.warning("请输入邮箱验证码");
+    return;
+  }
+
   const generation = auth.generation;
   const confirmed = await confirmDialog.open({
     title: "注销账号确认",
-    message: "确定要注销此账号吗？注销后数据将被脱敏，所有第三方登录凭据与邮箱将立即释放，此操作不可撤回！",
-    confirmText: "确认注销",
+    message: "确定要注销此账号吗？注销后此账号将被永久删除，此操作不可撤回！",
+    confirmText: "确认",
     cancelText: "取消",
     danger: true,
   });
@@ -248,16 +356,22 @@ const handleDeleteAccount = async () => {
 
   deleteLoading.value = true;
   try {
-    await api.deleteAccount({
-      password: deletePasswordInput.value || undefined,
-      confirmText: deleteConfirmTextInput.value || undefined,
-    });
+    await api.deleteAccount(
+      deleteNeedsScan.value
+        ? { ticket: deleteMihoyo.getTicket() || undefined }
+        : { code: deleteCodeInput.value.trim() },
+    );
     if (generation !== auth.generation) return;
     message.success("账号已成功注销");
     auth.clearSession();
     await navigateTo("/");
   } catch (err: any) {
     message.error(resolveErrorMessage(err, "注销账号失败"));
+    // 扫码 ticket 一次性，失败后必须重扫；邮箱验证码可重填，不清空
+    if (deleteNeedsScan.value) {
+      deleteScanVerified.value = false;
+      void deleteMihoyo.startQr();
+    }
   } finally {
     deleteLoading.value = false;
   }
@@ -266,6 +380,7 @@ const handleDeleteAccount = async () => {
 const goBack = () => {
   panelTransitionName.value = "ik-ac-slide-left";
   stopMihoyoQr();
+  deleteMihoyo.stopQr();
   activeMenuKey.value = "account";
   activeSubView.value = "";
   bindEmailInput.value = "";
@@ -273,8 +388,8 @@ const goBack = () => {
   setPasswordCodeInput.value = "";
   setPasswordInput.value = "";
   setPasswordConfirmInput.value = "";
-  deletePasswordInput.value = "";
-  deleteConfirmTextInput.value = "";
+  deleteCodeInput.value = "";
+  deleteScanVerified.value = false;
 };
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -308,7 +423,7 @@ const sendBindEmailCode = async () => {
   try {
     const res = await api.sendBindEmailCode(email);
     message.success("验证码已发送");
-    startCodeCooldown(res.cooldown || 60);
+    startCodeCooldown("bind", res.cooldown || 60);
   } catch (err) {
     if (isEmailTakenByOwnAccount(err)) {
       await handleEmailTakenByOwnAccount();
@@ -329,6 +444,12 @@ const clearSetPasswordForm = () => {
   setPasswordCodeInput.value = "";
   setPasswordInput.value = "";
   setPasswordConfirmInput.value = "";
+};
+
+// 「清除」只清注销页的输入态（验证码 / 扫码核验），不离开页面，与绑定邮箱 / 改密页一致
+const clearDeleteForm = () => {
+  deleteCodeInput.value = "";
+  deleteScanVerified.value = false;
 };
 
 const confirmBindEmail = async () => {
@@ -365,7 +486,7 @@ const sendSetPasswordCode = async () => {
   try {
     const res = await api.sendResetCode(security.value.email);
     message.success("验证码已发送");
-    startCodeCooldown(res.cooldown || 60);
+    startCodeCooldown("password", res.cooldown || 60);
   } catch (err) {
     message.error(resolveErrorMessage(err, "发送验证码失败"));
   } finally {
@@ -717,10 +838,10 @@ useHead({ title: "账号中心" });
                         <template #append>
                           <z-button
                             class="ik-ac-code-btn"
-                            :disabled="codeCooldown > 0 || bindEmailLoading"
+                            :disabled="codeCooldowns.bind > 0 || bindEmailLoading"
                             @click="sendBindEmailCode"
                           >
-                            {{ bindEmailLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送' }}
+                            {{ bindEmailLoading ? '发送中' : codeCooldowns.bind > 0 ? `${codeCooldowns.bind}s` : '发送' }}
                           </z-button>
                         </template>
                       </z-input>
@@ -787,10 +908,10 @@ useHead({ title: "账号中心" });
                         <template #append>
                           <z-button
                             class="ik-ac-code-btn"
-                            :disabled="codeCooldown > 0 || setPasswordLoading"
+                            :disabled="codeCooldowns.password > 0 || setPasswordLoading"
                             @click="sendSetPasswordCode"
                           >
-                            {{ setPasswordLoading ? '发送中' : codeCooldown > 0 ? `${codeCooldown}s` : '发送' }}
+                            {{ setPasswordLoading ? '发送中' : codeCooldowns.password > 0 ? `${codeCooldowns.password}s` : '发送' }}
                           </z-button>
                         </template>
                       </z-input>
@@ -841,37 +962,67 @@ useHead({ title: "账号中心" });
                   <p>{{ securityError }}</p>
                   <z-button @click="ensureSecurity(true)">重试</z-button>
                 </div>
-                <z-form v-else-if="securityLoaded" class="ik-ac-form" label-position="top">
-                  <template v-if="security?.hasPassword">
-                    <z-form-item label="密码核验">
-                      <z-input
-                        v-model="deletePasswordInput"
-                        type="password"
-                        placeholder="请输入当前账号密码"
-                      />
+                <template v-else-if="securityLoaded">
+                  <!-- 有真实邮箱：邮箱验证码核验 -->
+                  <z-form v-if="!deleteNeedsScan" class="ik-ac-form" label-position="top">
+                    <z-form-item label="邮箱验证码">
+                      <z-input v-model="deleteCodeInput" placeholder="请输入验证码">
+                        <template #append>
+                          <z-button
+                            class="ik-ac-code-btn"
+                            :disabled="codeCooldowns.delete > 0 || deleteCodeLoading"
+                            @click="sendDeleteCode"
+                          >
+                            {{ deleteCodeLoading ? '发送中' : codeCooldowns.delete > 0 ? `${codeCooldowns.delete}s` : '发送' }}
+                          </z-button>
+                        </template>
+                      </z-input>
                     </z-form-item>
-                  </template>
+                    <p class="ik-ac-security-send-hint">
+                      验证码将发送至你绑定的邮箱 {{ security?.email }}
+                    </p>
+                  </z-form>
+
+                  <!-- 无真实邮箱（纯米游社扫码号）：重新扫码同一米游社账号核验 -->
                   <template v-else>
-                    <z-form-item label="注销确认">
-                      <z-input
-                        v-model="deleteConfirmTextInput"
-                        placeholder="请输入“确认注销”以核验身份"
+                    <p class="ik-ac-security-send-hint">
+                      当前账号仅通过米游社扫码登录，请使用<strong>当前账号绑定的米游社账号</strong>再次扫码以核验身份
+                    </p>
+                    <div class="ik-ac-qr-box" :class="{ 'is-dimmed': deleteScanNeedRefresh }">
+                      <img
+                        v-if="deleteQrDataUrl && !deleteScanVerified"
+                        :src="deleteQrDataUrl"
+                        alt="米游社注销核验二维码"
+                        class="ik-ac-qr"
+                        draggable="false"
                       />
-                    </z-form-item>
+                      <div v-else class="ik-ac-qr-placeholder" />
+                      <button
+                        v-if="deleteScanNeedRefresh"
+                        type="button"
+                        class="ik-ac-qr-refresh"
+                        @click="refreshDeleteQr"
+                      >
+                        刷新二维码
+                      </button>
+                    </div>
+                    <p class="ik-ac-qr-status" :class="deleteScanVerified ? 'is-confirmed' : `is-${deleteQrStatus}`">
+                      {{ deleteQrStatusText }}
+                    </p>
                   </template>
-                </z-form>
+                </template>
 
                 <div class="ik-ac-form-actions">
                   <z-button
+                    :icon="{ error: '#ff4444' }"
                     :disabled="deleteLoading"
-                    @click="goBack"
+                    @click="clearDeleteForm"
                   >
-                    取消
+                    清除
                   </z-button>
                   <z-button
-                    class="ik-ac-btn--danger"
-                    :icon="{ error: '#ff4444' }"
-                    :disabled="!securityLoaded || securityLoading || !!securityError || deleteLoading || (security?.hasPassword ? !deletePasswordInput.trim() : deleteConfirmTextInput.trim() !== '确认注销')"
+                    :icon="{ success: '#00cc0d' }"
+                    :disabled="!securityLoaded || securityLoading || !!securityError || deleteLoading || (deleteNeedsScan ? !deleteScanVerified : !deleteCodeInput.trim())"
                     @click="handleDeleteAccount"
                   >
                     {{ deleteLoading ? '注销中…' : '确认' }}
