@@ -55,5 +55,11 @@ export function useHomeStateCache() {
     _snapshot = null;
   }
 
-  return { save, restore, consumeScrollY, clear };
+  /** 身份变化时同时丢弃旧列表和滚动位置；普通路由返回仍使用 clear()。 */
+  function reset() {
+    clear();
+    _pendingScrollY = 0;
+  }
+
+  return { save, restore, consumeScrollY, clear, reset };
 }

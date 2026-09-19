@@ -16,6 +16,8 @@ const form = reactive({
 
 const isRegister = ref(false);
 const isReset = ref(false);
+// 登录模式下的子模式：邮箱验证码登录（关闭时为密码登录）
+const isCodeLogin = ref(false);
 const isLoading = ref(false);
 const isCodeSent = ref(false);
 const isSendingCode = ref(false);
@@ -106,6 +108,7 @@ const resetForm = () => {
   form.confirmPassword = "";
   isRegister.value = false;
   isReset.value = false;
+  isCodeLogin.value = false;
   isLoading.value = false;
   isCodeSent.value = false;
   cooldown.value = 0;
@@ -140,6 +143,14 @@ const sendCode = async () => {
   try {
     if (isReset.value) {
       const res = await api.sendResetCode(form.email.trim());
+      isCodeSent.value = true;
+      form.email = res.email;
+      startCooldown(res.cooldown);
+      message.success("验证码已发送，请查收邮箱");
+    } else if (isCodeLogin.value) {
+      // 登录验证码：后端对未注册/占位邮箱静默返回成功以防枚举，
+      // 这里统一提示「已发送」，收不到码由用户自行判断邮箱是否注册。
+      const res = await api.sendLoginCode(form.email.trim());
       isCodeSent.value = true;
       form.email = res.email;
       startCooldown(res.cooldown);
@@ -181,6 +192,18 @@ const submit = async () => {
     }
 
     if (!isRegister.value) {
+      // 邮箱验证码登录
+      if (isCodeLogin.value) {
+        if (!form.email.trim()) throw new Error("请输入邮箱");
+        if (!form.code.trim()) throw new Error("请输入验证码");
+        const loginRes = await api.loginWithCode(form.email.trim(), form.code.trim());
+        if (!loginRes.token) {
+          throw new Error("登录失败：未获取到 Token");
+        }
+        await onLoginSuccess(loginRes.token, loginRes.user);
+        return;
+      }
+      // 密码登录
       if (!form.email.trim() || !form.password.trim()) {
         throw new Error("请输入邮箱和密码");
       }
@@ -224,6 +247,18 @@ const toggleMode = () => {
   } else {
     isRegister.value = !isRegister.value;
   }
+  isCodeLogin.value = false;
+  isCodeSent.value = false;
+  form.code = "";
+  form.password = "";
+  form.confirmPassword = "";
+  cooldown.value = 0;
+  stopCooldown();
+};
+
+// 登录模式下：密码登录 ⇄ 邮箱验证码登录
+const toggleCodeLogin = () => {
+  isCodeLogin.value = !isCodeLogin.value;
   isCodeSent.value = false;
   form.code = "";
   form.password = "";
@@ -235,6 +270,7 @@ const toggleMode = () => {
 const enterResetMode = () => {
   isReset.value = true;
   isRegister.value = false;
+  isCodeLogin.value = false;
   isCodeSent.value = false;
   form.code = "";
   form.password = "";
@@ -262,6 +298,8 @@ const focusInput = (ref: Ref<{ $el: HTMLElement } | null>) => {
 const handleEnterEmail = () => {
   if (isReset.value && !isCodeSent.value) {
     sendCode();
+  } else if (isCodeLogin.value) {
+    focusInput(codeRef);
   } else {
     focusInput(passwordRef);
   }
@@ -326,17 +364,27 @@ onUnmounted(() => {
                     </div>
                   </div>
                 </div>
-                <div class="ik-login-form">
-                  <!-- 邮箱：始终可见 -->
+                <div class="ik-login-form" :class="{ 'is-code-login': isCodeLogin }">
+                  <!-- 邮箱：始终可见。登录模式下 append 区放「验证码/密码登录」切换，和密码框的「忘记密码」同一处 -->
                   <z-input
                     ref="emailRef"
                     v-model="form.email"
-                    :placeholder="isReset ? '注册邮箱' : isRegister ? '邮箱' : '用户名/邮箱'"
+                    :placeholder="isReset ? '注册邮箱' : isRegister || isCodeLogin ? '邮箱' : '用户名/邮箱'"
                     @keydown.enter="handleEnterEmail"
-                  />
+                  >
+                    <template v-if="!isRegister && !isReset" #append>
+                      <button
+                        type="button"
+                        class="ik-forgot-btn"
+                        @click.stop="toggleCodeLogin"
+                      >
+                        {{ isCodeLogin ? "密码登录" : "验证码登录" }}
+                      </button>
+                    </template>
+                  </z-input>
 
-                  <!-- 密码：登录/注册时直接显示，重置时验证码发送后展开 -->
-                  <div class="ik-login-field-grid" :class="{ 'is-open': !isReset || (isReset && isCodeSent) }">
+                  <!-- 密码：密码登录/注册时显示；验证码登录时隐藏；重置时验证码发送后展开 -->
+                  <div class="ik-login-field-grid" :class="{ 'is-open': (!isReset && !isCodeLogin) || (isReset && isCodeSent) }">
                     <div class="ik-login-field-grid__inner">
                       <z-input
                         ref="passwordRef"
@@ -371,8 +419,8 @@ onUnmounted(() => {
                     </div>
                   </div>
 
-                  <!-- 验证码：注册 或 重置(验证码已发送) -->
-                  <div class="ik-login-field-grid" :class="{ 'is-open': isRegister || (isReset && isCodeSent) }">
+                  <!-- 验证码：注册 或 验证码登录 或 重置(验证码已发送) -->
+                  <div class="ik-login-field-grid" :class="{ 'is-open': isRegister || isCodeLogin || (isReset && isCodeSent) }">
                     <div class="ik-login-field-grid__inner">
                       <z-input
                         ref="codeRef"
@@ -394,10 +442,11 @@ onUnmounted(() => {
                     </div>
                   </div>
 
-                  <!-- 底部留白：与字段共用 grid 动画，避免切换时顿挫 -->
+                  <!-- 底部留白：与字段共用 grid 动画，避免切换时顿挫。
+                       验证码登录时中间折叠项的 gap 被抵消，底部留白改由此处展开补齐 -->
                   <div
                     class="ik-login-field-grid ik-login-form-spacer"
-                    :class="{ 'is-open': isRegister || (isReset && isCodeSent) }"
+                    :class="{ 'is-open': isRegister || isCodeLogin || (isReset && isCodeSent) }"
                   >
                     <div class="ik-login-field-grid__inner">
                       <div class="ik-login-form-spacer__fill" aria-hidden="true" />
@@ -792,13 +841,24 @@ onUnmounted(() => {
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 300ms cubic-bezier(0.4, 0, 0.2, 1);
+              opacity 300ms cubic-bezier(0.4, 0, 0.2, 1),
+              margin-top 300ms cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
 }
 
 .ik-login-field-grid.is-open {
   grid-template-rows: 1fr;
   opacity: 1;
+}
+
+/* 折叠字段仍是 flex 子项，会保留父容器 16px 的 gap。这原是设计的一部分：
+   密码登录/注册时，尾部折叠字段的 gap 故意堆出底部 32px 留白（见下方 spacer 注释）。
+   但验证码登录时，密码/确认密码折叠「夹在」邮箱与验证码中间，多出的 gap 把
+   验证码框往下顶 32px，看起来「错位」。所以只在验证码登录模式下，用负 margin
+   抵消这两个中间折叠项前面的 gap，让验证码紧贴邮箱；其它模式保持线上原样。
+   spacer 此时已展开（不被选中），负责补齐验证码登录的底部留白。 */
+.ik-login-form.is-code-login .ik-login-field-grid:not(.is-open):not(.ik-login-form-spacer) {
+  margin-top: -16px;
 }
 
 .ik-login-field-grid__inner {

@@ -1,4 +1,5 @@
 import { parseAuthSessions, requireAccountSuccess } from "~/utils/account-response";
+import { readonly, ref } from "vue";
 import type { QueryClient, QueryKey } from "@tanstack/vue-query";
 import type { ApiClientError, Pagination } from "~/types/api";
 import type {
@@ -100,24 +101,35 @@ const STALE_DETAIL = 2 * 60 * 1000; // 2 min
 const STALE_LIST = 1 * 60 * 1000; // 1 min
 const STALE_ME = 2 * 60 * 1000; // 2 min
 
-// 客户端累积的「乐观已读」文章 id 集合。列表/搜索/个人页接口现已对登录用户内联
-// isRead（服务端权威态）；但点开委托时的乐观标记请求可能尚未落库，此时若切分类
-// 强制重拉，服务端可能仍返回 isRead=false，导致「已读 → 闪回未读」跳动。这里把
-// 乐观已读 id 跨频道/分页保留，构造列表时同步补齐，消除该窗口内的闪烁。
-// 已读单调（不会变回未读），仅在客户端维护；登录/登出时随 clearAllCache 清空。
+// 客户端已经持久化成功的已读 id。旧的列表请求可能晚于标记请求写入缓存，
+// 因而每次消费列表/快照都要合并确认状态，不能只在 queryFn 内补齐一次。
+// 已读单调（不会变回未读），登录/登出时随 clearAllCache 清空。
 const knownReadIds = new Set<string>();
+const readStatusRevision = ref(0);
+let readStatusEpoch = 0;
 
 const rememberReadIds = (ids: Iterable<string>) => {
+  const previousSize = knownReadIds.size;
   for (const id of ids) if (id) knownReadIds.add(id);
+  if (knownReadIds.size !== previousSize) readStatusRevision.value += 1;
 };
 
-// 用累积的乐观已读集合补齐节点 isRead，覆盖「标记请求尚未落库」窗口。
-const seedReadStatus = <T extends { id: string; isRead?: boolean }>(nodes: T[]): T[] => {
+// 首页使用 shallowRef，卡片用对象 prop：有变化时必须替换节点引用，
+// 不能原地修改查询缓存或路由快照，否则组件可能不更新，回滚基线也会被污染。
+const mergeReadStatus = <T extends { id: string; isRead?: boolean }>(nodes: T[]): T[] => {
   if (!import.meta.client || !knownReadIds.size) return nodes;
-  for (const node of nodes) {
-    if (!node.isRead && knownReadIds.has(node.id)) node.isRead = true;
-  }
-  return nodes;
+  let changed = false;
+  const merged = nodes.map((node) => {
+    if (node.isRead || !knownReadIds.has(node.id)) return node;
+    changed = true;
+    return { ...node, isRead: true };
+  });
+  return changed ? merged : nodes;
+};
+
+const mergeReadPage = (page: Pagination<Post>): Pagination<Post> => {
+  const nodes = mergeReadStatus(page.nodes);
+  return nodes === page.nodes ? page : { ...page, nodes };
 };
 
 /** 实时搜索联想项（GET /api/articles/suggest） */
@@ -724,10 +736,15 @@ export function useApi() {
   };
 
   const clearAllCache = () => {
+    // $api 返回与调用方 await 续体之间也可能发生身份切换。
+    readStatusEpoch += 1;
     const qc = $queryClient as QueryClient | undefined;
     qc?.clear();
     // 身份变更：清掉累积的已读集合，避免把上个用户的已读态带给新用户。
-    knownReadIds.clear();
+    if (knownReadIds.size) {
+      knownReadIds.clear();
+      readStatusRevision.value += 1;
+    }
   };
 
   // 供页面在"用户明确刷新"等场景下跳过 staleTime 缓存使用
@@ -810,6 +827,41 @@ export function useApi() {
     });
     const data = response as Record<string, unknown>;
     return { success: data.success === true };
+  };
+
+  // 发送登录验证码：仅对已注册且有真实邮箱的账号真正发码，
+  // 后端对未注册/占位邮箱静默返回成功结构以防枚举。
+  const sendLoginCode = async (
+    email: string,
+  ): Promise<SendResetCodeResult> => {
+    const response = await $api("/api/auth/send-login-code", {
+      method: "POST",
+      body: { email },
+    });
+    const data = response as Record<string, unknown>;
+    return {
+      email: String(data.email || email),
+      sent: data.sent === true,
+      expiresIn: Number(data.expiresIn || 600),
+      cooldown: Number(data.cooldown || 60),
+    };
+  };
+
+  // 邮箱验证码登录：成功后同 login/registerWithCode 一样返回 token+user 并清缓存。
+  const loginWithCode = async (
+    email: string,
+    code: string,
+  ): Promise<AuthResult> => {
+    const response = await $api("/api/auth/login-with-code", {
+      method: "POST",
+      body: { email, code },
+    });
+    const data = response as Record<string, unknown>;
+    clearAllCache();
+    return {
+      token: (data.jwt as string | undefined) || null,
+      user: toAuthor(data.user, apiBaseUrl),
+    };
   };
 
   // ── 米游社扫码登录 / 绑定 ──────────────────────────
@@ -906,12 +958,15 @@ export function useApi() {
     feed: ArticleFeed = "recommend",
     sort: ArticleSort = "latest",
   ): Promise<Pagination<Post>> => {
+    // 先恢复/续期凭证，避免 optional-auth 把过期 token 降级为匿名已读状态。
+    // 这里只等凭证；个人资料加载和远端退出不应阻塞信息流。
+    if (import.meta.client) await useAuthStore().ensureCredentials();
     // 信息流走游标分页：endCur 原样当 cursor 发。后端还没部署游标时它是 buildPagination
     // 攒出来的数字 offset，resolveCursor 把两种形态分开，避免把 "20" 当游标发出去。
     const { cursor, start } = resolveCursor(endCur);
     // feed != recommend 时把 feed 折进 category 缓存槽，避免推荐/关注/收藏互相串缓存。
     const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
-    return cachedRead(
+    const page = await cachedRead(
       qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort),
       async () => {
         const endpoint = query ? "/api/articles/search" : "/api/articles/list";
@@ -942,13 +997,12 @@ export function useApi() {
         const page = cursorMeta
           ? buildCursorPagination(nodes, cursorMeta, start)
           : buildPagination(nodes, start, offsetMetaOf(meta, nodes.length));
-        // 列表/搜索接口已对登录用户内联 isRead（权威态）；这里仅用本地乐观已读集合
-        // 补齐「标记请求尚未落库」窗口内的节点，避免切分类重拉时已读短暂闪回未读。
-        seedReadStatus(page.nodes);
         return page;
       },
       STALE_LIST,
     );
+    // 在 TanStack 完成写入后合并，也覆盖 fresh cache 命中和迟到响应覆盖缓存的竞态。
+    return mergeReadPage(page);
   };
 
   /**
@@ -969,9 +1023,10 @@ export function useApi() {
     // 缓存槽的算法必须与 searchArticles 完全一致，否则预填永远命中不到。
     const { cursor, start } = resolveCursor(endCur);
     const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
-    return qc.getQueryData<Pagination<Post>>(
+    const page = qc.getQueryData<Pagination<Post>>(
       qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort),
     );
+    return page ? mergeReadPage(page) : undefined;
   };
 
   /**
@@ -1044,17 +1099,15 @@ export function useApi() {
   };
 
   const getPost = async (id: string): Promise<Post> => {
-    return cachedRead(
+    const post = await cachedRead(
       qk.articles.detail(id),
       async () => {
         const response = await $api(`/api/articles/detail/${id}`);
-        const post = toPost(unwrapData(response), apiBaseUrl);
-        // 详情接口已对登录用户内联 isRead；本地乐观已读集合补齐尚未落库窗口。
-        seedReadStatus([post]);
-        return post;
+        return toPost(unwrapData(response), apiBaseUrl);
       },
       STALE_DETAIL,
     );
+    return mergeReadStatus([post])[0]!;
   };
 
   const recordArticleView = async (id: string): Promise<number | undefined> => {
@@ -1411,7 +1464,7 @@ export function useApi() {
   const markReadInQueryCache = (articleDocumentIds: string[]) => {
     if (!articleDocumentIds.length) return;
     const ids = new Set(articleDocumentIds);
-    // 乐观已读也累积到全局集合：切走再回来/切分类重拉时同样不丢已读态。
+    // 成功持久化的已读累积到全局集合，通知当前首页和稍后恢复的快照。
     rememberReadIds(ids);
     const qc = $queryClient as QueryClient | undefined;
     if (!qc) return;
@@ -1454,10 +1507,12 @@ export function useApi() {
 
   const markAsReadBatch = async (articleDocumentIds: string[]) => {
     if (!articleDocumentIds.length) return;
+    const epoch = readStatusEpoch;
     await $api("/api/article-reads/batch", {
       method: "POST",
       body: { articleDocumentIds, markAsRead: true },
     });
+    if (epoch !== readStatusEpoch) return;
     // 持久化成功后写回缓存：保证切走再回来（peekArticles 预填 / staleTime 复用）
     // 拿到的也是已读态，而非旧的未读快照（否则已读 API 成功了，列表却仍显示未读）。
     // 失败则不写缓存，与服务端「未读」保持一致，由调用方回滚本地 list。
@@ -1560,7 +1615,7 @@ export function useApi() {
     limit = DEFAULT_PAGE_SIZE,
   ): Promise<Pagination<Post>> => {
     const start = parseStart(endCur);
-    return cachedRead(
+    const page = await cachedRead(
       qk.profile.articles(documentId, start, limit),
       async () => {
         const response = await $api(`/api/profiles/${documentId}/articles`, {
@@ -1572,13 +1627,11 @@ export function useApi() {
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
         const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
-        // 个人页文章接口已对登录用户内联 isRead；这里仅用本地乐观已读集合补齐
-        // 「标记请求尚未落库」窗口，避免重入个人页时已读短暂闪回未读。
-        seedReadStatus(page.nodes);
         return page;
       },
       STALE_LIST,
     );
+    return mergeReadPage(page);
   };
 
   const getProfileComments = async (
@@ -2506,11 +2559,15 @@ export function useApi() {
   return {
     clearAllCache,
     invalidateQueries,
+    mergeReadStatus,
+    readStatusRevision: readonly(readStatusRevision),
     login,
     sendRegisterCode,
     registerWithCode,
     sendResetCode,
     resetPassword,
+    sendLoginCode,
+    loginWithCode,
     getSelfUser,
     searchArticles,
     suggestArticles,

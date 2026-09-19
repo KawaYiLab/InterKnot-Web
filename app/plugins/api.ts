@@ -5,11 +5,13 @@ import {
   type FetchResponse,
 } from "ofetch";
 import type { ApiClientError } from "~/types/api";
+import { useHomeStateCache } from "~/composables/useHomeStateCache";
 import {
   isTokenNearExpiry,
+  isSameAuthSession,
   shouldAttachToken,
 } from "~/utils/request-auth";
-import { LOGOUT_KEY, staleAuthError, withAuthCookieLock } from "~/utils/auth-session";
+import { LOGOUT_KEY, SESSION_HINT_KEY, staleAuthError, withAuthCookieLock } from "~/utils/auth-session";
 
 function toApiError(statusCode: number | undefined, data: unknown): ApiClientError {
   const error = new Error("请求失败") as ApiClientError;
@@ -71,20 +73,17 @@ export default defineNuxtPlugin(() => {
       const options = ctx.options as FetchOptions;
       const request = String(ctx.request);
       if (import.meta.client) {
-        const token = localStorage.getItem(TOKEN_KEY) || "";
+        // Match the identity captured by the request wrapper. A queued storage
+        // event must not silently attach another tab's newer account token.
+        const token = auth.token;
         const path = request;
         const method = (options.method || "GET").toUpperCase();
         // /api/articles/list、/api/articles/search 默认公开（匿名请求不带 token，
         // 走共享缓存）。但登录用户需要带 token，让后端为当前用户内联 isRead 等
         // 个性化字段；带 token 的请求也会绕过公开缓存（cacheAuthorizedRequests:false），
         // 匿名请求仍可命中共享缓存。
-        const articleFeed =
-          path.startsWith("/api/articles/list") ||
-          path.startsWith("/api/articles/search");
-        if (
-          shouldAttachToken(path, method, token) ||
-          (Boolean(token) && articleFeed)
-        ) {
+        // 发送与 401 续期共用同一判定，避免列表带了过期 token 却不重试。
+        if (shouldAttachToken(path, method, token)) {
           const headers = new Headers(options.headers as HeadersInit);
           headers.set("Authorization", `Bearer ${token}`);
           options.headers = headers;
@@ -135,7 +134,12 @@ export default defineNuxtPlugin(() => {
   // Proactive token renewal timer (client-side only)
   if (import.meta.client) {
     const proactiveRenew = () => {
-      const token = localStorage.getItem(TOKEN_KEY);
+      if (localStorage.getItem(LOGOUT_KEY)) return;
+      const token = auth.token || localStorage.getItem(TOKEN_KEY);
+      if (auth.credentialRecoveryPending || (!auth.token && (token || localStorage.getItem(SESSION_HINT_KEY)))) {
+        void auth.hydrateFromStorage();
+        return;
+      }
       if (token && isTokenNearExpiry(token, RENEW_THRESHOLD_MS)) {
         void auth.renewToken();
       }
@@ -146,13 +150,25 @@ export default defineNuxtPlugin(() => {
     setInterval(proactiveRenew, RENEW_CHECK_INTERVAL_MS);
     window.addEventListener("online", () => {
       if (!auth.isLogin && localStorage.getItem(LOGOUT_KEY) === "pending") void auth.logout();
+      else proactiveRenew();
     });
     window.addEventListener("storage", (event) => {
-      if (event.key === TOKEN_KEY && event.newValue !== auth.token) {
+      if (event.key === TOKEN_KEY && (!event.storageArea || event.storageArea === localStorage)) {
+        // Other tabs may have completed several writes before this queued event.
+        const token = localStorage.getItem(TOKEN_KEY) || "";
+        if (token === auth.token) return;
+        if (isSameAuthSession(auth.token, token) && !auth.credentialRecoveryPending) {
+          auth.token = token;
+          return;
+        }
         // Invalidate pending requests before hydrating the other tab's login.
         auth.generation += 1;
         auth.user = null;
-        auth.token = event.newValue || "";
+        auth.token = token;
+        auth.credentialsReady = true;
+        auth.credentialRecoveryPending = false;
+        useApi().clearAllCache();
+        useHomeStateCache().reset();
         window.dispatchEvent(new CustomEvent("auth:logout"));
         if (auth.token) void auth.fetchSelfUser();
       }

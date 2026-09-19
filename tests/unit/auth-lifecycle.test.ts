@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useAuthStore, _resetHydratedForTest } from "~/stores/auth";
+import { useHomeStateCache } from "~/composables/useHomeStateCache";
 import { LOGOUT_KEY, SESSION_HINT_KEY } from "~/utils/auth-session";
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), self: vi.fn(), clear: vi.fn() }));
@@ -17,9 +18,29 @@ function jwt(expSeconds: number) {
   return `header.${btoa(JSON.stringify({ exp: expSeconds }))}.signature`;
 }
 
+function saveHomeSnapshot(isRead = false) {
+  const cache = useHomeStateCache();
+  cache.save({
+    list: [{ id: "post-1", title: "Home post", covers: [], author: { id: 1 }, isRead }],
+    endCursor: "next-page",
+    hasNextPage: true,
+    query: "",
+    category: "",
+    feed: "recommend",
+    sort: "latest",
+    seenIds: new Set(["post-1"]),
+    measuredHeights: new Map([["post-1", 240]]),
+    scrollY: 640,
+  });
+  return cache;
+}
+
 beforeEach(() => {
   setActivePinia(createPinia());
   _resetHydratedForTest();
+  const homeCache = useHomeStateCache();
+  homeCache.clear();
+  homeCache.consumeScrollY();
   localStorage.clear();
   vi.resetAllMocks();
   vi.stubGlobal("useRuntimeConfig", () => ({ public: { apiBaseUrl: "https://api.example.test" } }));
@@ -27,6 +48,35 @@ beforeEach(() => {
 });
 
 describe("authentication lifecycle", () => {
+  it("discards an anonymous home snapshot and saved scroll when signing in", () => {
+    const cache = saveHomeSnapshot();
+    useAuthStore().setSession("token", { id: 1 });
+    expect(cache.restore()).toBeNull();
+    expect(cache.consumeScrollY()).toBe(0);
+  });
+
+  it.each(["clearSession", "logout"] as const)(
+    "discards the previous user's home snapshot immediately on %s",
+    async (action) => {
+      const auth = useAuthStore();
+      auth.setSession("token", { id: 1 });
+      const cache = saveHomeSnapshot(true);
+      mocks.fetch.mockResolvedValue({ ok: true });
+      const pending = auth[action]();
+      expect(cache.restore()).toBeNull();
+      expect(cache.consumeScrollY()).toBe(0);
+      await pending;
+    },
+  );
+
+  it("preserves saved scroll when clearing a snapshot during a normal route return", () => {
+    const cache = saveHomeSnapshot();
+    cache.clear();
+    expect(cache.restore()).toBeNull();
+    expect(cache.consumeScrollY()).toBe(640);
+    expect(cache.consumeScrollY()).toBe(0);
+  });
+
   it("keeps a fresh anonymous visitor ready without refreshing, including after reload", async () => {
     for (let visit = 0; visit < 2; visit += 1) {
       setActivePinia(createPinia());
@@ -104,6 +154,49 @@ describe("authentication lifecycle", () => {
     expect(reloaded.token).toBe("restored");
     expect(reloaded.user?.id).toBe(1);
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries cookie recovery in the same app, sharing the retry across concurrent consumers", async () => {
+    localStorage.setItem(SESSION_HINT_KEY, "1");
+    mocks.fetch.mockRejectedValueOnce(new Error("offline"));
+    const auth = useAuthStore();
+    await auth.hydrateFromStorage();
+    const generation = auth.generation;
+    const homeCache = saveHomeSnapshot();
+    const recovered = deferred<{ accessToken: string }>();
+    mocks.fetch.mockReturnValueOnce(recovered.promise);
+    mocks.self.mockResolvedValue({ id: 1 });
+    const hydration = auth.hydrateFromStorage();
+    const first = auth.ensureCredentials();
+    const second = auth.ensureCredentials();
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    recovered.resolve({ accessToken: "restored" });
+    await Promise.all([hydration, first, second]);
+    expect(auth.token).toBe("restored");
+    expect(auth.user?.id).toBe(1);
+    expect(auth.generation).toBe(generation + 1);
+    expect(homeCache.restore()).toBeNull();
+    expect(homeCache.consumeScrollY()).toBe(0);
+    expect(mocks.clear).toHaveBeenCalledOnce();
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a late recovery retry after an explicit login replaces its identity", async () => {
+    localStorage.setItem(SESSION_HINT_KEY, "1");
+    mocks.fetch.mockRejectedValueOnce(new Error("offline"));
+    const auth = useAuthStore();
+    await auth.hydrateFromStorage();
+    const retry = deferred<{ accessToken: string }>();
+    mocks.fetch.mockReturnValueOnce(retry.promise);
+    const hydration = auth.hydrateFromStorage();
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    auth.setSession("new-account", { id: 2 });
+    retry.resolve({ accessToken: "previous-account" });
+    await hydration;
+    expect(auth.token).toBe("new-account");
+    expect(auth.user?.id).toBe(2);
+    expect(localStorage.getItem("access_token")).toBe("new-account");
+    expect(mocks.self).not.toHaveBeenCalled();
   });
 
   it("gives explicit logout priority over any remaining recovery hint", async () => {
