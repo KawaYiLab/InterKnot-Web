@@ -179,6 +179,11 @@ const endCursor = ref("");
 const hasNextPage = ref(true);
 const requestVersion = ref(0);
 let seenIds = new Set<string>();
+let listProgressClaimed = false;
+// 网络状态独立于骨架屏：缓存预填/主动刷新不显示骨架，但仍须阻止分页抢占首屏。
+let listRequestPending = false;
+let hasSettledPage = false;
+let disposed = false;
 
 // VirtualMasonry 模板引用，用于读取 expose 的 measuredHeights
 const masonryRef = ref<{ measuredHeights: Map<string | number, number>; $el: HTMLElement } | null>(null);
@@ -311,16 +316,20 @@ const toUniqueNodes = (nodes: Post[], reset: boolean): Post[] => {
   return unique;
 };
 
-const scrollToTopAfterReset = async (reset: boolean) => {
+const scrollToTopAfterReset = async (reset: boolean, version: number) => {
   await nextTick();
-  if (reset && import.meta.client) {
+  if (!disposed && version === requestVersion.value && reset && import.meta.client) {
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 };
 
 const fetchList = async (reset = false) => {
-  if (loading.value || loadingMore.value) return;
+  if (disposed) return;
+  // 重置请求必须能取代旧身份/筛选的在途请求；只有追加分页需要等待。
+  if (!reset && listRequestPending) return;
   if (!hasNextPage.value && !reset) return;
+  listRequestPending = true;
+  if (reset) hasSettledPage = false;
 
   // 缓存命中预填：避免从其他页面切回首页时 skeleton → fade → list 双重过渡 440ms。
   // 同步把缓存数据填进 list，模板首帧就走 "list" 分支，跳过 <Transition> 切换。
@@ -351,12 +360,14 @@ const fetchList = async (reset = false) => {
       pageDataLoading.start();
     }
     pageDataLoading.claim();
+    listProgressClaimed = true;
   }
 
   // 缓存命中时不显 skeleton（loading 保持 false）；仅 cold load 才占位
-  if (reset && !refreshing.value && !cacheHit) {
-    loading.value = true;
-  } else if (!reset) {
+  if (reset) {
+    loading.value = !refreshing.value && !cacheHit;
+    loadingMore.value = false;
+  } else {
     loadingMore.value = true;
   }
 
@@ -389,16 +400,28 @@ const fetchList = async (reset = false) => {
 
     endCursor.value = page.endCursor;
     hasNextPage.value = page.hasNextPage;
+    hasSettledPage = true;
 
     // 缓存命中路径下，scrollToTopAfterReset 不再需要（避免破坏用户期望的滚动位置）
-    if (!cacheHit) await scrollToTopAfterReset(reset);
+    if (!cacheHit) await scrollToTopAfterReset(reset, currentVersion);
   } catch (err) {
-    message.error(resolveErrorMessage(err, "获取委托失败"));
+    if (currentVersion === requestVersion.value) {
+      message.error(resolveErrorMessage(err, "获取委托失败"));
+    }
   } finally {
-    loading.value = false;
-    loadingMore.value = false;
-    if (shouldShowPageProgress) {
-      pageDataLoading.finish();
+    // 旧请求不能结束新请求的 loading / 进度条，也不能覆盖它的错误状态。
+    if (currentVersion === requestVersion.value) {
+      listRequestPending = false;
+      loading.value = false;
+      loadingMore.value = false;
+      if (listProgressClaimed) {
+        listProgressClaimed = false;
+        pageDataLoading.finish();
+      }
+      // 首屏在途时哨兵可能已经进入视口；完成后重新观察，避免漏掉自动续页。
+      void nextTick().then(() => {
+        if (!disposed && currentVersion === requestVersion.value) observeLoadMoreSentinel();
+      });
     }
   }
 };
@@ -423,23 +446,30 @@ const goPost = (post: Post, event: MouseEvent) => {
   // 弹窗关闭之后——被点开的卡片在弹窗期间完全被遮住，用户看不到已读变化，
   // 而重建数组会触发瀑布流重算 + 可见卡片 patch，与 PostOverlay 的挂载、
   // 详情/评论数据回填渲染争抢主线程，正是「点开弹窗卡顿」的来源。
-  if (post.isRead) return;
+  if (post.isRead || unsettledReadIds.has(post.id)) return;
   const targetId = post.id;
+  const readGeneration = auth.generation;
   pendingReadIds.add(targetId);
+  unsettledReadIds.add(targetId);
   api.markAsReadBatch([targetId]).catch(() => {
+    if (disposed || auth.generation !== readGeneration) return;
     // 失败时若尚未回填，从 pending 移除即可；若已回填到 list，需回滚已读态
     if (pendingReadIds.delete(targetId)) return;
-    list.value = list.value.map((d) =>
+    list.value = api.mergeReadStatus(list.value.map((d) =>
       d.id === targetId && d.isRead ? { ...d, isRead: false } : d,
-    );
+    ));
+  }).finally(() => {
+    if (auth.generation === readGeneration) unsettledReadIds.delete(targetId);
   });
 };
 
 // 弹窗期间累积的待回填已读 id；弹窗离场动画结束后一次性合并进 list
 const pendingReadIds = new Set<string>();
+// 未确认的乐观标记不能写进路由快照；确认后的状态由 API 的共享集合补齐。
+const unsettledReadIds = new Set<string>();
 
 const flushPendingReadIds = () => {
-  if (pendingReadIds.size === 0) return;
+  if (disposed) return;
   const ids = new Set(pendingReadIds);
   pendingReadIds.clear();
   let changed = false;
@@ -450,8 +480,15 @@ const flushPendingReadIds = () => {
     }
     return d;
   });
-  if (changed) list.value = next;
+  list.value = api.mergeReadStatus(changed ? next : list.value);
 };
+
+// 确认响应可能在离开首页后才到达；新实例同样需要收到已读更新。
+watch(api.readStatusRevision, () => {
+  if (!disposed && !postModal.isOpen.value) {
+    list.value = api.mergeReadStatus(list.value);
+  }
+});
 
 watch(
   () => postModal.isOpen.value,
@@ -463,7 +500,7 @@ watch(
 );
 
 const handleRefresh = async () => {
-  if (refreshing.value || loading.value) return;
+  if (disposed || refreshing.value || loading.value) return;
   refreshing.value = true;
   window.scrollTo({ top: 0, behavior: "instant" });
   // Minimum visible duration so the animation feels intentional
@@ -485,17 +522,18 @@ const pollLatestArticles = async () => {
   // 「热门」是热度榜：新帖不会一发布就上榜，「有 N 条新内容」在这条流下没有意义
   if (activeSort.value !== "latest") return;
   // 不与正在进行的请求/刷新冲突
-  if (polling || loading.value || refreshing.value || loadingMore.value) return;
+  if (disposed || polling || listRequestPending || refreshing.value) return;
   if (import.meta.client && document.visibilityState !== "visible") return;
   // 列表还没加载出来时不必探测
   if (!list.value.length) return;
 
   polling = true;
+  const currentVersion = requestVersion.value;
   try {
     // 强制失效当前频道空搜索的第一页，让 fetchQuery 真正打到后端
     api.invalidateQueries(["articles", "search", "", selectedCategory.value]);
     const page = await api.searchArticles("", "", selectedCategory.value, "recommend", "latest");
-    if (!page.nodes.length) return;
+    if (disposed || currentVersion !== requestVersion.value || !page.nodes.length) return;
 
     const knownIds = new Set(list.value.map((d) => d.id));
     const fresh: string[] = [];
@@ -521,7 +559,7 @@ const pollLatestArticles = async () => {
 };
 
 const startPolling = () => {
-  if (pollTimer) return;
+  if (disposed || pollTimer) return;
   pollTimer = setInterval(() => {
     void pollLatestArticles();
   }, NEW_ARTICLES_POLL_MS);
@@ -545,12 +583,12 @@ const onTabVisible = () => {
 };
 
 const doLoadMore = () => {
-  if (loading.value || loadingMore.value || !hasNextPage.value) return;
+  if (disposed || listRequestPending || !hasNextPage.value) return;
   fetchList(false).catch(() => undefined);
 };
 
 const observeLoadMoreSentinel = () => {
-  if (!import.meta.client) return;
+  if (disposed || !import.meta.client) return;
 
   loadMoreObserverRef.value?.disconnect();
   loadMoreObserverRef.value = null;
@@ -644,6 +682,30 @@ watch(
   },
 );
 
+// 登录/退出/切账号后，旧身份的列表和在途请求都作废。generation 不随正常续期变化，
+// 因此续期不会打断浏览，也不再依赖可能因 loading 被忽略的 home-refresh 事件。
+watch(
+  () => auth.generation,
+  () => {
+    // 身份切换入口已同步清缓存；这里再 clear 会取消新身份刚发出的用户资料请求。
+    homeStateCache.clear();
+    pendingReadIds.clear();
+    unsettledReadIds.clear();
+    list.value = [];
+    cachedMeasuredHeights.value = undefined;
+    seenIds = new Set();
+    enterAnimationIds.value = new Set();
+    newArticleIds.value = [];
+    endCursor.value = "";
+    hasNextPage.value = true;
+    if (!auth.isLogin && feedMode.value !== "recommend") {
+      skipFeedWatch = true;
+      feedMode.value = "recommend";
+    }
+    void fetchList(true);
+  },
+);
+
 const loadCategories = async () => {
   try {
     const list = await api.getCategories();
@@ -675,6 +737,7 @@ let initialFetchPromise: Promise<void>;
 // 未必来自关注作者，也不会一发布就进热度榜）。
 // drain 仅在真正会写入 list 时调用，不能在冷启动 fetchList 之前就 drain——fetchList 会重置 seenIds 和 list。
 const consumePendingPosts = () => {
+  if (disposed) return;
   if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
   if (activeSort.value !== "latest") return;
@@ -707,7 +770,8 @@ if (cached && cached.query === query.value && cached.category === selectedCatego
     skipFeedWatch = true;
     sortMode.value = restoredSort;
   }
-  list.value = cached.list;
+  list.value = api.mergeReadStatus(cached.list);
+  hasSettledPage = true;
   endCursor.value = cached.endCursor;
   hasNextPage.value = cached.hasNextPage;
   seenIds = cached.seenIds;
@@ -835,6 +899,7 @@ onMounted(async () => {
     window.addEventListener("touchcancel", onTouchCancel);
   }
   await initialFetchPromise;
+  if (disposed) return;
   // 注册 pending 队列 watch（immediate=true）：
   //   - 冷启动：fetchList 刚填好 list，immediate 触发立即消费当前 pending；
   //   - 迟到 push：/create 的 fire-and-forget getPost 可能晚于此点解析，
@@ -846,6 +911,7 @@ onMounted(async () => {
     { immediate: true },
   );
   await nextTick();
+  if (disposed) return;
   observeLoadMoreSentinel();
 
   // 滚动恢复由 app/router.options.ts 的 scrollBehavior 统一处理，
@@ -859,9 +925,16 @@ onMounted(async () => {
 // onBeforeRouteLeave 在路由变化前触发，此时 DOM 完整无损，window.scrollY 精确。
 // 配合 measuredHeights 缓存，重建后布局像素级一致，scrollY 即可精确恢复。
 onBeforeRouteLeave(() => {
+  // 未完成/失败的首屏不能作为空列表快照恢复；成功返回的空页则照常缓存。
+  if (!hasSettledPage) {
+    homeStateCache.reset();
+    return;
+  }
   const heights = masonryRef.value?.measuredHeights;
   homeStateCache.save({
-    list: list.value,
+    list: api.mergeReadStatus(list.value.map((post) =>
+      unsettledReadIds.has(post.id) && post.isRead ? { ...post, isRead: false } : post,
+    )),
     endCursor: endCursor.value,
     hasNextPage: hasNextPage.value,
     query: query.value,
@@ -875,6 +948,8 @@ onBeforeRouteLeave(() => {
 });
 
 onBeforeUnmount(() => {
+  disposed = true;
+  requestVersion.value++;
   if (import.meta.client) {
     window.removeEventListener("ik:home-refresh", onHomeRefreshEvent);
     window.removeEventListener("ik:tab-visible", onTabVisible);

@@ -6,8 +6,8 @@ import { useApi } from "~/composables/useApi";
  * 后端给了 meta.pagination.nextCursor 就走游标，没给就必须退回 offset —— 前端会先上线，
  * 这个回退挂了等于线上信息流翻不了页。
  *
- * useApi 只依赖 useNuxtApp / useRuntimeConfig 两个 Nuxt 自动导入，纯 vitest 环境里把它们
- * 塞成全局桩就能直接测真实实现，不用另抄一份请求逻辑。$queryClient 故意留空：
+ * useApi 依赖的 Nuxt 自动导入用全局桩提供，登录恢复视为已完成，直接测真实实现，
+ * 不用另抄一份请求逻辑。$queryClient 故意留空：
  * cachedRead 会直接跑 queryFn，每次调用都是一次真实请求，断言请求参数才有意义。
  */
 type Query = Record<string, unknown>;
@@ -22,6 +22,7 @@ function stubNuxt(respond: (query: Query, url: string) => unknown) {
   const g = globalThis as unknown as Record<string, unknown>;
   g.useNuxtApp = () => ({ $api, $queryClient: undefined });
   g.useRuntimeConfig = () => ({ public: { apiBaseUrl: "" } });
+  g.useAuthStore = () => ({ ensureCredentials: async () => {} });
   return {
     calls,
     lastCall: () => calls[calls.length - 1]!,

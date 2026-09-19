@@ -1,16 +1,29 @@
 import { defineStore } from "pinia";
 import { $fetch } from "ofetch";
 import type { Author } from "~/types/entities";
-import { isTokenExpired } from "~/utils/request-auth";
+import { useHomeStateCache } from "~/composables/useHomeStateCache";
+import { isTokenExpired, isTokenNearExpiry } from "~/utils/request-auth";
 import { LOGOUT_KEY, SESSION_HINT_KEY, staleAuthError, withAuthCookieLock } from "~/utils/auth-session";
 
 const TOKEN_KEY = "access_token";
 const USER_ID_KEY = "user_id";
-let hydration = new WeakMap<object, Promise<void>>();
+let hydration = new WeakMap<object, { generation: number; promise: Promise<void> }>();
+let credentials = new WeakMap<object, { generation: number; promise: Promise<number> }>();
 const renewals = new WeakMap<object, { generation: number; promise: Promise<string | null> }>();
 
 export function _resetHydratedForTest() {
   hydration = new WeakMap();
+  credentials = new WeakMap();
+}
+
+function resetPersonalizedCache() {
+  if (!import.meta.client) return;
+  useHomeStateCache().reset();
+  try {
+    useApi().clearAllCache();
+  } catch {
+    // The store can also be reset before Nuxt has installed the API plugin.
+  }
 }
 
 function persistUserId(user: Author | null) {
@@ -27,6 +40,8 @@ export const useAuthStore = defineStore("auth", {
     user: null as Author | null,
     generation: 0,
     hydrationReady: false,
+    credentialsReady: false,
+    credentialRecoveryPending: false,
   }),
   getters: {
     isLogin: (state) => !!state.token,
@@ -49,29 +64,75 @@ export const useAuthStore = defineStore("auth", {
     hydrateFromStorage(): Promise<void> {
       if (!import.meta.client) return Promise.resolve();
       const existing = hydration.get(this);
-      if (existing) return existing;
+      if (existing?.generation === this.generation) return existing.promise;
       const generation = this.generation;
       const pending = (async () => {
         try {
-          if (localStorage.getItem(LOGOUT_KEY)) {
-            if (localStorage.getItem(LOGOUT_KEY) === "pending") await this.logout();
+          if (localStorage.getItem(LOGOUT_KEY) === "pending") {
+            await this.logout();
             return;
           }
-          const storedToken = localStorage.getItem(TOKEN_KEY) || "";
-          if (storedToken && !isTokenExpired(storedToken)) {
-            this.token = storedToken;
-            localStorage.setItem(SESSION_HINT_KEY, "1");
-          } else if (storedToken || localStorage.getItem(SESSION_HINT_KEY)) {
-            // A fresh visitor has no session to restore; do not probe the refresh endpoint.
-            await this.renewToken();
-          }
-          if (this.generation === generation && this.token) await this.fetchSelfUser();
+          const restoredGeneration = await this.ensureCredentials();
+          if (this.generation === restoredGeneration && this.token) await this.fetchSelfUser();
+        } catch {
+          // A transient credential failure is retryable. Requests that require a
+          // usable token report it themselves; app startup must not reject unhandled.
         } finally {
           this.hydrationReady = true;
         }
-      })();
-      hydration.set(this, pending);
+      })().finally(() => {
+        if (hydration.get(this)?.promise === pending) hydration.delete(this);
+      });
+      hydration.set(this, { generation, promise: pending });
       return pending;
+    },
+    /** Wait only for usable credentials, never for profile loading or remote logout. */
+    ensureCredentials(): Promise<number> {
+      if (!import.meta.client) return Promise.resolve(this.generation);
+      const generation = this.generation;
+      const existing = credentials.get(this);
+      if (existing?.generation === generation) return existing.promise;
+      const pending = (async () => {
+        try {
+          if (localStorage.getItem(LOGOUT_KEY)) return generation;
+          if (!this.token) {
+            const storedToken = localStorage.getItem(TOKEN_KEY);
+            if (storedToken) this.acceptRestoredToken(storedToken);
+          }
+          // Check on every list request: a suspended tab's renewal timer may not
+          // have run. Optional-auth list routes return anonymous 200s for expiry.
+          if ((this.token && isTokenNearExpiry(this.token)) ||
+              (!this.token && localStorage.getItem(SESSION_HINT_KEY))) {
+            const renewed = await this.renewToken();
+            if (!renewed && this.generation !== generation) return generation;
+            if (!renewed && this.token && isTokenExpired(this.token)) {
+              this.credentialRecoveryPending = true;
+              throw new Error("登录状态暂时无法恢复，请稍后重试");
+            }
+          }
+          return this.generation;
+        } finally {
+          this.credentialsReady = true;
+        }
+      })().finally(() => {
+        if (credentials.get(this)?.promise === pending) credentials.delete(this);
+      });
+      credentials.set(this, { generation, promise: pending });
+      return pending;
+    },
+    acceptRestoredToken(token: string) {
+      const recovering = this.credentialsReady && (!this.token || this.credentialRecoveryPending);
+      if (recovering) {
+        // An earlier request may already have rendered/cached anonymous data.
+        // Wake the feed only on recovery, not on a routine access-token rotation.
+        this.generation += 1;
+        resetPersonalizedCache();
+      }
+      this.token = token;
+      this.credentialRecoveryPending = false;
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(SESSION_HINT_KEY, "1");
+      if (recovering && !this.user) void this.fetchSelfUser();
     },
     renewToken(): Promise<string | null> {
       const generation = this.generation;
@@ -87,9 +148,7 @@ export const useAuthStore = defineStore("auth", {
         if (this.generation !== generation || localStorage.getItem(LOGOUT_KEY)) return null;
         const token = result.accessToken || result.jwt;
         if (typeof token !== "string" || !token) throw new Error("刷新登录响应无效");
-        this.token = token;
-        localStorage.setItem(TOKEN_KEY, token);
-        localStorage.setItem(SESSION_HINT_KEY, "1");
+        this.acceptRestoredToken(token);
         return token;
       }).catch((err) => {
         if (this.generation === generation && (err?.statusCode === 401 || err?.statusCode === 403)) {
@@ -117,6 +176,7 @@ export const useAuthStore = defineStore("auth", {
       this.clearSession();
       this.token = token;
       this.user = user;
+      this.credentialsReady = true;
       if (import.meta.client) {
         localStorage.removeItem(LOGOUT_KEY);
         localStorage.setItem(TOKEN_KEY, token);
@@ -150,17 +210,13 @@ export const useAuthStore = defineStore("auth", {
       this.generation += 1;
       this.token = "";
       this.user = null;
+      this.credentialsReady = true;
+      this.credentialRecoveryPending = false;
       if (import.meta.client) {
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_ID_KEY);
         localStorage.removeItem(SESSION_HINT_KEY);
-        // 登出/会话过期：清空查询缓存，避免上一用户的 liked/isRead 等残留到新登录
-        try {
-          const api = useApi();
-          api.clearAllCache();
-        } catch {
-          // useApi 依赖 Nuxt 上下文，极端情况下可能不可用，忽略
-        }
+        resetPersonalizedCache();
         // 通知其它模块（如敲敲 composable）一并清理本地状态 / 断开 SSE
         try {
           window.dispatchEvent(new CustomEvent("auth:logout"));

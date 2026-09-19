@@ -4,6 +4,7 @@ import {
   isPublicEndpoint,
   isTokenExpired,
   isTokenNearExpiry,
+  isSameAuthSession,
   shouldAttachToken,
 } from "~/utils/request-auth";
 
@@ -35,6 +36,9 @@ describe("request-auth endpoint classification", () => {
     expect(shouldAttachToken("/api/auth/sessions", "GET", token)).toBe(true);
     expect(shouldAttachToken("/api/auth/sessions/2", "DELETE", token)).toBe(true);
     // Whitelisted GET endpoints that require user personalization
+    expect(shouldAttachToken("/api/articles/list", "GET", token)).toBe(true);
+    expect(shouldAttachToken("/api/articles/search?q=test", "GET", token)).toBe(true);
+    expect(shouldAttachToken("/api/articles/list", "GET", "")).toBe(false);
     expect(shouldAttachToken("/api/authors/search?q=test", "GET", token)).toBe(true);
     expect(shouldAttachToken("/api/articles/detail/123", "GET", token)).toBe(true);
     // When no token is present, should never attach
@@ -71,5 +75,30 @@ describe("JWT expiration helpers", () => {
     const freshJwt = createMockJwt(nowSec + 600);
     expect(isTokenExpired(freshJwt)).toBe(false);
     expect(isTokenNearExpiry(freshJwt, 2 * 60 * 1000)).toBe(false);
+  });
+});
+
+describe("JWT session identity", () => {
+  const token = (claims: unknown) => `header.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.signature`;
+  const current = token({ id: 1, sid: "family-1", exp: 1000 });
+
+  it("recognizes rotation only when both user and refresh-session family match", () => {
+    expect(isSameAuthSession(current, token({ id: 1, sid: "family-1", exp: 2000 }))).toBe(true);
+    expect(isSameAuthSession(current, token({ id: 2, sid: "family-1", exp: 2000 }))).toBe(false);
+    expect(isSameAuthSession(current, token({ id: 1, sid: "family-2", exp: 2000 }))).toBe(false);
+  });
+
+  it.each([null, [], { id: 1 }, { sid: "family-1" }, { id: "1", sid: "family-1" },
+    { id: 0, sid: "family-1" }, { id: 1, sid: "" }])("treats unproven claims as a new identity: %j", (claims) => {
+    const unknown = token(claims);
+    expect(isSameAuthSession(current, unknown)).toBe(false);
+    expect(isSameAuthSession(unknown, current)).toBe(false);
+    expect(isSameAuthSession(unknown, unknown)).toBe(false);
+  });
+
+  it("does not equate opaque or malformed credentials", () => {
+    expect(isSameAuthSession("opaque", "opaque")).toBe(false);
+    expect(isSameAuthSession(current, "a.b.c")).toBe(false);
+    expect(isSameAuthSession("", current)).toBe(false);
   });
 });

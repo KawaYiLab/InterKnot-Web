@@ -32,7 +32,9 @@ export function shouldAttachToken(path: string, method: string, token: string): 
   const pathname = path.split("?")[0] || path;
   if (
     upperMethod === "GET" &&
-    (pathname.startsWith("/api/articles/detail/") ||
+    (pathname === "/api/articles/list" ||
+      pathname === "/api/articles/search" ||
+      pathname.startsWith("/api/articles/detail/") ||
       pathname.startsWith("/api/comments/list") ||
       pathname.startsWith("/api/profiles/") ||
       // /api/authors/search 走鉴权（后端按 user.id 做 Redis 限流），但路径前缀
@@ -44,7 +46,7 @@ export function shouldAttachToken(path: string, method: string, token: string): 
   return !isPublicEndpoint(path, method);
 }
 
-export function decodeJwtExp(token: string): number | null {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
@@ -53,11 +55,29 @@ export function decodeJwtExp(token: string): number | null {
       typeof atob === "function"
         ? atob(base64)
         : Buffer.from(base64, "base64").toString("utf-8");
-    const payload = JSON.parse(json);
-    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+    const payload: unknown = JSON.parse(json);
+    return payload !== null && typeof payload === "object" && !Array.isArray(payload)
+      ? payload as Record<string, unknown> : null;
   } catch {
     return null;
   }
+}
+
+export function decodeJwtExp(token: string): number | null {
+  const exp = decodeJwtPayload(token)?.exp;
+  return typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : null;
+}
+
+/** Cache identity only; JWT authenticity is still validated by the server. */
+export function isSameAuthSession(previousToken: string, nextToken: string): boolean {
+  const previous = decodeJwtPayload(previousToken);
+  const next = decodeJwtPayload(nextToken);
+  // Session responses issue { id: user.id, sid: refreshTokenFamily }.
+  // Missing/legacy claims cannot prove a harmless same-session token rotation.
+  return Boolean(previous && next &&
+    typeof previous.id === "number" && Number.isSafeInteger(previous.id) && previous.id > 0 &&
+    typeof previous.sid === "string" && previous.sid.length > 0 &&
+    previous.id === next.id && previous.sid === next.sid);
 }
 
 export function isTokenExpired(token: string): boolean {
