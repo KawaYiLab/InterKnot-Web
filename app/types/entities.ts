@@ -250,6 +250,20 @@ export interface PostCategory {
   slug: string;
 }
 
+/** 标签（话题横切维度，与频道 category 正交）。 */
+export interface Tag {
+  name: string;
+  slug: string;
+  /** 已发布文章数（GET /api/tags/list 返回，用于排序/展示）。 */
+  count?: number;
+}
+
+/** 委托上附带的精简标签信息（接口随文章一并返回）。 */
+export interface PostTag {
+  name: string;
+  slug: string;
+}
+
 export interface Post {
   id: string;
   title: string;
@@ -281,6 +295,7 @@ export interface Post {
   /** 置顶时间（ISO 8601）。 */
   pinnedAt?: string | null;
   category?: PostCategory | null;
+  tags?: PostTag[];
   createdAt?: string;
   updatedAt?: string;
   editedAt?: string;
@@ -471,6 +486,7 @@ export interface DraftArticle {
   hasPublishedVersion: boolean;
   isAnonymous?: boolean;
   category?: PostCategory | null;
+  tags?: PostTag[];
   createdAt?: string;
   updatedAt?: string;
   author?: Author;
