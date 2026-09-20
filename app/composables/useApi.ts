@@ -74,15 +74,13 @@ const qk = {
   categories: {
     list: ["categories", "list"] as QueryKey,
   },
-  tags: {
-    list: ["tags", "list"] as QueryKey,
-    suggest: (q: string) => ["tags", "suggest", q] as QueryKey,
-  },
   articles: {
     // page 兼容两种分页模式：offset 模式传数字 start，游标模式传不透明游标串（空串=第一页）。
     // 两种模式下每页各占一个缓存槽，不会互相覆盖；第一页的键与切游标之前逐字节一致。
-    search: (query: string, category: string, page: string | number, limit: number, sort = "latest") =>
-      ["articles", "search", query, category, page, limit, sort] as QueryKey,
+    search: (query: string, category: string, page: string | number, limit: number, sort = "latest", tag = "") =>
+      (tag
+        ? ["articles", "search", query, category, page, limit, sort, { tag }]
+        : ["articles", "search", query, category, page, limit, sort]) as QueryKey,
     searchAll: ["articles", "search"] as QueryKey,
     detail: (id: string) => ["articles", "detail", id] as QueryKey,
     detailAll: ["articles", "detail"] as QueryKey,
@@ -491,7 +489,7 @@ function toPostTags(raw: unknown): PostTag[] {
       const obj = t as Record<string, unknown>;
       const slug = typeof obj.slug === "string" ? obj.slug : "";
       const name = typeof obj.name === "string" ? obj.name : "";
-      if (!slug && !name) return null;
+      if (!slug || !name) return null;
       return { name, slug } as PostTag;
     })
     .filter((t): t is PostTag => t !== null);
@@ -982,18 +980,18 @@ export function useApi() {
     sort: ArticleSort = "latest",
     tag = "",
   ): Promise<Pagination<Post>> => {
+    // /search 的全文索引尚不支持标签过滤，不能把未过滤结果伪装为标签搜索。
+    if (query && tag) throw new Error("标签筛选暂不支持全文搜索");
     // 先恢复/续期凭证，避免 optional-auth 把过期 token 降级为匿名已读状态。
     // 这里只等凭证；个人资料加载和远端退出不应阻塞信息流。
     if (import.meta.client) await useAuthStore().ensureCredentials();
     // 信息流走游标分页：endCur 原样当 cursor 发。后端还没部署游标时它是 buildPagination
     // 攒出来的数字 offset，resolveCursor 把两种形态分开，避免把 "20" 当游标发出去。
     const { cursor, start } = resolveCursor(endCur);
-    // feed != recommend 时把 feed 折进 category 缓存槽，避免推荐/关注/收藏互相串缓存；
-    // tag 过滤同理折进缓存槽，避免 tag 页与首页/频道页互相串缓存。
-    const cacheCategory =
-      (feed === "recommend" ? category : `${feed}|${category}`) + (tag ? `|tag:${tag}` : "");
+    // tag 单独作为缓存维度，避免与包含分隔符的频道标识碰撞。
+    const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
     const page = await cachedRead(
-      qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort),
+      qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort, tag),
       async () => {
         const endpoint = query ? "/api/articles/search" : "/api/articles/list";
         const response = await $api(endpoint, {
@@ -1046,14 +1044,14 @@ export function useApi() {
     sort: ArticleSort = "latest",
     tag = "",
   ): Pagination<Post> | undefined => {
+    if (query && tag) return undefined;
     const qc = $queryClient as QueryClient | undefined;
     if (!qc) return undefined;
     // 缓存槽的算法必须与 searchArticles 完全一致，否则预填永远命中不到。
     const { cursor, start } = resolveCursor(endCur);
-    const cacheCategory =
-      (feed === "recommend" ? category : `${feed}|${category}`) + (tag ? `|tag:${tag}` : "");
+    const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
     const page = qc.getQueryData<Pagination<Post>>(
-      qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort),
+      qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort, tag),
     );
     return page ? mergeReadPage(page) : undefined;
   };
@@ -1127,38 +1125,14 @@ export function useApi() {
     );
   };
 
-  /** 标签索引（GET /api/tags/list）：按热度降序返回标签及其已发布文章数。 */
-  const getTags = async (limit = 50): Promise<Tag[]> => {
-    return cachedRead(
-      qk.tags.list,
-      async () => {
-        const response = await $api("/api/tags/list", {
-          query: { limit: String(limit) },
-        });
-        const data = unwrapData<unknown[]>(response) || [];
-        return data
-          .map((raw): Tag | null => {
-            if (!raw || typeof raw !== "object") return null;
-            const t = raw as Record<string, unknown>;
-            const slug = typeof t.slug === "string" ? t.slug : "";
-            const name = typeof t.name === "string" ? t.name : "";
-            if (!slug || !name) return null;
-            return { name, slug, count: typeof t.count === "number" ? t.count : 0 };
-          })
-          .filter((t): t is Tag => t !== null);
-      },
-      STALE_LIST,
-    );
-  };
-
   /**
    * 标签联想（GET /api/tags/suggest）：发帖打标框边输入边搜已有标签。
    * 不走 TanStack 缓存（调用方自行防抖 + 丢弃过期响应）。
    */
-  const suggestTags = async (query: string): Promise<Tag[]> => {
+  const suggestTags = async (query: string, signal?: AbortSignal): Promise<Tag[]> => {
     const q = query.trim();
     if (!q) return [];
-    const response = await $api("/api/tags/suggest", { query: { q } });
+    const response = await $api("/api/tags/suggest", { query: { q }, ...(signal ? { signal } : {}) });
     const data = unwrapData<unknown[]>(response) || [];
     return data
       .map((raw): Tag | null => {
@@ -2655,7 +2629,6 @@ export function useApi() {
     suggestArticles,
     peekArticles,
     getCategories,
-    getTags,
     suggestTags,
     getPost,
     recordArticleView,

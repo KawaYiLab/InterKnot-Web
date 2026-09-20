@@ -1475,15 +1475,6 @@ onBeforeUnmount(() => {
                       <h1 class="ik-dialog__title">
                         <span v-if="post.category" class="ik-dialog__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
                       </h1>
-                      <div v-if="post.tags?.length" class="ik-dialog__tags">
-                        <button
-                          v-for="tag in post.tags"
-                          :key="tag.slug"
-                          type="button"
-                          class="ik-dialog__tag"
-                          @click="goTag(tag.slug)"
-                        >#{{ tag.name }}</button>
-                      </div>
                       <div
                         v-if="bodyHasContent"
                         class="ik-dialog__content"
@@ -1498,6 +1489,15 @@ onBeforeUnmount(() => {
                           :key="`video-${idx}`"
                           :video="video"
                         />
+                      </div>
+                      <div v-if="post.tags?.length" class="ik-dialog__tags">
+                        <button
+                          v-for="tag in post.tags"
+                          :key="tag.slug"
+                          type="button"
+                          class="ik-dialog__tag"
+                          @click="goTag(tag.slug)"
+                        >#{{ tag.name }}</button>
                       </div>
                     </div>
                   </div>
@@ -2363,29 +2363,27 @@ onBeforeUnmount(() => {
 .ik-dialog__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: -6px 0 16px;
+  gap: 4px 12px;
+  margin: 16px 0 0;
 }
 
 .ik-dialog__tag {
   display: inline-flex;
   align-items: center;
-  height: 26px;
-  padding: 0 12px;
-  border-radius: 9999px;
-  border: 1px solid #2a2a2a;
-  background: #1c1c1c;
-  color: var(--ik-primary, #bfff09);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #4a9eff;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.6;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: color 0.15s ease;
 }
 
 .ik-dialog__tag:hover {
-  border-color: var(--ik-primary, #bfff09);
-  background: #232323;
+  color: #7ab8ff;
+  text-decoration: underline;
 }
 
 .ik-dialog__content {

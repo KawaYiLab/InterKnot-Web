@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { useDebounceFn } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type {
   Category,
   DraftArticle,
   ExternalVideo,
-  Tag,
   UploadedFile,
   UploadTask,
   UploadStatus,
@@ -32,6 +30,9 @@ import { PlayIcon } from "@heroicons/vue/24/solid";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
 import { isAllowedImage, MAX_IMAGE_SIZE } from "~/utils/upload";
+import { useTagEditor } from "~/composables/useTagEditor";
+import { useVisualViewport } from "~/composables/useVisualViewport";
+import { MAX_TAGS_PER_ARTICLE } from "~/utils/tags";
 import {
   buildDraftPayload,
   buildDraftSnapshot,
@@ -78,6 +79,7 @@ const isSavingDraft = ref(false);
 const isPublishing = ref(false);
 const isDeletingDraft = ref(false);
 const isDiscardingChanges = ref(false);
+const isLoadingEditor = ref(false);
 const hasUnsavedChanges = ref(false);
 // 编辑已发布委托模式：自动保存仍写 draft 版本，点「更新委托」后重新发布。
 const isEditingPublished = ref(false);
@@ -117,6 +119,7 @@ const isMobileDraftsOpen = ref(false);
 const isMobileSettingsOpen = ref(false);
 const isMobileCategoryOpen = ref(false);
 const isMobileTagOpen = ref(false);
+useVisualViewport();
 // 移动端「分类」设置行展示的当前频道名（找不到则按加载态兜底文案）。
 const selectedCategoryName = computed(() => {
   const found = categories.value.find((c) => c.slug === selectedCategory.value);
@@ -125,66 +128,18 @@ const selectedCategoryName = computed(() => {
 });
 
 /* ── 标签（话题横切维度，与频道正交；完全自由创建，上限 5 个）── */
-const MAX_TAGS = 5;
-const selectedTags = ref<string[]>([]);
-const tagInput = ref("");
-const tagSuggestions = ref<Tag[]>([]);
-
-// 前端即时归一：trim + 折叠空白 + 截断。真正的规范化（去 emoji / 纯符号、slug 去重）
-// 以后端 normalizeTagName 为准，这里只做输入体验层面的清理与本地去重。
-function normalizeTagInput(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim().slice(0, 30);
-}
-
-function addTag(raw: string) {
-  const name = normalizeTagInput(raw);
-  if (!name) return;
-  if (selectedTags.value.length >= MAX_TAGS) {
-    message.warning(`最多只能添加 ${MAX_TAGS} 个标签`);
-    return;
-  }
-  // 本地去重（忽略大小写）：真正的 slug 归一在后端，这里挡掉最明显的重复。
-  const dup = selectedTags.value.some((t) => t.toLowerCase() === name.toLowerCase());
-  tagInput.value = "";
-  tagSuggestions.value = [];
-  if (dup) return;
-  selectedTags.value.push(name);
-  markDirty();
-}
-
-function removeTag(index: number) {
-  if (index < 0 || index >= selectedTags.value.length) return;
-  selectedTags.value.splice(index, 1);
-  markDirty();
-}
-
-// 联想：把用户推向复用已有标签而非新建（防碎片化）。防抖 200ms，过滤掉已选中的。
-const fetchTagSuggestions = useDebounceFn(async (q: string) => {
-  const query = q.trim();
-  if (!query) {
-    tagSuggestions.value = [];
-    return;
-  }
-  try {
-    const list = await api.suggestTags(query);
-    const selectedLower = new Set(selectedTags.value.map((t) => t.toLowerCase()));
-    tagSuggestions.value = list.filter((t) => !selectedLower.has(t.name.toLowerCase()));
-  } catch {
-    tagSuggestions.value = [];
-  }
-}, 200);
-
-function onTagInput() {
-  fetchTagSuggestions(tagInput.value);
-}
-
-// 回车添加标签，但必须放过中文输入法的组合确认：拼音选词时按下的那次 Enter
-// （isComposing / keyCode 229）不能被当成「添加标签」，否则半成品拼音会被塞进标签。
-// Vue 的 .enter 修饰符不判组合态，故显式拦一层。
-function onTagEnter(e: KeyboardEvent) {
-  if (e.isComposing || e.keyCode === 229) return;
-  addTag(tagInput.value);
-}
+const MAX_TAGS = MAX_TAGS_PER_ARTICLE;
+const isTagEditingDisabled = computed(() => isLoadingEditor.value || isPublishing.value || isDeletingDraft.value || isDiscardingChanges.value);
+const {
+  selectedTags, tagInput, tagSuggestions, isComposing: isTagComposing,
+  addTag, removeTag, resetTags, onTagInput, onTagEnter,
+  onTagCompositionStart, onTagCompositionEnd,
+} = useTagEditor({
+  suggest: (query, signal) => api.suggestTags(query, signal),
+  onChange: () => markDirty(),
+  warn: (text) => message.warning(text),
+  disabled: () => isTagEditingDisabled.value,
+});
 
 const suppressTracking = ref(false);
 const lastSavedSnapshot = ref("");
@@ -200,10 +155,10 @@ const inFlightSnapshot = ref<string | null>(null);
 // 之后每一次保存都写错文档（用户在 B 里打字，内容进了 A）。
 const draftEpoch = ref(0);
 
-// 在途的「新建草稿」请求。force 会穿透下方的在途闸门，那一刻 documentId 还是空的，
-// 不等它就会再发一次 createArticleDraft —— 凭空多出一篇草稿，用户手里这份内容还留在
-// 被丢弃的那个 id 上。
-let pendingCreate: Promise<unknown> | null = null;
+// 所有保存串行执行：切换草稿 / 离开时的 force 也必须等在途 PUT，避免旧标签覆盖新标签。
+let pendingSave: Promise<void> | null = null;
+let editorDisposed = false;
+let editorLoadRevision = 0;
 
 // Draft list
 const drafts = ref<DraftArticle[]>([]);
@@ -243,7 +198,8 @@ const hasAnyContent = computed(
     title.value.trim().length > 0 ||
     body.value.trim().length > 0 ||
     externalVideos.value.length > 0 ||
-    uploadedImages.value.length > 0,
+    uploadedImages.value.length > 0 ||
+    selectedTags.value.length > 0,
 );
 
 const canPublish = computed(
@@ -251,6 +207,8 @@ const canPublish = computed(
     !isSavingDraft.value &&
     !isPublishing.value &&
     !isDeletingDraft.value &&
+    !isDiscardingChanges.value &&
+    !isLoadingEditor.value &&
     !isCoverUploading.value &&
     !isBodyOverLimit.value &&
     title.value.trim().length > 0 &&
@@ -414,27 +372,33 @@ function syncSnapshot() {
 
 /* ── Auto-save ────────────────────────────────────── */
 const performSaveDraft = async (force = false) => {
-  if (!auth.isLogin) return;
-  // 在途时不能静默丢掉这次保存：@vueuse 的 debounce 在 trailing 触发时已经把 timer 与
-  // maxTimer 一并作废，这里直接 return 就再没有任何定时器会重试 —— 用户停手后那段输入只能
-  // 等下一次按键 / 发布 / 切换草稿才有机会落盘，关标签页直接丢（全 app 无 beforeunload 兜底）。
-  // 所以推后一个防抖周期重排。debouncedSave 在下方声明，靠闭包延迟求值，调用时早已初始化。
-  if (isSavingDraft.value && !force) {
-    debouncedSave();
-    return;
+  const epoch = draftEpoch.value;
+  if (force) cancelDraftSave();
+  while (pendingSave) {
+    if (!force) {
+      debouncedSave();
+      return;
+    }
+    await pendingSave.catch(() => undefined);
+    if (draftEpoch.value !== epoch) throw new Error("编辑目标已改变，请重试");
   }
-  if (!documentId.value && !hasAnyContent.value) return;
+  const saving = saveDraft(force);
+  pendingSave = saving;
+  try {
+    await saving;
+  } finally {
+    if (pendingSave === saving) pendingSave = null;
+  }
+};
 
-  // force 穿透了在途闸门：若此刻有一次新建在飞，documentId 还是空的，直接往下走会再
-  // POST 一次，草稿箱里凭空多一篇。等它落地把 id 填好，下面就自然走 update 分支。
-  // 放在采集内容之前：等完再采，指纹与 payload 描述的就都是最新那一版。
-  if (force && pendingCreate && !documentId.value) {
-    await pendingCreate.catch(() => undefined);
-  }
+const saveDraft = async (force = false): Promise<void> => {
+  if (!auth.isLogin || (editorDisposed && !force)) return;
+  if (isDeletingDraft.value || isDiscardingChanges.value || (isPublishing.value && !force)) return;
+  if (!documentId.value && !hasAnyContent.value) return;
 
   const content = editorContent();
   const snapshot = buildDraftSnapshot(content);
-  if (!force && snapshot === lastSavedSnapshot.value) return;
+  if (documentId.value && snapshot === lastSavedSnapshot.value) return;
 
   isSavingDraft.value = true;
   inFlightSnapshot.value = snapshot;
@@ -448,18 +412,9 @@ const performSaveDraft = async (force = false) => {
     const authorId = auth.user?.authorId || auth.user?.documentId;
     const payload = buildDraftPayload(content, authorId || undefined);
 
-    let result: DraftArticle;
-    if (isCreate) {
-      const creating = api.createArticleDraft(payload);
-      pendingCreate = creating;
-      try {
-        result = await creating;
-      } finally {
-        if (pendingCreate === creating) pendingCreate = null;
-      }
-    } else {
-      result = await api.updateArticleDraft(targetId!, payload);
-    }
+    const result = isCreate
+      ? await api.createArticleDraft(payload)
+      : await api.updateArticleDraft(targetId!, payload);
 
     // 目标在途期间被换掉了：这次响应属于旧文档，编辑器状态一概不能碰（连草稿列表也不同步
     // —— 下面那段读的 isEditingPublished 已经是新目标的标志）。
@@ -488,6 +443,10 @@ const performSaveDraft = async (force = false) => {
     lastSavedSnapshot.value = snapshot;
     hasUnsavedChanges.value = buildSnapshot() !== snapshot;
   } catch (err) {
+    if (draftEpoch.value !== epoch) {
+      if (force) throw err;
+      return;
+    }
     hasUnsavedChanges.value = true;
     // 目标草稿已不存在。后端现在对已删除的 documentId 返 404（原来是 200 + data:null，
     // 把「一个字也没写进去」伪装成保存成功），继续往这个 id 上写只会每 2.5 秒刷一个 toast。
@@ -514,10 +473,8 @@ const performSaveDraft = async (force = false) => {
         return;
       }
       if (force) {
-        // publish() 靠这次 force 保存产出 documentId（拿不到就抛「草稿保存后仍缺少
-        // documentId」）。id 已清掉，立刻重跑一次走 createArticleDraft —— force 会穿透
-        // 上面那道在途闸门，不用等 finally。
-        return await performSaveDraft(true);
+        // 在当前保存事务内重试新建，不能排入等待自己的 pendingSave 队列。
+        return await saveDraft(true);
       }
       message.warning("原草稿已不存在，内容将另存为新草稿");
       debouncedSave();
@@ -527,33 +484,41 @@ const performSaveDraft = async (force = false) => {
     message.error(resolveErrorMessage(err, "草稿保存失败"));
   } finally {
     isSavingDraft.value = false;
-    // 只清自己那次：force 穿透在途闸门时可能有两次保存同时在飞，别把对方的基准抹掉。
+    // 404 后递归另存时，只清自己那份基准。
     if (inFlightSnapshot.value === snapshot) {
       inFlightSnapshot.value = null;
     }
   }
 };
 
-const debouncedSave = useDebounceFn(
-  () => {
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let maxSaveTimer: ReturnType<typeof setTimeout> | undefined;
+function cancelDraftSave() {
+  if (saveTimer !== undefined) clearTimeout(saveTimer);
+  if (maxSaveTimer !== undefined) clearTimeout(maxSaveTimer);
+  saveTimer = undefined;
+  maxSaveTimer = undefined;
+}
+function debouncedSave() {
+  if (editorDisposed) return;
+  if (saveTimer !== undefined) clearTimeout(saveTimer);
+  const run = () => {
+    cancelDraftSave();
     performSaveDraft().catch(() => undefined);
-  },
-  AUTO_SAVE_DELAY,
-  { maxWait: AUTO_SAVE_MAX_WAIT },
-);
+  };
+  saveTimer = setTimeout(run, AUTO_SAVE_DELAY);
+  maxSaveTimer ??= setTimeout(run, AUTO_SAVE_MAX_WAIT);
+}
 
 function markDirty() {
-  if (suppressTracking.value) return;
-  // 按指纹判脏，而不是无条件置 true：suppressTracking 拦不住 title / body 那两个 watch
-  // （默认 flush:'pre'，回调跑在 applyDraftToEditor 的 finally 复位**之后**），所以载入
-  // 草稿后这个标志会被错误地拉成 true 并一直留着。openDraft / newDraft / onBeforeUnmount
-  // 三个兜底都以它为门，于是每次切换草稿、新建、离开页面都白发一次 force PUT
-  // —— force 绕过下面的指纹比对，内容一模一样也照发。
+  if (suppressTracking.value || editorDisposed) return;
+  // title / body 的 watch 在恢复草稿之后才执行，必须按指纹判脏，避免恢复内容也触发保存。
   // 基准取 inFlightSnapshot 优先：在途那次 PUT 一旦落地，服务端就是那份内容，
   // 拿 lastSavedSnapshot 比会把「撤销回上一次已保存的样子」误判成干净。
   hasUnsavedChanges.value =
     buildSnapshot() !== (inFlightSnapshot.value ?? lastSavedSnapshot.value);
-  debouncedSave();
+  if (hasUnsavedChanges.value) debouncedSave();
+  else cancelDraftSave();
 }
 
 /* ── Image Upload ─────────────────────────────────── */
@@ -769,49 +734,62 @@ async function publish() {
     message.error(resolveErrorMessage(err, isEditingPublished.value ? "更新失败" : "发布失败"));
   } finally {
     isPublishing.value = false;
+    if (hasUnsavedChanges.value) debouncedSave();
   }
 }
 
 /* ── Discard changes (editing published post) ───── */
 async function discardChanges() {
-  if (!documentId.value || !isEditingPublished.value) return;
+  if (!documentId.value || !isEditingPublished.value || isPublishing.value || isDiscardingChanges.value) return;
+  const targetId = documentId.value;
+  const epoch = draftEpoch.value;
   const ok = await confirmDialog.open({
     title: "放弃修改",
     message: "确定放弃未发布的修改吗？内容将恢复为线上版本。",
     confirmText: "放弃修改",
     danger: true,
   });
-  if (!ok) return;
+  if (!ok || epoch !== draftEpoch.value) return;
 
   isDiscardingChanges.value = true;
+  cancelDraftSave();
   try {
-    await api.discardArticleDraft(documentId.value);
-    const detail = await api.getMyDraftDetail(documentId.value);
+    await pendingSave?.catch(() => undefined);
+    if (epoch !== draftEpoch.value) return;
+    await api.discardArticleDraft(targetId);
+    const detail = await api.getMyDraftDetail(targetId);
     applyDraftToEditor(detail);
     message.success("已恢复为线上版本");
   } catch (err) {
     message.error(resolveErrorMessage(err, "放弃修改失败"));
   } finally {
     isDiscardingChanges.value = false;
+    if (hasUnsavedChanges.value) debouncedSave();
   }
 }
 
 /* ── Delete Draft ─────────────────────────────────── */
 async function deleteDraft() {
-  if (!documentId.value) return;
+  if (!documentId.value || isPublishing.value || isDeletingDraft.value) return;
+  const targetId = documentId.value;
+  const epoch = draftEpoch.value;
   const ok = await confirmDialog.open({ title: "删除草稿", message: "确定要删除这个草稿吗？此操作不可恢复。", confirmText: "删除", danger: true });
-  if (!ok) return;
+  if (!ok || epoch !== draftEpoch.value) return;
 
   isDeletingDraft.value = true;
+  cancelDraftSave();
 
   try {
-    await api.deleteArticle(documentId.value);
+    await pendingSave?.catch(() => undefined);
+    if (epoch !== draftEpoch.value) return;
+    await api.deleteArticle(targetId);
     resetEditor();
     await refreshDrafts();
   } catch (err) {
     message.error(resolveErrorMessage(err, "删除草稿失败"));
   } finally {
     isDeletingDraft.value = false;
+    if (hasUnsavedChanges.value) debouncedSave();
   }
 }
 
@@ -910,32 +888,47 @@ async function ensureDraftsLoaded() {
 }
 
 async function openDraft(draft: DraftArticle) {
-  if (draft.documentId === documentId.value) {
+  if (draft.documentId === documentId.value || isPublishing.value || isDeletingDraft.value || isDiscardingChanges.value) {
     return;
   }
+  const revision = ++editorLoadRevision;
+  isLoadingEditor.value = true;
 
-  if (hasUnsavedChanges.value && (documentId.value || hasAnyContent.value)) {
+  if (pendingSave || (hasUnsavedChanges.value && (documentId.value || hasAnyContent.value))) {
     try {
       await performSaveDraft(true);
-    } catch {
-      /* best effort */
+    } catch (err) {
+      if (revision === editorLoadRevision) {
+        isLoadingEditor.value = false;
+        message.error(resolveErrorMessage(err, "草稿保存失败，请重试后再切换"));
+      }
+      return;
     }
   }
+  if (revision !== editorLoadRevision || editorDisposed) return;
 
   try {
     const detail = await api.getMyDraftDetail(draft.documentId);
+    if (revision !== editorLoadRevision || editorDisposed) return;
     applyDraftToEditor(detail);
   } catch (err) {
-    message.error(resolveErrorMessage(err, "加载草稿详情失败"));
+    if (revision === editorLoadRevision && !editorDisposed) {
+      isLoadingEditor.value = false;
+      message.error(resolveErrorMessage(err, "加载草稿详情失败"));
+    }
   }
 }
 
 /* ── Editor State Management ──────────────────────── */
 function applyDraftToEditor(draft: DraftArticle) {
+  cancelDraftSave();
+  editorLoadRevision++;
+  isLoadingEditor.value = false;
   suppressTracking.value = true;
   try {
     // 换目标：作废所有在途保存的回写（见 draftEpoch 声明处）
     draftEpoch.value++;
+    inFlightSnapshot.value = null;
     documentId.value = draft.documentId;
     isEditingPublished.value = !!draft.hasPublishedVersion;
     title.value = draft.title;
@@ -945,9 +938,7 @@ function applyDraftToEditor(draft: DraftArticle) {
     selectedCategory.value = draft.category?.slug || DEFAULT_CATEGORY_SLUG;
     // 恢复标签（用显示名，与打标 UI 一致）。必须在 syncSnapshot 之前设好，否则指纹里
     // 不含已恢复的标签，载入后立刻会被判为「有未保存改动」而多打一次 PUT。
-    selectedTags.value = (draft.tags ?? []).map((t) => t.name).filter(Boolean);
-    tagInput.value = "";
-    tagSuggestions.value = [];
+    resetTags((draft.tags ?? []).map((tag) => tag.name));
 
     for (const task of uploadTasks.value) {
       URL.revokeObjectURL(task.previewUrl);
@@ -976,10 +967,14 @@ function applyDraftToEditor(draft: DraftArticle) {
 }
 
 function resetEditor() {
+  cancelDraftSave();
+  editorLoadRevision++;
+  isLoadingEditor.value = false;
   suppressTracking.value = true;
   try {
     // 换目标：作废所有在途保存的回写（见 draftEpoch 声明处）
     draftEpoch.value++;
+    inFlightSnapshot.value = null;
     documentId.value = null;
     title.value = "";
     body.value = "";
@@ -991,9 +986,7 @@ function resetEditor() {
     isAnonymous.value = false;
     isEditingPublished.value = false;
     selectedCategory.value = DEFAULT_CATEGORY_SLUG;
-    selectedTags.value = [];
-    tagInput.value = "";
-    tagSuggestions.value = [];
+    resetTags();
     lastSavedSnapshot.value = "";
     hasUnsavedChanges.value = false;
   } finally {
@@ -1002,13 +995,21 @@ function resetEditor() {
 }
 
 async function newDraft() {
-  if (hasUnsavedChanges.value && (documentId.value || hasAnyContent.value)) {
+  if (isPublishing.value || isDeletingDraft.value || isDiscardingChanges.value) return;
+  const revision = ++editorLoadRevision;
+  isLoadingEditor.value = true;
+  if (pendingSave || (hasUnsavedChanges.value && (documentId.value || hasAnyContent.value))) {
     try {
       await performSaveDraft(true);
-    } catch {
-      /* best effort */
+    } catch (err) {
+      if (revision === editorLoadRevision) {
+        isLoadingEditor.value = false;
+        message.error(resolveErrorMessage(err, "草稿保存失败，请重试后再新建"));
+      }
+      return;
     }
   }
+  if (revision !== editorLoadRevision || editorDisposed) return;
   resetEditor();
 }
 
@@ -1117,7 +1118,35 @@ function onThumbDragEnd() {
 }
 
 /* ── Lifecycle ────────────────────────────────────── */
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (!hasUnsavedChanges.value && !isSavingDraft.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+if (import.meta.client) window.addEventListener("beforeunload", onBeforeUnload);
+
+// SPA 导航不会触发 beforeunload；必须在卸载前确认保存成功，失败时保留编辑器。
+onBeforeRouteLeave(async () => {
+  if (isDeletingDraft.value || isDiscardingChanges.value) return false;
+  try {
+    // 保存期间页面仍可输入；每次都重新检查，直到最新内容也已经落盘。
+    while (pendingSave || (hasUnsavedChanges.value && (documentId.value || hasAnyContent.value))) {
+      if (isDeletingDraft.value || isDiscardingChanges.value) return false;
+      if (!auth.isLogin) throw new Error("登录状态已失效，请重新登录后保存草稿");
+      await performSaveDraft(true);
+    }
+    return true;
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "草稿保存失败，请重试后再离开"));
+    return false;
+  }
+});
+
 onBeforeUnmount(() => {
+  if (import.meta.client) window.removeEventListener("beforeunload", onBeforeUnload);
+  editorDisposed = true;
+  editorLoadRevision++;
+  cancelDraftSave();
   if (hasUnsavedChanges.value && (documentId.value || hasAnyContent.value)) {
     performSaveDraft(true).catch(() => undefined);
   }
@@ -1156,11 +1185,17 @@ async function loadCategories() {
 
 /* ── Edit mode entry (?edit=<documentId>) ──────── */
 async function loadEditTarget(id: string) {
+  const revision = ++editorLoadRevision;
+  isLoadingEditor.value = true;
   try {
     const detail = await api.getMyDraftDetail(id);
+    if (revision !== editorLoadRevision || editorDisposed) return;
     applyDraftToEditor(detail);
   } catch (err) {
-    message.error(resolveErrorMessage(err, "加载委托失败"));
+    if (revision === editorLoadRevision && !editorDisposed) {
+      isLoadingEditor.value = false;
+      message.error(resolveErrorMessage(err, "加载委托失败"));
+    }
   }
 }
 
@@ -1253,6 +1288,7 @@ if (import.meta.client) {
       <!-- ── Right: Form Panel ───────────────── -->
       <main class="ik-create-panel">
         <div class="ik-create-panel__body">
+          <!-- ═══ 写作区：标题 + 正文（主内容，无装饰头部） ═══ -->
           <!-- Title field — flat TextField with bottom divider (Flutter desktop style) -->
           <div class="ik-create-section ik-create-section--title">
             <ZTextarea
@@ -1265,105 +1301,14 @@ if (import.meta.client) {
             <span class="ik-create-section__count">{{ editorTitleCount }}/200</span>
           </div>
 
-          <!-- Category section（发布委托必选频道）
-               加载中即渲染占位标签，为分类栏预留高度，避免列表后到挤压正文导致跳动 -->
-          <div v-if="categoriesLoading || visibleCategories.length" class="ik-create-section">
-            <div class="ik-create-section__head">
-              <span class="ik-create-section__label">
-                <Squares2X2Icon style="width:14px;height:14px" />
-                分类
-              </span>
-              <span class="ik-create-section__hint">选择委托所属频道</span>
-            </div>
-            <div class="ik-create-category-chips">
-              <template v-if="visibleCategories.length">
-                <button
-                  v-for="cat in visibleCategories"
-                  :key="cat.slug"
-                  type="button"
-                  class="ik-create-category-chip"
-                  :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
-                  @click="selectCategory(cat.slug)"
-                >
-                  {{ cat.name }}
-                </button>
-              </template>
-              <template v-else>
-                <span
-                  v-for="n in 4"
-                  :key="`cat-skeleton-${n}`"
-                  class="ik-create-category-chip ik-create-category-chip--placeholder"
-                  aria-hidden="true"
-                ></span>
-              </template>
-            </div>
-          </div>
-
-          <!-- Tag section（可选，话题横切维度，最多 5 个，可自由创建） -->
-          <div class="ik-create-section">
-            <div class="ik-create-section__head">
-              <span class="ik-create-section__label">
-                <HashtagIcon style="width:14px;height:14px" />
-                标签
-              </span>
-              <span class="ik-create-section__hint">最多 {{ MAX_TAGS }} 个，回车添加（可新建）</span>
-            </div>
-            <div class="ik-create-tags">
-              <div class="ik-create-tags__chips">
-                <span
-                  v-for="(tag, idx) in selectedTags"
-                  :key="`tag-${idx}-${tag}`"
-                  class="ik-create-tag-chip"
-                >
-                  <span class="ik-create-tag-chip__text">{{ tag }}</span>
-                  <button
-                    type="button"
-                    class="ik-create-tag-chip__remove"
-                    :aria-label="`移除标签 ${tag}`"
-                    @click="removeTag(idx)"
-                  >
-                    <XMarkIcon style="width:12px;height:12px" />
-                  </button>
-                </span>
-                <div v-if="selectedTags.length < MAX_TAGS" class="ik-create-tag-input-wrap">
-                  <input
-                    v-model="tagInput"
-                    type="text"
-                    class="ik-create-tag-input"
-                    placeholder="添加标签…"
-                    maxlength="30"
-                    @input="onTagInput"
-                    @keydown.enter.prevent="onTagEnter"
-                  />
-                  <ul v-if="tagSuggestions.length" class="ik-create-tag-suggestions">
-                    <li
-                      v-for="s in tagSuggestions"
-                      :key="s.slug"
-                      class="ik-create-tag-suggestion"
-                      @mousedown.prevent="addTag(s.name)"
-                    >
-                      <HashtagIcon style="width:12px;height:12px;opacity:0.5" />
-                      <span class="ik-create-tag-suggestion__name">{{ s.name }}</span>
-                      <span v-if="s.count != null" class="ik-create-tag-suggestion__count">{{ s.count }}</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Body section -->
-          <div class="ik-create-section">
-            <div class="ik-create-section__head">
-              <span class="ik-create-section__label">
-                <DocumentTextIcon style="width:14px;height:14px" />
-                正文
-                <span
-                  class="ik-create-section__count-pill"
-                  :class="{ 'ik-create-section__count-pill--over': isBodyOverLimit }"
-                >{{ bodyCharCount }}/{{ maxBodyChars }}</span>
-              </span>
-              <span class="ik-create-section__hint">若仅上传图片，正文可留空</span>
+          <!-- Body section（主内容，紧随标题） -->
+          <div class="ik-create-section ik-create-section--body">
+            <div class="ik-create-field">
+              <span class="ik-create-field__label">正文</span>
+              <span
+                class="ik-create-field__count"
+                :class="{ 'ik-create-field__count--over': isBodyOverLimit }"
+              >{{ bodyCharCount }}/{{ maxBodyChars }}</span>
             </div>
             <div class="ik-create-editor-frame">
               <ZTextarea
@@ -1374,16 +1319,18 @@ if (import.meta.client) {
             </div>
           </div>
 
-          <!-- Media section (images + videos) -->
-          <div class="ik-create-section">
-            <div class="ik-create-section__head">
-              <span class="ik-create-section__label">
-                <PhotoIcon style="width:14px;height:14px" />
-                媒体
-              </span>
-              <span class="ik-create-section__hint">第一张图片为封面</span>
+          <!-- ═══ 配置区：媒体 + 分类 + 标签（发布前设置，成组下沉） ═══ -->
+          <div class="ik-create-config">
+            <div class="ik-create-config__divider">
+              <span class="ik-create-config__divider-text">委托设置</span>
             </div>
-            <div class="ik-cover-grid">
+
+            <!-- Media section (images + videos) -->
+            <div class="ik-create-section ik-create-section--media">
+              <div class="ik-create-field">
+                <span class="ik-create-field__label">封面</span>
+              </div>
+              <div class="ik-cover-grid">
               <div
                 v-for="(task, idx) in uploadTasks"
                 :key="task.localId"
@@ -1481,11 +1428,95 @@ if (import.meta.client) {
                 @click="openVideoDialog"
               />
             </div>
-            <BilibiliVideoDialog
-              v-model:visible="isVideoDialogVisible"
-              @confirm="onVideoDialogConfirm"
-              @cancel="isVideoDialogVisible = false"
-            />
+              <BilibiliVideoDialog
+                v-model:visible="isVideoDialogVisible"
+                @confirm="onVideoDialogConfirm"
+                @cancel="isVideoDialogVisible = false"
+              />
+            </div>
+
+            <!-- Category section（发布委托必选频道）
+                 加载中即渲染占位标签，为分类栏预留高度，避免列表后到挤压导致跳动 -->
+            <div v-if="categoriesLoading || visibleCategories.length" class="ik-create-section">
+              <div class="ik-create-field">
+                <span class="ik-create-field__label">分类</span>
+              </div>
+              <div class="ik-create-category-chips">
+                <template v-if="visibleCategories.length">
+                  <button
+                    v-for="cat in visibleCategories"
+                    :key="cat.slug"
+                    type="button"
+                    class="ik-create-category-chip"
+                    :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
+                    @click="selectCategory(cat.slug)"
+                  >
+                    {{ cat.name }}
+                  </button>
+                </template>
+                <template v-else>
+                  <span
+                    v-for="n in 4"
+                    :key="`cat-skeleton-${n}`"
+                    class="ik-create-category-chip ik-create-category-chip--placeholder"
+                    aria-hidden="true"
+                  ></span>
+                </template>
+              </div>
+            </div>
+
+            <!-- Tag section（可选，话题横切维度，最多 5 个，可自由创建） -->
+            <div class="ik-create-section">
+              <div class="ik-create-field">
+                <span class="ik-create-field__label">标签</span>
+                <span class="ik-create-field__hint">按回车添加</span>
+              </div>
+              <div class="ik-create-tags">
+                <div class="ik-create-tags__chips">
+                  <span
+                    v-for="(tag, idx) in selectedTags"
+                    :key="`tag-${idx}-${tag}`"
+                    class="ik-create-tag-chip"
+                  >
+                    <span class="ik-create-tag-chip__text">{{ tag }}</span>
+                    <button
+                      type="button"
+                      class="ik-create-tag-chip__remove"
+                      :aria-label="`移除标签 ${tag}`"
+                      :disabled="isTagEditingDisabled"
+                      @click="removeTag(idx)"
+                    >
+                      <XMarkIcon style="width:12px;height:12px" />
+                    </button>
+                  </span>
+                  <div v-if="selectedTags.length < MAX_TAGS" class="ik-create-tag-input-wrap">
+                    <input
+                      v-model="tagInput"
+                      type="text"
+                      class="ik-create-tag-input"
+                      :disabled="isTagEditingDisabled"
+                      placeholder="添加标签…"
+                      maxlength="30"
+                      @input="onTagInput"
+                      @keydown.enter="onTagEnter"
+                      @compositionstart="onTagCompositionStart"
+                      @compositionend="onTagCompositionEnd"
+                    />
+                    <ul v-if="tagSuggestions.length" class="ik-create-tag-suggestions">
+                      <li
+                        v-for="s in tagSuggestions"
+                        :key="s.slug"
+                        class="ik-create-tag-suggestion"
+                        @mousedown.prevent="addTag(s.name)"
+                      >
+                        <HashtagIcon style="width:12px;height:12px;opacity:0.5" />
+                        <span class="ik-create-tag-suggestion__name">{{ s.name }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -1923,15 +1954,23 @@ if (import.meta.client) {
       <Transition name="ik-mobile-sheet">
         <div
           v-if="isMobileTagOpen"
-          class="ik-mobile-sheet"
+          class="ik-mobile-sheet ik-mobile-sheet--tags"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="ik-mobile-tags-title"
           @click.self="isMobileTagOpen = false"
+          @keydown.esc="isMobileTagOpen = false"
         >
-          <div class="ik-mobile-sheet__panel">
+          <div class="ik-mobile-sheet__panel ik-mobile-sheet__panel--tags">
             <div class="ik-mobile-sheet__handle"></div>
-            <span class="ik-mobile-sheet__title">添加标签</span>
-            <div class="ik-mobile-sheet__body ik-mobile-sheet__body--compact">
+            <header class="ik-mobile-sheet__header">
+              <span id="ik-mobile-tags-title" class="ik-mobile-sheet__title">添加标签</span>
+              <button type="button" class="ik-mobile-sheet__close" aria-label="关闭标签编辑" @click="isMobileTagOpen = false">
+                <XMarkIcon style="width:20px;height:20px" />
+              </button>
+            </header>
+            <div class="ik-mobile-sheet__body ik-mobile-tag-body">
+              <p class="ik-mobile-tag-hint">已添加 {{ selectedTags.length }}/{{ MAX_TAGS }} 个，可搜索或创建标签</p>
               <!-- 已选标签 chips -->
               <div v-if="selectedTags.length" class="ik-mobile-tag-chips">
                 <span
@@ -1944,6 +1983,7 @@ if (import.meta.client) {
                     type="button"
                     class="ik-create-tag-chip__remove"
                     :aria-label="`移除标签 ${tag}`"
+                    :disabled="isTagEditingDisabled"
                     @click="removeTag(idx)"
                   >
                     <XMarkIcon />
@@ -1958,15 +1998,20 @@ if (import.meta.client) {
                   v-model="tagInput"
                   type="text"
                   class="ik-mobile-tag-input"
-                  placeholder="输入标签，回车添加（可新建）"
+                  :disabled="isTagEditingDisabled"
+                  aria-label="标签名称"
+                  placeholder="输入标签名称"
                   maxlength="30"
+                  enterkeyhint="done"
                   @input="onTagInput"
-                  @keydown.enter.prevent="onTagEnter"
+                  @keydown.enter="onTagEnter"
+                  @compositionstart="onTagCompositionStart"
+                  @compositionend="onTagCompositionEnd"
                 />
                 <button
                   type="button"
                   class="ik-mobile-tag-add-btn"
-                  :disabled="!tagInput.trim()"
+                  :disabled="!tagInput.trim() || isTagComposing || isTagEditingDisabled"
                   @click="addTag(tagInput)"
                 >
                   添加
@@ -1979,12 +2024,11 @@ if (import.meta.client) {
                 <li
                   v-for="s in tagSuggestions"
                   :key="`m-sug-${s.slug}`"
-                  class="ik-mobile-tag-suggestion"
-                  @click="addTag(s.name)"
                 >
-                  <HashtagIcon class="ik-mobile-tag-suggestion__icon" />
-                  <span class="ik-mobile-tag-suggestion__name">{{ s.name }}</span>
-                  <span v-if="s.count != null" class="ik-mobile-tag-suggestion__count">{{ s.count }}</span>
+                  <button type="button" class="ik-mobile-tag-suggestion" :disabled="isTagEditingDisabled" @click="addTag(s.name)">
+                    <HashtagIcon class="ik-mobile-tag-suggestion__icon" />
+                    <span class="ik-mobile-tag-suggestion__name">{{ s.name }}</span>
+                  </button>
                 </li>
               </ul>
             </div>
@@ -2019,11 +2063,13 @@ if (import.meta.client) {
   position: relative;
   width: min(1440px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 20px 0 100px;
-  min-height: calc(100vh - 80px);
+  padding: 16px 0 0;
+  /* AppHeader 在文档流中占 78px，发布栏在下方 flex 布局中自行占位。 */
+  height: calc(100dvh - 78px);
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .ik-create-page > .ik-create-columns {
@@ -2125,7 +2171,7 @@ if (import.meta.client) {
 .ik-create-columns {
   flex: 1;
   display: grid;
-  grid-template-columns: 230px 1fr;
+  grid-template-columns: 230px minmax(0, 1fr);
   gap: 16px;
   min-height: 0;
   align-items: stretch;
@@ -2133,17 +2179,17 @@ if (import.meta.client) {
 
 /* ═════════ Left Nav: Editing + Drafts (ZMenu) ═════════ */
 .ik-create-nav-wrap {
-  position: sticky;
-  top: 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: calc(100vh - 100px);
+  min-height: 0;
+  min-width: 0;
 }
 
 .ik-create-menu {
   flex: 1;
-  min-height: 320px !important;
+  min-width: 0;
+  min-height: 0 !important;
   max-height: 100%;
 }
 
@@ -2244,12 +2290,8 @@ if (import.meta.client) {
   background: #2D2C2D;
   border-radius: 24px 0 24px 24px;
   overflow: hidden;
-  min-height: 480px;
-  /* 固定在视口内（与左侧 nav 列同款 sticky）：面板本身不再撑高页面，
-     内容超出时只在 __body 内部滚动，整页不动。上留 20px、下留 100px 给固定页脚。 */
-  position: sticky;
-  top: 20px;
-  max-height: calc(100vh - 120px);
+  min-height: 0;
+  min-width: 0;
 }
 
 .ik-create-panel__body {
@@ -2258,8 +2300,8 @@ if (import.meta.client) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px 26px 28px;
+  gap: 14px;
+  padding: 18px 22px 20px;
   background:
     url("/images/tab-bg-point.webp") repeat,
     linear-gradient(180deg, #0a0a0a 0%, #070707 100%);
@@ -2268,6 +2310,7 @@ if (import.meta.client) {
   /* 只有这个容器纵向滚动 */
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
 }
 
 /* ── Delete draft button (in footer) ─────────────────── */
@@ -2303,7 +2346,14 @@ if (import.meta.client) {
 .ik-create-section {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  min-width: 0;
   gap: 8px;
+}
+
+.ik-create-section--body {
+  flex: 1 0 160px;
+  min-height: 160px;
 }
 
 .ik-create-section--title {
@@ -2319,33 +2369,76 @@ if (import.meta.client) {
   border-bottom-color: #fbfe00;
 }
 
-.ik-create-section__head {
+/* ── Quiet field label（字段名，非标题；无图标、无重字重） ── */
+.ik-create-field {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: baseline;
+  gap: 10px;
   padding: 0 2px;
 }
 
-.ik-create-section__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 900;
-  color: #f0f0f0;
+.ik-create-field__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ik-muted, #9a9a9a);
   letter-spacing: 0.4px;
 }
 
-.ik-create-section__label svg {
-  color: #BFFF09;
+.ik-create-field__hint {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: #6a6a6a;
+  letter-spacing: 0.2px;
 }
 
-.ik-create-section__hint {
+.ik-create-field__count {
+  margin-left: auto;
   font-size: 11px;
-  font-weight: 700;
-  color: #777;
-  letter-spacing: 0.2px;
+  font-weight: 600;
+  color: var(--ik-muted, #9a9a9a);
+  font-variant-numeric: tabular-nums;
+}
+
+.ik-create-field__count--over {
+  color: var(--ik-danger, #ff4d4f);
+}
+
+/* 媒体与分类 / 标签并排，给正文保留空间，同时让发布设置在首屏可见。 */
+.ik-create-config {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 1fr);
+  gap: 14px 24px;
+  flex-shrink: 0;
+  align-items: start;
+}
+
+.ik-create-section--media {
+  grid-row: span 2;
+}
+
+.ik-create-config__divider {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.ik-create-config__divider::before,
+.ik-create-config__divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: #1f1f1f;
+}
+
+.ik-create-config__divider-text {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6a6a6a;
+  letter-spacing: 1px;
 }
 
 .ik-create-category-chips {
@@ -2356,7 +2449,8 @@ if (import.meta.client) {
   min-height: 30px;
 }
 
-/* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
+/* 分类 chip 与标签 chip 共用同一 base：深底 #1e1e1e + #2a2a2a 描边、白字、胶囊圆角。
+   仅激活/hover 才上绿——绿色只标有意义的交互态。 */
 .ik-create-category-chip {
   display: inline-flex;
   align-items: center;
@@ -2364,9 +2458,9 @@ if (import.meta.client) {
   height: 30px;
   padding: 0 16px;
   border-radius: 9999px;
-  border: 2px solid #222;
-  background: #222222;
-  color: #fff;
+  border: 1px solid #2a2a2a;
+  background: #1e1e1e;
+  color: #d8d8d8;
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -2374,6 +2468,11 @@ if (import.meta.client) {
     color 0.15s ease,
     border-color 0.15s ease,
     background 0.15s ease;
+}
+
+.ik-create-category-chip:hover:not(.ik-create-category-chip--active):not(.ik-create-category-chip--placeholder) {
+  border-color: #3a3a3a;
+  color: #fff;
 }
 
 .ik-create-category-chip--active {
@@ -2437,13 +2536,6 @@ if (import.meta.client) {
   line-height: 1;
 }
 
-.ik-create-tag-chip__text::before {
-  content: "#";
-  color: var(--ik-primary, #bfff09);
-  margin-right: 2px;
-  font-weight: 700;
-}
-
 .ik-create-tag-chip__remove {
   display: inline-flex;
   align-items: center;
@@ -2503,10 +2595,10 @@ if (import.meta.client) {
   border-style: solid;
 }
 
-/* 联想下拉：绝对定位悬浮在输入框下方 */
+/* 标签位于面板底部，联想列表向上展开，避免被滚动容器下沿裁切。 */
 .ik-create-tag-suggestions {
   position: absolute;
-  top: calc(100% + 4px);
+  bottom: calc(100% + 4px);
   left: 0;
   z-index: 20;
   min-width: 180px;
@@ -2555,27 +2647,10 @@ if (import.meta.client) {
 .ik-create-section__count {
   flex-shrink: 0;
   font-size: 11px;
-  font-weight: 700;
-  color: #888;
+  font-weight: 600;
+  color: var(--ik-muted, #9a9a9a);
   font-variant-numeric: tabular-nums;
   padding-bottom: 8px;
-}
-
-.ik-create-section__count-pill {
-  margin-left: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(215, 255, 0, 0.12);
-  color: #BFFF09;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.3px;
-  font-variant-numeric: tabular-nums;
-}
-
-.ik-create-section__count-pill--over {
-  background: rgba(255, 68, 68, 0.14);
-  color: #ff5c5c;
 }
 
 /* ── Title input (large, flat) ──────────────────── */
@@ -2593,7 +2668,7 @@ if (import.meta.client) {
   background: transparent;
   color: #fff;
   font-size: 22px;
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: 0.3px;
   line-height: 1.4;
   border: none;
@@ -2618,6 +2693,8 @@ if (import.meta.client) {
 /* ── Body editor frame (Flutter-like grey outline) ── */
 .ik-create-editor-frame {
   position: relative;
+  flex: 1;
+  min-height: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
   background: #050505;
@@ -2633,7 +2710,8 @@ if (import.meta.client) {
 /* ── Body Textarea (within editor frame) ────────── */
 .ik-create-editor__body {
   width: 100%;
-  min-height: 240px;
+  height: 100%;
+  min-height: 0;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -2649,9 +2727,10 @@ if (import.meta.client) {
 }
 
 .ik-create-editor__body :deep(.z-textarea__inner) {
+  height: 100%;
   padding: 16px;
   color: #e0e0e0;
-  resize: vertical;
+  resize: none;
   background: transparent;
   border: none;
 }
@@ -2712,11 +2791,11 @@ if (import.meta.client) {
   box-shadow: 0 0 0 1px #fbfe00;
 }
 
-/* ── Cover Grid (Flutter SliverGrid maxCrossAxisExtent=160) ── */
+/* 上传入口与预览共用紧凑尺寸，低窗口下同步缩小。 */
 .ik-cover-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, clamp(88px, 13dvh, 120px));
+  gap: 12px;
   padding: 2px 0;
 }
 
@@ -2925,10 +3004,10 @@ if (import.meta.client) {
 
 /* ═════════ Bottom Footer (mirrors AppHeader) ═════════ */
 .ik-create-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
+  align-self: center;
+  width: 100vw;
   z-index: 50;
   background: #000;
 }
@@ -3006,7 +3085,7 @@ if (import.meta.client) {
    ═══════════════════════════════════════════════ */
 @media (max-width: 1200px) {
   .ik-create-columns {
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 180px minmax(0, 1fr);
   }
 }
 
@@ -3014,25 +3093,17 @@ if (import.meta.client) {
   .ik-create-page {
     width: calc(100% - 24px);
     gap: 12px;
-    padding: 16px 0 96px;
+    padding: 12px 0 0;
   }
 
   .ik-create-columns {
-    grid-template-columns: 1fr;
-  }
-
-  .ik-create-nav-wrap {
-    position: static;
-    max-height: 280px;
-  }
-
-  .ik-create-menu {
-    min-height: 200px !important;
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 12px;
   }
 
   .ik-create-panel__body {
-    padding: 20px 20px 24px;
-    gap: 14px;
+    padding: 14px 16px 16px;
+    gap: 12px;
   }
 
   .ik-create-title-input :deep(.z-textarea__inner) {
@@ -3040,7 +3111,6 @@ if (import.meta.client) {
   }
 
   .ik-create-editor__body {
-    min-height: 180px;
     font-size: 14px;
   }
 
@@ -3048,11 +3118,28 @@ if (import.meta.client) {
     padding: 14px;
   }
 
-  .ik-cover-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 12px;
+  .ik-create-config {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 1fr);
+    gap: 12px 16px;
   }
 
+}
+
+@media (min-width: 769px) and (max-height: 700px) {
+  .ik-create-panel__body {
+    padding-top: 12px;
+    padding-bottom: 14px;
+    gap: 10px;
+  }
+
+  .ik-create-section--body {
+    flex-basis: 112px;
+    min-height: 112px;
+  }
+
+  .ik-create-config {
+    row-gap: 10px;
+  }
 }
 
 @media (max-width: 500px) {
@@ -3128,6 +3215,7 @@ if (import.meta.client) {
 @media (max-width: 768px) {
   .ik-create-page {
     width: 100%;
+    height: auto;
     margin: 0;
     padding: 0 0 calc(62px + env(safe-area-inset-bottom, 0px));
     gap: 0;
@@ -3600,6 +3688,170 @@ if (import.meta.client) {
 }
 .ik-mobile-sheet__body--no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* ── Mobile tag editor ───────────────────────── */
+.ik-mobile-sheet--tags {
+  bottom: var(--vv-bottom, 0px);
+}
+
+.ik-mobile-sheet__panel--tags {
+  max-height: min(75dvh, calc(var(--vv-height, 100dvh) - 16px));
+}
+
+.ik-mobile-sheet__panel--tags .ik-mobile-sheet__header,
+.ik-mobile-sheet__panel--tags .ik-mobile-sheet__handle {
+  flex-shrink: 0;
+}
+
+.ik-mobile-sheet__panel--tags .ik-mobile-sheet__close {
+  width: 44px;
+  height: 44px;
+}
+
+.ik-mobile-tag-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  gap: 12px;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+}
+
+.ik-mobile-tag-hint,
+.ik-mobile-tag-limit-hint {
+  margin: 0;
+  color: #999;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ik-mobile-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ik-mobile-tag-chips .ik-create-tag-chip {
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 4px 6px 4px 10px;
+}
+
+.ik-mobile-tag-chips .ik-create-tag-chip__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.ik-mobile-tag-chips .ik-create-tag-chip__remove {
+  width: 32px;
+  height: 32px;
+}
+
+.ik-mobile-tag-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid #333;
+  border-radius: 12px;
+  background: #111;
+}
+
+.ik-mobile-tag-input-row:focus-within {
+  border-color: var(--ik-primary, #BFFF09);
+}
+
+.ik-mobile-tag-input-row__icon,
+.ik-mobile-tag-suggestion__icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: #888;
+}
+
+.ik-mobile-tag-input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #eee;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.ik-mobile-tag-input::placeholder {
+  color: #777;
+}
+
+.ik-mobile-tag-add-btn {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ik-primary, #BFFF09);
+  color: #111;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ik-mobile-tag-add-btn:disabled,
+.ik-mobile-tag-suggestion:disabled {
+  opacity: 0.4;
+}
+
+.ik-mobile-tag-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ik-mobile-tag-body > * {
+  flex-shrink: 0;
+}
+
+.ik-mobile-tag-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  background: #1f1f1f;
+  color: #ddd;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+
+.ik-mobile-tag-suggestion:active:not(:disabled) {
+  background: #292929;
+}
+
+.ik-mobile-tag-suggestion__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ik-mobile-tag-suggestion__count {
+  flex-shrink: 0;
+  color: #888;
+  font-size: 12px;
 }
 
 /* ── Draft list rows (in drafts sheet) ────────── */

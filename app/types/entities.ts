@@ -254,8 +254,6 @@ export interface PostCategory {
 export interface Tag {
   name: string;
   slug: string;
-  /** 已发布文章数（GET /api/tags/list 返回，用于排序/展示）。 */
-  count?: number;
 }
 
 /** 委托上附带的精简标签信息（接口随文章一并返回）。 */
