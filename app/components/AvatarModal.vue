@@ -370,7 +370,7 @@ onBeforeUnmount(() => {
                     }"
                     :canvas="{ width: 512, height: 512, imageSmoothingQuality: 'high' }"
                     :resize-image="{ adjustStencil: false }"
-                    :default-size="({ imageSize, visibleArea }: any) => ({ width: visibleArea?.width || imageSize.width, height: visibleArea?.height || imageSize.height })"
+                    :default-size="({ imageSize, visibleArea }: { imageSize: { width: number; height: number }; visibleArea?: { width?: number; height?: number } }) => ({ width: visibleArea?.width || imageSize.width, height: visibleArea?.height || imageSize.height })"
                     :min-width="0"
                     :min-height="0"
                   />

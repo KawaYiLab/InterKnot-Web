@@ -10,7 +10,6 @@ import {
   LinkIcon,
   LockClosedIcon,
   NoSymbolIcon,
-  ShieldCheckIcon,
   TrashIcon,
   UserIcon,
 } from "@heroicons/vue/24/outline";
@@ -365,7 +364,7 @@ const handleDeleteAccount = async () => {
     message.success("账号已成功注销");
     auth.clearSession();
     await navigateTo("/");
-  } catch (err: any) {
+  } catch (err) {
     message.error(resolveErrorMessage(err, "注销账号失败"));
     // 扫码 ticket 一次性，失败后必须重扫；邮箱验证码可重填，不清空
     if (deleteNeedsScan.value) {

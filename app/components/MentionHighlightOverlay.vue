@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { StyleValue } from "vue";
+
 /**
  * Textarea 内部 @ 提及的高亮叠加层。
  *
@@ -175,12 +177,11 @@ watch(
 <template>
   <Teleport v-if="teleportTarget" :to="teleportTarget">
     <!-- 整个 mirrorStyle 是从 textarea computed style 拷过来的 string map，
-         直接当 :style 用；Vue 的 StyleValue 类型对 tabSize / wordWrap 不友好，
-         统一过一次类型断言（mirrorStyle as any）即可。 -->
+         转换为 StyleValue 供模板绑定。 -->
     <div
       v-if="mirrorStyle"
       class="ik-mention-overlay"
-      :style="(mirrorStyle as any)"
+      :style="(mirrorStyle as StyleValue)"
       aria-hidden="true"
     >
       <div

@@ -76,7 +76,10 @@ const asPosts = (v: unknown): WorkflowPostRef[] =>
     ? v
         .filter(
           (it): it is { documentId: string; title: string } =>
-            !!it && typeof it === "object" && typeof (it as any).documentId === "string",
+            !!it &&
+            typeof it === "object" &&
+            "documentId" in it &&
+            typeof (it as { documentId: unknown }).documentId === "string",
         )
         .map((it) => ({ documentId: it.documentId, title: String(it.title ?? "") }))
     : [];

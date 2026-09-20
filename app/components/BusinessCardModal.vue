@@ -57,12 +57,17 @@ const findCachedCard = (documentId: string | null) => {
 
 const previewCard = computed(() => selectedCard.value ?? findCachedCard(equippedId.value) ?? equippedCard.value);
 
+interface StrapiTextBlock {
+  children?: Array<{ text?: string }>;
+}
+
 const blocksToText = (blocks: unknown[] | undefined): string => {
   if (!Array.isArray(blocks)) return "";
   return blocks
-    .map((block: any) => {
-      if (Array.isArray(block?.children)) {
-        return block.children.map((c: any) => c?.text ?? "").join("");
+    .map((block) => {
+      const b = block as StrapiTextBlock;
+      if (Array.isArray(b?.children)) {
+        return b.children.map((c) => c?.text ?? "").join("");
       }
       return "";
     })

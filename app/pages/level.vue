@@ -141,8 +141,9 @@ const doCheckIn = async () => {
       dailyExpStatus.value.sources.checkIn = { done: true, exp: result.reward };
       dailyExpStatus.value.todaySelfGained += result.reward;
     }
-  } catch (err: any) {
-    if (err?.code === "CHECK_IN_ALREADY_TODAY") {
+  } catch (err) {
+    const apiErr = normalizeApiError(err);
+    if (apiErr.code === "CHECK_IN_ALREADY_TODAY") {
       message.warning("今日已签到");
       checkInStatus.value.canCheckIn = false;
     } else {

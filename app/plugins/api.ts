@@ -96,7 +96,7 @@ export default defineNuxtPlugin(() => {
   });
 
   // Wrapper that intercepts 401 for automatic token renewal + retry
-  const api = (async (request: any, options?: any) => {
+  const api = (async (request: Parameters<typeof $fetch>[0], options?: Parameters<typeof $fetch>[1]) => {
     const generation = auth.generation;
     const requestToken = auth.token;
     const cookieMutation = (String(request).startsWith("/api/auth/") && options?.method !== undefined) ||
@@ -109,15 +109,16 @@ export default defineNuxtPlugin(() => {
     };
     try {
       return await (cookieMutation ? withAuthCookieLock(perform) : perform());
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (auth.generation !== generation) throw staleAuthError();
+      const apiErr = err as ApiClientError;
       // 未通过入站考试的写操作被后端拒绝：广播事件，由 app.vue 引导去 /exam
-      if (import.meta.client && err?.statusCode === 403 && err?.code === "EXAM_REQUIRED") {
+      if (import.meta.client && apiErr?.statusCode === 403 && apiErr?.code === "EXAM_REQUIRED") {
         window.dispatchEvent(new Event("exam:required"));
       }
       if (
         import.meta.client &&
-        err?.statusCode === 401 &&
+        apiErr?.statusCode === 401 &&
         !String(request).includes(RENEW_ENDPOINT) &&
         !String(request).includes("/api/auth/session/logout")
       ) {

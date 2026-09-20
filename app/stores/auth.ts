@@ -168,8 +168,9 @@ export const useAuthStore = defineStore("auth", {
         if (this.generation !== generation) return;
         this.user = user;
         persistUserId(user);
-      } catch (err: any) {
-        if (this.generation === generation && err?.statusCode === 401) this.clearSession();
+      } catch (err) {
+        const apiErr = err as { statusCode?: number };
+        if (this.generation === generation && apiErr?.statusCode === 401) this.clearSession();
       }
     },
     setSession(token: string, user: Author) {
