@@ -2371,7 +2371,7 @@ export function useApi() {
       denny: Number(data.denny) || 0,
       dennyGiven: Number(data.dennyGiven) || 0,
       recentLogs: Array.isArray(data.recentLogs)
-        ? data.recentLogs.map((log: any) => ({
+        ? data.recentLogs.map((log: Record<string, unknown>) => ({
             action: String(log.action || ""),
             amount: Number(log.amount) || 0,
             balance: Number(log.balance) || 0,
@@ -2712,8 +2712,4 @@ export function useApi() {
     getMihoyoBinding,
     unbindMihoyo,
   };
-}
-
-export function isApiClientError(err: unknown): err is ApiClientError {
-  return !!err && typeof err === "object" && "message" in (err as object);
 }

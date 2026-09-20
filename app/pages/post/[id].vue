@@ -171,6 +171,10 @@ const openCoverPreview = () => {
   if (images.length) openGallery(images, 0);
 };
 
+const goTag = (slug: string) => {
+  navigateTo(`/tags/${encodeURIComponent(slug)}`);
+};
+
 /* ── 数据加载 ──────────────────────────────────── */
 const loadPost = async () => {
   loading.value = true;
@@ -1121,6 +1125,15 @@ onBeforeUnmount(() => {
                     :video="video"
                   />
                 </div>
+                <div v-if="post.tags?.length" class="ik-page__tags">
+                  <button
+                    v-for="tag in post.tags"
+                    :key="tag.slug"
+                    type="button"
+                    class="ik-page__tag"
+                    @click="goTag(tag.slug)"
+                  >#{{ tag.name }}</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1830,6 +1843,30 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 16px;
   margin-top: 16px;
+}
+
+.ik-page__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 16px 0 0;
+}
+
+.ik-page__tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #4a9eff;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.ik-page__tag:hover {
+  color: #70b4ff;
 }
 
 /* ── Right Column ─────────────────────────────── */

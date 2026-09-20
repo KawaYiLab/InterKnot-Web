@@ -496,7 +496,7 @@ defineExpose({ measuredHeights });
       v-for="layoutItem in visibleItems"
       :key="layoutItem.key"
       class="ik-vm-item"
-      :ref="(el: any) => setItemRef(el as Element, layoutItem.key)"
+      :ref="(el) => setItemRef(el as Element | null, layoutItem.key)"
       :style="itemStyle(layoutItem)"
     >
       <slot

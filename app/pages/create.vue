@@ -24,7 +24,6 @@ import {
   InboxIcon,
   FilmIcon,
   Squares2X2Icon,
-  DocumentTextIcon,
 } from "@heroicons/vue/24/outline";
 import { PlayIcon } from "@heroicons/vue/24/solid";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";

@@ -5,7 +5,7 @@ export const MIN_COVER_ASPECT_RATIO = 0.80;
  * 默认占位图（/images/default-cover.webp）的原生宽高比 643:408 ≈ 1.576。
  * fallback 状态的卡片使用这个比例，让占位图完整填满 frame 不被裁剪。
  */
-export const FALLBACK_COVER_ASPECT_RATIO = 643 / 408;
+export const FALLBACK_COVER_ASPECT_RATIO = DEFAULT_COVER_ASPECT_RATIO;
 
 /**
  * 列表瀑布流封面比例归一化：

@@ -65,12 +65,6 @@ function migrateImageUrl(url: string): string {
   return clean;
 }
 
-function buildR2ImageUrl(canonicalUrl: string, options: string): string {
-  const u = new URL(canonicalUrl);
-  u.pathname = `/cdn-cgi/image/${options}${u.pathname}`;
-  return u.toString();
-}
-
 function buildEsaImageUrl(canonicalUrl: string, process: string): string {
   const sep = canonicalUrl.includes("?") ? "&" : "?";
   return `${canonicalUrl}${sep}image_process=${process}`;

@@ -164,9 +164,10 @@ if (import.meta.client) {
       dennyBalance.value -= 1;
     }
   });
-  useEventListener(window, "ik:denny-updated", (e: any) => {
-    if (typeof e?.detail === "number") {
-      dennyBalance.value = e.detail;
+  useEventListener(window, "ik:denny-updated", (e: Event) => {
+    const detail = (e as CustomEvent<number>)?.detail;
+    if (typeof detail === "number") {
+      dennyBalance.value = detail;
     } else {
       void fetchDennyBalance();
     }

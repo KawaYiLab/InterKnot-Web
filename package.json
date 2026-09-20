@@ -12,9 +12,7 @@
     "type-check": "vue-tsc --noEmit",
     "test": "npm run test:unit",
     "test:unit": "nuxt prepare && vitest run",
-    "test:watch": "nuxt prepare && vitest",
-    "test:e2e": "npm run generate && playwright test",
-    "test:e2e:ui": "npm run generate && playwright test --ui"
+    "test:watch": "nuxt prepare && vitest"
   },
   "dependencies": {
     "@heroicons/vue": "^2.2.0",
