@@ -7,8 +7,7 @@ coverage
 test-results
 playwright-report
 .playwright-cli
-output/playwright
-output/*.tar.gz
+/output
 server
 /.windsurf
 .env
@@ -16,5 +15,4 @@ server
 /.claude
 /.agents
 /docs
-/tests
 /tests
