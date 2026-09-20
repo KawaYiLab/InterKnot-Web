@@ -22,6 +22,8 @@ export interface DraftEditorContent {
    *  payload 没变」会白发一次 PUT */
   category: string;
   isAnonymous: boolean;
+  /** 标签显示名数组（按用户排列的顺序）。空数组表示无标签。顺序参与指纹比较。 */
+  tags: string[];
 }
 
 /**
@@ -36,6 +38,7 @@ export function buildDraftSnapshot(input: DraftEditorContent): string {
     cover: input.cover,
     category: input.category,
     isAnonymous: input.isAnonymous,
+    tags: input.tags,
   });
 }
 
@@ -48,6 +51,8 @@ export interface DraftSavePayload {
   /** 必须无条件带上：updateArticleDraft 按 `!== undefined` 决定是否进 data，
    *  漏掉 false 就是「匿名开关只能开不能关」*/
   isAnonymous: boolean;
+  /** 标签显示名数组。无条件带上（同 isAnonymous 的理由）：空数组即清空所有标签。 */
+  tags: string[];
   authorId?: string;
 }
 
@@ -63,6 +68,7 @@ export function buildDraftPayload(
     coverId: input.cover,
     category: input.category,
     isAnonymous: input.isAnonymous,
+    tags: input.tags,
     authorId,
   };
 }

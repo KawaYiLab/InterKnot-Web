@@ -20,6 +20,7 @@ const base: DraftEditorContent = {
   cover: [],
   category: "general",
   isAnonymous: false,
+  tags: [],
 };
 
 /**
@@ -35,6 +36,7 @@ const mutations: Array<[string, Partial<DraftEditorContent>]> = [
   ["cover：从无到一张", { cover: "img-1" }],
   ["cover：从一张到多张", { cover: ["img-1", "img-2"] }],
   ["externalVideos", { externalVideos: [{ provider: "bilibili", bvid: "BV1xx411c7mD" }] }],
+  ["tags", { tags: ["原神"] }],
 ];
 
 describe("buildDraftSnapshot", () => {

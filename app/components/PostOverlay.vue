@@ -863,6 +863,13 @@ const handleEditArticle = () => {
   navigateTo(`/create?edit=${post.value.id}`);
 };
 
+// 点击标签 chip 跳转到标签页。与 handleEditArticle 同理：直接 navigateTo，
+// 路径变化触发 app.vue 的守卫自动收起弹窗，不先手动 close 以免 popstate 取消导航。
+const goTag = (slug: string) => {
+  if (!slug) return;
+  navigateTo(`/tags/${encodeURIComponent(slug)}`);
+};
+
 const handleArticleMenuCommand = (command: string | number) => {
   if (command === "delete") {
     handleDeleteArticle();
@@ -1468,6 +1475,15 @@ onBeforeUnmount(() => {
                       <h1 class="ik-dialog__title">
                         <span v-if="post.category" class="ik-dialog__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
                       </h1>
+                      <div v-if="post.tags?.length" class="ik-dialog__tags">
+                        <button
+                          v-for="tag in post.tags"
+                          :key="tag.slug"
+                          type="button"
+                          class="ik-dialog__tag"
+                          @click="goTag(tag.slug)"
+                        >#{{ tag.name }}</button>
+                      </div>
                       <div
                         v-if="bodyHasContent"
                         class="ik-dialog__content"
@@ -2342,6 +2358,34 @@ onBeforeUnmount(() => {
   font-weight: 900;
   letter-spacing: 0.5px;
   color: #fff;
+}
+
+.ik-dialog__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -6px 0 16px;
+}
+
+.ik-dialog__tag {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  border: 1px solid #2a2a2a;
+  background: #1c1c1c;
+  color: var(--ik-primary, #bfff09);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ik-dialog__tag:hover {
+  border-color: var(--ik-primary, #bfff09);
+  background: #232323;
 }
 
 .ik-dialog__content {

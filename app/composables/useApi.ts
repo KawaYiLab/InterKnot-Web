@@ -27,6 +27,8 @@ import type {
   NsfwStatus,
   Post,
   PostCategory,
+  Tag,
+  PostTag,
   ArticleFeed,
   ArticleSort,
   ZzzRoleBadge,
@@ -71,6 +73,10 @@ const qk = {
   },
   categories: {
     list: ["categories", "list"] as QueryKey,
+  },
+  tags: {
+    list: ["tags", "list"] as QueryKey,
+    suggest: (q: string) => ["tags", "suggest", q] as QueryKey,
   },
   articles: {
     // page 兼容两种分页模式：offset 模式传数字 start，游标模式传不透明游标串（空串=第一页）。
@@ -476,6 +482,21 @@ function toPostCategory(raw: unknown): PostCategory | null {
   };
 }
 
+/** 把接口返回的 tags 数组规整成 PostTag[]，过滤掉无效项；始终返回数组。 */
+function toPostTags(raw: unknown): PostTag[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((t) => {
+      if (!t || typeof t !== "object") return null;
+      const obj = t as Record<string, unknown>;
+      const slug = typeof obj.slug === "string" ? obj.slug : "";
+      const name = typeof obj.name === "string" ? obj.name : "";
+      if (!slug && !name) return null;
+      return { name, slug } as PostTag;
+    })
+    .filter((t): t is PostTag => t !== null);
+}
+
 function toPost(raw: unknown, apiBaseUrl: string): Post {
   const data = (raw || {}) as Record<string, unknown>;
 
@@ -545,6 +566,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     pinnedAt: typeof data.pinnedAt === "string" ? data.pinnedAt : null,
     isOwner: data.isOwner === true,
     category: toPostCategory(data.category),
+    tags: toPostTags(data.tags),
     createdAt: data.createdAt as string | undefined,
     updatedAt: data.updatedAt as string | undefined,
     editedAt: data.editedAt as string | undefined,
@@ -590,6 +612,7 @@ function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
     // false → 自动保存把 false 写回后端 → 用户勾过的匿名被静默清掉，发布时真名出面。
     isAnonymous: raw.isAnonymous === true,
     category: toPostCategory(raw.category),
+    tags: toPostTags(raw.tags),
     createdAt: raw.createdAt as string | undefined,
     updatedAt: raw.updatedAt as string | undefined,
   };
@@ -957,6 +980,7 @@ export function useApi() {
     category = "",
     feed: ArticleFeed = "recommend",
     sort: ArticleSort = "latest",
+    tag = "",
   ): Promise<Pagination<Post>> => {
     // 先恢复/续期凭证，避免 optional-auth 把过期 token 降级为匿名已读状态。
     // 这里只等凭证；个人资料加载和远端退出不应阻塞信息流。
@@ -964,8 +988,10 @@ export function useApi() {
     // 信息流走游标分页：endCur 原样当 cursor 发。后端还没部署游标时它是 buildPagination
     // 攒出来的数字 offset，resolveCursor 把两种形态分开，避免把 "20" 当游标发出去。
     const { cursor, start } = resolveCursor(endCur);
-    // feed != recommend 时把 feed 折进 category 缓存槽，避免推荐/关注/收藏互相串缓存。
-    const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
+    // feed != recommend 时把 feed 折进 category 缓存槽，避免推荐/关注/收藏互相串缓存；
+    // tag 过滤同理折进缓存槽，避免 tag 页与首页/频道页互相串缓存。
+    const cacheCategory =
+      (feed === "recommend" ? category : `${feed}|${category}`) + (tag ? `|tag:${tag}` : "");
     const page = await cachedRead(
       qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort),
       async () => {
@@ -974,6 +1000,7 @@ export function useApi() {
           query: {
             ...(query ? { q: query } : {}),
             ...(category ? { category } : {}),
+            ...(tag ? { tag } : {}),
             ...(feed !== "recommend" ? { feed } : {}),
             // sort 只发给列表接口：/search 的 sort 档另有一档「相关性」且是其默认，
             // 搜索结果按相关性排最有用，不该被首页的排序选择顶掉。
@@ -1017,12 +1044,14 @@ export function useApi() {
     category = "",
     feed: ArticleFeed = "recommend",
     sort: ArticleSort = "latest",
+    tag = "",
   ): Pagination<Post> | undefined => {
     const qc = $queryClient as QueryClient | undefined;
     if (!qc) return undefined;
     // 缓存槽的算法必须与 searchArticles 完全一致，否则预填永远命中不到。
     const { cursor, start } = resolveCursor(endCur);
-    const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
+    const cacheCategory =
+      (feed === "recommend" ? category : `${feed}|${category}`) + (tag ? `|tag:${tag}` : "");
     const page = qc.getQueryData<Pagination<Post>>(
       qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort),
     );
@@ -1096,6 +1125,51 @@ export function useApi() {
       },
       STALE_LIST,
     );
+  };
+
+  /** 标签索引（GET /api/tags/list）：按热度降序返回标签及其已发布文章数。 */
+  const getTags = async (limit = 50): Promise<Tag[]> => {
+    return cachedRead(
+      qk.tags.list,
+      async () => {
+        const response = await $api("/api/tags/list", {
+          query: { limit: String(limit) },
+        });
+        const data = unwrapData<unknown[]>(response) || [];
+        return data
+          .map((raw): Tag | null => {
+            if (!raw || typeof raw !== "object") return null;
+            const t = raw as Record<string, unknown>;
+            const slug = typeof t.slug === "string" ? t.slug : "";
+            const name = typeof t.name === "string" ? t.name : "";
+            if (!slug || !name) return null;
+            return { name, slug, count: typeof t.count === "number" ? t.count : 0 };
+          })
+          .filter((t): t is Tag => t !== null);
+      },
+      STALE_LIST,
+    );
+  };
+
+  /**
+   * 标签联想（GET /api/tags/suggest）：发帖打标框边输入边搜已有标签。
+   * 不走 TanStack 缓存（调用方自行防抖 + 丢弃过期响应）。
+   */
+  const suggestTags = async (query: string): Promise<Tag[]> => {
+    const q = query.trim();
+    if (!q) return [];
+    const response = await $api("/api/tags/suggest", { query: { q } });
+    const data = unwrapData<unknown[]>(response) || [];
+    return data
+      .map((raw): Tag | null => {
+        if (!raw || typeof raw !== "object") return null;
+        const t = raw as Record<string, unknown>;
+        const slug = typeof t.slug === "string" ? t.slug : "";
+        const name = typeof t.name === "string" ? t.name : "";
+        if (!slug || !name) return null;
+        return { name, slug };
+      })
+      .filter((t): t is Tag => t !== null);
   };
 
   const getPost = async (id: string): Promise<Post> => {
@@ -1712,6 +1786,7 @@ export function useApi() {
     authorId?: string;
     isAnonymous?: boolean;
     category?: string;
+    tags?: string[];
   }): Promise<DraftArticle> => {
     const data: Record<string, unknown> = {
       title: payload.title,
@@ -1721,6 +1796,10 @@ export function useApi() {
     };
     if (payload.category) {
       data.category = payload.category;
+    }
+    // 标签：显式传数组即写入（空数组 = 无标签）。后端按 slug 去重/新建后全量挂接。
+    if (payload.tags !== undefined) {
+      data.tags = payload.tags;
     }
     if (payload.coverId != null) {
       data.cover = payload.coverId;
@@ -1752,6 +1831,7 @@ export function useApi() {
       authorId?: string;
       isAnonymous?: boolean;
       category?: string;
+      tags?: string[];
     },
   ): Promise<DraftArticle> => {
     const data: Record<string, unknown> = {};
@@ -1760,6 +1840,8 @@ export function useApi() {
     data.editorState = payload.editorState;
     data.externalVideos = payload.externalVideos ?? [];
     if (payload.category) data.category = payload.category;
+    // 标签全量替换：编辑器每次自动保存都带全量 tags，空数组即清空所有标签。
+    if (payload.tags !== undefined) data.tags = payload.tags;
     if (payload.coverId !== undefined) {
       data.cover = payload.coverId ?? [];
     }
@@ -2573,6 +2655,8 @@ export function useApi() {
     suggestArticles,
     peekArticles,
     getCategories,
+    getTags,
+    suggestTags,
     getPost,
     recordArticleView,
     pinArticle,

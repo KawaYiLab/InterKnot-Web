@@ -5,6 +5,7 @@ import type {
   Category,
   DraftArticle,
   ExternalVideo,
+  Tag,
   UploadedFile,
   UploadTask,
   UploadStatus,
@@ -24,6 +25,8 @@ import {
   PlusCircleIcon,
   InboxIcon,
   FilmIcon,
+  Squares2X2Icon,
+  DocumentTextIcon,
 } from "@heroicons/vue/24/outline";
 import { PlayIcon } from "@heroicons/vue/24/solid";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
@@ -113,12 +116,75 @@ const visibleCategories = computed(() =>
 const isMobileDraftsOpen = ref(false);
 const isMobileSettingsOpen = ref(false);
 const isMobileCategoryOpen = ref(false);
+const isMobileTagOpen = ref(false);
 // 移动端「分类」设置行展示的当前频道名（找不到则按加载态兜底文案）。
 const selectedCategoryName = computed(() => {
   const found = categories.value.find((c) => c.slug === selectedCategory.value);
   if (found) return found.name;
   return categoriesLoading.value ? "加载中…" : "请选择";
 });
+
+/* ── 标签（话题横切维度，与频道正交；完全自由创建，上限 5 个）── */
+const MAX_TAGS = 5;
+const selectedTags = ref<string[]>([]);
+const tagInput = ref("");
+const tagSuggestions = ref<Tag[]>([]);
+
+// 前端即时归一：trim + 折叠空白 + 截断。真正的规范化（去 emoji / 纯符号、slug 去重）
+// 以后端 normalizeTagName 为准，这里只做输入体验层面的清理与本地去重。
+function normalizeTagInput(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim().slice(0, 30);
+}
+
+function addTag(raw: string) {
+  const name = normalizeTagInput(raw);
+  if (!name) return;
+  if (selectedTags.value.length >= MAX_TAGS) {
+    message.warning(`最多只能添加 ${MAX_TAGS} 个标签`);
+    return;
+  }
+  // 本地去重（忽略大小写）：真正的 slug 归一在后端，这里挡掉最明显的重复。
+  const dup = selectedTags.value.some((t) => t.toLowerCase() === name.toLowerCase());
+  tagInput.value = "";
+  tagSuggestions.value = [];
+  if (dup) return;
+  selectedTags.value.push(name);
+  markDirty();
+}
+
+function removeTag(index: number) {
+  if (index < 0 || index >= selectedTags.value.length) return;
+  selectedTags.value.splice(index, 1);
+  markDirty();
+}
+
+// 联想：把用户推向复用已有标签而非新建（防碎片化）。防抖 200ms，过滤掉已选中的。
+const fetchTagSuggestions = useDebounceFn(async (q: string) => {
+  const query = q.trim();
+  if (!query) {
+    tagSuggestions.value = [];
+    return;
+  }
+  try {
+    const list = await api.suggestTags(query);
+    const selectedLower = new Set(selectedTags.value.map((t) => t.toLowerCase()));
+    tagSuggestions.value = list.filter((t) => !selectedLower.has(t.name.toLowerCase()));
+  } catch {
+    tagSuggestions.value = [];
+  }
+}, 200);
+
+function onTagInput() {
+  fetchTagSuggestions(tagInput.value);
+}
+
+// 回车添加标签，但必须放过中文输入法的组合确认：拼音选词时按下的那次 Enter
+// （isComposing / keyCode 229）不能被当成「添加标签」，否则半成品拼音会被塞进标签。
+// Vue 的 .enter 修饰符不判组合态，故显式拦一层。
+function onTagEnter(e: KeyboardEvent) {
+  if (e.isComposing || e.keyCode === 229) return;
+  addTag(tagInput.value);
+}
 
 const suppressTracking = ref(false);
 const lastSavedSnapshot = ref("");
@@ -331,6 +397,7 @@ function editorContent(): DraftEditorContent {
     // 与默认分类不同、在 payload 里相同，白发一次零变更 PUT。
     category: selectedCategory.value || DEFAULT_CATEGORY_SLUG,
     isAnonymous: isAnonymous.value,
+    tags: [...selectedTags.value],
   };
 }
 
@@ -876,6 +943,11 @@ function applyDraftToEditor(draft: DraftArticle) {
     externalVideos.value = draft.externalVideos ?? [];
     isAnonymous.value = !!draft.isAnonymous;
     selectedCategory.value = draft.category?.slug || DEFAULT_CATEGORY_SLUG;
+    // 恢复标签（用显示名，与打标 UI 一致）。必须在 syncSnapshot 之前设好，否则指纹里
+    // 不含已恢复的标签，载入后立刻会被判为「有未保存改动」而多打一次 PUT。
+    selectedTags.value = (draft.tags ?? []).map((t) => t.name).filter(Boolean);
+    tagInput.value = "";
+    tagSuggestions.value = [];
 
     for (const task of uploadTasks.value) {
       URL.revokeObjectURL(task.previewUrl);
@@ -919,6 +991,9 @@ function resetEditor() {
     isAnonymous.value = false;
     isEditingPublished.value = false;
     selectedCategory.value = DEFAULT_CATEGORY_SLUG;
+    selectedTags.value = [];
+    tagInput.value = "";
+    tagSuggestions.value = [];
     lastSavedSnapshot.value = "";
     hasUnsavedChanges.value = false;
   } finally {
@@ -1194,7 +1269,10 @@ if (import.meta.client) {
                加载中即渲染占位标签，为分类栏预留高度，避免列表后到挤压正文导致跳动 -->
           <div v-if="categoriesLoading || visibleCategories.length" class="ik-create-section">
             <div class="ik-create-section__head">
-              <span class="ik-create-section__label">分类</span>
+              <span class="ik-create-section__label">
+                <Squares2X2Icon style="width:14px;height:14px" />
+                分类
+              </span>
               <span class="ik-create-section__hint">选择委托所属频道</span>
             </div>
             <div class="ik-create-category-chips">
@@ -1221,10 +1299,64 @@ if (import.meta.client) {
             </div>
           </div>
 
+          <!-- Tag section（可选，话题横切维度，最多 5 个，可自由创建） -->
+          <div class="ik-create-section">
+            <div class="ik-create-section__head">
+              <span class="ik-create-section__label">
+                <HashtagIcon style="width:14px;height:14px" />
+                标签
+              </span>
+              <span class="ik-create-section__hint">最多 {{ MAX_TAGS }} 个，回车添加（可新建）</span>
+            </div>
+            <div class="ik-create-tags">
+              <div class="ik-create-tags__chips">
+                <span
+                  v-for="(tag, idx) in selectedTags"
+                  :key="`tag-${idx}-${tag}`"
+                  class="ik-create-tag-chip"
+                >
+                  <span class="ik-create-tag-chip__text">{{ tag }}</span>
+                  <button
+                    type="button"
+                    class="ik-create-tag-chip__remove"
+                    :aria-label="`移除标签 ${tag}`"
+                    @click="removeTag(idx)"
+                  >
+                    <XMarkIcon style="width:12px;height:12px" />
+                  </button>
+                </span>
+                <div v-if="selectedTags.length < MAX_TAGS" class="ik-create-tag-input-wrap">
+                  <input
+                    v-model="tagInput"
+                    type="text"
+                    class="ik-create-tag-input"
+                    placeholder="添加标签…"
+                    maxlength="30"
+                    @input="onTagInput"
+                    @keydown.enter.prevent="onTagEnter"
+                  />
+                  <ul v-if="tagSuggestions.length" class="ik-create-tag-suggestions">
+                    <li
+                      v-for="s in tagSuggestions"
+                      :key="s.slug"
+                      class="ik-create-tag-suggestion"
+                      @mousedown.prevent="addTag(s.name)"
+                    >
+                      <HashtagIcon style="width:12px;height:12px;opacity:0.5" />
+                      <span class="ik-create-tag-suggestion__name">{{ s.name }}</span>
+                      <span v-if="s.count != null" class="ik-create-tag-suggestion__count">{{ s.count }}</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Body section -->
           <div class="ik-create-section">
             <div class="ik-create-section__head">
               <span class="ik-create-section__label">
+                <DocumentTextIcon style="width:14px;height:14px" />
                 正文
                 <span
                   class="ik-create-section__count-pill"
@@ -1549,9 +1681,18 @@ if (import.meta.client) {
 
       <!-- Setting rows -->
       <button type="button" class="ik-mobile-row" @click="isMobileCategoryOpen = true">
-        <HashtagIcon class="ik-mobile-row__icon" />
+        <Squares2X2Icon class="ik-mobile-row__icon" />
         <span class="ik-mobile-row__title">分类</span>
         <span class="ik-mobile-row__value">{{ selectedCategoryName }}</span>
+        <ChevronRightIcon class="ik-mobile-row__chevron" />
+      </button>
+
+      <div class="ik-mobile-divider"></div>
+
+      <button type="button" class="ik-mobile-row" @click="isMobileTagOpen = true">
+        <HashtagIcon class="ik-mobile-row__icon" />
+        <span class="ik-mobile-row__title">标签</span>
+        <span class="ik-mobile-row__value">{{ selectedTags.length ? `${selectedTags.length}/${MAX_TAGS}` : "未添加" }}</span>
         <ChevronRightIcon class="ik-mobile-row__chevron" />
       </button>
 
@@ -1771,6 +1912,81 @@ if (import.meta.client) {
               <div v-if="!visibleCategories.length" class="ik-mobile-draft-empty">
                 {{ categoriesLoading ? "加载中..." : "暂无可选分类" }}
               </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ── Mobile Tag Picker Sheet (bottom) ── -->
+    <Teleport to="body">
+      <Transition name="ik-mobile-sheet">
+        <div
+          v-if="isMobileTagOpen"
+          class="ik-mobile-sheet"
+          role="dialog"
+          aria-modal="true"
+          @click.self="isMobileTagOpen = false"
+        >
+          <div class="ik-mobile-sheet__panel">
+            <div class="ik-mobile-sheet__handle"></div>
+            <span class="ik-mobile-sheet__title">添加标签</span>
+            <div class="ik-mobile-sheet__body ik-mobile-sheet__body--compact">
+              <!-- 已选标签 chips -->
+              <div v-if="selectedTags.length" class="ik-mobile-tag-chips">
+                <span
+                  v-for="(tag, idx) in selectedTags"
+                  :key="`m-tag-${idx}-${tag}`"
+                  class="ik-create-tag-chip"
+                >
+                  <span class="ik-create-tag-chip__text">{{ tag }}</span>
+                  <button
+                    type="button"
+                    class="ik-create-tag-chip__remove"
+                    :aria-label="`移除标签 ${tag}`"
+                    @click="removeTag(idx)"
+                  >
+                    <XMarkIcon />
+                  </button>
+                </span>
+              </div>
+
+              <!-- 输入 + 联想（仅未达上限时可输入） -->
+              <div v-if="selectedTags.length < MAX_TAGS" class="ik-mobile-tag-input-row">
+                <HashtagIcon class="ik-mobile-tag-input-row__icon" />
+                <input
+                  v-model="tagInput"
+                  type="text"
+                  class="ik-mobile-tag-input"
+                  placeholder="输入标签，回车添加（可新建）"
+                  maxlength="30"
+                  @input="onTagInput"
+                  @keydown.enter.prevent="onTagEnter"
+                />
+                <button
+                  type="button"
+                  class="ik-mobile-tag-add-btn"
+                  :disabled="!tagInput.trim()"
+                  @click="addTag(tagInput)"
+                >
+                  添加
+                </button>
+              </div>
+              <p v-else class="ik-mobile-tag-limit-hint">已达上限（最多 {{ MAX_TAGS }} 个）</p>
+
+              <!-- 联想候选 -->
+              <ul v-if="tagSuggestions.length" class="ik-mobile-tag-suggestions">
+                <li
+                  v-for="s in tagSuggestions"
+                  :key="`m-sug-${s.slug}`"
+                  class="ik-mobile-tag-suggestion"
+                  @click="addTag(s.name)"
+                >
+                  <HashtagIcon class="ik-mobile-tag-suggestion__icon" />
+                  <span class="ik-mobile-tag-suggestion__name">{{ s.name }}</span>
+                  <span v-if="s.count != null" class="ik-mobile-tag-suggestion__count">{{ s.count }}</span>
+                </li>
+              </ul>
             </div>
           </div>
         </div>
@@ -2029,10 +2245,17 @@ if (import.meta.client) {
   border-radius: 24px 0 24px 24px;
   overflow: hidden;
   min-height: 480px;
+  /* 固定在视口内（与左侧 nav 列同款 sticky）：面板本身不再撑高页面，
+     内容超出时只在 __body 内部滚动，整页不动。上留 20px、下留 100px 给固定页脚。 */
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 120px);
 }
 
 .ik-create-panel__body {
   flex: 1;
+  /* flex 子项默认 min-height:auto 不会收缩到内容以下，内部滚动出不来，必须置 0 */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -2042,7 +2265,9 @@ if (import.meta.client) {
     linear-gradient(180deg, #0a0a0a 0%, #070707 100%);
   border: 4px solid #000;
   border-radius: 22px 0 22px 22px;
-  overflow: hidden;
+  /* 只有这个容器纵向滚动 */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* ── Delete draft button (in footer) ─────────────────── */
@@ -2180,6 +2405,151 @@ if (import.meta.client) {
     animation: none;
     opacity: 0.5;
   }
+}
+
+/* ── Tags ─────────────────────────────────────────── */
+.ik-create-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ik-create-tags__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+
+/* 已选标签 chip：深底胶囊 + 前置 # 视觉，右侧删除按钮 */
+.ik-create-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 12px;
+  border-radius: 9999px;
+  border: 2px solid #2a2a2a;
+  background: #1c1c1c;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.ik-create-tag-chip__text::before {
+  content: "#";
+  color: var(--ik-primary, #bfff09);
+  margin-right: 2px;
+  font-weight: 700;
+}
+
+.ik-create-tag-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  border-radius: 9999px;
+  border: none;
+  background: #333;
+  color: #bbb;
+  cursor: pointer;
+  line-height: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ik-create-tag-chip__remove svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.ik-create-tag-chip__remove:hover {
+  background: #4a4a4a;
+  color: #fff;
+}
+
+.ik-create-tag-input-wrap {
+  position: relative;
+  flex: 1 1 120px;
+  min-width: 120px;
+}
+
+.ik-create-tag-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  border: 2px dashed #2a2a2a;
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.ik-create-tag-input::placeholder {
+  color: #666;
+}
+
+.ik-create-tag-input:focus {
+  border-color: var(--ik-primary, #bfff09);
+  border-style: solid;
+}
+
+/* 联想下拉：绝对定位悬浮在输入框下方 */
+.ik-create-tag-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 180px;
+  max-width: 260px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: 12px;
+  border: 1px solid #2a2a2a;
+  background: #181818;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.ik-create-tag-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #eee;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.ik-create-tag-suggestion:hover {
+  background: #262626;
+}
+
+.ik-create-tag-suggestion__name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ik-create-tag-suggestion__count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #777;
 }
 
 .ik-create-section__count {
