@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useWindowSize } from "@vueuse/core";
 import type { Post } from "~/types/entities";
 import { getCoverAspectRatio } from "~/utils/cover";
 import VirtualMasonry from "~/components/VirtualMasonry.vue";
@@ -8,53 +9,60 @@ import { generateSkeletons, estimateSkeletonHeight, type SkeletonItem } from "~/
 
 const route = useRoute();
 const api = useApi();
+const auth = useAuthStore();
 const postModal = usePostModal();
 
-// slug 可能含中文/符号，路由参数已是解码态，这里再兜一次 decode 容错。
-const slug = computed(() => {
-  const raw = String(route.params.slug ?? "");
-  try {
-    return decodeURIComponent(raw);
-  } catch {
-    return raw;
-  }
-});
+// Vue Router 已解码参数；再次解码会把 URL 中的字面百分号误解释为转义。
+const slug = computed(() => String(route.params.slug ?? ""));
 
 // 展示名：优先用已加载文章卡片上该标签的 name（更友好），否则回退 slug。
 const displayName = ref("");
-const heading = computed(() => `#${displayName.value || slug.value}`);
+const heading = computed(() => displayName.value || slug.value);
 
 useSeoMeta({
   title: () => `标签：${slug.value} - 绳网`,
   robots: "noindex, nofollow",
 });
 
-const list = ref<Post[]>([]);
+const list = shallowRef<Post[]>([]);
 const endCursor = ref("");
 const hasNextPage = ref(true);
 const loading = ref(true);
 const loadingMore = ref(false);
+const loadError = ref(false);
 const seenIds = new Set<string>();
+let requestVersion = 0;
+let disposed = false;
 
 const skeletonItems = ref<SkeletonItem[]>(generateSkeletons(8));
 const masonryKeyMapper = (item: Post) => item.id;
 const skeletonKeyMapper = (item: SkeletonItem) => item.id;
 
+// 瀑布流列间距：与首页保持一致，移动端收窄。避免标签页卡片比首页更小更挤。
+const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+const { width: viewportWidth } = useWindowSize({ initialWidth });
+const feedGap = computed(() => (viewportWidth.value && viewportWidth.value <= 768 ? 14 : 32));
+
 /** 把新一页的文章去重后追加进列表，并尝试从中提取该标签的展示名。 */
 function appendPosts(nodes: Post[]) {
+  const added: Post[] = [];
   for (const post of nodes) {
     if (seenIds.has(post.id)) continue;
     seenIds.add(post.id);
-    list.value.push(post);
+    added.push(post);
     if (!displayName.value) {
       const matched = post.tags?.find((t) => t.slug === slug.value);
       if (matched?.name) displayName.value = matched.name;
     }
   }
+  if (added.length) list.value = [...list.value, ...added];
 }
 
 async function loadFirstPage() {
+  const version = ++requestVersion;
   loading.value = true;
+  loadingMore.value = false;
+  loadError.value = false;
   list.value = [];
   seenIds.clear();
   endCursor.value = "";
@@ -62,28 +70,37 @@ async function loadFirstPage() {
   displayName.value = "";
   try {
     const page = await api.searchArticles("", "", "", "recommend", "latest", slug.value);
+    if (disposed || version !== requestVersion) return;
     appendPosts(page.nodes);
     endCursor.value = page.endCursor;
     hasNextPage.value = page.hasNextPage;
   } catch {
-    hasNextPage.value = false;
+    if (!disposed && version === requestVersion) loadError.value = true;
   } finally {
-    loading.value = false;
+    if (!disposed && version === requestVersion) loading.value = false;
   }
 }
 
 async function loadMore() {
-  if (loadingMore.value || loading.value || !hasNextPage.value) return;
+  if (disposed || loadingMore.value || loading.value || !hasNextPage.value) return;
+  const version = requestVersion;
+  const cursor = endCursor.value;
   loadingMore.value = true;
+  loadError.value = false;
   try {
-    const page = await api.searchArticles("", endCursor.value, "", "recommend", "latest", slug.value);
+    const page = await api.searchArticles("", cursor, "", "recommend", "latest", slug.value);
+    if (disposed || version !== requestVersion) return;
+    // 防止异常分页元数据让可见哨兵反复请求同一页。
+    if (page.hasNextPage && (!page.endCursor || page.endCursor === cursor)) {
+      throw new Error("Tag pagination did not advance");
+    }
     appendPosts(page.nodes);
     endCursor.value = page.endCursor;
     hasNextPage.value = page.hasNextPage;
   } catch {
-    hasNextPage.value = false;
+    if (!disposed && version === requestVersion) loadError.value = true;
   } finally {
-    loadingMore.value = false;
+    if (!disposed && version === requestVersion) loadingMore.value = false;
   }
 }
 
@@ -108,24 +125,38 @@ const loadMoreSentinelRef = ref<HTMLElement>();
 let observer: IntersectionObserver | null = null;
 
 onMounted(() => {
-  loadFirstPage();
   observer = new IntersectionObserver(
     (entries) => {
-      if (entries.some((e) => e.isIntersecting)) loadMore();
+      if (!loadError.value && entries.some((e) => e.isIntersecting)) void loadMore();
     },
     { rootMargin: "360px 0px" },
   );
-  if (loadMoreSentinelRef.value) observer.observe(loadMoreSentinelRef.value);
+  void loadFirstPage();
 });
 
+// 哨兵在 ClientOnly/列表加载后才挂载；每页完成后重新观察也能填满较高视口。
+watch(
+  [loadMoreSentinelRef, loading, loadingMore, hasNextPage, loadError],
+  () => {
+    observer?.disconnect();
+    if (loadMoreSentinelRef.value && !loading.value && !loadingMore.value && hasNextPage.value && !loadError.value) {
+      observer?.observe(loadMoreSentinelRef.value);
+    }
+  },
+  { flush: "post" },
+);
+
 onBeforeUnmount(() => {
+  disposed = true;
+  requestVersion++;
   observer?.disconnect();
   observer = null;
 });
 
 // 切换标签（同一页面路由参数变化）时重载
-watch(slug, () => {
-  loadFirstPage();
+watch([slug, () => auth.generation], () => { void loadFirstPage(); }, { flush: "sync" });
+watch(api.readStatusRevision, () => {
+  list.value = api.mergeReadStatus(list.value);
 });
 </script>
 
@@ -133,7 +164,6 @@ watch(slug, () => {
   <section class="ik-tag-page">
     <header class="ik-tag-header">
       <h1 class="ik-tag-title">{{ heading }}</h1>
-      <NuxtLink to="/tags" class="ik-tag-all-link">全部标签</NuxtLink>
     </header>
 
     <ClientOnly>
@@ -142,7 +172,7 @@ watch(slug, () => {
           class="ik-masonry"
           :items="skeletonItems"
           :column-width="240"
-          :gap="12"
+          :gap="feedGap"
           :min-columns="2"
           :max-columns="5"
           :key-mapper="skeletonKeyMapper"
@@ -155,6 +185,11 @@ watch(slug, () => {
         </VirtualMasonry>
       </div>
 
+      <div v-else-if="loadError && !list.length" class="ik-empty" role="alert">
+        加载失败，请稍后重试
+        <button type="button" class="ik-tag-retry" @click="loadFirstPage">重试</button>
+      </div>
+
       <div v-else-if="!list.length" class="ik-empty">该标签下暂无委托... [ o_x ]/</div>
 
       <div v-else class="ik-list-state">
@@ -162,7 +197,7 @@ watch(slug, () => {
           class="ik-masonry"
           :items="list"
           :column-width="240"
-          :gap="12"
+          :gap="feedGap"
           :min-columns="2"
           :max-columns="5"
           :estimated-height="300"
@@ -178,7 +213,8 @@ watch(slug, () => {
         </VirtualMasonry>
 
         <div ref="loadMoreSentinelRef" class="ik-load-more-sentinel">
-          <div v-if="loadingMore || !hasNextPage" class="ik-scroll-footer">
+          <button v-if="loadError" type="button" class="ik-tag-retry" @click="loadMore">加载失败，点击重试</button>
+          <div v-else-if="loadingMore || !hasNextPage" class="ik-scroll-footer">
             <img v-if="loadingMore" class="ik-scroll-gif" src="/images/Bangboo.gif" alt="加载中" />
             <span v-else class="ik-meta">已经到底啦 [ O_X ] /</span>
           </div>
@@ -189,17 +225,15 @@ watch(slug, () => {
 </template>
 
 <style scoped>
+/* 与首页 .ik-home-container 对齐，保证瀑布流宽度/列宽一致，避免卡片被压缩。 */
 .ik-tag-page {
-  max-width: 1280px;
+  width: min(1600px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 16px 16px 48px;
+  padding-top: 24px;
+  padding-bottom: 48px;
 }
 
 .ik-tag-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
   padding: 8px 4px 16px;
   border-bottom: 1px solid #1f1f1f;
   margin-bottom: 16px;
@@ -212,18 +246,6 @@ watch(slug, () => {
   letter-spacing: 0.4px;
   margin: 0;
   overflow-wrap: anywhere;
-}
-
-.ik-tag-all-link {
-  flex-shrink: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ik-primary, #bfff09);
-  text-decoration: none;
-}
-
-.ik-tag-all-link:hover {
-  text-decoration: underline;
 }
 
 .ik-masonry {
@@ -260,5 +282,28 @@ watch(slug, () => {
 .ik-meta {
   font-size: 13px;
   color: #666;
+}
+
+.ik-tag-retry {
+  margin: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ik-primary, #bfff09);
+  cursor: pointer;
+  font: inherit;
+}
+
+/* 断点与首页 .ik-home-container 一致 */
+@media (max-width: 1400px) {
+  .ik-tag-page {
+    width: calc(100% - 32px);
+  }
+}
+
+@media (max-width: 768px) {
+  .ik-tag-page {
+    width: calc(100% - 28px);
+    padding-top: 16px;
+  }
 }
 </style>

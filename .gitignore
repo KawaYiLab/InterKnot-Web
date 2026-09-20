@@ -15,3 +15,6 @@ server
 /.zcode
 /.claude
 /.agents
+/docs
+/tests
+/tests
