@@ -9,6 +9,8 @@ export interface Author {
   avatar?: string;
   exp?: number;
   level?: number;
+  /** 自身资料中的丁尼余额；旧后端未提供时保持 undefined。 */
+  denny?: number;
   isAiAgent?: boolean;
   /** 是否为管理员（仅 /api/me/profile 自身资料返回）。 */
   isAdmin?: boolean;
@@ -452,7 +454,7 @@ export type ArticleFeed = "recommend" | "following" | "favorites";
  * 首页排序：最新（纯时间序）/ 热门（纯热度榜）。两条流互斥 ——
  * 「最新」里不掺热门帖，「热门」里不掺置顶帖，也不接时间序兜底。
  */
-export type ArticleSort = "latest" | "hot";
+export type ArticleSort = "recommend" | "latest" | "hot";
 
 export type UploadStatus =
   | "pending"

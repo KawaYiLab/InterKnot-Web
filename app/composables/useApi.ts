@@ -153,6 +153,8 @@ export interface SearchSuggestion {
 export interface AuthResult {
   token: string | null;
   user: Author;
+  /** 新后端随登录返回的完整自身资料；缺省时兼容旧后端。 */
+  profile?: Author;
 }
 
 export interface MihoyoQrCreateResult {
@@ -462,9 +464,22 @@ function toAuthor(raw: unknown, apiBaseUrl: string): Author {
     avatar,
     exp: (data.exp as number | undefined) || 0,
     level: (data.level as number | undefined) || 1,
+    denny: typeof data.denny === "number" && Number.isFinite(data.denny) ? data.denny : undefined,
     isAiAgent: data.isAiAgent === true,
     isAdmin: data.isAdmin === true,
     examPassed: typeof data.examPassed === "boolean" ? data.examPassed : undefined,
+  };
+}
+
+function toAuthResult(raw: unknown, apiBaseUrl: string): AuthResult {
+  const data = (raw || {}) as Record<string, unknown>;
+  const profile = data.profile as Record<string, unknown> | null | undefined;
+  // author 可以是 null，但必须存在；仅有用户标量不能冒充完整资料。
+  const complete = profile && typeof profile === "object" && profile.id != null && "author" in profile;
+  return {
+    token: (data.jwt as string | undefined) || null,
+    user: toAuthor(data.user, apiBaseUrl),
+    ...(complete ? { profile: toAuthor(profile, apiBaseUrl) } : {}),
   };
 }
 
@@ -779,13 +794,8 @@ export function useApi() {
       method: "POST",
       body: { identifier: email, password },
     });
-    const data = response as Record<string, unknown>;
-    // 身份变更：清空所有缓存，避免带上旧用户的 isRead / liked 等个性化字段
-    clearAllCache();
-    return {
-      token: (data.jwt as string | undefined) || null,
-      user: toAuthor(data.user, apiBaseUrl),
-    };
+    // 缓存由 auth.setSession 在真正接受新身份时统一清理。
+    return toAuthResult(response, apiBaseUrl);
   };
 
   const sendRegisterCode = async (
@@ -813,12 +823,7 @@ export function useApi() {
       method: "POST",
       body: { email, code, password },
     });
-    const data = response as Record<string, unknown>;
-    clearAllCache();
-    return {
-      token: (data.jwt as string | undefined) || null,
-      user: toAuthor(data.user, apiBaseUrl),
-    };
+    return toAuthResult(response, apiBaseUrl);
   };
 
   const sendResetCode = async (
@@ -868,7 +873,7 @@ export function useApi() {
     };
   };
 
-  // 邮箱验证码登录：成功后同 login/registerWithCode 一样返回 token+user 并清缓存。
+  // 邮箱验证码登录与密码登录复用同一资料契约。
   const loginWithCode = async (
     email: string,
     code: string,
@@ -877,12 +882,7 @@ export function useApi() {
       method: "POST",
       body: { email, code },
     });
-    const data = response as Record<string, unknown>;
-    clearAllCache();
-    return {
-      token: (data.jwt as string | undefined) || null,
-      user: toAuthor(data.user, apiBaseUrl),
-    };
+    return toAuthResult(response, apiBaseUrl);
   };
 
   // ── 米游社扫码登录 / 绑定 ──────────────────────────
@@ -934,16 +934,12 @@ export function useApi() {
         takeover: raw ? { fromUsername } : null,
       };
     }
-    clearAllCache();
     return {
       status: "confirmed",
       mode: "login",
       isNewUser: data.isNewUser === true,
       binding,
-      auth: {
-        token: (data.jwt as string | undefined) || null,
-        user: toAuthor(data.user, apiBaseUrl),
-      },
+      auth: toAuthResult(data, apiBaseUrl),
     };
   };
 
@@ -970,6 +966,20 @@ export function useApi() {
       },
       STALE_ME,
     );
+  };
+
+  // 只在 setSession 清理旧身份缓存之后调用，后续页面可直接复用登录资料。
+  const seedSelfUser = (user: Author) => {
+    ($queryClient as QueryClient | undefined)?.setQueryData(qk.me.self, user);
+  };
+
+  const patchSelfUserCache = (updates: Partial<Author>) => {
+    const qc = $queryClient as QueryClient | undefined;
+    const cached = qc?.getQueryState<Author>(qk.me.self);
+    if (qc && cached?.data) {
+      // 签到/投币后的余额和等级不能被登录时的缓存倒灌；也不延长其它资料的有效期。
+      qc.setQueryData(qk.me.self, { ...cached.data, ...updates }, { updatedAt: cached.dataUpdatedAt });
+    }
   };
 
   const searchArticles = async (
@@ -2625,6 +2635,8 @@ export function useApi() {
     sendLoginCode,
     loginWithCode,
     getSelfUser,
+    seedSelfUser,
+    patchSelfUserCache,
     searchArticles,
     suggestArticles,
     peekArticles,

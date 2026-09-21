@@ -76,7 +76,6 @@ const {
   typingByConversation,
   sendTyping,
   startStream,
-  stopStream,
   createAiSession,
   deleteConversation,
   isStreamingMessage,
@@ -115,7 +114,7 @@ const selfUserId = computed<number | null>(() => {
   return null;
 });
 
-/** 弹窗打开：拉会话列表 + 开 WS；关闭：清空选中 + 关 WS */
+/** 弹窗打开时加载内容；关闭只清选中，登录级 WS 继续更新全站未读。 */
 watch(visible, async (next) => {
   if (!next) {
     const closingId = activeConversationId.value;
@@ -128,7 +127,6 @@ watch(visible, async (next) => {
     knockBootstrapDone.value = false;
     aiRevealSessionReady.value = false;
     historyBaselineIds.value = new Set();
-    stopStream();
     return;
   }
   activeTab.value = "contacts";
@@ -140,7 +138,9 @@ watch(visible, async (next) => {
   autoFillUsed.value = 0;
   // 拉列表 + 起 WS（startStream 内部对 SSR / 未登录都做了护栏）
   startStream();
+  const generation = auth.generation;
   await Promise.all([refresh(), refreshAiCharacters(), refreshAiModels(), refreshAgentQuota()]);
+  if (!visible.value || auth.generation !== generation) return;
   knockBootstrapDone.value = true;
   // 若是由 UserHoverCard「私信」打开，定位到指定会话
   const pendingDm = consumePendingDmConversationId();

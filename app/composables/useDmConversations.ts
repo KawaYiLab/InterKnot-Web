@@ -181,6 +181,16 @@ const TYPING_TTL_MS = 3_000;
 let finalizedAtByConv = new Map<string, number>();
 const TYPING_IGNORE_AFTER_FINALIZE_MS = 1_500;
 
+interface ConversationRefresh {
+  generation: number;
+  showLoading: boolean;
+  promise: Promise<void>;
+}
+
+// 共享请求独立于 UI loading：静默刷新也必须去重，同一个账号的所有调用方
+// 都等待同一份结果。按 auth store 隔离，避免 SSR 请求间串用 Promise。
+const conversationRefreshes = new WeakMap<object, ConversationRefresh>();
+
 export function useDmConversations(): UseDmConversations {
   const conversations = useState<DmConversationSummary[]>(
     "dm:conversations",
@@ -380,46 +390,71 @@ export function useDmConversations(): UseDmConversations {
    * 弹窗触发，很频繁；截断会让用户滚到的位置反复丢失，还会让底部哨兵立刻重新
    * 触发翻页。此时只用第一页的权威数据覆盖同 documentId 的项，尾部已加载的页保留。
    */
-  async function refresh(opts?: { silent?: boolean }): Promise<void> {
+  function refresh(opts?: { silent?: boolean }): Promise<void> {
+    if (!auth.isLogin) return Promise.resolve();
     const silent = opts?.silent === true;
-    if (isLoading.value) return;
+    const generation = auth.generation;
+    const existing = conversationRefreshes.get(auth);
+    if (existing?.generation === generation) {
+      if (!silent) {
+        existing.showLoading = true;
+        isLoading.value = true;
+        error.value = null;
+      }
+      return existing.promise;
+    }
+
+    const request: ConversationRefresh = {
+      generation,
+      showLoading: !silent,
+      promise: Promise.resolve(),
+    };
+    const isCurrent = () =>
+      auth.isLogin && auth.generation === generation && conversationRefreshes.get(auth) === request;
     if (!silent) {
       isLoading.value = true;
       error.value = null;
     }
-    try {
-      const resp = await $api<ConversationListResponse>("/api/dm/conversations", {
-        query: { limit: CONVERSATION_PAGE_SIZE },
-      });
-      const incoming = resp?.data ?? [];
-      if (convPagesLoaded.value > 1) {
-        const byId = new Map(conversations.value.map((c) => [c.documentId, c]));
-        for (const c of incoming) {
-          if (c?.documentId) byId.set(c.documentId, c);
+    conversationRefreshes.set(auth, request);
+    request.promise = (async () => {
+      try {
+        const resp = await $api<ConversationListResponse>("/api/dm/conversations", {
+          query: { limit: CONVERSATION_PAGE_SIZE },
+        });
+        if (!isCurrent()) return;
+        const incoming = resp?.data ?? [];
+        if (convPagesLoaded.value > 1) {
+          const byId = new Map(conversations.value.map((c) => [c.documentId, c]));
+          for (const c of incoming) {
+            if (c?.documentId) byId.set(c.documentId, c);
+          }
+          conversations.value = sortConversations([...byId.values()]);
+          // cursor / hasMore 不动：后续页仍接在已加载列表之后
+        } else {
+          conversations.value = incoming;
+          convPagesLoaded.value = 1;
+          // meta 缺失 → 老后端全量返回，按「无更多」降级
+          convHasMore.value = resp?.meta?.hasMore === true;
+          convNextCursor.value = resp?.meta?.nextCursor ?? null;
         }
-        conversations.value = sortConversations([...byId.values()]);
-        // cursor / hasMore 不动：后续页仍接在已加载列表之后
-      } else {
-        conversations.value = incoming;
-        convPagesLoaded.value = 1;
-        // meta 缺失 → 老后端全量返回，按「无更多」降级
-        convHasMore.value = resp?.meta?.hasMore === true;
-        convNextCursor.value = resp?.meta?.nextCursor ?? null;
+        unreadTotal.value =
+          typeof resp?.meta?.totalUnread === "number" ? resp.meta.totalUnread : null;
+      } catch (err) {
+        if (!isCurrent()) return;
+        if (request.showLoading) {
+          const e = err as ApiClientError;
+          error.value = e?.message || "加载失败";
+        }
+        // 不清空 conversations：网络抖动 / 短暂 5xx 时保留旧列表，避免用户看到的
+        // 私聊列表瞬间消失；error 已暴露给上层 UI 提示用户重试
+      } finally {
+        if (isCurrent()) {
+          isLoading.value = false;
+          conversationRefreshes.delete(auth);
+        }
       }
-      unreadTotal.value =
-        typeof resp?.meta?.totalUnread === "number" ? resp.meta.totalUnread : null;
-    } catch (err) {
-      if (!silent) {
-        const e = err as ApiClientError;
-        error.value = e?.message || "加载失败";
-      }
-      // 不清空 conversations：网络抖动 / 短暂 5xx 时保留旧列表，避免用户看到的
-      // 私聊列表瞬间消失；error 已暴露给上层 UI 提示用户重试
-    } finally {
-      if (!silent) {
-        isLoading.value = false;
-      }
-    }
+    })();
+    return request.promise;
   }
 
   /**
@@ -430,7 +465,8 @@ export function useDmConversations(): UseDmConversations {
    * 快照，覆盖回去会丢掉实时状态。
    */
   async function loadMoreConversations(): Promise<void> {
-    if (!convHasMore.value || convLoadingMore.value) return;
+    if (!auth.isLogin || !convHasMore.value || convLoadingMore.value) return;
+    const generation = auth.generation;
     const cursor = convNextCursor.value;
     if (!cursor) {
       convHasMore.value = false;
@@ -441,6 +477,7 @@ export function useDmConversations(): UseDmConversations {
       const resp = await $api<ConversationListResponse>("/api/dm/conversations", {
         query: { limit: CONVERSATION_PAGE_SIZE, cursor },
       });
+      if (auth.generation !== generation || !auth.isLogin) return;
       const incoming = resp?.data ?? [];
       if (incoming.length > 0) {
         const known = new Set(conversations.value.map((c) => c.documentId));
@@ -460,7 +497,7 @@ export function useDmConversations(): UseDmConversations {
     } catch {
       // 静默失败：保留已加载的页，哨兵下次进入视口时会重试
     } finally {
-      convLoadingMore.value = false;
+      if (auth.generation === generation) convLoadingMore.value = false;
     }
   }
 
@@ -1225,6 +1262,7 @@ export function useDmConversations(): UseDmConversations {
   };
 
   const reset = () => {
+    conversationRefreshes.delete(auth);
     stopStream();
     conversations.value = [];
     isLoading.value = false;

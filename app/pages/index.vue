@@ -83,12 +83,14 @@ const selectedCategory = ref<string>("");
 const SORT_STORAGE_KEY = "ik:home-sort";
 
 const readStoredSort = (): ArticleSort => {
-  if (!import.meta.client) return "latest";
+  if (!import.meta.client) return "recommend";
   try {
-    return localStorage.getItem(SORT_STORAGE_KEY) === "hot" ? "hot" : "latest";
+    const val = localStorage.getItem(SORT_STORAGE_KEY);
+    if (val === "hot" || val === "latest" || val === "recommend") return val;
+    return "recommend";
   } catch {
     // 隐私模式下读取即抛错，回落默认档
-    return "latest";
+    return "recommend";
   }
 };
 
@@ -740,7 +742,7 @@ const consumePendingPosts = () => {
   if (disposed) return;
   if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
-  if (activeSort.value !== "latest") return;
+  if (activeSort.value === "hot") return;
   if (!pendingPost.peek().length) return;
   const pending = pendingPost.drain();
   // 反转后再 unshift：保证 push 顺序最晚的委托排在最顶部
@@ -981,6 +983,16 @@ onBeforeUnmount(() => {
            其后按 order 排分类。恒渲染（不随 categories 异步加载出现/消失），
            为分类栏预留固定高度，避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
       <nav class="ik-category-tabs" aria-label="委托频道">
+        <!-- 推荐（个性化推荐，默认第一档） -->
+        <button
+          v-if="!isSearching"
+          type="button"
+          class="ik-category-tab"
+          :class="{ 'ik-category-tab--active': selectedCategory === '' && activeSort === 'recommend' }"
+          @click="selectSort('recommend')"
+        >
+          推荐
+        </button>
         <button
           type="button"
           class="ik-category-tab"

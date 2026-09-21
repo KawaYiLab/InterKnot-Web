@@ -4,7 +4,7 @@
  * watch auth.user 的 null → 有值，一个入口同时覆盖：
  *   - 新登录（LoginDialog 邮箱登录 / 米游社扫码）
  *   - hydrateFromStorage() 恢复会话（刷新页面、重开浏览器）
- * LoginDialog 会调 setSession 两次（第二次补全 author 关联），去重交给
+ * 登录响应直接提供完整 profile；旧后端补查资料和后续用户更新的去重交给
  * useCheckInReminder 内部的 evaluatedForDay。
  *
  * ik:tab-visible / focus 是「标签页开着过夜」的兜底：跨过凌晨 4:00 后 auth.user

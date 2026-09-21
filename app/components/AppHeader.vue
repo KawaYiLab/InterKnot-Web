@@ -133,46 +133,7 @@ const expProgressPercent = computed(() => {
 
 // 丁尼货币系统 (自定义 Z-Button 按钮风格)
 const api = useApi();
-const dennyBalance = ref(0);
-
-const fetchDennyBalance = async () => {
-  if (!auth.isLogin) return;
-  try {
-    const data = await api.getMyDenny();
-    dennyBalance.value = data.denny;
-  } catch {
-    // 忽略异常
-  }
-};
-
-if (import.meta.client) {
-  watch(
-    () => auth.isLogin,
-    (isLogin) => {
-      if (isLogin) {
-        void fetchDennyBalance();
-      } else {
-        dennyBalance.value = 0;
-      }
-    },
-    { immediate: true },
-  );
-
-  useEventListener(window, "ik:home-refresh", fetchDennyBalance);
-  useEventListener(window, "ik:denny-decrement", () => {
-    if (dennyBalance.value > 0) {
-      dennyBalance.value -= 1;
-    }
-  });
-  useEventListener(window, "ik:denny-updated", (e: Event) => {
-    const detail = (e as CustomEvent<number>)?.detail;
-    if (typeof detail === "number") {
-      dennyBalance.value = detail;
-    } else {
-      void fetchDennyBalance();
-    }
-  });
-}
+const { balance: dennyBalance } = useDennyBalance();
 
 const searchKeyword = ref("");
 const applyingSearch = ref(false);
