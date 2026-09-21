@@ -1016,7 +1016,7 @@ onBeforeUnmount(() => {
           :class="{ 'ik-category-tab--active': selectedCategory === '' && activeSort === 'recommend' }"
           @click="selectSort('recommend')"
         >
-          推荐
+          🧿推荐
         </button>
         <button
           type="button"
