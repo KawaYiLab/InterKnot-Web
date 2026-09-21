@@ -584,6 +584,31 @@ const onTabVisible = () => {
   void pollLatestArticles();
 };
 
+// ── 实时广播（SSE）：收到「新帖」即刻并入「有 N 条新内容」提示 ──────────
+// 即时路径，与既有慢轮询（pollLatestArticles）互补：
+//   · 新帖发布 → SSE 秒级提示；
+//   · 旧帖被回复顶起（bump）/ SSE 断连期间漏推 → 仍由轮询对账兜底。
+// 启用条件与轮询一致：推荐流 + 最新排序 + 无搜索。频道随分类切换。
+const feedStreamEnabled = computed(
+  () =>
+    feedMode.value === "recommend" &&
+    activeSort.value === "latest" &&
+    !query.value.trim(),
+);
+// 对齐 Discourse 的 _addIncoming：只在提示集合内部去重，**不**排除已在列表里的帖——
+// 因为 topic_bumped（旧帖被顶起）本就是「更新的」，即便它此刻还显示在列表里也要计入。
+// 点击提示 → handleRefresh 重排，被顶起的帖回到顶部。
+const mergeNewArticleId = (id: string) => {
+  if (!id) return;
+  if (newArticleIds.value.includes(id)) return;
+  newArticleIds.value = [...newArticleIds.value, id];
+};
+useArticleFeedStream({
+  enabled: feedStreamEnabled,
+  category: selectedCategory,
+  onTopicEvent: mergeNewArticleId,
+});
+
 const doLoadMore = () => {
   if (disposed || listRequestPending || !hasNextPage.value) return;
   fetchList(false).catch(() => undefined);
