@@ -1,0 +1,47 @@
+/* ═══════════════════════════════════════════════════════════
+   品牌字体 —— 印品鸿蒙体（还原游戏 / 云绝区零官网同款）
+   ───────────────────────────────────────────────────────────
+   两个物理文件放在 public/，与官网 (zzz.mihoyo.com/cloud-feat) 同源同名：
+     zh-cn-light.ttf  → 正文 / 说明（细档）
+     zh-cn-bold.ttf   → 标题 / 强调（粗档）
+
+   官网的做法是两档并用、按元素分（它用 zh-cn-min-light / zh-cn-min-bold
+   两个独立 family 切换）。这里合成同一 CSS family "InterKnot Sans"、靠
+   font-weight 自动分流，复用项目里既有的字重语义、改动最小：
+     weight 1–699  → 细档（body 400、medium 500、semibold 600 都落这里）
+     weight 700–900 → 粗档（只有真正的标题级 700 / 800 / 900 落这里）
+   浏览器据此各挑各的文件，绝不做 faux-bold 合成（这正是「全用细体时
+   900 标题被强行加粗、字形变形」那种奇怪观感的根源）。
+
+   ## 为什么分界点是 700 而不是 500
+   印品鸿蒙体只有细 / 粗两个物理档，项目却按连续字重（400/500/600/700/900）
+   设计。分界压到 500 会把一大票「中等强调」文本（敲敲消息气泡 600、各种
+   semibold 标签）也推成标题级粗黑，满屏发胖。500 / 600 在官网的二元模型里
+   本就属正文侧，所以只把 700+ 这种真·标题交给粗档；600 及以下留细档，
+   同一文件渲染、不合成、不变形，层级改由字号与颜色承担。
+
+   ## 加载策略：font-display: swap，不 preload
+   两文件各约 1.8MB，是 App 打包一次即可、web 每次访问都要传的东西。
+   swap = 先用系统字体立即渲染，字体到位后再替换，绝不阻塞首屏文字。
+   刻意不 preload：避免把 3.6MB 抬进首屏关键路径。
+
+   ## 字符覆盖
+   各约 6800 常用汉字（GB2312 量级）。用户生成内容里的生僻字 / emoji 会
+   逐字回退到 fallback 栈的系统中文黑体，属预期行为。
+   ═══════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: "InterKnot Sans";
+  src: url("/zh-cn-light.ttf") format("truetype");
+  font-weight: 1 699;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "InterKnot Sans";
+  src: url("/zh-cn-bold.ttf") format("truetype");
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}

@@ -12,7 +12,7 @@ export default defineNuxtConfig({
   nitro: {
     preset: "static",
   },
-  css: ["~/assets/styles/theme.css"],
+  css: ["~/assets/styles/fonts.css", "~/assets/styles/theme.css"],
   runtimeConfig: {
     public: {
       // 本地 dev 或 Pages 預覽構建可通過 .env 的 NUXT_PUBLIC_API_BASE_URL 指定後端地址。
