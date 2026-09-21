@@ -32,11 +32,9 @@ export default defineNuxtConfig({
         { rel: "icon", type: "image/png", sizes: "192x192", href: "/icon/android-chrome-192x192.png" },
         { rel: "icon", type: "image/png", sizes: "512x512", href: "/icon/android-chrome-512x512.png" },
         { rel: "apple-touch-icon", sizes: "180x180", href: "/icon/apple-touch-icon-180x180.png" },
-        // 首屏关键图片预加载：SPA loading 屏的 GIF 与首页底图 main.avif
-        // 目的：避免生产环境下 JS 挂载早于 GIF 解码导致 loading 屏一闪而过，
-        // 以及 #__nuxt::before 背景图未就绪出现的"黑屏"过渡。
+        // 首屏关键图片预加载：SPA loading 屏的 GIF。
+        // 目的：避免生产环境下 JS 挂载早于 GIF 解码导致 loading 屏一闪而过。
         { rel: "preload", as: "image", href: "/images/loading.gif", fetchpriority: "high" },
-        { rel: "preload", as: "image", href: "/images/main.avif", fetchpriority: "high" },
         { rel: "preconnect", href: "https://im.tiwat.cn" },
       ],
       htmlAttrs: {
