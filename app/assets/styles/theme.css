@@ -87,7 +87,12 @@ body,
   min-height: 100%;
   background: #000;
   color: var(--ik-text);
-  font-family: sans-serif;
+  /* 品牌字体（印品鸿蒙体，见 fonts.css）；缺字逐字回退到系统中文黑体 */
+  font-family: "InterKnot Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  /* 与官网一致的字体平滑：让印品鸿蒙体的笔画在高分屏上更细腻不发糊 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   cursor: var(--ik-cursor-default);
   /* 隐藏滚动条 (IE, Edge, Firefox) */
   -ms-overflow-style: none;

@@ -21,7 +21,7 @@ useSeoMeta({ title: "页面未找到 - 绳网" });
   justify-content: center;
   min-height: 100vh;
   background: #efefef;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "InterKnot Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .ik-not-found__img {
