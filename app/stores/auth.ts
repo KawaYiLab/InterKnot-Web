@@ -10,6 +10,7 @@ const USER_ID_KEY = "user_id";
 let hydration = new WeakMap<object, { generation: number; promise: Promise<void> }>();
 let credentials = new WeakMap<object, { generation: number; promise: Promise<number> }>();
 const renewals = new WeakMap<object, { generation: number; promise: Promise<string | null> }>();
+const profileLoads = new WeakMap<object, Set<{ generation: number; updates: Partial<Author> }>>();
 
 export function _resetHydratedForTest() {
   hydration = new WeakMap();
@@ -163,14 +164,24 @@ export const useAuthStore = defineStore("auth", {
     },
     async fetchSelfUser() {
       const generation = this.generation;
+      const load = { generation, updates: {} as Partial<Author> };
+      const loads = profileLoads.get(this) ?? new Set<typeof load>();
+      profileLoads.set(this, loads);
+      loads.add(load);
       try {
-        const user = await useApi().getSelfUser();
+        const api = useApi();
+        const user = await api.getSelfUser();
         if (this.generation !== generation) return;
-        this.user = user;
-        persistUserId(user);
+        // 请求开始后的签到/投币等更新比返回的资料快照更新，不能被覆盖。
+        this.user = { ...user, ...load.updates };
+        if (Object.keys(load.updates).length) api.patchSelfUserCache(load.updates);
+        persistUserId(this.user);
       } catch (err) {
         const apiErr = err as { statusCode?: number };
         if (this.generation === generation && apiErr?.statusCode === 401) this.clearSession();
+      } finally {
+        loads.delete(load);
+        if (!loads.size && profileLoads.get(this) === loads) profileLoads.delete(this);
       }
     },
     setSession(token: string, user: Author) {
@@ -183,8 +194,8 @@ export const useAuthStore = defineStore("auth", {
         localStorage.setItem(TOKEN_KEY, token);
         localStorage.setItem(SESSION_HINT_KEY, "1");
         persistUserId(user);
-        // 登录后通知首页刷新委托列表，使已读状态正确合并
-        window.dispatchEvent(new CustomEvent("ik:home-refresh"));
+        // 首页监听 generation 刷新个性化列表；不要再广播手动刷新事件，
+        // 否则首页和顶部余额会各自重复发起请求。
       }
     },
     async logout() {
@@ -230,8 +241,18 @@ export const useAuthStore = defineStore("auth", {
      * 乐观更新用户部分字段（如签到后的绳网信用/等级/丁尼）
      */
     updateUserPartial(updates: Partial<Author>) {
+      for (const load of profileLoads.get(this) ?? []) {
+        if (load.generation === this.generation) Object.assign(load.updates, updates);
+      }
       if (this.user) {
         this.user = { ...this.user, ...updates };
+        if (import.meta.client) {
+          try {
+            useApi().patchSelfUserCache(updates);
+          } catch {
+            // The store may also be used before the API plugin is installed.
+          }
+        }
       }
     },
   },

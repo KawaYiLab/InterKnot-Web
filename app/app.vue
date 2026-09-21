@@ -13,18 +13,8 @@ const gpuAccelerated = useGpuAccelerated();
 if (import.meta.client) {
   auth.hydrateFromStorage();
 
-  // 登录态恢复后预取账号中心数据，刷新时先从本地缓存恢复再静默更新
-  const accountData = useAccountData();
-  const stop = watch(
-    () => auth.user,
-    (user) => {
-      if (user) {
-        void accountData.ensureLoaded();
-        stop();
-      }
-    },
-    { immediate: true },
-  );
+  // 初始化账号缓存清理；安全信息、绑定和黑名单由账号页按需加载。
+  useAccountData();
 
   // 检测到软件渲染（未启用 GPU 加速）时，提前给 html 加标记，
   // CSS 据此关闭全局跑马灯，避免 CPU 路径下全屏重绘造成滚动卡顿。

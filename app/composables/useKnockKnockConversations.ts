@@ -285,12 +285,11 @@ export function useKnockKnockConversations(): UseKnockKnockConversations {
   }
 
   // ── SSE 实时推送 ─────────────────────────────────────
-  /** 通知变更后刷新列表（legacy knock API + DM 融合列表，后者供 Header 未读角标） */
+  /** 通知变更只刷新当前 UI 使用的 DM 融合列表（也包含权威未读总数）。 */
   function scheduleRefresh() {
     if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
     refreshDebounceTimer = setTimeout(() => {
       refreshDebounceTimer = null;
-      void refresh();
       void useDmConversations().refresh({ silent: true });
     }, REFRESH_DEBOUNCE_MS);
   }

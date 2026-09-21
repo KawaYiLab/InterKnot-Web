@@ -23,13 +23,14 @@ export default defineNuxtPlugin(() => {
   };
 
   watch(
-    () => auth.isLogin,
-    (loggedIn) => {
+    () => [auth.isLogin, auth.generation] as const,
+    ([loggedIn]) => {
       if (!loggedIn) return;
       dm.startStream();
       knock.startStream();
       void dm.refresh();
     },
+    { immediate: true },
   );
 
   document.addEventListener("visibilitychange", onVisibilityChange);
