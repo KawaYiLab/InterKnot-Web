@@ -371,6 +371,10 @@ const handleOpen = (e: MouseEvent) => {
 .ik-card__title {
   margin: 0;
   font-size: var(--ik-post-card-title-size);
+  /* h3 浏览器默认 700 会落到品牌粗档；瀑布流标题字号小（17px），
+     粗档在小字号下发糊难认，显式降到 600 落细档，清晰。
+     （详情页大标题字号大，仍用粗档，不受此影响。） */
+  font-weight: 600;
   line-height: 1.25;
   color: var(--ik-post-card-title-color);
   overflow: hidden;
