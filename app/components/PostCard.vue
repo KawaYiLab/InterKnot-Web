@@ -211,7 +211,7 @@ const handleOpen = (e: MouseEvent) => {
         </div>
 
         <h3 class="ik-card__title" :class="{ 'ik-card__title--read': post.isRead }">
-          <span v-if="post.category" class="ik-card__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
+          <span v-if="post.category" class="ik-card__title-cat">[{{ post.category.name }}]</span>{{ post.title }}
         </h3>
       </div>
     </NuxtLink>
