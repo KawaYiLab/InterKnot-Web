@@ -503,7 +503,7 @@ const deleteAiSession = async (id: string) => {
   if (!id || deletingSessionId.value === id) return;
   const ok = await confirmDialog.open({
     title: "删除会话",
-    message: "确定删除该会话？历史消息将不再出现在列表中。",
+    message: "确定删除该会话？聊天记录将被清除。",
     confirmText: "删除",
     danger: true,
   });

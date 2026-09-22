@@ -137,7 +137,7 @@ const submit = async (auto = false) => {
   if (submitting.value || !attemptId.value) return;
   if (!auto && answeredCount.value < questions.value.length) {
     const remain = questions.value.length - answeredCount.value;
-    if (!window.confirm(`还有 ${remain} 题未作答，确定提交吗？`)) return;
+    if (!window.confirm(`还有 ${remain} 题未作答，确定提交？`)) return;
   }
   submitting.value = true;
   try {
@@ -264,10 +264,10 @@ useHead({ title: "入站考试 - 绳网" });
             </li>
           </ul>
           <p v-if="status?.activeAttempt" class="ik-exam-hint">
-            你有一场进行中的考试，点击「继续考试」将继续作答。
+            检测到未完成的考试，点击「继续考试」继续作答。
           </p>
           <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
-            失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
+            考试失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后重试。
           </p>
           <z-button
             :loading="starting"
@@ -371,7 +371,7 @@ useHead({ title: "入站考试 - 绳网" });
           </template>
           <template v-else>
             <p v-if="cooldownRemaining > 0" class="ik-exam-hint ik-exam-hint--warn">
-              失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后再试。
+              考试失败次数过多，请在 {{ formatDuration(cooldownRemaining) }} 后重试。
             </p>
             <div class="ik-exam-actions">
               <z-button :disabled="cooldownRemaining > 0" @click="retry">

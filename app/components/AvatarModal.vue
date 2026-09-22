@@ -69,7 +69,7 @@ const handleConfirm = async () => {
     return;
   }
   if (selectedAvatar.value.documentId === equippedId.value) {
-    message.warning("什么都没改呢！");
+    message.warning("未做任何修改");
     return;
   }
   equipping.value = true;

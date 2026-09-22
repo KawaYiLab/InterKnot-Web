@@ -85,7 +85,7 @@ const toggleCard = (id: string) => {
 const handleSave = async () => {
   if (saving.value) return;
   if (!isDirty.value) {
-    message.warning("什么都没改呢！");
+    message.warning("未做任何修改");
     return;
   }
   saving.value = true;

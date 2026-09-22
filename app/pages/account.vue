@@ -145,7 +145,7 @@ const deleteMihoyo = useMihoyoQr({
       deleteScanVerified.value = true;
     } else {
       deleteScanVerified.value = false;
-      message.error("扫码的米游社账号与当前账号不一致，请使用当前账号绑定的米游社扫码");
+      message.error("扫码账号与当前绑定账号不一致，请更换后重试");
     }
   },
   onError: (err) => {
@@ -204,15 +204,15 @@ const mihoyoMetaText = computed(() => {
 
 const unbindMihoyo = async () => {
   if (mihoyoOnlyAccount.value) {
-    message.warning("当前账号仅可通过米游社登录，解绑将导致账号失联。请先绑定邮箱，或在「账号」中注销当前账号");
+    message.warning("当前仅绑定了米游社，解绑会导致无法登录。请先绑定邮箱再解绑");
     return;
   }
   const confirmed = await confirmDialog.open({
     title: "解除米哈游账号绑定",
-    message: "解绑后将无法再使用该米哈游账号登录此绳网账号，确定解除绑定吗？",
-    confirmText: "确认解绑",
-    cancelText: "取消",
-    danger: true,
+      message: "解绑后将无法使用该米哈游账号登录，确定解绑？",
+      confirmText: "确认解绑",
+      cancelText: "取消",
+      danger: true,
   });
   if (!confirmed) return;
 
@@ -314,7 +314,7 @@ const openDeleteAccount = () => {
 // 向本人已绑定的真实邮箱发送注销验证码（纯扫码号无真实邮箱，UI 不会显示此按钮）
 const sendDeleteCode = async () => {
   if (!security.value?.hasBoundEmail) {
-    message.warning("当前账号未绑定邮箱，请通过重新扫码米游社账号注销");
+    message.warning("未绑定邮箱，请重新扫码绑定的米游社账号以确认注销");
     return;
   }
   deleteCodeLoading.value = true;
@@ -345,11 +345,11 @@ const handleDeleteAccount = async () => {
 
   const generation = auth.generation;
   const confirmed = await confirmDialog.open({
-    title: "注销账号确认",
-    message: "确定要注销此账号吗？注销后此账号将被永久删除，此操作不可撤回！",
-    confirmText: "确认",
-    cancelText: "取消",
-    danger: true,
+    title: "确认注销账号",
+      message: "确定注销此账号？注销后账号及所有数据将被永久删除，无法恢复。",
+      confirmText: "确认注销",
+      cancelText: "取消",
+      danger: true,
   });
   if (!confirmed || generation !== auth.generation) return;
 
@@ -402,11 +402,11 @@ const isEmailTakenByOwnAccount = (err: unknown) =>
 
 const handleEmailTakenByOwnAccount = async () => {
   const proceedToDelete = await confirmDialog.open({
-    title: "该邮箱属于你的另一个账号",
-    message:
-      "该邮箱已绑定在你的另一个账号上。若你想将当前的米游社账号绑定至该主账号，因米游社账号同一时间只能绑定一个绳网账号，请先在当前页面完成「注销账号」以释放绑定，然后再登录主账号进行绑定。",
-    confirmText: "前往注销账号",
-    cancelText: "换个邮箱",
+    title: "邮箱已被其他账号绑定",
+      message:
+        "该邮箱已绑定其他账号。若需将当前米游社绑定到该账号，因同一米游社只能绑定一个账号，请先注销当前账号，再登录原账号进行绑定。",
+      confirmText: "去注销当前账号",
+      cancelText: "换个邮箱",
   });
   if (!proceedToDelete) return;
   openDeleteAccount();
@@ -547,10 +547,10 @@ const handleRevokeSingle = async (session: AuthSessionItem) => {
   const uaInfo = parseUserAgent(session.userAgent);
   const ok = await confirmDialog.open({
     title: "下线设备",
-    message: `确定要下线该设备（${uaInfo.label}）吗？下线后该设备需要重新登录。`,
-    confirmText: "下线",
-    cancelText: "取消",
-    danger: true,
+      message: `确定下线设备（${uaInfo.label}）？下线后该设备需重新登录。`,
+      confirmText: "下线",
+      cancelText: "取消",
+      danger: true,
   });
   if (!ok || generation !== auth.generation) return;
   await revokeSingleSession(session.id);
@@ -566,10 +566,10 @@ const handleRevokeOthers = async () => {
 
   const ok = await confirmDialog.open({
     title: "下线其他所有设备",
-    message: `确定要下线除当前设备外的全部 ${otherCount} 个会话吗？这些设备将立即失效并需要重新登录。`,
-    confirmText: "确认",
-    cancelText: "取消",
-    danger: true,
+      message: `确定下线除当前设备外的全部 ${otherCount} 台设备？下线后需重新登录。`,
+      confirmText: "确认下线",
+      cancelText: "取消",
+      danger: true,
   });
   if (!ok || generation !== auth.generation) return;
   await revokeOtherSessions();
@@ -985,7 +985,7 @@ useHead({ title: "账号中心" });
                   <!-- 无真实邮箱（纯米游社扫码号）：重新扫码同一米游社账号核验 -->
                   <template v-else>
                     <p class="ik-ac-security-send-hint">
-                      当前账号仅通过米游社扫码登录，请使用<strong>当前账号绑定的米游社账号</strong>再次扫码以核验身份
+                      当前账号仅通过米游社登录，请使用<strong>绑定的米游社账号</strong>扫码核验身份
                     </p>
                     <div class="ik-ac-qr-box" :class="{ 'is-dimmed': deleteScanNeedRefresh }">
                       <img
@@ -1039,7 +1039,7 @@ useHead({ title: "账号中心" });
               </button>
               <div class="ik-ac-detail-title-wrap">
                 <h2 class="ik-ac-detail-title">已登录设备与会话</h2>
-                <p class="ik-ac-detail-desc">以下是您近期的操作日志详情 ，若存在异常记录，建议尽快修改密码</p>
+                <p class="ik-ac-detail-desc">近期登录设备记录，若发现异常请尽快修改密码</p>
               </div>
               <div v-if="isMobile" class="ik-ac-detail-spacer" />
             </header>
@@ -1165,7 +1165,7 @@ useHead({ title: "账号中心" });
                   {{ mihoyoUnbinding ? "解绑中…" : "解除绑定" }}
                 </z-button>
                 <p v-if="mihoyoOnlyAccount" class="ik-ac-security-send-hint is-warning">
-                  当前账号未绑定邮箱，解绑后将无法登录。请先在「账号」中绑定邮箱，或注销当前账号。
+                  当前仅绑定了米游社，解绑后将无法登录。请先绑定邮箱再解绑。
                 </p>
               </template>
 
