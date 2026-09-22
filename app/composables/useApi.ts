@@ -585,6 +585,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     editedAt: data.editedAt as string | undefined,
     publishedAt: data.publishedAt as string | undefined,
     firstPublishedAt: (data.firstPublishedAt as string | null | undefined) ?? undefined,
+    bumpedAt: typeof data.bumpedAt === "string" ? data.bumpedAt : null,
     author: toAuthor(data.author, apiBaseUrl),
   };
 }
@@ -1038,6 +1039,46 @@ export function useApi() {
     );
     // 在 TanStack 完成写入后合并，也覆盖 fresh cache 命中和迟到响应覆盖缓存的竞态。
     return mergeReadPage(page);
+  };
+
+  /** 按事件 ID 拉取最新卡片，不复用分页缓存，也不改变信息流游标。 */
+  const getArticleUpdates = async (ids: string[], category = ""): Promise<Post[]> => {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (!uniqueIds.length) return [];
+    if (import.meta.client) await useAuthStore().ensureCredentials();
+
+    const posts: Post[] = [];
+    // 与服务端的单批上限一致；长时间离开页面积累的更新也能完整取回。
+    const batchSize = 50;
+    for (let start = 0; start < uniqueIds.length; start += batchSize) {
+      const batch = uniqueIds.slice(start, start + batchSize);
+      const response = await $api("/api/articles/list", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+        query: {
+          ids: batch.join(","),
+          sort: "latest",
+          ...(category ? { category } : {}),
+        },
+      });
+      const data = unwrapData<unknown[]>(response);
+      const confirmedIds = (response as { meta?: { updateIds?: unknown } })?.meta?.updateIds;
+      // 老服务端会忽略 ids 并返回普通第一页，不能把它当成完整更新批次而误删旧卡片。
+      if (!Array.isArray(data) || !Array.isArray(confirmedIds) ||
+          batch.some((id) => !confirmedIds.includes(id))) {
+        throw new Error("获取更新失败，请稍后重试");
+      }
+      const requested = new Set(batch);
+      posts.push(...data.map((item) => toPost(item, apiBaseUrl)).filter((post) => requested.has(post.id)));
+    }
+
+    // 多批结果合并后仍按最近活动排序，与服务端 latest 的次序一致。
+    posts.sort((a, b) => {
+      const timeA = Date.parse(a.bumpedAt || a.firstPublishedAt || a.publishedAt || "") || 0;
+      const timeB = Date.parse(b.bumpedAt || b.firstPublishedAt || b.publishedAt || "") || 0;
+      return timeB - timeA || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+    });
+    return mergeReadStatus(posts);
   };
 
   /**
@@ -2638,6 +2679,7 @@ export function useApi() {
     seedSelfUser,
     patchSelfUserCache,
     searchArticles,
+    getArticleUpdates,
     suggestArticles,
     peekArticles,
     getCategories,

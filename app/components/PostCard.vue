@@ -28,6 +28,7 @@ const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
 const props = defineProps<{
   post: Post;
   eager?: boolean;
+  highlighted?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -132,6 +133,7 @@ const handleOpen = (e: MouseEvent) => {
   <article
     ref="cardRef"
     class="ik-card"
+    :class="{ 'ik-card--updated': highlighted }"
     @click.capture="handleOpen"
     @mouseenter="schedulePrefetch(post.id)"
     @mouseleave="cancelPrefetch"
@@ -230,6 +232,22 @@ const handleOpen = (e: MouseEvent) => {
 
 .ik-card:hover {
   background: var(--ik-post-card-hover-bg);
+}
+
+.ik-card--updated {
+  background: #bfff09;
+  box-shadow: inset 0 0 0 2px #bfff09;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ik-card--updated {
+    animation: ik-card-update-highlight 3s ease-out;
+  }
+
+  @keyframes ik-card-update-highlight {
+    from { background-color: #bfff09; }
+    to { background-color: var(--ik-post-card-outer-bg); }
+  }
 }
 
 .ik-card__link {
