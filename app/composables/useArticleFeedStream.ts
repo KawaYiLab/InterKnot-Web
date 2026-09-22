@@ -64,11 +64,12 @@ export function useArticleFeedStream(opts: {
     }
     es = source;
     const onTopic = (ev: Event) => {
+      if (es !== source || !opts.enabled.value || opts.category.value !== category) return;
       try {
         const data = JSON.parse(
           (ev as MessageEvent).data,
         ) as ArticleFeedTopicEvent;
-        if (data?.topicId) opts.onTopicEvent(data.topicId);
+        if (typeof data?.topicId === "string" && data.topicId) opts.onTopicEvent(data.topicId);
       } catch {
         /* malformed payload — ignore */
       }

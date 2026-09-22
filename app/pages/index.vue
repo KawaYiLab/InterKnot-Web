@@ -11,6 +11,7 @@ import {
 } from "~/utils/cover";
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
+import { useArticleFeedUpdates } from "~/composables/useArticleFeedUpdates";
 
 // 静态导入核心瀑布流组件，防止下滑加载或冷启动时动态请求分包导致滚动卡顿
 import VirtualMasonry from "~/components/VirtualMasonry.vue";
@@ -197,7 +198,32 @@ const loadMoreObserverRef = shallowRef<IntersectionObserver | null>(null);
 
 // ── 后台轮询：检测有无新委托（仅在无搜索关键词时启用） ─────────
 const NEW_ARTICLES_POLL_MS = 60_000;
-const newArticleIds = shallowRef<string[]>([]);
+const feedStreamEnabled = computed(
+  () => feedMode.value === "recommend" && activeSort.value === "latest" && !query.value.trim(),
+);
+const feedUpdates = useArticleFeedUpdates({
+  posts: list,
+  enabled: feedStreamEnabled,
+  scope: computed(() => JSON.stringify([
+    feedMode.value, selectedCategory.value, activeSort.value, query.value, auth.generation,
+  ])),
+  canApply: () => !listRequestPending && !refreshing.value && !loading.value,
+  load: (ids) => api.getArticleUpdates(ids, selectedCategory.value),
+  onApplied: () => {
+    seenIds = new Set(list.value.map((post) => post.id));
+    const version = requestVersion.value;
+    void nextTick().then(() => {
+      if (!disposed && version === requestVersion.value) window.scrollTo({ top: 0, behavior: "auto" });
+    });
+  },
+  onError: (error) => message.error(resolveErrorMessage(error, "获取更新失败，请重试")),
+});
+const {
+  pendingIds: newArticleIds,
+  applying: applyingNewArticles,
+  highlightedIds: highlightedArticleIds,
+  announcement: updateAnnouncement,
+} = feedUpdates;
 const hasNewArticles = computed(() => newArticleIds.value.length > 0);
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
@@ -328,7 +354,7 @@ const scrollToTopAfterReset = async (reset: boolean, version: number) => {
 const fetchList = async (reset = false) => {
   if (disposed) return;
   // 重置请求必须能取代旧身份/筛选的在途请求；只有追加分页需要等待。
-  if (!reset && listRequestPending) return;
+  if (!reset && (listRequestPending || applyingNewArticles.value)) return;
   if (!hasNextPage.value && !reset) return;
   listRequestPending = true;
   if (reset) hasSettledPage = false;
@@ -403,9 +429,13 @@ const fetchList = async (reset = false) => {
     endCursor.value = page.endCursor;
     hasNextPage.value = page.hasNextPage;
     hasSettledPage = true;
+    if (reset || feedUpdates.reconciledBump.value === null) {
+      feedUpdates.seedPollingBaseline(page.nodes);
+    }
 
     // 缓存命中路径下，scrollToTopAfterReset 不再需要（避免破坏用户期望的滚动位置）
     if (!cacheHit) await scrollToTopAfterReset(reset, currentVersion);
+    return true;
   } catch (err) {
     if (currentVersion === requestVersion.value) {
       message.error(resolveErrorMessage(err, "获取委托失败"));
@@ -502,21 +532,21 @@ watch(
 );
 
 const handleRefresh = async () => {
-  if (disposed || refreshing.value || loading.value) return;
+  if (disposed || refreshing.value || loading.value || applyingNewArticles.value) return;
+  const pendingBatch = feedUpdates.snapshot();
+  feedUpdates.clearHighlight();
   refreshing.value = true;
   window.scrollTo({ top: 0, behavior: "instant" });
   // Minimum visible duration so the animation feels intentional
   const minDelay = new Promise((r) => setTimeout(r, 600));
   // 用户明确下拉刷新：跳过 staleTime 缓存，强制重拉最新首页列表
   api.invalidateQueries(["articles", "search"]);
-  await fetchList(true);
-  // 刷新后清掉"新委托提示"
-  newArticleIds.value = [];
+  if (await fetchList(true)) feedUpdates.acknowledge(pendingBatch);
   await minDelay;
   refreshing.value = false;
 };
 
-// ── 后台静默轮询：比对最新一页与本地 list 的差集，检测有无新委托 ────
+// ── 后台静默轮询：按活动时间跨页对账，补齐断线期间的新帖/顶帖 ────
 const pollLatestArticles = async () => {
   // 仅在推荐流（无搜索词、非关注/收藏）下做轮询
   if (feedMode.value !== "recommend") return;
@@ -524,35 +554,21 @@ const pollLatestArticles = async () => {
   // 「热门」是热度榜：新帖不会一发布就上榜，「有 N 条新内容」在这条流下没有意义
   if (activeSort.value !== "latest") return;
   // 不与正在进行的请求/刷新冲突
-  if (disposed || polling || listRequestPending || refreshing.value) return;
+  if (disposed || polling || listRequestPending || refreshing.value || applyingNewArticles.value) return;
   if (import.meta.client && document.visibilityState !== "visible") return;
   // 列表还没加载出来时不必探测
-  if (!list.value.length) return;
+  if (!hasSettledPage || !list.value.length) return;
 
   polling = true;
   const currentVersion = requestVersion.value;
   try {
-    // 强制失效当前频道空搜索的第一页，让 fetchQuery 真正打到后端
+    // 跨页对账也要取新数据，因此失效当前频道的列表缓存。
     api.invalidateQueries(["articles", "search", "", selectedCategory.value]);
-    const page = await api.searchArticles("", "", selectedCategory.value, "recommend", "latest");
-    if (disposed || currentVersion !== requestVersion.value || !page.nodes.length) return;
-
-    const knownIds = new Set(list.value.map((d) => d.id));
-    const fresh: string[] = [];
-    for (const node of page.nodes) {
-      if (!node.id) continue;
-      // 收集第一页中所有本地未知的 id。
-      // 不能在遇到第一个已知 id 时 break：列表顶部会注入置顶帖（全站公告，非时间序），
-      // 它们已在初始加载时进入 list，若 break 会导致新委托（排在置顶帖之后的普通区）
-      // 永远检测不到。
-      if (!knownIds.has(node.id)) fresh.push(node.id);
-    }
-    if (fresh.length) {
-      // 取并集，避免短时间内多次轮询重复计数
-      const merged = new Set<string>(newArticleIds.value);
-      for (const id of fresh) merged.add(id);
-      newArticleIds.value = Array.from(merged);
-    }
+    const category = selectedCategory.value;
+    await feedUpdates.reconcile(
+      (cursor) => api.searchArticles("", cursor, category, "recommend", "latest"),
+      () => !disposed && currentVersion === requestVersion.value,
+    );
   } catch {
     // 网络错误静默忽略：下次轮询再试
   } finally {
@@ -574,9 +590,14 @@ const stopPolling = () => {
   }
 };
 
-// 用户点击"有 N 条新内容" → 顶部刷新
-const applyNewArticles = () => {
-  void handleRefresh();
+// 查看更新只插入这批卡片，旧列表的 endCursor / hasNextPage 保持不变。
+const applyNewArticles = async () => {
+  if (disposed || applyingNewArticles.value || listRequestPending || refreshing.value || !hasNewArticles.value) return;
+  // 作废已发出的轮询结果，避免它在本批次加载后重新提示同一批更新。
+  requestVersion.value++;
+  await feedUpdates.apply();
+  await nextTick();
+  if (!disposed) observeLoadMoreSentinel();
 };
 
 // Tab 回到前台：立即跳一次轮询，让用户尽快看到提示
@@ -584,33 +605,15 @@ const onTabVisible = () => {
   void pollLatestArticles();
 };
 
-// ── 实时广播（SSE）：收到「新帖」即刻并入「有 N 条新内容」提示 ──────────
-// 即时路径，与既有慢轮询（pollLatestArticles）互补：
-//   · 新帖发布 → SSE 秒级提示；
-//   · 旧帖被回复顶起（bump）/ SSE 断连期间漏推 → 仍由轮询对账兜底。
-// 启用条件与轮询一致：推荐流 + 最新排序 + 无搜索。频道随分类切换。
-const feedStreamEnabled = computed(
-  () =>
-    feedMode.value === "recommend" &&
-    activeSort.value === "latest" &&
-    !query.value.trim(),
-);
-// 对齐 Discourse 的 _addIncoming：只在提示集合内部去重，**不**排除已在列表里的帖——
-// 因为 topic_bumped（旧帖被顶起）本就是「更新的」，即便它此刻还显示在列表里也要计入。
-// 点击提示 → handleRefresh 重排，被顶起的帖回到顶部。
-const mergeNewArticleId = (id: string) => {
-  if (!id) return;
-  if (newArticleIds.value.includes(id)) return;
-  newArticleIds.value = [...newArticleIds.value, id];
-};
+// 新帖与旧帖的新回复都计入；断线期间漏掉的活动由轮询 bumpedAt 对账。
 useArticleFeedStream({
   enabled: feedStreamEnabled,
   category: selectedCategory,
-  onTopicEvent: mergeNewArticleId,
+  onTopicEvent: feedUpdates.enqueue,
 });
 
 const doLoadMore = () => {
-  if (disposed || listRequestPending || !hasNextPage.value) return;
+  if (disposed || listRequestPending || applyingNewArticles.value || !hasNextPage.value) return;
   fetchList(false).catch(() => undefined);
 };
 
@@ -645,8 +648,6 @@ const debouncedSearch = useDebounceFn(() => fetchList(true), 300);
 watch(
   () => query.value,
   (q) => {
-    // 切换到搜索时清掉"新委托提示"，搜索流不轮询
-    newArticleIds.value = [];
     // 输入搜索词时回到推荐流（关注/收藏不支持文本搜索）。
     // feedMode 变化会触发其 watcher 重拉，避免与 debouncedSearch 重复，这里提前 return。
     if (q.trim() && feedMode.value !== "recommend") {
@@ -700,7 +701,6 @@ watch(
       skipFeedWatch = false;
       return;
     }
-    newArticleIds.value = [];
     endCursor.value = "";
     hasNextPage.value = true;
     requestVersion.value++;
@@ -722,7 +722,6 @@ watch(
     cachedMeasuredHeights.value = undefined;
     seenIds = new Set();
     enterAnimationIds.value = new Set();
-    newArticleIds.value = [];
     endCursor.value = "";
     hasNextPage.value = true;
     if (!auth.isLogin && feedMode.value !== "recommend") {
@@ -756,7 +755,7 @@ watch(
 // scrollY 的恢复由 app/router.options.ts 的 scrollBehavior 在导航阶段统一处理，
 // 此处只负责列表数据 + measuredHeights 的恢复。
 const cached = homeStateCache.restore();
-let initialFetchPromise: Promise<void>;
+let initialFetchPromise: Promise<unknown>;
 
 // 乐观插入：消费 /create 发布后塞入的 pending 队列，把刚发布的委托
 // unshift 到 list 头部并加入 seenIds，避免后续 fetch 返回相同 id 时被去重逻辑过滤掉。
@@ -803,6 +802,9 @@ if (cached && cached.query === query.value && cached.category === selectedCatego
   hasNextPage.value = cached.hasNextPage;
   seenIds = cached.seenIds;
   cachedMeasuredHeights.value = cached.measuredHeights;
+  feedUpdates.seedPollingBaseline(cached.list);
+  if (cached.reconciledBump !== undefined) feedUpdates.reconciledBump.value = cached.reconciledBump;
+  for (const id of cached.pendingArticleIds ?? []) feedUpdates.enqueue(id);
   // scrollY 由 router.options.ts 的 scrollBehavior 通过 consumeScrollY() 独立消费
   homeStateCache.clear();
   initialFetchPromise = Promise.resolve();
@@ -968,6 +970,8 @@ onBeforeRouteLeave(() => {
     category: selectedCategory.value,
     feed: feedMode.value,
     sort: sortMode.value,
+    reconciledBump: feedUpdates.reconciledBump.value,
+    pendingArticleIds: [...newArticleIds.value],
     seenIds,
     measuredHeights: heights ? new Map(heights) : new Map(),
     scrollY: window.scrollY,
@@ -1096,18 +1100,31 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
-    <!-- New articles toast: 后台轮询发现新委托时弹出 -->
-    <Transition name="ik-new-articles-pill">
-      <button
-        v-if="hasNewArticles && !refreshing"
-        class="ik-new-articles-pill"
-        type="button"
-        @click="applyNewArticles"
-      >
-        <ArrowPathIcon class="ik-new-articles-pill-icon" aria-hidden="true" />
-        <span>有 {{ newArticleIds.length }} 条新内容，点击查看</span>
-      </button>
-    </Transition>
+    <div class="ik-feed-updates" aria-live="polite" aria-atomic="true">
+      <Transition name="ik-new-articles-pill" mode="out-in">
+        <button
+          v-if="hasNewArticles && !refreshing"
+          class="ik-new-articles-pill"
+          type="button"
+          :disabled="applyingNewArticles || loading || loadingMore"
+          :aria-busy="applyingNewArticles"
+          @click="applyNewArticles"
+        >
+          <ArrowPathIcon
+            class="ik-new-articles-pill-icon"
+            :class="{ 'ik-refresh-spin': applyingNewArticles }"
+            aria-hidden="true"
+          />
+          <span v-if="applyingNewArticles">正在加载更新…</span>
+          <span v-else>查看 {{ newArticleIds.length }} 条新的或更新的帖子</span>
+        </button>
+        <div
+          v-else-if="updateAnnouncement && !refreshing"
+          class="ik-new-articles-pill ik-new-articles-pill--status"
+          role="status"
+        >{{ updateAnnouncement }}</div>
+      </Transition>
+    </div>
 
     <ClientOnly>
       <Transition name="ik-list-fade" mode="out-in">
@@ -1162,10 +1179,11 @@ onBeforeUnmount(() => {
                 :class="{ 'ik-masonry-card-enter': shouldAnimatePost(item.id) }"
                 :style="shouldAnimatePost(item.id) ? getStaggerDelayStyle(index, columnCount) : undefined"
                 :post="item"
+                :highlighted="highlightedArticleIds.has(item.id)"
                 :eager="index < columnCount * 2"
                 @open="goPost"
                 @animationend="finishEnterAnimation(item.id)"
-                v-memo="[item.id, item.isRead, item.cover, shouldAnimatePost(item.id)]"
+                v-memo="[item, shouldAnimatePost(item.id), highlightedArticleIds.has(item.id), index < columnCount * 2]"
               />
             </template>
           </VirtualMasonry>
@@ -1184,6 +1202,7 @@ onBeforeUnmount(() => {
       circle
       class="ik-refresh-fab"
       :loading="refreshing"
+      :disabled="applyingNewArticles"
       @click="handleRefresh"
     >
       <ArrowPathIcon v-if="!refreshing" style="width:1em;height:1em" />
@@ -1638,6 +1657,10 @@ onBeforeUnmount(() => {
 }
 
 /* ── 新委托提示药丸按钮 ───────────────────────── */
+.ik-feed-updates {
+  position: absolute;
+}
+
 .ik-new-articles-pill {
   position: fixed;
   top: calc(78px + 12px);
@@ -1654,11 +1677,22 @@ onBeforeUnmount(() => {
   color: #000;
   font-size: 14px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.3;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  text-align: center;
   cursor: var(--ik-cursor-pointer);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45),
     0 0 0 1px rgba(0, 0, 0, 0.6) inset;
   transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.ik-new-articles-pill:disabled {
+  cursor: progress;
+}
+
+.ik-new-articles-pill--status {
+  pointer-events: none;
 }
 
 .ik-new-articles-pill:hover {

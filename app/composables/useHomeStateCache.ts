@@ -22,6 +22,9 @@ export interface HomeStateSnapshot {
   category: string;
   feed: ArticleFeed;
   sort: ArticleSort;
+  /** 最新流已完整对账到的活动时间；与尚未查看的 ID 一起恢复。 */
+  reconciledBump?: number | null;
+  pendingArticleIds?: string[];
   seenIds: Set<string>;
   measuredHeights: Map<string | number, number>;
   /** 路由离开瞬间的 window.scrollY（DOM 完好时采集，值精确） */

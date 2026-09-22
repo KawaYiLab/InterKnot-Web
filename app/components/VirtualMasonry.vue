@@ -433,13 +433,23 @@ watch(
       mappedHeightCache.clear();
       return;
     }
-    // 列表被整体替换时（首 key 不同），清空缓存
-    const newFirst = newItems[0] ? props.keyMapper(newItems[0]) : undefined;
-    const oldFirst = oldItems[0] ? props.keyMapper(oldItems[0]) : undefined;
-    if (newFirst !== oldFirst) {
-      measuredHeights.clear();
-      mappedHeightCache.clear();
+    // 插入/移动卡片保留其它项的高度；同 ID 的标题或封面更新则重新测量。
+    const previous = new Map(oldItems.map((item) => [props.keyMapper(item), item]));
+    const activeKeys = new Set(newItems.map(props.keyMapper));
+    for (const item of newItems) {
+      const key = props.keyMapper(item);
+      if (previous.get(key) !== item) {
+        measuredHeights.delete(key);
+        mappedHeightCache.delete(key);
+      }
     }
+    for (const key of previous.keys()) {
+      if (!activeKeys.has(key)) {
+        measuredHeights.delete(key);
+        mappedHeightCache.delete(key);
+      }
+    }
+    heightVersion.value++;
   },
 );
 

@@ -302,6 +302,8 @@ export interface Post {
   publishedAt?: string;
   /** 首次发布时间（ISO 8601）。编辑重发不会改变，用于展示"发布于"。 */
   firstPublishedAt?: string | null;
+  /** 最近一次新活动时间，用于信息流更新对账。 */
+  bumpedAt?: string | null;
   author: Author;
 }
 
