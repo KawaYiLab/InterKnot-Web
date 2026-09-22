@@ -293,7 +293,7 @@ function parseBilibiliVideo(input: string): ExternalVideo | null {
 async function onVideoDialogConfirm(raw: string) {
   const video = parseBilibiliVideo(raw);
   if (!video) {
-    message.error("无法识别该 B 站视频链接，请检查 BV 号或链接格式");
+    message.error("无法识别视频链接，请检查 BV 号或链接");
     return;
   }
   if (externalVideos.value.length >= MAX_EXTERNAL_VIDEOS) {
@@ -303,7 +303,7 @@ async function onVideoDialogConfirm(raw: string) {
 
   const info = await api.getBilibiliInfo(video.bvid || undefined, video.aid || undefined);
   if (!info?.pic) {
-    message.error("无法获取该 B 站视频信息，请检查 BV 号或链接是否有效");
+    message.error("获取视频信息失败，请检查链接是否有效");
     return;
   }
 
@@ -324,7 +324,7 @@ async function onVideoDialogConfirm(raw: string) {
 
 function openVideoDialog() {
   if (uploadTasks.value.length > 0) {
-    message.error("已上传图片的委托不能再添加视频");
+    message.error("已添加图片，无法再嵌入视频");
     return;
   }
   isVideoDialogVisible.value = true;
@@ -744,7 +744,7 @@ async function discardChanges() {
   const epoch = draftEpoch.value;
   const ok = await confirmDialog.open({
     title: "放弃修改",
-    message: "确定放弃未发布的修改吗？内容将恢复为线上版本。",
+    message: "确定放弃未发布的修改？内容将还原为已发布版本。",
     confirmText: "放弃修改",
     danger: true,
   });
@@ -772,7 +772,7 @@ async function deleteDraft() {
   if (!documentId.value || isPublishing.value || isDeletingDraft.value) return;
   const targetId = documentId.value;
   const epoch = draftEpoch.value;
-  const ok = await confirmDialog.open({ title: "删除草稿", message: "确定要删除这个草稿吗？此操作不可恢复。", confirmText: "删除", danger: true });
+  const ok = await confirmDialog.open({ title: "删除草稿", message: "确定删除该草稿？删除后不可恢复。", confirmText: "删除", danger: true });
   if (!ok || epoch !== draftEpoch.value) return;
 
   isDeletingDraft.value = true;

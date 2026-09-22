@@ -234,7 +234,7 @@ const submit = async () => {
     }
     await onLoginSuccess(registerRes);
     // 新注册用户需通过入站考试才能发布委托/评论，注册成功后直接引导去考试页
-    message.success("完成入站考试后即可解锁发布委托、评论等功能");
+    message.success("注册成功！通过入站考试即可解锁发帖和评论");
     await navigateTo("/exam");
   } catch (err) {
     const label = isReset.value ? "重置失败" : isRegister.value ? "注册失败" : "登录失败";
@@ -532,8 +532,8 @@ onUnmounted(() => {
                               {{ mihoyoStatusText }}
                             </p>
                             <p class="ik-mihoyo__hint">
-                              未绑定过的米游社账号首次登录才会创建绳网账号；已有绑定会登录原账号。
-                            </p>
+                                将自动登录/注册新账号。
+                              </p>
                           </div>
                         </div>
                         <div class="ik-login-footer">

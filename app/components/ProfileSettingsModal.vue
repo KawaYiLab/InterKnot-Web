@@ -71,7 +71,7 @@ const closeLogout = () => {
 };
 const confirmLogout = async () => {
   const revoked = await authStore.logout();
-  if (!revoked) message.warning("已退出本机登录，网络恢复后会重试撤销服务器会话");
+  if (!revoked) message.warning("已在本地退出，网络恢复后将自动同步");
   emit("close");
   await router.replace("/");
 };
@@ -96,7 +96,7 @@ const submitName = async () => {
     return;
   }
   if (trimmed === props.currentName) {
-    message.warning("什么都没改呢！");
+    message.warning("未做任何修改");
     closeEditName();
     return;
   }
@@ -130,7 +130,7 @@ const submitBio = async () => {
     return;
   }
   if (trimmed === (props.currentBio || "")) {
-    message.warning("什么都没改呢！");
+    message.warning("未做任何修改");
     closeEditBio();
     return;
   }

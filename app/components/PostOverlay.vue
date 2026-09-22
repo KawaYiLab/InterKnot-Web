@@ -690,15 +690,15 @@ const giveDenny = async () => {
     return;
   }
   if (isOwner.value) {
-    message.warning("不能给自己的委托投币<(＿　＿)>");
+    message.warning("不能给自己的委托投币");
     return;
   }
   if (post.value.isAnonymous) {
-    message.warning("匿名委托不能投币{{{(>_<)}}}");
+    message.warning("匿名委托不支持投币");
     return;
   }
   if (post.value.hasGivenDenny) {
-    message.warning("已经投过币了ヾ(•ω•`)o");
+    message.warning("已投过币，无法重复投币");
     return;
   }
 
@@ -839,7 +839,7 @@ const handlePinArticle = async () => {
 
 const handleDeleteArticle = async () => {
   if (!post.value?.id) return;
-  const ok = await confirmDialog.open({ title: "删除委托", message: "确定删除这篇委托吗？此操作不可恢复。（10丁尼）", confirmText: "删除", danger: true });
+  const ok = await confirmDialog.open({ title: "删除委托", message: "确定删除这篇委托？删除后不可恢复。", confirmText: "删除", danger: true });
   if (!ok) return;
   deletingArticle.value = true;
   try {
