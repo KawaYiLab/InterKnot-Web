@@ -46,6 +46,14 @@ export function usePostModal() {
     },
   ) {
     if (!import.meta.client) return;
+    const replacingOpenPost = isOpen.value;
+
+    // Related reading replaces the current overlay, preserving the single
+    // background history entry and its original title for Close/Back.
+    if (!replacingOpenPost) {
+      _savedTitle = document.title;
+      acquire(SCROLL_LOCK_TOKEN);
+    }
 
     postId.value = id;
     coverHint.value = opts?.coverAspectRatio ?? null;
@@ -54,17 +62,12 @@ export function usePostModal() {
     isOpen.value = true;
     _historyPushed = true;
 
-    _savedTitle = document.title;
-    acquire(SCROLL_LOCK_TOKEN);
-
     const url = opts?.commentId
       ? `/post/${id}?comment=${encodeURIComponent(opts.commentId)}`
       : `/post/${id}`;
-    window.history.pushState(
-      overlayHistoryState({ __postModal: true, postId: id, commentId: opts?.commentId ?? null }),
-      "",
-      url,
-    );
+    const state = overlayHistoryState({ __postModal: true, postId: id, commentId: opts?.commentId ?? null });
+    if (replacingOpenPost) window.history.replaceState(state, "", url);
+    else window.history.pushState(state, "", url);
 
     // 预热委托详情，减少 PostOverlay 挂载后的等待与布局抖动
     // 首屏评论由 PostOverlay 挂载时强制拉取最新，避免命中旧缓存

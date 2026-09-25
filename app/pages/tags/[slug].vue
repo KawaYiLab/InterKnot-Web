@@ -6,6 +6,7 @@ import VirtualMasonry from "~/components/VirtualMasonry.vue";
 import PostCard from "~/components/PostCard.vue";
 import PostCardSkeleton from "~/components/PostCardSkeleton.vue";
 import { generateSkeletons, estimateSkeletonHeight, type SkeletonItem } from "~/utils/skeleton";
+import { useRecommendations } from "~/composables/useRecommendations";
 
 const route = useRoute();
 const api = useApi();
@@ -25,6 +26,10 @@ useSeoMeta({
 });
 
 const list = shallowRef<Post[]>([]);
+const recommendations = useRecommendations();
+const sortMode = ref<"recommend" | "latest">("recommend");
+const visibleList = computed(() => sortMode.value === "recommend"
+  ? list.value.filter((post) => !recommendations.isDismissed(post.id)) : list.value);
 const endCursor = ref("");
 const hasNextPage = ref(true);
 const loading = ref(true);
@@ -69,7 +74,7 @@ async function loadFirstPage() {
   hasNextPage.value = true;
   displayName.value = "";
   try {
-    const page = await api.searchArticles("", "", "", "recommend", "latest", slug.value);
+    const page = await api.searchArticles("", "", "", "recommend", sortMode.value, slug.value);
     if (disposed || version !== requestVersion) return;
     appendPosts(page.nodes);
     endCursor.value = page.endCursor;
@@ -88,7 +93,7 @@ async function loadMore() {
   loadingMore.value = true;
   loadError.value = false;
   try {
-    const page = await api.searchArticles("", cursor, "", "recommend", "latest", slug.value);
+    const page = await api.searchArticles("", cursor, "", "recommend", sortMode.value, slug.value);
     if (disposed || version !== requestVersion) return;
     // 防止异常分页元数据让可见哨兵反复请求同一页。
     if (page.hasNextPage && (!page.endCursor || page.endCursor === cursor)) {
@@ -154,7 +159,10 @@ onBeforeUnmount(() => {
 });
 
 // 切换标签（同一页面路由参数变化）时重载
-watch([slug, () => auth.generation], () => { void loadFirstPage(); }, { flush: "sync" });
+watch([slug, sortMode, () => auth.generation], () => {
+  api.invalidateQueries(["articles", "search"]);
+  void loadFirstPage();
+}, { flush: "sync" });
 watch(api.readStatusRevision, () => {
   list.value = api.mergeReadStatus(list.value);
 });
@@ -164,6 +172,10 @@ watch(api.readStatusRevision, () => {
   <section class="ik-tag-page">
     <header class="ik-tag-header">
       <h1 class="ik-tag-title">{{ heading }}</h1>
+      <nav class="ik-tag-sort" aria-label="标签排序">
+        <button type="button" :aria-pressed="sortMode === 'recommend'" @click="sortMode = 'recommend'">推荐</button>
+        <button type="button" :aria-pressed="sortMode === 'latest'" @click="sortMode = 'latest'">最新</button>
+      </nav>
     </header>
 
     <ClientOnly>
@@ -190,12 +202,12 @@ watch(api.readStatusRevision, () => {
         <button type="button" class="ik-tag-retry" @click="loadFirstPage">重试</button>
       </div>
 
-      <div v-else-if="!list.length" class="ik-empty">该标签下暂无委托... [ o_x ]/</div>
+      <div v-else-if="!visibleList.length && !hasNextPage" class="ik-empty">该标签下暂无委托... [ o_x ]/</div>
 
       <div v-else class="ik-list-state">
         <VirtualMasonry
           class="ik-masonry"
-          :items="list"
+          :items="visibleList"
           :column-width="240"
           :gap="feedGap"
           :min-columns="2"
@@ -206,6 +218,7 @@ watch(api.readStatusRevision, () => {
           <template #default="{ item, index, columnCount }">
             <PostCard
               :post="item"
+              :recommendation-enabled="sortMode === 'recommend' && !postModal.isOpen.value"
               :eager="index < columnCount * 2"
               @open="goPost"
             />
@@ -225,6 +238,12 @@ watch(api.readStatusRevision, () => {
 </template>
 
 <style scoped>
+.ik-tag-sort { display: flex; gap: 8px; margin-top: 12px; }
+.ik-tag-sort button {
+  padding: 6px 14px; border: 1px solid #444; border-radius: 8px;
+  color: #aaa; background: #222; font: inherit; cursor: pointer;
+}
+.ik-tag-sort button[aria-pressed="true"] { color: #161616; background: var(--ik-primary, #bfff09); border-color: transparent; }
 /* 与首页 .ik-home-container 对齐，保证瀑布流宽度/列宽一致，避免卡片被压缩。 */
 .ik-tag-page {
   width: min(1600px, calc(100% - 40px));

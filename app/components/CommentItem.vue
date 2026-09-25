@@ -19,6 +19,7 @@ const props = defineProps<{
   comment: Comment;
   index?: number;
   currentUserAuthorId?: string;
+  isPostOwner?: boolean;
   canPin?: boolean;
   highlightedCommentId?: string | null;
 }>();
@@ -44,16 +45,20 @@ const isOwnComment = computed(() =>
 const isOwnReply = (reply: CommentReply) =>
   !!props.currentUserAuthorId && reply.author?.documentId === props.currentUserAuthorId;
 
+const canDeleteComment = computed(() => props.isPostOwner === true || isOwnComment.value);
+
+const canDeleteReply = (reply: CommentReply) => props.isPostOwner === true || isOwnReply(reply);
+
 const handleCommentMenuCommand = (command: string | number) => {
   if (command === "pin") emit("pinComment", props.comment);
   else if (command === "unpin") emit("unpinComment", props.comment);
-  else if (command === "delete") emit("deleteComment", props.comment);
+  else if (command === "delete" && canDeleteComment.value) emit("deleteComment", props.comment);
   else if (command === "report") emit("reportComment", props.comment);
   else if (command === "block" && props.comment.author?.documentId && !isOwnComment.value && !props.comment.author?.isAiAgent) emit("blockUser", props.comment.author.documentId);
 };
 
 const handleReplyMenuCommand = (reply: CommentReply, command: string | number) => {
-  if (command === "delete") emit("deleteReply", reply, props.comment);
+  if (command === "delete" && canDeleteReply(reply)) emit("deleteReply", reply, props.comment);
   else if (command === "report") emit("reportReply", reply, props.comment);
   else if (command === "block" && reply.author?.documentId && !isOwnReply(reply) && !reply.author?.isAiAgent) emit("blockUser", reply.author.documentId);
 };
@@ -238,7 +243,7 @@ watch(
                 <z-dropdown-item :command="comment.isPinned ? 'unpin' : 'pin'" :disabled="!canPin">
                   {{ comment.isPinned ? '取消置顶' : '置顶评论' }}
                 </z-dropdown-item>
-                <z-dropdown-item command="delete" :disabled="!isOwnComment">删除评论</z-dropdown-item>
+                <z-dropdown-item command="delete" :disabled="!canDeleteComment">删除评论</z-dropdown-item>
               </template>
             </z-dropdown>
           </div>
@@ -334,7 +339,7 @@ watch(
                     >
                       拉黑用户
                     </z-dropdown-item>
-                    <z-dropdown-item command="delete" :disabled="!isOwnReply(reply)">删除评论</z-dropdown-item>
+                    <z-dropdown-item command="delete" :disabled="!canDeleteReply(reply)">删除评论</z-dropdown-item>
                   </template>
                 </z-dropdown>
               </div>

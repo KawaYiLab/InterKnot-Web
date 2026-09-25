@@ -20,6 +20,8 @@ import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
 import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
+import { useRecommendationReading, useRecommendations } from "~/composables/useRecommendations";
+import RelatedArticles from "./RelatedArticles.vue";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import BilibiliPlayer from "./BilibiliPlayer.vue";
@@ -60,6 +62,12 @@ const isCompact = useMediaQuery("(max-width: 1024px)", { ssrWidth: initialWidth 
 const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
+const readingBodyRef = ref<HTMLElement | null>(null);
+const readingActive = computed(() => postModal.isOpen.value && postModal.postId.value === props.postId &&
+  post.value?.id === props.postId && !loading.value && !loadError.value && !post.value?.isHidden &&
+  !isGalleryOpen.value && !isGalleryLoading.value);
+useRecommendationReading(() => post.value?.id, readingActive, readingBodyRef);
+const recommendations = useRecommendations();
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
@@ -384,21 +392,42 @@ watch(covers, () => {
 });
 
 /* ── 数据加载 ──────────────────────────────────── */
+let currentPostLoadId = 0;
+let isUnmounted = false;
+interface PostRequest {
+  loadId: number;
+  postId: string;
+  generation: number;
+}
+const isCurrentPostRequest = (request: PostRequest) =>
+  !isUnmounted && request.loadId === currentPostLoadId &&
+  request.postId === props.postId && request.generation === auth.generation &&
+  postModal.isOpen.value && postModal.postId.value === request.postId;
+
 const loadPost = async () => {
+  const request: PostRequest = {
+    loadId: ++currentPostLoadId,
+    postId: props.postId,
+    generation: auth.generation,
+  };
   try {
-    post.value = await api.getPost(props.postId);
+    const loadedPost = await api.getPost(request.postId);
+    if (!isCurrentPostRequest(request)) return null;
+    post.value = loadedPost;
     if (post.value?.title) {
       postModal.setTitle(post.value.title);
     }
   } catch (err) {
+    if (!isCurrentPostRequest(request)) return null;
     loadError.value = true;
     message.error(resolveErrorMessage(err, "获取委托详情失败"));
   }
+  return request;
 };
 
-const waitForLoadedPreview = async (postId: string) => {
+const waitForLoadedPreview = async (request: PostRequest) => {
   await nextTick();
-  if (props.postId !== postId) return false;
+  if (!isCurrentPostRequest(request)) return false;
   if (!previewCover.value) return true;
 
   const image = loadedPreviewImageRef.value;
@@ -416,12 +445,12 @@ const waitForLoadedPreview = async (postId: string) => {
       // 解码失败或超时：继续显示 preview/骨架，让 img@load 事件最终替换
     }
   }
-  if (props.postId !== postId) return false;
+  if (!isCurrentPostRequest(request)) return false;
 
   if (import.meta.client) {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   }
-  return props.postId === postId;
+  return isCurrentPostRequest(request);
 };
 
 const loadComments = async () => {
@@ -479,9 +508,10 @@ watch(targetCommentId, () => {
 });
 
 /** 正文渲染后再拉评论 / 定位目标评论，避免与入场动画、骨架屏切换抢主线程 */
-const scheduleSeek = () => {
+const scheduleSeek = (request: PostRequest) => {
   if (!import.meta.client) return;
   const run = () => {
+    if (!isCurrentPostRequest(request)) return;
     void seek();
   };
   requestAnimationFrame(() => {
@@ -493,12 +523,13 @@ const scheduleSeek = () => {
   });
 };
 
-const recordView = async () => {
-  if (!post.value?.id) return;
+const recordView = async (request: PostRequest) => {
+  const viewedPost = post.value;
+  if (!isCurrentPostRequest(request) || viewedPost?.id !== request.postId) return;
   try {
-    const views = await api.recordArticleView(post.value.id);
-    if (typeof views === "number") {
-      post.value.views = views;
+    const views = await api.recordArticleView(request.postId);
+    if (isCurrentPostRequest(request) && post.value === viewedPost && typeof views === "number") {
+      viewedPost.views = views;
     }
   } catch {
   }
@@ -879,6 +910,20 @@ const handleArticleMenuCommand = (command: string | number) => {
     handleReportArticle();
   } else if (command === "pin" || command === "unpin") {
     handlePinArticle();
+  } else if (command === "dislike") {
+    handleDislikeArticle();
+  }
+};
+
+const handleDislikeArticle = () => {
+  if (!post.value) return;
+  if (!auth.isLogin) { loginDialog.open(); return; }
+  // dismiss 的乐观更新是同步的（先记入 dismissed 再发请求，失败自动回滚）。
+  // 受理后用项目通用的 message 提示，并关闭浮层回到信息流；不再提供撤销。
+  void recommendations.dismiss(post.value);
+  if (recommendations.isDismissed(post.value.id)) {
+    message.success("已设为不感兴趣");
+    postModal.close();
   }
 };
 
@@ -958,7 +1003,14 @@ const likeReply = async (reply: Comment["replies"][number]) => {
 };
 
 const handleDeleteComment = async (comment: Comment) => {
-  const ok = await confirmDialog.open({ title: "删除评论", message: "确定删除这条评论吗？", confirmText: "删除", danger: true });
+  const ok = await confirmDialog.open({
+    title: "删除评论",
+    message: totalRepliesOf(comment) > 0
+      ? "确定删除这条评论及其所有回复吗？此操作无法撤销。"
+      : "确定删除这条评论吗？此操作无法撤销。",
+    confirmText: "删除",
+    danger: true,
+  });
   if (!ok) return;
   try {
     await api.deleteComment(comment.id);
@@ -1040,7 +1092,6 @@ const onKeyDown = (e: KeyboardEvent) => {
 
 /* ── 当 postId 变化时重新加载 ─────────────── */
 const resetAndLoad = async () => {
-  const requestedPostId = props.postId;
   post.value = null;
   comments.value = [];
   commentsCursor.value = "";
@@ -1059,23 +1110,24 @@ const resetAndLoad = async () => {
   if (scrollRef.value) {
     scrollRef.value.scrollTop = 0;
   }
-  await loadPost();
-  if (props.postId !== requestedPostId) return;
-  if (!loadError.value && !(await waitForLoadedPreview(requestedPostId))) return;
+  const request = await loadPost();
+  if (!request || !isCurrentPostRequest(request)) return;
+  if (!loadError.value && !(await waitForLoadedPreview(request))) return;
+  if (!isCurrentPostRequest(request)) return;
   // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
-  void recordView();
+  void recordView(request);
   if (!loadError.value) {
-    scheduleSeek();
+    scheduleSeek(request);
   }
   scheduleShowComments();
 };
 
 watch(
-  () => props.postId,
-  (newId, oldId) => {
-    if (newId && newId !== oldId) {
-      resetAndLoad();
+  [() => props.postId, () => auth.generation],
+  ([newId]) => {
+    if (newId && postModal.isOpen.value) {
+      void resetAndLoad();
     }
   },
 );
@@ -1158,18 +1210,20 @@ onMounted(async () => {
   // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
   // 让只看文字、不点图的用户不必下载这套资源。
   loading.value = true;
-  const requestedPostId = props.postId;
-  await loadPost();
-  if (props.postId !== requestedPostId) return;
-  if (!loadError.value && !(await waitForLoadedPreview(requestedPostId))) return;
+  const request = await loadPost();
+  if (!request || !isCurrentPostRequest(request)) return;
+  if (!loadError.value && !(await waitForLoadedPreview(request))) return;
+  if (!isCurrentPostRequest(request)) return;
   // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
   loading.value = false;
-  void recordView();
+  void recordView(request);
   await nextTick();
+  if (!isCurrentPostRequest(request)) return;
   if (!loadError.value) {
-    scheduleSeek();
+    scheduleSeek(request);
   }
   await nextTick();
+  if (!isCurrentPostRequest(request)) return;
   scheduleShowComments();
   if (scrollableTimer) clearTimeout(scrollableTimer);
   scrollableTimer = setTimeout(() => {
@@ -1179,6 +1233,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  isUnmounted = true;
+  currentPostLoadId++;
   isCommentLoadingCancelled = true;
   currentCommentLoadId++;
   commentsLoading.value = false;
@@ -1187,6 +1243,10 @@ onBeforeUnmount(() => {
   destroyPreview();
   teardownMentionListeners?.();
   teardownMentionListeners = null;
+  if (showCommentsTimer) {
+    clearTimeout(showCommentsTimer);
+    showCommentsTimer = null;
+  }
   if (scrollableTimer) {
     clearTimeout(scrollableTimer);
     scrollableTimer = null;
@@ -1468,6 +1528,7 @@ onBeforeUnmount(() => {
 
                     <!-- 正文 -->
                     <div class="ik-dialog__detail">
+                      <div ref="readingBodyRef">
                       <div v-if="post.isHidden" class="ik-dialog__hidden-banner" role="alert">
                         <EyeSlashIcon class="ik-dialog__hidden-icon" aria-hidden="true" />
                         <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
@@ -1499,6 +1560,8 @@ onBeforeUnmount(() => {
                           @click="goTag(tag.slug)"
                         >#{{ tag.name }}</button>
                       </div>
+                      </div>
+                      <RelatedArticles :document-id="post.id" :active="readingActive" @open-post="postModal.open($event)" />
                     </div>
                   </div>
                 </div>
@@ -1525,6 +1588,7 @@ onBeforeUnmount(() => {
                           :comment="comment"
                           :index="idx"
                           :current-user-author-id="auth.user?.authorId"
+                          :is-post-owner="auth.isLogin && isOwner"
                           :can-pin="canPin"
                           :highlighted-comment-id="highlightedCommentId"
                           @like-comment="likeComment"
@@ -1675,6 +1739,7 @@ onBeforeUnmount(() => {
                               </button>
                               <template #dropdown>
                                 <z-dropdown-item command="report" :disabled="isOwner">举报委托</z-dropdown-item>
+                                <z-dropdown-item v-if="!isOwner && !post?.isPinned" command="dislike" :disabled="recommendations.pending.value">不感兴趣</z-dropdown-item>
                                 <z-dropdown-item v-if="isAdmin" :command="post?.isPinned ? 'unpin' : 'pin'" :disabled="pinningArticle">{{ post?.isPinned ? '取消置顶' : '置顶' }}</z-dropdown-item>
                                 <z-dropdown-item command="edit" :disabled="!isOwner">编辑委托</z-dropdown-item>
                                 <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除委托</z-dropdown-item>

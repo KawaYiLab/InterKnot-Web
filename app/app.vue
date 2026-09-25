@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import PostOverlay from "~/components/PostOverlay.vue";
+import { useRecommendations } from "~/composables/useRecommendations";
 import { OVERLAY_KNOCK_KEY, overlayHistoryState } from "~/utils/overlay-history";
 
 const auth = useAuthStore();
+const recommendations = useRecommendations();
+onBeforeUnmount(recommendations.dispose);
 const router = useRouter();
 const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
@@ -71,6 +74,7 @@ let handleVisibilityAndFocus: (() => void) | null = null;
 
 onMounted(() => {
   if (import.meta.client) {
+    window.addEventListener("pagehide", recommendations.flush);
     handleVisibilityAndFocus = () => {
       const isFocused = document.visibilityState === "visible" && document.hasFocus();
       if (isFocused) {
@@ -90,6 +94,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  if (import.meta.client) window.removeEventListener("pagehide", recommendations.flush);
   if (import.meta.client && handleVisibilityAndFocus) {
     document.removeEventListener("visibilitychange", handleVisibilityAndFocus);
     window.removeEventListener("focus", handleVisibilityAndFocus);

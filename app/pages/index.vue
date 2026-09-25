@@ -12,6 +12,8 @@ import {
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { useArticleFeedUpdates } from "~/composables/useArticleFeedUpdates";
+import { useRecommendations } from "~/composables/useRecommendations";
+import { decodeJwtUserId } from "~/utils/request-auth";
 
 // 静态导入核心瀑布流组件，防止下滑加载或冷启动时动态请求分包导致滚动卡顿
 import VirtualMasonry from "~/components/VirtualMasonry.vue";
@@ -159,8 +161,8 @@ const activeSort = computed<ArticleSort>(() =>
 
 /**
  * 排序 Tab（最新 / 热门）：与分类 Tab 同处一行、同款造型，所以语义也一致——整行单选。
- * 点排序即回到「全部频道 + 推荐流」；反过来点分类 / 关注 / 收藏会把排序落回最新
- * （见 selectCategory / activeSort），同一时刻只有一个 Tab 亮着。
+ * 点顶部排序即回到「全部频道 + 推荐流」；频道内部保留自己的推荐/最新选择。
+ * 关注和收藏仍使用各自的固定排序（见 activeSort）。
  */
 const selectSort = (mode: ArticleSort) => {
   if (feedMode.value !== "recommend") feedMode.value = "recommend";
@@ -173,6 +175,12 @@ const loadingMore = ref(false);
 const refreshing = ref(false);
 
 const list = shallowRef<Post[]>([]);
+const recommendations = useRecommendations();
+const isRecommendationFeed = computed(() => feedMode.value === "recommend" && activeSort.value === "recommend" && !isSearching.value);
+// Keep the original snapshot for undo. Fixed-order latest/following/favorites
+// retain their entries; only recommendation surfaces apply negative feedback.
+const visibleList = computed(() => isRecommendationFeed.value
+  ? list.value.filter((post) => !recommendations.isDismissed(post.id)) : list.value);
 const enterAnimationIds = shallowRef(new Set<string>());
 // 信息流游标：只负责存下来原样回传，绝不做算术（内容是「已加载条数 + 后端不透明 token」，
 // 由 utils/pagination 负责拼和拆）。空串 = 第一页；切游标之前这里的哨兵是 "0"（数字 offset
@@ -198,6 +206,7 @@ const loadMoreObserverRef = shallowRef<IntersectionObserver | null>(null);
 
 // ── 后台轮询：检测有无新委托（仅在无搜索关键词时启用） ─────────
 const NEW_ARTICLES_POLL_MS = 60_000;
+// 推荐流保留 Gorse 快照顺序；按最新活动置顶的增量更新只用于「最新」。
 const feedStreamEnabled = computed(
   () => feedMode.value === "recommend" && activeSort.value === "latest" && !query.value.trim(),
 );
@@ -551,7 +560,7 @@ const pollLatestArticles = async () => {
   // 仅在推荐流（无搜索词、非关注/收藏）下做轮询
   if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
-  // 「热门」是热度榜：新帖不会一发布就上榜，「有 N 条新内容」在这条流下没有意义
+  // 仅对账最新流，避免按活动时间插入帖子改变 Gorse 推荐快照或热门榜顺序。
   if (activeSort.value !== "latest") return;
   // 不与正在进行的请求/刷新冲突
   if (disposed || polling || listRequestPending || refreshing.value || applyingNewArticles.value) return;
@@ -609,6 +618,8 @@ const onTabVisible = () => {
 useArticleFeedStream({
   enabled: feedStreamEnabled,
   category: selectedCategory,
+  // 明文上报当前登录用户 id：让服务端不把「自己评论顶起 / 自己发布」的帖推回给自己。
+  currentUserId: computed(() => (auth.token ? decodeJwtUserId(auth.token) : null)),
   onTopicEvent: feedUpdates.enqueue,
 });
 
@@ -677,11 +688,8 @@ watch(
 const selectCategory = (slug: string) => {
   // 选分类即回到推荐流（关注/收藏是独立筛选，不与分类叠加）。
   if (feedMode.value !== "recommend") feedMode.value = "recommend";
-  // 分类与排序 Tab 同处一行、整行单选：选分类即把排序落回最新，
-  // 否则「热门」会与分类 Tab 同时高亮，而后端此时给的是该分类的时间序。
-  // 只改当前档、不写 localStorage：选分类是「我要看这个频道」，不是「我以后默认看最新」，
-  // 走 setSortMode 会把用户记下的「热门」一并抹掉。
-  sortMode.value = "latest";
+  // 频道保留推荐/最新选择；热门仍是全站榜单，进入频道时改用推荐。
+  if (sortMode.value === "hot") sortMode.value = "recommend";
   if (slug === selectedCategory.value) return;
   selectedCategory.value = slug;
 };
@@ -788,8 +796,8 @@ if (cached && cached.query === query.value && cached.category === selectedCatego
     skipFeedWatch = true;
     feedMode.value = restoredFeed;
   }
-  // 快照里的档位优先于 localStorage 里的默认档：sortMode 是按 localStorage 初始化的，
-  // 而「点分类把当前档带回最新」不写 localStorage（见 selectCategory），两者会分叉。
+  // 快照里的档位优先于 localStorage 里的默认档：切换频道可能改变当前排序，
+  // 但不会覆盖全站默认档（见 selectCategory），两者会分叉。
   // 回到首页要还原用户离开时正在看的那条流，不是他记下的默认档。
   const restoredSort = cached.sort;
   if (restoredSort !== sortMode.value) {
@@ -1084,6 +1092,11 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <nav v-if="selectedCategory && !isSearching && feedMode === 'recommend'" class="ik-category-sort" aria-label="频道排序">
+      <button type="button" class="ik-category-tab" :class="{ 'ik-category-tab--active': activeSort === 'recommend' }" @click="setSortMode('recommend')">频道推荐</button>
+      <button type="button" class="ik-category-tab" :class="{ 'ik-category-tab--active': activeSort === 'latest' }" @click="setSortMode('latest')">最新</button>
+    </nav>
+
     <!-- 移动端下拉刷新指示器 -->
     <div
       v-if="pullDistance > 0 || refreshing"
@@ -1156,14 +1169,14 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- 空状态：loading=false 且 list 为空时显示 -->
-        <div v-else-if="!list.length && !loading" key="empty" class="ik-empty">暂无相关委托... [ o_x ]/</div>
+        <div v-else-if="!visibleList.length && !loading && !hasNextPage" key="empty" class="ik-empty">暂无相关委托... [ o_x ]/</div>
 
         <!-- 实际内容：list 不为空时显示 -->
         <div v-else key="list" class="ik-list-state">
           <VirtualMasonry
             ref="masonryRef"
             class="ik-masonry"
-            :items="list"
+            :items="visibleList"
             :column-width="240"
             :gap="feedGap"
             :min-columns="2"
@@ -1179,11 +1192,12 @@ onBeforeUnmount(() => {
                 :class="{ 'ik-masonry-card-enter': shouldAnimatePost(item.id) }"
                 :style="shouldAnimatePost(item.id) ? getStaggerDelayStyle(index, columnCount) : undefined"
                 :post="item"
+                :recommendation-enabled="isRecommendationFeed && !postModal.isOpen.value"
                 :highlighted="highlightedArticleIds.has(item.id)"
                 :eager="index < columnCount * 2"
                 @open="goPost"
                 @animationend="finishEnterAnimation(item.id)"
-                v-memo="[item, shouldAnimatePost(item.id), highlightedArticleIds.has(item.id), index < columnCount * 2]"
+                v-memo="[item, shouldAnimatePost(item.id), highlightedArticleIds.has(item.id), index < columnCount * 2, isRecommendationFeed, postModal.isOpen.value]"
               />
             </template>
           </VirtualMasonry>
@@ -1212,6 +1226,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.ik-category-sort { display: flex; gap: 8px; padding: 0 4px; }
 .ik-home-container {
   position: relative;
   width: min(1600px, calc(100% - 40px));

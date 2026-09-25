@@ -135,7 +135,7 @@ export function useArticleFeedUpdates(options: {
       clearHighlight();
       highlightedIds.value = new Set(updates.keys());
       announcement.value = updates.size
-        ? `已显示 ${updates.size} 条新的或更新的帖子`
+        ? ""
         : "这批帖子已不可见，列表已同步";
       highlightTimer = setTimeout(clearHighlight, HIGHLIGHT_MS);
       options.onApplied();

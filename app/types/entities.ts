@@ -264,9 +264,25 @@ export interface PostTag {
   slug: string;
 }
 
+export interface RecommendationContext {
+  token: string;
+  expiresAt?: number;
+  requestId: string;
+  surface: string;
+  source: string;
+  position: number;
+}
+
+export interface RecommendationEvent {
+  type: "impression" | "dwell";
+  token: string;
+  durationMs?: number;
+}
+
 export interface Post {
   id: string;
   title: string;
+  recommendation?: RecommendationContext;
   body?: string;
   bodyText?: string;
   rawBodyText?: string;

@@ -235,10 +235,11 @@ const messageSegments = computed((): string[] | null => {
         :citations="entry.citations"
         @open-post="emit('open-post', $event)"
       />
-      <!-- 3.4 推荐阅读：回答定稿后展示搜索命中但未引用的帖子 -->
+      <!-- 引用/搜索命中仅作为相似推荐种子，证据与上方引用列表保持不变。 -->
       <AiRelatedPosts
-        v-if="entry.aiRich && !entry.aiStreaming && entry.relatedPosts.length > 0"
+        v-if="entry.aiRich && !entry.aiStreaming && (entry.relatedPosts.length > 0 || entry.citations.length > 0)"
         :posts="entry.relatedPosts"
+        :citations="entry.citations"
         @open-post="emit('open-post', $event)"
       />
       <!-- 1.4 气泡外左下角：时间 + 复制 + 重新生成，仅 AI 消息展示；始终放在消息块最下方 -->
