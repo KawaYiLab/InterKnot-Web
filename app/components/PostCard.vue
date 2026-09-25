@@ -22,6 +22,7 @@ import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 import { toThumbUrl } from "~/utils/image";
 import UserHoverCard from "./UserHoverCard.vue";
+import { useRecommendationImpression, useRecommendations } from "~/composables/useRecommendations";
 
 const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
 
@@ -29,6 +30,7 @@ const props = defineProps<{
   post: Post;
   eager?: boolean;
   highlighted?: boolean;
+  recommendationEnabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -49,6 +51,9 @@ const coverImageLoaded = ref(isCoverLoaded(coverSrc.value));
 const coverIsFallback = ref(false);
 const avatarSrc = ref(DEFAULT_AVATAR_IMAGE);
 const cardRef = ref<HTMLElement | null>(null);
+const recommendations = useRecommendations();
+const recommendationEnabled = computed(() => props.recommendationEnabled !== false && !!props.post.recommendation);
+useRecommendationImpression(cardRef, () => props.post, recommendationEnabled);
 
 const hasBackendCoverSize = computed(() =>
   typeof props.post.coverWidth === "number" &&
@@ -125,6 +130,7 @@ const handleOpen = (e: MouseEvent) => {
   if ((e.target as HTMLElement | null)?.closest?.(".nsfw-image__overlay")) {
     return;
   }
+  if (recommendationEnabled.value) recommendations.trackClick(props.post);
   emit("open", props.post, e);
 };
 </script>
@@ -222,6 +228,7 @@ const handleOpen = (e: MouseEvent) => {
 
 <style scoped>
 .ik-card {
+  position: relative;
   border-radius: var(--ik-post-card-radius);
   background: var(--ik-post-card-outer-bg);
   padding: var(--ik-post-card-padding);
@@ -234,23 +241,45 @@ const handleOpen = (e: MouseEvent) => {
   background: var(--ik-post-card-hover-bg);
 }
 
-.ik-card--updated {
-  background: #bfff09;
-  box-shadow: inset 0 0 0 2px #bfff09;
+.ik-card--updated::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--ik-post-card-hover-bg);
+  z-index: 0;
+  pointer-events: none;
+  animation: ik-card-highlight-fade 3s ease-out forwards;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .ik-card--updated {
-    animation: ik-card-update-highlight 3s ease-out;
+@keyframes ik-card-highlight-fade {
+  0% {
+    opacity: 0;
+    animation-timing-function: ease-out;
   }
+  16% {
+    opacity: 1;
+    animation-timing-function: linear;
+  }
+  42% {
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 
-  @keyframes ik-card-update-highlight {
-    from { background-color: #bfff09; }
-    to { background-color: var(--ik-post-card-outer-bg); }
+@media (prefers-reduced-motion: reduce) {
+  .ik-card--updated::before {
+    animation: none;
+    opacity: 0;
   }
 }
 
 .ik-card__link {
+  position: relative;
+  z-index: 1;
   display: block;
   border-radius: var(--ik-post-card-inner-radius);
   background: var(--ik-post-card-inner-bg);

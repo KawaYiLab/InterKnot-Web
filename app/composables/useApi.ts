@@ -26,6 +26,8 @@ import type {
   MihoyoBinding,
   NsfwStatus,
   Post,
+  RecommendationContext,
+  RecommendationEvent,
   PostCategory,
   Tag,
   PostTag,
@@ -555,6 +557,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
   return {
     id: String(data.documentId || data.id || ""),
     title: String(data.title || "无标题"),
+    recommendation: toRecommendationContext(data.recommendation),
     body: (data.body as string | undefined) || "",
     bodyText: (data.text as string | undefined) || "",
     rawBodyText: (data.rawBodyText as string | undefined) || "",
@@ -588,6 +591,18 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     bumpedAt: typeof data.bumpedAt === "string" ? data.bumpedAt : null,
     author: toAuthor(data.author, apiBaseUrl),
   };
+}
+
+function toRecommendationContext(raw: unknown): RecommendationContext | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.token !== "string" || !value.token || value.token.length > 8192 ||
+      typeof value.requestId !== "string" || !value.requestId ||
+      typeof value.surface !== "string" || typeof value.source !== "string" ||
+      !Number.isInteger(value.position) || Number(value.position) < 0) return undefined;
+  return { token: value.token, requestId: value.requestId, surface: value.surface,
+    source: value.source, position: Number(value.position),
+    ...(typeof value.expiresAt === "number" && Number.isFinite(value.expiresAt) ? { expiresAt: value.expiresAt } : {}) };
 }
 
 function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
@@ -1218,6 +1233,29 @@ export function useApi() {
     const data = response as Record<string, unknown>;
     const views = Number(data.views);
     return Number.isFinite(views) && views >= 0 ? views : undefined;
+  };
+
+  const sendRecommendationEvents = async (events: RecommendationEvent[], signal?: AbortSignal): Promise<void> => {
+    await $api("/api/recommendations/events", { method: "POST", body: { events }, signal, timeout: 10_000, keepalive: true });
+  };
+
+  const getRecommendationContext = async (articleId: string, signal?: AbortSignal): Promise<RecommendationContext | undefined> => {
+    if (import.meta.client) await useAuthStore().ensureCredentials();
+    const response = await $api("/api/recommendations/context", { method: "POST", body: { articleId }, signal, timeout: 8000 });
+    const data = (unwrapData(response) || response) as Record<string, unknown>;
+    return toRecommendationContext(data.recommendation);
+  };
+
+  const setRecommendationDislike = async (articleId: string, disliked: boolean, signal?: AbortSignal): Promise<void> => {
+    await $api("/api/recommendations/dislike", { method: "POST", body: { articleId, disliked }, signal, timeout: 8000 });
+  };
+
+  const getRelatedArticles = async (articleId: string, limit = 6, surface: "related" | "ai" = "related"): Promise<Post[]> => {
+    if (import.meta.client) await useAuthStore().ensureCredentials();
+    const response = await $api(`/api/recommendations/related/${encodeURIComponent(articleId)}`, {
+      query: { limit, surface }, cache: "no-store",
+    });
+    return (unwrapData<unknown[]>(response) || []).map((item) => toPost(item, apiBaseUrl));
   };
 
   const pinArticle = async (id: string): Promise<void> => {
@@ -2679,6 +2717,10 @@ export function useApi() {
     seedSelfUser,
     patchSelfUserCache,
     searchArticles,
+    sendRecommendationEvents,
+    getRecommendationContext,
+    setRecommendationDislike,
+    getRelatedArticles,
     getArticleUpdates,
     suggestArticles,
     peekArticles,

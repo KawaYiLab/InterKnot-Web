@@ -14,6 +14,8 @@ import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
 import BilibiliPlayer from "~/components/BilibiliPlayer.vue";
+import RelatedArticles from "~/components/RelatedArticles.vue";
+import { useRecommendationReading } from "~/composables/useRecommendations";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -32,6 +34,13 @@ const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
 const isBlocked = ref(false);
+const readingBodyRef = ref<HTMLElement | null>(null);
+const postModal = usePostModal();
+const knockModal = useKnockKnockModal();
+const readingActive = computed(() => !loading.value && !loadError.value && !isBlocked.value &&
+  !!post.value && post.value.id === String(route.params.id || "") && !post.value.isHidden &&
+  !postModal.isOpen.value && !knockModal.visible.value && !isGalleryOpen.value && !isGalleryLoading.value);
+useRecommendationReading(() => post.value?.id, readingActive, readingBodyRef);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
@@ -776,7 +785,14 @@ const likeReply = async (reply: Comment["replies"][number]) => {
 };
 
 const handleDeleteComment = async (comment: Comment) => {
-  const ok = await confirmDialog.open({ title: "删除评论", message: "确定删除这条评论吗？", confirmText: "删除", danger: true });
+  const ok = await confirmDialog.open({
+    title: "删除评论",
+    message: totalRepliesOf(comment) > 0
+      ? "确定删除这条评论及其所有回复吗？此操作无法撤销。"
+      : "确定删除这条评论吗？此操作无法撤销。",
+    confirmText: "删除",
+    danger: true,
+  });
   if (!ok) return;
   try {
     await api.deleteComment(comment.id);
@@ -1103,6 +1119,7 @@ onBeforeUnmount(() => {
 
               <!-- 正文 -->
               <div class="ik-page__detail">
+                <div ref="readingBodyRef">
                 <div v-if="post.isHidden" class="ik-page__hidden-banner" role="alert">
                   <EyeSlashIcon class="ik-page__hidden-icon" aria-hidden="true" />
                   <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
@@ -1134,6 +1151,8 @@ onBeforeUnmount(() => {
                     @click="goTag(tag.slug)"
                   >#{{ tag.name }}</button>
                 </div>
+                </div>
+                <RelatedArticles :document-id="post.id" :active="readingActive" @open-post="postModal.open($event)" />
               </div>
             </div>
           </div>
@@ -1167,6 +1186,7 @@ onBeforeUnmount(() => {
                   :comment="comment"
                   :index="idx"
                   :current-user-author-id="auth.user?.authorId"
+                  :is-post-owner="auth.isLogin && isOwner"
                   :can-pin="canPin"
                   :highlighted-comment-id="highlightedCommentId"
                   @like-comment="likeComment"

@@ -27,6 +27,11 @@ export function useArticleFeedStream(opts: {
   enabled: Ref<boolean>;
   /** 当前分类 slug；空串 = 全部频道。 */
   category: Ref<string>;
+  /**
+   * 当前登录用户的 users-permissions user id（未登录为 null）。随连接明文上报给服务端，
+   * 仅用于让服务端不把「自己触发的发帖 / 顶帖」事件推回给自己。伪造无收益：流里只有公开 topicId。
+   */
+  currentUserId: Ref<number | null>;
   /** 收到一条 topic 广播（新帖或顶帖）时调用。 */
   onTopicEvent: (topicId: string) => void;
 }): { stop: () => void } {
@@ -53,9 +58,14 @@ export function useArticleFeedStream(opts: {
   const open = () => {
     close();
     const category = opts.category.value;
-    const params = category
-      ? `?category=${encodeURIComponent(category)}`
-      : "";
+    const uid = opts.currentUserId.value;
+    const search = new URLSearchParams();
+    if (category) search.set("category", category);
+    // 明文自报自己的 user id：仅用于让服务端不把「我自己顶起 / 发布的帖」推回给我自己
+    //（EventSource 无法带 Authorization 头）。可伪造但无收益：流里只有公开 topicId。
+    if (uid) search.set("uid", String(uid));
+    const qs = search.toString();
+    const params = qs ? `?${qs}` : "";
     let source: EventSource;
     try {
       source = new EventSource(`${baseURL}/api/articles/stream${params}`);
@@ -84,8 +94,8 @@ export function useArticleFeedStream(opts: {
     else close();
   };
 
-  // enabled 或 category 变化：重新评估连接（换频道 = 关旧开新）。
-  watch([opts.enabled, opts.category], sync, { immediate: true });
+  // enabled / category / 当前用户 变化：重新评估连接（换频道或登录态变化 = 关旧开新）。
+  watch([opts.enabled, opts.category, opts.currentUserId], sync, { immediate: true });
   onScopeDispose(close);
 
   return { stop: close };

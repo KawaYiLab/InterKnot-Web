@@ -66,6 +66,16 @@ export function decodeJwtExp(token: string): number | null {
   return typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : null;
 }
 
+/**
+ * 从 access token 解出 users-permissions user id。
+ * Session 响应签发 { id: user.id, sid: refreshTokenFamily }，这里只取 id。
+ * 用于首页 SSE 订阅时明文自报身份，让服务端不把自己触发的事件推回给自己。
+ */
+export function decodeJwtUserId(token: string): number | null {
+  const id = decodeJwtPayload(token)?.id;
+  return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 /** Cache identity only; JWT authenticity is still validated by the server. */
 export function isSameAuthSession(previousToken: string, nextToken: string): boolean {
   const previous = decodeJwtPayload(previousToken);
