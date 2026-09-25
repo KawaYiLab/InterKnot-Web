@@ -105,6 +105,7 @@ export function groupSessionsByDate(sessions: AuthSessionItem[], now = new Date(
     let group = groups.get(key);
     if (!group) {
       const label = !date ? "时间未知" : key === today ? "今天" : key === yesterday ? "昨天"
+        : date.getFullYear() === now.getFullYear() ? `${date.getMonth() + 1}月${date.getDate()}日`
         : `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
       group = { key, label, items: [] };
       groups.set(key, group);
