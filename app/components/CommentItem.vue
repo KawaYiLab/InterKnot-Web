@@ -192,14 +192,12 @@ watch(
             class="ik-comment__media-item"
             @click="openCommentImages(comment.images, imageIndex)"
           >
-            <NsfwImage
+            <img
               :src="toThumbUrl(image.url)"
-              :status="image.nsfwStatus"
               :alt="comment.author?.name || '评论图片'"
-              img-class="ik-comment__media-thumb"
+              class="ik-comment__media-thumb"
               decoding="async"
-              overlay-title="内容警告：敏感内容"
-              overlay-description="绳网已将这张图片标记为包含敏感内容。"
+              referrerpolicy="no-referrer"
             />
           </button>
         </div>
@@ -295,12 +293,12 @@ watch(
                 class="ik-comment__media-item"
                 @click="openCommentImages(reply.images, imageIndex)"
               >
-                <NsfwImage
+                <img
                   :src="toThumbUrl(image.url)"
-                  :status="image.nsfwStatus"
                   :alt="reply.author?.name || '回复图片'"
-                  img-class="ik-comment__media-thumb"
+                  class="ik-comment__media-thumb"
                   decoding="async"
+                  referrerpolicy="no-referrer"
                 />
               </button>
             </div>

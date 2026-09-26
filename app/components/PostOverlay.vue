@@ -1429,13 +1429,13 @@ onBeforeUnmount(() => {
                               :decoding="isCompact ? 'async' : 'sync'"
                             />
                           </div>
-                          <NsfwImage
+                          <img
                             :src="firstCover ? coverDisplaySrc(firstCover.url) : DEFAULT_COVER_IMAGE"
-                            :status="firstCover?.nsfwStatus"
                             :alt="post.title"
-                            img-class="ik-dialog__cover"
+                            class="ik-dialog__cover"
                             loading="eager"
                             decoding="async"
+                            referrerpolicy="no-referrer"
                             @load="onCoverImageLoad(0)"
                             @click="openCoverPreview(0)"
                             @error="onCoverImageLoad(0); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
@@ -1473,14 +1473,15 @@ onBeforeUnmount(() => {
                                     :decoding="i === 0 && !isCompact ? 'sync' : 'async'"
                                   />
                                 </div>
-                                <NsfwImage
-                                  :src="isCoverNearby(i) ? coverDisplaySrc(c.url) : undefined"
-                                  :status="c.nsfwStatus"
+                                <img
+                                  v-if="isCoverNearby(i)"
+                                  :src="coverDisplaySrc(c.url)"
                                   :alt="`${post.title} - ${i + 1}`"
-                                  img-class="ik-dialog__cover"
-                                  :loading="isCoverNearby(i) ? 'eager' : 'lazy'"
+                                  class="ik-dialog__cover"
+                                  loading="eager"
                                   decoding="async"
                                   draggable="false"
+                                  referrerpolicy="no-referrer"
                                   @load="onCoverImageLoad(i)"
                                   @click="openCoverPreview(i)"
                                   @error="onCoverImageLoad(i); ($event.target as HTMLImageElement).src = DEFAULT_COVER_IMAGE"
@@ -1542,12 +1543,13 @@ onBeforeUnmount(() => {
 
                         <!-- 默认占位图 -->
                         <template v-else>
-                          <NsfwImage
+                          <img
                             :src="DEFAULT_COVER_IMAGE"
                             alt="default cover"
-                            img-class="ik-dialog__cover"
+                            class="ik-dialog__cover"
                             loading="eager"
                             decoding="async"
+                            referrerpolicy="no-referrer"
                             @load="onCoverImageLoad(0)"
                           />
                           <div
