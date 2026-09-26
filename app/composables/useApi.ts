@@ -589,6 +589,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     publishedAt: data.publishedAt as string | undefined,
     firstPublishedAt: (data.firstPublishedAt as string | null | undefined) ?? undefined,
     bumpedAt: typeof data.bumpedAt === "string" ? data.bumpedAt : null,
+    bumpedBySelf: data.bumpedBySelf === true,
     author: toAuthor(data.author, apiBaseUrl),
   };
 }

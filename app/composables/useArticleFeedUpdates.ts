@@ -50,6 +50,9 @@ export function useArticleFeedUpdates(options: {
   const detect = (posts: Post[]) => {
     const known = new Map(options.posts.value.map((post) => [post.id, post]));
     for (const post of posts) {
+      // 自己顶起 / 发布的帖不计入「新活动」：服务端按 viewer 下发 bumpedBySelf，
+      // 覆盖轮询对账这条路（SSE 即时路径已在广播层按 user 排除）。
+      if (post.bumpedBySelf) continue;
       const previous = known.get(post.id);
       // updatedAt 会受点赞等操作影响；只有 bumpedAt 才表示信息流中的新活动。
       if (!previous || (
