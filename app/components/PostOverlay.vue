@@ -1090,6 +1090,32 @@ const onKeyDown = (e: KeyboardEvent) => {
   }
 };
 
+/* ── 浮层内切换委托时重放进场动画 ─────────────
+   浮层已打开时点相关委托 / 通知跳转，只换 postId，组件不重新挂载，
+   app.vue 外层的 <Transition> 不会触发，观感像「原地替换内容」。
+   这里给弹窗主体 .ik-dialog 重放一次与瀑布流点开一致的滑入+淡入，
+   背景遮罩保持不动，让新委托像「新帖子进场」而非替换。 */
+const dialogRef = ref<HTMLElement | null>(null);
+let switchResetTimer: ReturnType<typeof setTimeout> | null = null;
+
+const replaySwitchAnimation = () => {
+  if (!import.meta.client) return;
+  const el = dialogRef.value;
+  if (!el) return;
+  // 重启 CSS animation 必须走「移除 class → 强制同步 reflow → 加回 class」三步：
+  // 只靠 nextTick 切换 ref，移除与加回会落在同一绘制帧的微任务里被浏览器合并，
+  // animation 属性无变化 → 动画不重放，观感退化为「原地替换内容」。
+  el.classList.remove("ik-dialog--switching");
+  void el.offsetWidth; // 强制 reflow，让浏览器确认上一轮动画已结束
+  el.classList.add("ik-dialog--switching");
+  if (switchResetTimer) clearTimeout(switchResetTimer);
+  // 略大于动画时长后卸掉 class，避免残留影响后续布局
+  switchResetTimer = setTimeout(() => {
+    el.classList.remove("ik-dialog--switching");
+    switchResetTimer = null;
+  }, 240);
+};
+
 /* ── 当 postId 变化时重新加载 ─────────────── */
 const resetAndLoad = async () => {
   post.value = null;
@@ -1125,8 +1151,11 @@ const resetAndLoad = async () => {
 
 watch(
   [() => props.postId, () => auth.generation],
-  ([newId]) => {
+  ([newId], [oldId]) => {
     if (newId && postModal.isOpen.value) {
+      // postId 真的变了（相关委托 / 通知跳转到另一条委托）才重放进场动画；
+      // 仅 generation 变化（重新登录刷新）不重放，避免无谓的闪动。
+      if (oldId && newId !== oldId) replaySwitchAnimation();
       void resetAndLoad();
     }
   },
@@ -1251,6 +1280,10 @@ onBeforeUnmount(() => {
     clearTimeout(scrollableTimer);
     scrollableTimer = null;
   }
+  if (switchResetTimer) {
+    clearTimeout(switchResetTimer);
+    switchResetTimer = null;
+  }
   isScrollable.value = false;
 });
 </script>
@@ -1264,7 +1297,7 @@ onBeforeUnmount(() => {
       <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
       <!-- ── 弹窗主体 ────────────────────────────── -->
-      <div class="ik-dialog" :class="{ 'ik-dialog--emote-open': emotePickerVisible }">
+      <div ref="dialogRef" class="ik-dialog" :class="{ 'ik-dialog--emote-open': emotePickerVisible }">
         <!-- 外边框（半透明白色，三圆角） -->
         <div class="ik-dialog__outer">
           <!-- 内边框（纯黑，三圆角） -->
@@ -3040,6 +3073,24 @@ onBeforeUnmount(() => {
   transform: scale(1.1) translateX(-5%);
 }
 
+/* 浮层内切换委托（相关委托 / 通知跳转）时，仅让弹窗主体 .ik-dialog 重放一次
+   与瀑布流点开一致的滑入+淡入；背景遮罩、斜纹保持不动，观感为「新委托进场」
+   而非「原地替换内容」。桌面端 base transform 为 scale(1.1)。 */
+@keyframes ik-dialog-switch-in {
+  from { opacity: 0; transform: scale(1.1) translateX(5%); }
+  to   { opacity: 1; transform: scale(1.1) translateX(0); }
+}
+
+.ik-dialog--switching {
+  animation: ik-dialog-switch-in 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-dialog--switching {
+    animation: none;
+  }
+}
+
 /* 保留根元素 transition 0.2s，让 Vue 的 <Transition> 能正确计算离场时长。
    实际用 opacity 作为无动画占位，真正的退场仍由 .ik-overlay__backdrop 的 opacity
    与 .ik-dialog 的 transform/opacity 完成。 */
@@ -3094,6 +3145,16 @@ onBeforeUnmount(() => {
 
   .ik-overlay-leave-to .ik-dialog {
     transform: scale(1) translateX(-5%);
+  }
+
+  /* 移动/平板端 base transform 为 scale(1)，切换委托的重放动画同步用 scale(1) 版关键帧 */
+  @keyframes ik-dialog-switch-in-mobile {
+    from { opacity: 0; transform: scale(1) translateX(5%); }
+    to   { opacity: 1; transform: scale(1) translateX(0); }
+  }
+
+  .ik-dialog--switching {
+    animation-name: ik-dialog-switch-in-mobile;
   }
 
   /* 移动端整体变为一条整页滚动的单栏：封面 + 正文 + 评论一起滚 */
