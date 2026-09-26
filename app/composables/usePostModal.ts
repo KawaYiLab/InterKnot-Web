@@ -48,8 +48,8 @@ export function usePostModal() {
     if (!import.meta.client) return;
     const replacingOpenPost = isOpen.value;
 
-    // Related reading replaces the current overlay, preserving the single
-    // background history entry and its original title for Close/Back.
+    // 首次打开才保存标题、锁滚动；浮层内点相关委托是在已开的浮层里换内容，
+    // 复用同一把滚动锁与原始标题。
     if (!replacingOpenPost) {
       _savedTitle = document.title;
       acquire(SCROLL_LOCK_TOKEN);
@@ -66,8 +66,9 @@ export function usePostModal() {
       ? `/post/${id}?comment=${encodeURIComponent(opts.commentId)}`
       : `/post/${id}`;
     const state = overlayHistoryState({ __postModal: true, postId: id, commentId: opts?.commentId ?? null });
-    if (replacingOpenPost) window.history.replaceState(state, "", url);
-    else window.history.pushState(state, "", url);
+    // 相关委托逐条压入历史：每点一条新增一条 /post/:id 记录，
+    // 这样返回键 / 关闭键可以逐条退回上一条委托，直到最初进入的页面。
+    window.history.pushState(state, "", url);
 
     // 预热委托详情，减少 PostOverlay 挂载后的等待与布局抖动
     // 首屏评论由 PostOverlay 挂载时强制拉取最新，避免命中旧缓存
@@ -79,18 +80,20 @@ export function usePostModal() {
    */
   function close() {
     if (!isOpen.value) return;
-    teardown();
-    if (_historyPushed) {
-      _historyPushed = false;
-      window.history.back();
-    }
+    // 逐条返回：交给 history.back → popstate → handlePopState 决定是切到
+    // 上一条委托还是彻底关闭；不在这里直接 teardown，否则会跳过中间的
+    // 委托历史条目，一步退到最初进入的页面。
+    if (_historyPushed) window.history.back();
+    else teardown();
   }
 
   /**
    * 仅清理状态，不操作 history（由 popstate / 路由守卫调用）
    */
   function teardown() {
+    if (!isOpen.value) return;
     isOpen.value = false;
+    _historyPushed = false;
     // postId 保留到离场动画结束后再清理
     if (import.meta.client) {
       // 只 release 自己的锁；如果还有别的 overlay（如 KnockKnockModal）持有，
@@ -113,12 +116,24 @@ export function usePostModal() {
    * popstate 事件处理器 —— 在 app.vue 中注册
    */
   function handlePopState() {
-    if (isOpen.value) {
-      // 如果是回退到自身的 history 条目（如从敲敲弹窗返回委托弹窗），不关闭
-      if (window.history.state?.__postModal) return;
-      _historyPushed = false;
-      teardown();
+    if (!isOpen.value) return;
+    const state = window.history.state as { __postModal?: boolean; postId?: string; commentId?: string | null } | null;
+    // 回退 / 前进到仍属于委托浮层的历史条目：保持浮层开启。
+    // - postId 变了（相关委托逐条返回）：原地切换浮层内容；
+    // - postId 没变（如从敲敲弹窗返回委托弹窗）：什么都不做。
+    if (state?.__postModal) {
+      if (typeof state.postId === "string" && state.postId !== postId.value) {
+        postId.value = state.postId;
+        coverHint.value = null;
+        preview.value = null;
+        targetCommentId.value = state.commentId ?? null;
+        // 预热切回的委托详情，减少 PostOverlay 重载等待
+        void api.getPost(state.postId).catch(() => {});
+      }
+      return;
     }
+    // 回退到背景页（首页 / 标签页 / 独立文章页等）：彻底关闭浮层
+    teardown();
   }
 
   function setTitle(title: string) {

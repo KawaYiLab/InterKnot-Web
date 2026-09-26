@@ -52,7 +52,11 @@ if (import.meta.client) {
   // 只关敲敲；委托弹窗用 /post/:id，path 变化时关闭。
   router.beforeEach((to, from) => {
     if (to.path !== from.path) {
-      if (postModal.isOpen.value) postModal.teardown();
+      // 相关委托在浮层内逐条压入 /post/:id 历史。后退到另一条委托详情路径时
+      // 不能收起浮层——交给 postModal.handlePopState 切换内容；只有目标不再是
+      // 委托详情（回到首页 / 标签页，或点了编辑 / 标签跳出）才 teardown。
+      const toIsPostDetail = /^\/post\/[^/]+$/.test(to.path);
+      if (postModal.isOpen.value && !toIsPostDetail) postModal.teardown();
       // 从委托弹窗 back 回带 ik_knock 的页面时，敲敲仍应保留
       const knockStillInUrl = Boolean(to.query[OVERLAY_KNOCK_KEY]);
       if (knockModal.visible.value && !knockStillInUrl) {
