@@ -24,7 +24,6 @@ import type {
   ExamStatus,
   ExamSubmitResult,
   MihoyoBinding,
-  NsfwStatus,
   Post,
   RecommendationContext,
   RecommendationEvent,
@@ -232,8 +231,6 @@ interface MediaMeta {
   url: string;
   width?: number;
   height?: number;
-  nsfwStatus?: NsfwStatus;
-  nsfwScores?: Record<string, number>;
 }
 
 function normalizeMediaUrl(input: unknown, _apiBaseUrl: string): string {
@@ -268,27 +265,6 @@ function parsePositiveNumber(input: unknown): number | undefined {
   return undefined;
 }
 
-const NSFW_STATUS_VALUES: NsfwStatus[] = ["safe", "sensitive", "error"];
-
-function parseNsfwStatus(input: unknown): NsfwStatus | undefined {
-  if (typeof input === "string" && NSFW_STATUS_VALUES.includes(input as NsfwStatus)) {
-    return input as NsfwStatus;
-  }
-  return undefined;
-}
-
-function parseNsfwScores(input: unknown): Record<string, number> | undefined {
-  if (!input || typeof input !== "object") return undefined;
-  const record = input as Record<string, unknown>;
-  const result: Record<string, number> = {};
-  for (const [key, value] of Object.entries(record)) {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      result[key] = value;
-    }
-  }
-  return Object.keys(result).length ? result : undefined;
-}
-
 function extractMediaMeta(raw: unknown, apiBaseUrl: string): MediaMeta | null {
   if (typeof raw === "string") {
     const url = normalizeMediaUrl(raw, apiBaseUrl);
@@ -312,8 +288,6 @@ function extractMediaMeta(raw: unknown, apiBaseUrl: string): MediaMeta | null {
         url: directUrl,
         width: parsePositiveNumber(record.width),
         height: parsePositiveNumber(record.height),
-        nsfwStatus: parseNsfwStatus(record.nsfwStatus),
-        nsfwScores: parseNsfwScores(record.nsfwScores),
       };
     }
 
@@ -326,8 +300,6 @@ function extractMediaMeta(raw: unknown, apiBaseUrl: string): MediaMeta | null {
           url: attrUrl,
           width: parsePositiveNumber(attrs.width),
           height: parsePositiveNumber(attrs.height),
-          nsfwStatus: parseNsfwStatus(attrs.nsfwStatus),
-          nsfwScores: parseNsfwScores(attrs.nsfwScores),
         };
       }
     }
@@ -348,16 +320,11 @@ function extractAllMediaMeta(raw: unknown, apiBaseUrl: string): MediaMeta[] {
     return url ? [{ url }] : [];
   }
 
-  const sharedStatus = parseNsfwStatus((raw as Record<string, unknown>)?.nsfwStatus);
-  const sharedScores = parseNsfwScores((raw as Record<string, unknown>)?.nsfwScores);
-
   if (Array.isArray(raw)) {
     const results: MediaMeta[] = [];
     for (const item of raw) {
       const media = extractMediaMeta(item, apiBaseUrl);
       if (media) {
-        if (sharedStatus && !media.nsfwStatus) media.nsfwStatus = sharedStatus;
-        if (sharedScores && !media.nsfwScores) media.nsfwScores = sharedScores;
         results.push(media);
       }
     }
@@ -520,16 +487,13 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
   let coverW: number | undefined;
   let coverH: number | undefined;
 
-  let coverNsfw: NsfwStatus | undefined;
-
   if (typeof data.cover === "string" || data.cover === null || data.cover === undefined) {
     coverUrl = (typeof data.cover === "string" ? toMediaUrl(data.cover) : "");
     coverW = typeof data.coverWidth === "number" ? data.coverWidth : undefined;
     coverH = typeof data.coverHeight === "number" ? data.coverHeight : undefined;
-    coverNsfw = parseNsfwStatus(data.coverNsfwStatus);
     const externalVideos = Array.isArray(data.externalVideos) ? (data.externalVideos as ExternalVideo[]) : [];
     const isVideoCover = coverUrl && externalVideos.length > 0 && coverUrl === externalVideos[0]?.coverUrl;
-    covers = coverUrl && !isVideoCover ? [{ url: coverUrl, width: coverW, height: coverH, nsfwStatus: coverNsfw }] : [];
+    covers = coverUrl && !isVideoCover ? [{ url: coverUrl, width: coverW, height: coverH }] : [];
   } else {
     covers =
       extractAllMediaMeta(data.cover, apiBaseUrl).length
@@ -541,7 +505,6 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     coverUrl = firstCover?.url || "";
     coverW = firstCover?.width;
     coverH = firstCover?.height;
-    coverNsfw = firstCover?.nsfwStatus;
   }
 
   if (!coverUrl && Array.isArray(data.externalVideos)) {
@@ -564,7 +527,6 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     externalVideos: Array.isArray(data.externalVideos) ? (data.externalVideos as ExternalVideo[]) : undefined,
     covers,
     cover: coverUrl,
-    coverNsfwStatus: coverNsfw,
     coverWidth: coverW,
     coverHeight: coverH,
     views: Number(data.views || 0),
@@ -617,8 +579,6 @@ function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
         url,
         width: parsePositiveNumber(c.width),
         height: parsePositiveNumber(c.height),
-        nsfwStatus: parseNsfwStatus(c.nsfwStatus),
-        nsfwScores: parseNsfwScores(c.nsfwScores),
       });
     }
   };
@@ -1999,8 +1959,6 @@ export function useApi() {
     size: parsePositiveNumber(raw.size),
     width: parsePositiveNumber(raw.width),
     height: parsePositiveNumber(raw.height),
-    nsfwStatus: parseNsfwStatus(raw.nsfwStatus),
-    nsfwScores: parseNsfwScores(raw.nsfwScores),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : undefined,
   });
 

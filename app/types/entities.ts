@@ -192,15 +192,11 @@ export interface AgentQuota {
   available: boolean;
 }
 
-export type NsfwStatus = 'safe' | 'sensitive' | 'error';
-
 export interface CoverImage {
   documentId?: string;
   url: string;
   width?: number;
   height?: number;
-  nsfwStatus?: NsfwStatus;
-  nsfwScores?: Record<string, number>;
 }
 
 export interface ExternalVideo {
@@ -289,7 +285,6 @@ export interface Post {
   externalVideos?: ExternalVideo[];
   covers: CoverImage[];
   cover?: string;
-  coverNsfwStatus?: NsfwStatus;
   coverWidth?: number;
   coverHeight?: number;
   views?: number;
@@ -493,7 +488,6 @@ export interface UploadTask {
   previewUrl: string;
   serverId?: string;
   serverUrl?: string;
-  nsfwStatus?: NsfwStatus;
   error?: string;
 }
 
@@ -534,8 +528,6 @@ export interface UploadedFile {
   size?: number;
   width?: number;
   height?: number;
-  nsfwStatus?: NsfwStatus;
-  nsfwScores?: Record<string, number>;
   createdAt?: string;
 }
 

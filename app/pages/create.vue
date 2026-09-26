@@ -543,7 +543,6 @@ function createReferencedUploadTask(upload: UploadedFile): UploadTask {
     previewUrl: upload.url,
     serverId: upload.documentId,
     serverUrl: upload.url,
-    nsfwStatus: upload.nsfwStatus,
   };
 }
 
@@ -610,7 +609,6 @@ async function executeUploadTask(task: UploadTask) {
 
     task.serverId = uploaded.documentId;
     task.serverUrl = uploaded.url;
-    task.nsfwStatus = uploaded.nsfwStatus;
     task.status = "done";
     task.progress = 100;
     markDirty();
