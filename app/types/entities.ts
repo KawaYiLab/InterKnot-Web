@@ -320,6 +320,9 @@ export interface Post {
   firstPublishedAt?: string | null;
   /** 最近一次新活动时间，用于信息流更新对账。 */
   bumpedAt?: string | null;
+  /** 该帖最后一次顶起/发布是否由当前登录用户自己触发；服务端按 viewer 计算下发，
+   *  用于让「有 N 条新内容」跳过自己的动作。 */
+  bumpedBySelf?: boolean;
   author: Author;
 }
 
