@@ -66,9 +66,16 @@ export function usePostModal() {
       ? `/post/${id}?comment=${encodeURIComponent(opts.commentId)}`
       : `/post/${id}`;
     const state = overlayHistoryState({ __postModal: true, postId: id, commentId: opts?.commentId ?? null });
-    // 相关委托逐条压入历史：每点一条新增一条 /post/:id 记录，
-    // 这样返回键 / 关闭键可以逐条退回上一条委托，直到最初进入的页面。
-    window.history.pushState(state, "", url);
+    // 浮层只占用一条历史记录：首次打开压入 /post/:id；浮层内点相关委托切换内容时
+    // 用 replaceState 原地替换 URL，不新增历史条目。
+    // 若每层都 pushState 留一条 /post/:id，history.back 会触发 popstate，Vue Router
+    // 随之把背景页（NuxtPage）导航成独立帖子页 post/[id].vue —— 多层叠加退出时背景
+    // 就会「转进帖子页」。单条历史下返回 / 关闭统一一步回到最初进入的页面。
+    if (replacingOpenPost) {
+      window.history.replaceState(state, "", url);
+    } else {
+      window.history.pushState(state, "", url);
+    }
 
     // 预热委托详情，减少 PostOverlay 挂载后的等待与布局抖动
     // 首屏评论由 PostOverlay 挂载时强制拉取最新，避免命中旧缓存
@@ -80,9 +87,8 @@ export function usePostModal() {
    */
   function close() {
     if (!isOpen.value) return;
-    // 逐条返回：交给 history.back → popstate → handlePopState 决定是切到
-    // 上一条委托还是彻底关闭；不在这里直接 teardown，否则会跳过中间的
-    // 委托历史条目，一步退到最初进入的页面。
+    // 回退首次打开时压入的那条 /post/:id 记录：history.back → popstate →
+    // handlePopState 收起浮层。这样地址栏与浏览器历史保持一致。
     if (_historyPushed) window.history.back();
     else teardown();
   }
@@ -119,8 +125,9 @@ export function usePostModal() {
     if (!isOpen.value) return;
     const state = window.history.state as { __postModal?: boolean; postId?: string; commentId?: string | null } | null;
     // 回退 / 前进到仍属于委托浮层的历史条目：保持浮层开启。
-    // - postId 变了（相关委托逐条返回）：原地切换浮层内容；
-    // - postId 没变（如从敲敲弹窗返回委托弹窗）：什么都不做。
+    // - postId 没变（如从敲敲弹窗返回委托弹窗）：什么都不做；
+    // - postId 变了：原地切换浮层内容。单条历史下正常不会出现，保留作防御
+    //   （例如未来叠加其他 overlay 后再返回）。
     if (state?.__postModal) {
       if (typeof state.postId === "string" && state.postId !== postId.value) {
         postId.value = state.postId;
