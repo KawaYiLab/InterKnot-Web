@@ -12,7 +12,7 @@ import { watch, onScopeDispose, type Ref } from "vue";
  */
 /**
  * 对齐 Discourse：`new_topic` = 新帖，`topic_bumped` = 旧帖被新回复顶起。
- * 「最新」视图两者都算「新的或更新的」，客户端一视同仁地计数。
+ * 推荐、最新、热门视图都将两者计为「新的或更新的」。
  */
 export interface ArticleFeedTopicEvent {
   type: "new_topic" | "topic_bumped";
@@ -23,7 +23,7 @@ export interface ArticleFeedTopicEvent {
 }
 
 export function useArticleFeedStream(opts: {
-  /** 是否应保持连接（推荐流 + 最新排序 + 无搜索时为 true）。 */
+  /** 是否应保持连接（首页推荐 / 最新 / 热门无搜索时为 true）。 */
   enabled: Ref<boolean>;
   /** 当前分类 slug；空串 = 全部频道。 */
   category: Ref<string>;

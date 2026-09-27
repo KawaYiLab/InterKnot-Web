@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
@@ -58,6 +58,7 @@ const message = useMessage();
 const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
 const isMobile = useMediaQuery("(max-width: 768px)", { ssrWidth: initialWidth });
 const isCompact = useMediaQuery("(max-width: 1024px)", { ssrWidth: initialWidth });
+const relatedTargetId = `post-overlay-related-${useId()}`;
 
 const post = ref<Post | null>(null);
 const loading = ref(true);
@@ -1596,7 +1597,9 @@ onBeforeUnmount(() => {
                         >#{{ tag.name }}</button>
                       </div>
                       </div>
-                      <RelatedArticles :document-id="post.id" :active="readingActive" @open-post="postModal.open($event)" />
+                      <Teleport defer :to="`#${relatedTargetId}`" :disabled="!isCompact">
+                        <RelatedArticles :document-id="post.id" :active="readingActive" :collapsible="isCompact" @open-post="postModal.open($event)" />
+                      </Teleport>
                     </div>
                   </div>
                 </div>
@@ -1605,6 +1608,7 @@ onBeforeUnmount(() => {
                 <div class="ik-dialog__right">
                   <div class="ik-dialog__comments-scroll">
                     <div class="ik-dialog__comments-inner">
+                      <h2 class="ik-dialog__comments-heading">评论 <span>{{ postCommentCount }}</span></h2>
                       <div v-if="showCommentsSkeleton">
                         <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
                           <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
@@ -1644,6 +1648,7 @@ onBeforeUnmount(() => {
                           <span class="ik-meta">- 评论已全部加载 -</span>
                         </div>
                       </template>
+                      <div :id="relatedTargetId"></div>
                     </div>
                   </div>
 
@@ -2611,6 +2616,23 @@ onBeforeUnmount(() => {
   gap: 0;
 }
 
+.ik-dialog__comments-heading {
+  display: none;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: #ededed;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.ik-dialog__comments-heading span {
+  color: #9a9a9a;
+  font-size: 13px;
+  font-weight: 400;
+}
+
 .ik-dialog__load-more {
   display: flex;
   justify-content: center;
@@ -3237,6 +3259,10 @@ onBeforeUnmount(() => {
     overflow: visible;
     will-change: auto;
     transform: none;
+  }
+
+  .ik-dialog__comments-heading {
+    display: flex;
   }
 
   /* 底部互动栏固定在屏幕底部，不随内容滚走 */

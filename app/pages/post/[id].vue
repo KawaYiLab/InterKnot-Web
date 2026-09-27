@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Comment, Post } from "~/types/entities";
@@ -29,6 +29,9 @@ const confirmDialog = useConfirmDialog();
 const reportDialog = useReportDialog();
 const pageDataLoading = usePageDataLoading();
 const message = useMessage();
+const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+const isCompact = useMediaQuery("(max-width: 800px)", { ssrWidth: initialWidth });
+const relatedTargetId = `post-page-related-${useId()}`;
 
 const post = ref<Post | null>(null);
 const loading = ref(true);
@@ -1152,7 +1155,9 @@ onBeforeUnmount(() => {
                   >#{{ tag.name }}</button>
                 </div>
                 </div>
-                <RelatedArticles :document-id="post.id" :active="readingActive" @open-post="postModal.open($event)" />
+                <Teleport defer :to="`#${relatedTargetId}`" :disabled="!isCompact">
+                  <RelatedArticles :document-id="post.id" :active="readingActive" :collapsible="isCompact" @open-post="postModal.open($event)" />
+                </Teleport>
               </div>
             </div>
           </div>
@@ -1161,6 +1166,7 @@ onBeforeUnmount(() => {
           <div class="ik-page__right">
             <div class="ik-page__comments-scroll">
               <div class="ik-page__comments-inner">
+                <h2 class="ik-page__comments-heading">评论 <span>{{ postCommentCount }}</span></h2>
 
                 <!-- 评论骨架屏 -->
                 <template v-if="commentsInitialLoading">
@@ -1207,6 +1213,7 @@ onBeforeUnmount(() => {
                 <div v-else-if="comments.length" class="ik-page__load-more">
                   <span class="ik-meta">- 评论已全部加载 -</span>
                 </div>
+                <div :id="relatedTargetId"></div>
               </div>
             </div>
 
@@ -1924,6 +1931,23 @@ onBeforeUnmount(() => {
   gap: 0;
 }
 
+.ik-page__comments-heading {
+  display: none;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: #ededed;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.ik-page__comments-heading span {
+  color: #9a9a9a;
+  font-size: 13px;
+  font-weight: 400;
+}
+
 
 
 .ik-page__load-more {
@@ -2525,6 +2549,10 @@ onBeforeUnmount(() => {
     overflow: visible;
     will-change: auto;
     transform: none;
+  }
+
+  .ik-page__comments-heading {
+    display: flex;
   }
 
   .ik-page__actions {
