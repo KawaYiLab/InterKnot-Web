@@ -150,7 +150,6 @@ watch(
       class="ik-comment__main"
       :class="{
         'ik-comment__main--pinned': comment.isPinned,
-        'ik-comment__main--accepted': comment.isAccepted,
         'ik-comment__main--target': comment.id === highlightedCommentId,
       }"
     >
@@ -576,11 +575,6 @@ watch(
 .ik-comment__accepted-icon {
   width: 12px;
   height: 12px;
-}
-
-.ik-comment__main--accepted {
-  border-left: 3px solid #4ade80;
-  padding-left: 10px;
 }
 
 /* ── Body ──────────────────────────────────────── */
