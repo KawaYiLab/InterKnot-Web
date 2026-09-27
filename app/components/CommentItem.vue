@@ -183,7 +183,7 @@ watch(
           </span>
           <span v-if="comment.isAccepted" class="ik-comment__accepted-badge">
             <CheckBadgeIcon class="ik-comment__accepted-icon" />
-            最佳答案
+            已采纳
           </span>
           <span v-else-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
         </div>
