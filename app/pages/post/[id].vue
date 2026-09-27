@@ -860,7 +860,7 @@ const handleAcceptComment = async (comment: Comment) => {
   try {
     await api.acceptComment(comment.id, post.value.id);
     await refreshComments();
-    message.success("已采纳为最佳答案");
+    message.success("已采纳");
   } catch (err) {
     message.error(resolveErrorMessage(err, "采纳失败"));
   }
