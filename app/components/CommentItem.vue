@@ -186,7 +186,7 @@ watch(
             <CheckBadgeIcon class="ik-comment__accepted-icon" />
             最佳答案
           </span>
-          <span v-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
+          <span v-else-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
         </div>
 
         <!-- Body -->
@@ -252,7 +252,7 @@ watch(
                   {{ comment.isPinned ? '取消置顶' : '置顶评论' }}
                 </z-dropdown-item>
                 <z-dropdown-item :command="comment.isAccepted ? 'unaccept' : 'accept'" :disabled="!canAccept">
-                  {{ comment.isAccepted ? '取消采纳' : '采纳为最佳答案' }}
+                  {{ comment.isAccepted ? '取消采纳' : '采纳' }}
                 </z-dropdown-item>
                 <z-dropdown-item command="delete" :disabled="!canDeleteComment">删除评论</z-dropdown-item>
               </template>
