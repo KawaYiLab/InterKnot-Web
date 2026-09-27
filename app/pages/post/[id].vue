@@ -460,6 +460,7 @@ const startReplyToReply = (reply: Comment["replies"][number], parentComment: Com
 const isOwner = computed(() => post.value?.isOwner === true);
 const isAdmin = computed(() => auth.isLogin && auth.user?.isAdmin === true);
 const canPin = computed(() => auth.isLogin && (isOwner.value || isAdmin.value));
+const canAccept = computed(() => auth.isLogin && (isOwner.value || isAdmin.value));
 
 const isPostAuthorBlocked = ref(false);
 const isPostAuthorBlockLoading = ref(false);
@@ -854,6 +855,28 @@ const handleUnpinComment = async (comment: Comment) => {
   }
 };
 
+const handleAcceptComment = async (comment: Comment) => {
+  if (!post.value?.id) return;
+  try {
+    await api.acceptComment(comment.id, post.value.id);
+    await refreshComments();
+    message.success("已采纳为最佳答案");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "采纳失败"));
+  }
+};
+
+const handleUnacceptComment = async (comment: Comment) => {
+  if (!post.value?.id) return;
+  try {
+    await api.unacceptComment(comment.id, post.value.id);
+    await refreshComments();
+    message.success("已取消采纳");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "取消采纳失败"));
+  }
+};
+
 const pageTitle = computed(() =>
   post.value?.title ? `${post.value.title} - 绳网` : "绳网",
 );
@@ -1128,7 +1151,7 @@ onBeforeUnmount(() => {
                   <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
                 </div>
                 <h1 class="ik-page__title">
-                  <span v-if="post.category" class="ik-page__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
+                  <span v-if="post.solvedAt" class="ik-page__solved">已解决</span><span v-if="post.category" class="ik-page__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
                 </h1>
                 <div
                   v-if="bodyHasContent"
@@ -1194,6 +1217,7 @@ onBeforeUnmount(() => {
                   :current-user-author-id="auth.user?.authorId"
                   :is-post-owner="auth.isLogin && isOwner"
                   :can-pin="canPin"
+                  :can-accept="canAccept"
                   :highlighted-comment-id="highlightedCommentId"
                   @like-comment="likeComment"
                   @like-reply="likeReply"
@@ -1206,6 +1230,8 @@ onBeforeUnmount(() => {
                   @block-user="handleBlockUserFromComment"
                   @pin-comment="handlePinComment"
                   @unpin-comment="handleUnpinComment"
+                  @accept-comment="handleAcceptComment"
+                  @unaccept-comment="handleUnacceptComment"
                 />
                 <div v-if="commentsHasNext" class="ik-page__load-more">
                   <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>
@@ -1774,6 +1800,18 @@ onBeforeUnmount(() => {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+}
+
+.ik-page__solved {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 5px;
+  background: #14351f;
+  color: #4ade80;
+  font-size: 0.55em;
+  font-weight: 700;
+  vertical-align: middle;
 }
 
 .ik-page__title-cat {

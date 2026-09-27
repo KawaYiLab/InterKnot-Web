@@ -214,7 +214,7 @@ const handleOpen = (e: MouseEvent) => {
         </div>
 
         <h3 class="ik-card__title" :class="{ 'ik-card__title--read': post.isRead }">
-          <span v-if="post.category" class="ik-card__title-cat">[{{ post.category.name }}]</span>{{ post.title }}
+          <span v-if="post.solvedAt" class="ik-card__solved">已解决</span><span v-if="post.category" class="ik-card__title-cat">[{{ post.category.name }}]</span>{{ post.title }}
         </h3>
       </div>
     </NuxtLink>
@@ -290,6 +290,18 @@ const handleOpen = (e: MouseEvent) => {
 .ik-card__cover-frame {
   width: 100%;
   background: var(--ik-post-card-cover-bg);
+}
+
+.ik-card__solved {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #14351f;
+  color: #4ade80;
+  font-size: 0.82em;
+  font-weight: 700;
+  vertical-align: middle;
 }
 
 .ik-card__title-cat {
