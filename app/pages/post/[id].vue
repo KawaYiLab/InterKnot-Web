@@ -601,24 +601,6 @@ const handleReportReply = (reply: Comment["replies"][number]) => {
   reportDialog.open({ targetType: "comment", targetId: reply.id, targetLabel: "回复" });
 };
 
-const handleBlockUserFromComment = async (authorDocumentId: string) => {
-  if (!auth.isLogin) {
-    loginDialog.open();
-    return;
-  }
-  try {
-    const result = await api.toggleUserBlock(authorDocumentId);
-    message.success(result.blocked ? "已拉黑用户" : "已取消拉黑");
-    // 让评论/搜索/个人页缓存失效，重新拉取时后端会过滤掉已拉黑内容
-    api.invalidateQueries(["articles", "comments", postId.value]);
-    api.invalidateQueries(["articles", "search"]);
-    api.invalidateQueries(["profile"]);
-    await refreshComments();
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "操作失败"));
-  }
-};
-
 const favoriting = ref(false);
 
 const favoriteArticle = async () => {
@@ -1227,7 +1209,6 @@ onBeforeUnmount(() => {
                   @delete-reply="handleDeleteReply"
                   @report-comment="handleReportComment"
                   @report-reply="handleReportReply"
-                  @block-user="handleBlockUserFromComment"
                   @pin-comment="handlePinComment"
                   @unpin-comment="handleUnpinComment"
                   @accept-comment="handleAcceptComment"
