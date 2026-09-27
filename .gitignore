@@ -16,3 +16,4 @@ server
 /.agents
 /docs
 /tests
+/.codex

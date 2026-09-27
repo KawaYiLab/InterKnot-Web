@@ -206,9 +206,9 @@ const loadMoreObserverRef = shallowRef<IntersectionObserver | null>(null);
 
 // ── 后台轮询：检测有无新委托（仅在无搜索关键词时启用） ─────────
 const NEW_ARTICLES_POLL_MS = 60_000;
-// 推荐流保留 Gorse 快照顺序；按最新活动置顶的增量更新只用于「最新」。
+// 推荐、最新、热门都接收 SSE；查看更新时仅把事件批次置顶，其余列表顺序与分页保持不变。
 const feedStreamEnabled = computed(
-  () => feedMode.value === "recommend" && activeSort.value === "latest" && !query.value.trim(),
+  () => feedMode.value === "recommend" && !query.value.trim(),
 );
 const feedUpdates = useArticleFeedUpdates({
   posts: list,
@@ -560,7 +560,7 @@ const pollLatestArticles = async () => {
   // 仅在推荐流（无搜索词、非关注/收藏）下做轮询
   if (feedMode.value !== "recommend") return;
   if (query.value.trim()) return;
-  // 仅对账最新流，避免按活动时间插入帖子改变 Gorse 推荐快照或热门榜顺序。
+  // 活动时间边界只适用于最新流；推荐快照和热门榜不按 bumpedAt 排序，仅接收 SSE。
   if (activeSort.value !== "latest") return;
   // 不与正在进行的请求/刷新冲突
   if (disposed || polling || listRequestPending || refreshing.value || applyingNewArticles.value) return;
@@ -614,7 +614,7 @@ const onTabVisible = () => {
   void pollLatestArticles();
 };
 
-// 新帖与旧帖的新回复都计入；断线期间漏掉的活动由轮询 bumpedAt 对账。
+// 三种排序都计入新帖与旧帖的新回复；最新流额外通过 bumpedAt 轮询补齐漏推。
 useArticleFeedStream({
   enabled: feedStreamEnabled,
   category: selectedCategory,
