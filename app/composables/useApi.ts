@@ -542,6 +542,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     isHidden: data.isHidden === true,
     isPinned: data.isPinned === true,
     pinnedAt: typeof data.pinnedAt === "string" ? data.pinnedAt : null,
+    solvedAt: typeof data.solvedAt === "string" ? data.solvedAt : null,
     isOwner: data.isOwner === true,
     category: toPostCategory(data.category),
     tags: toPostTags(data.tags),
@@ -721,6 +722,8 @@ function toComment(raw: unknown, apiBaseUrl: string): Comment {
     articleTitle: articleRaw ? String(articleRaw.title || "") : undefined,
     isPinned: data.isPinned === true,
     pinnedAt: data.pinnedAt as string | undefined,
+    isAccepted: data.isAccepted === true,
+    acceptedAt: data.acceptedAt as string | undefined,
     floor: typeof data.floor === "number" ? data.floor : undefined,
   };
 }
@@ -1261,8 +1264,13 @@ export function useApi() {
         const data = unwrapData<unknown[]>(response) || [];
         const pinnedRaw = (response as Record<string, unknown>).pinned;
         const pinned = start === 0 && pinnedRaw ? toComment(pinnedRaw, apiBaseUrl) : null;
+        const acceptedRaw = (response as Record<string, unknown>).accepted;
+        const accepted = start === 0 && acceptedRaw ? toComment(acceptedRaw, apiBaseUrl) : null;
         const nodes = data.map((item) => toComment(item, apiBaseUrl));
+        // 顶部顺序：最佳答案在最前，其次置顶（两者后端已互斥去重），再普通楼层。
+        // 先 unshift(pinned) 再 unshift(accepted)，使 accepted 落在最前。
         if (pinned) nodes.unshift(pinned);
+        if (accepted) nodes.unshift(accepted);
         return buildPagination(nodes, start, meta);
       },
       STALE_LIST,
@@ -1381,6 +1389,22 @@ export function useApi() {
 
   const unpinComment = async (commentId: string, postId: string): Promise<void> => {
     await $api(`/api/comments/${commentId}/unpin`, {
+      method: "POST",
+    });
+    invalidate(qk.articles.commentsOf(postId));
+    invalidate(qk.articles.detail(postId));
+  };
+
+  const acceptComment = async (commentId: string, postId: string): Promise<void> => {
+    await $api(`/api/comments/${commentId}/accept`, {
+      method: "POST",
+    });
+    invalidate(qk.articles.commentsOf(postId));
+    invalidate(qk.articles.detail(postId));
+  };
+
+  const unacceptComment = async (commentId: string, postId: string): Promise<void> => {
+    await $api(`/api/comments/${commentId}/unaccept`, {
       method: "POST",
     });
     invalidate(qk.articles.commentsOf(postId));
@@ -2696,6 +2720,8 @@ export function useApi() {
     deleteComment,
     pinComment,
     unpinComment,
+    acceptComment,
+    unacceptComment,
     toggleLike,
     batchCheckLikes,
     toggleFavorite,

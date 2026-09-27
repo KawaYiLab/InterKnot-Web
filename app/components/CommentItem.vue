@@ -7,7 +7,7 @@ import {
   ArrowUpCircleIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/vue/24/outline";
-import { HandThumbUpIcon as HandThumbUpIconSolid } from "@heroicons/vue/24/solid";
+import { HandThumbUpIcon as HandThumbUpIconSolid, CheckBadgeIcon } from "@heroicons/vue/24/solid";
 import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
 
 import UserHoverCard from "./UserHoverCard.vue";
@@ -21,6 +21,7 @@ const props = defineProps<{
   currentUserAuthorId?: string;
   isPostOwner?: boolean;
   canPin?: boolean;
+  canAccept?: boolean;
   highlightedCommentId?: string | null;
 }>();
 
@@ -36,6 +37,8 @@ const emit = defineEmits<{
   blockUser: [authorDocumentId: string];
   pinComment: [comment: Comment];
   unpinComment: [comment: Comment];
+  acceptComment: [comment: Comment];
+  unacceptComment: [comment: Comment];
 }>();
 
 const isOwnComment = computed(() =>
@@ -52,6 +55,8 @@ const canDeleteReply = (reply: CommentReply) => props.isPostOwner === true || is
 const handleCommentMenuCommand = (command: string | number) => {
   if (command === "pin") emit("pinComment", props.comment);
   else if (command === "unpin") emit("unpinComment", props.comment);
+  else if (command === "accept") emit("acceptComment", props.comment);
+  else if (command === "unaccept") emit("unacceptComment", props.comment);
   else if (command === "delete" && canDeleteComment.value) emit("deleteComment", props.comment);
   else if (command === "report") emit("reportComment", props.comment);
   else if (command === "block" && props.comment.author?.documentId && !isOwnComment.value && !props.comment.author?.isAiAgent) emit("blockUser", props.comment.author.documentId);
@@ -145,6 +150,7 @@ watch(
       class="ik-comment__main"
       :class="{
         'ik-comment__main--pinned': comment.isPinned,
+        'ik-comment__main--accepted': comment.isAccepted,
         'ik-comment__main--target': comment.id === highlightedCommentId,
       }"
     >
@@ -175,6 +181,10 @@ watch(
           <span v-if="comment.isPinned" class="ik-comment__pinned-badge">
             <ArrowUpCircleIcon class="ik-comment__pinned-icon" />
             置顶
+          </span>
+          <span v-if="comment.isAccepted" class="ik-comment__accepted-badge">
+            <CheckBadgeIcon class="ik-comment__accepted-icon" />
+            最佳答案
           </span>
           <span v-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
         </div>
@@ -240,6 +250,9 @@ watch(
                 </z-dropdown-item>
                 <z-dropdown-item :command="comment.isPinned ? 'unpin' : 'pin'" :disabled="!canPin">
                   {{ comment.isPinned ? '取消置顶' : '置顶评论' }}
+                </z-dropdown-item>
+                <z-dropdown-item :command="comment.isAccepted ? 'unaccept' : 'accept'" :disabled="!canAccept">
+                  {{ comment.isAccepted ? '取消采纳' : '采纳为最佳答案' }}
                 </z-dropdown-item>
                 <z-dropdown-item command="delete" :disabled="!canDeleteComment">删除评论</z-dropdown-item>
               </template>
@@ -542,6 +555,31 @@ watch(
 
 .ik-comment__main--pinned {
   border-left: 3px solid var(--ik-primary);
+  padding-left: 10px;
+}
+
+.ik-comment__accepted-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 0 6px 6px 6px;
+  background: #14351f;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4ade80;
+  line-height: 1.5;
+}
+
+.ik-comment__accepted-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.ik-comment__main--accepted {
+  border-left: 3px solid #4ade80;
   padding-left: 10px;
 }
 

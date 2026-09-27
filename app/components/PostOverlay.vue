@@ -846,6 +846,7 @@ const startReplyToReply = (reply: Comment["replies"][number], parentComment: Com
 const isOwner = computed(() => post.value?.isOwner === true);
 const isAdmin = computed(() => auth.isLogin && auth.user?.isAdmin === true);
 const canPin = computed(() => auth.isLogin && (isOwner.value || isAdmin.value));
+const canAccept = computed(() => auth.isLogin && (isOwner.value || isAdmin.value));
 
 const deletingArticle = ref(false);
 const pinningArticle = ref(false);
@@ -1064,6 +1065,28 @@ const handleUnpinComment = async (comment: Comment) => {
     message.success("评论已取消置顶");
   } catch (err) {
     message.error(resolveErrorMessage(err, "取消置顶失败"));
+  }
+};
+
+const handleAcceptComment = async (comment: Comment) => {
+  if (!props.postId) return;
+  try {
+    await api.acceptComment(comment.id, props.postId);
+    await refreshComments();
+    message.success("已采纳为最佳答案");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "采纳失败"));
+  }
+};
+
+const handleUnacceptComment = async (comment: Comment) => {
+  if (!props.postId) return;
+  try {
+    await api.unacceptComment(comment.id, props.postId);
+    await refreshComments();
+    message.success("已取消采纳");
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "取消采纳失败"));
   }
 };
 
@@ -1375,7 +1398,7 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                   <div class="ik-dialog__detail">
-                    <h1 v-if="headerTitle" class="ik-dialog__title"><span v-if="headerCategory" class="ik-dialog__title-cat">[ {{ headerCategory.name }} ]</span>{{ headerTitle }}</h1>
+                    <h1 v-if="headerTitle" class="ik-dialog__title"><span v-if="post?.solvedAt" class="ik-dialog__solved">已解决</span><span v-if="headerCategory" class="ik-dialog__title-cat">[ {{ headerCategory.name }} ]</span>{{ headerTitle }}</h1>
                     <div v-else class="ik-skel ik-skel--title"></div>
                     <div class="ik-skel ik-skel--line" style="width:100%"></div>
                     <div class="ik-skel ik-skel--line" style="width:90%"></div>
@@ -1629,6 +1652,7 @@ onBeforeUnmount(() => {
                           :current-user-author-id="auth.user?.authorId"
                           :is-post-owner="auth.isLogin && isOwner"
                           :can-pin="canPin"
+                          :can-accept="canAccept"
                           :highlighted-comment-id="highlightedCommentId"
                           @like-comment="likeComment"
                           @like-reply="likeReply"
@@ -1640,6 +1664,8 @@ onBeforeUnmount(() => {
                           @report-reply="handleReportReply"
                           @pin-comment="handlePinComment"
                           @unpin-comment="handleUnpinComment"
+                          @accept-comment="handleAcceptComment"
+                          @unaccept-comment="handleUnacceptComment"
                         />
                         <div v-if="commentsHasNext && comments.length" class="ik-dialog__load-more">
                           <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>
@@ -2451,6 +2477,18 @@ onBeforeUnmount(() => {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+}
+
+.ik-dialog__solved {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 5px;
+  background: #14351f;
+  color: #4ade80;
+  font-size: 0.6em;
+  font-weight: 700;
+  vertical-align: middle;
 }
 
 .ik-dialog__title-cat {

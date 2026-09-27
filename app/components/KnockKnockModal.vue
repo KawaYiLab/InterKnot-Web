@@ -719,6 +719,7 @@ const isLikeOnComment = (msg: DmMessage): boolean =>
 /** quote 卡左侧 label */
 const quoteLabel = (msg: DmMessage): string => {
   if (isLikeOnComment(msg)) return "评论";
+  if (msg.notificationKind === "accepted") return "评论";
   if (msg.notificationKind === "like" || msg.notificationKind === "favorite" || msg.notificationKind === "denny") return "委托";
   if (msg.notificationKind === "system") return "委托";
   return "评论委托"; // comment / reply / mention：引用所在委托

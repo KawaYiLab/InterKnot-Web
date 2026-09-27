@@ -305,6 +305,8 @@ export interface Post {
   isPinned?: boolean;
   /** 置顶时间（ISO 8601）。 */
   pinnedAt?: string | null;
+  /** 已解决（存在被采纳的最佳答案）的时间（ISO 8601）；null 表示未解决。 */
+  solvedAt?: string | null;
   category?: PostCategory | null;
   tags?: PostTag[];
   createdAt?: string;
@@ -354,6 +356,10 @@ export interface Comment {
   isPinned?: boolean;
   /** 置顶时间（ISO 8601）。 */
   pinnedAt?: string;
+  /** 是否被帖主/管理员采纳为最佳答案（仅顶层评论）。 */
+  isAccepted?: boolean;
+  /** 采纳时间（ISO 8601）。 */
+  acceptedAt?: string;
   /** 展示楼层号（列表接口按 desc 顺序返回），置顶评论无楼层号。 */
   floor?: number;
 }
@@ -645,7 +651,8 @@ export type DmNotificationKind =
   | "reply"
   | "mention"
   | "system"
-  | "denny";
+  | "denny"
+  | "accepted";
 
 /**
  * pseudo conversation id 类型标记。真 DM 的 documentId 是 strapi 给的 hash；
