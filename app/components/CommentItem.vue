@@ -34,7 +34,6 @@ const emit = defineEmits<{
   deleteReply: [reply: CommentReply, parentComment: Comment];
   reportComment: [comment: Comment];
   reportReply: [reply: CommentReply, parentComment: Comment];
-  blockUser: [authorDocumentId: string];
   pinComment: [comment: Comment];
   unpinComment: [comment: Comment];
   acceptComment: [comment: Comment];
@@ -64,7 +63,6 @@ const handleCommentMenuCommand = (command: string | number) => {
 const handleReplyMenuCommand = (reply: CommentReply, command: string | number) => {
   if (command === "delete" && canDeleteReply(reply)) emit("deleteReply", reply, props.comment);
   else if (command === "report") emit("reportReply", reply, props.comment);
-  else if (command === "block" && reply.author?.documentId && !isOwnReply(reply) && !reply.author?.isAiAgent) emit("blockUser", reply.author.documentId);
 };
 
 const floorLabel = computed(() => {
@@ -336,12 +334,6 @@ watch(
                   </button>
                   <template #dropdown>
                     <z-dropdown-item command="report" :disabled="isOwnReply(reply)">举报评论</z-dropdown-item>
-                    <z-dropdown-item
-                      command="block"
-                      :disabled="!reply.author?.documentId || isOwnReply(reply) || reply.author?.isAiAgent"
-                    >
-                      拉黑用户
-                    </z-dropdown-item>
                     <z-dropdown-item command="delete" :disabled="!canDeleteReply(reply)">删除评论</z-dropdown-item>
                   </template>
                 </z-dropdown>
