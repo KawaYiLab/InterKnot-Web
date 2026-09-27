@@ -251,7 +251,7 @@ watch(
                   {{ comment.isPinned ? '取消置顶' : '置顶评论' }}
                 </z-dropdown-item>
                 <z-dropdown-item :command="comment.isAccepted ? 'unaccept' : 'accept'" :disabled="!canAccept">
-                  {{ comment.isAccepted ? '取消采纳' : '采纳' }}
+                  {{ comment.isAccepted ? '取消采纳' : '采纳评论' }}
                 </z-dropdown-item>
                 <z-dropdown-item command="delete" :disabled="!canDeleteComment">删除评论</z-dropdown-item>
               </template>
@@ -561,20 +561,17 @@ watch(
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 0 6px 6px 6px;
-  background: #14351f;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
   color: #4ade80;
   line-height: 1.5;
 }
 
 .ik-comment__accepted-icon {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
 }
 
 /* ── Body ──────────────────────────────────────── */
