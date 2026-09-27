@@ -59,7 +59,6 @@ const handleCommentMenuCommand = (command: string | number) => {
   else if (command === "unaccept") emit("unacceptComment", props.comment);
   else if (command === "delete" && canDeleteComment.value) emit("deleteComment", props.comment);
   else if (command === "report") emit("reportComment", props.comment);
-  else if (command === "block" && props.comment.author?.documentId && !isOwnComment.value && !props.comment.author?.isAiAgent) emit("blockUser", props.comment.author.documentId);
 };
 
 const handleReplyMenuCommand = (reply: CommentReply, command: string | number) => {
@@ -241,12 +240,6 @@ watch(
               </button>
               <template #dropdown>
                 <z-dropdown-item command="report" :disabled="isOwnComment">举报评论</z-dropdown-item>
-                <z-dropdown-item
-                  command="block"
-                  :disabled="!comment.author?.documentId || isOwnComment || comment.author?.isAiAgent"
-                >
-                  拉黑用户
-                </z-dropdown-item>
                 <z-dropdown-item :command="comment.isPinned ? 'unpin' : 'pin'" :disabled="!canPin">
                   {{ comment.isPinned ? '取消置顶' : '置顶评论' }}
                 </z-dropdown-item>
