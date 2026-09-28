@@ -10,7 +10,23 @@ import {
   getNormalizedCoverAspectRatio,
 } from "~/utils/cover";
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
-import { ArrowPathIcon } from "@heroicons/vue/24/outline";
+import {
+  ArrowPathIcon,
+  SparklesIcon,
+  ClockIcon,
+  FireIcon,
+  BookmarkIcon,
+  UserGroupIcon,
+  MagnifyingGlassIcon,
+} from "@heroicons/vue/24/outline";
+import {
+  TabsRoot,
+  TabsList,
+  TabsTrigger,
+  TabsIndicator,
+  ScrollAreaRoot,
+  ScrollAreaViewport,
+} from "reka-ui";
 import { useArticleFeedUpdates } from "~/composables/useArticleFeedUpdates";
 import { useRecommendations } from "~/composables/useRecommendations";
 import { decodeJwtUserId } from "~/utils/request-auth";
@@ -19,6 +35,7 @@ import { decodeJwtUserId } from "~/utils/request-auth";
 import VirtualMasonry from "~/components/VirtualMasonry.vue";
 import PostCard from "~/components/PostCard.vue";
 import PostCardSkeleton from "~/components/PostCardSkeleton.vue";
+import HomeFeedNavigation from "~/components/HomeFeedNavigation.vue";
 
 const api = useApi();
 const homeStateCache = useHomeStateCache();
@@ -117,28 +134,13 @@ const setSortMode = (mode: ArticleSort) => {
 // feed 模式：推荐 / 关注（我关注的作者）/ 收藏（我的收藏）。
 // 关注、收藏需登录；缓存键随 feed 一起隔离（见 useApi.searchArticles）。
 const feedMode = ref<ArticleFeed>("recommend");
-// 右侧仅展示「关注 / 收藏」两个特殊筛选；默认（推荐）态由左侧分类栏主导，
-// 此时这两个按钮均不高亮。再次点击已激活的按钮即可切回推荐。
-const feedTabs: { key: Exclude<ArticleFeed, "recommend">; label: string }[] = [
-  { key: "following", label: "关注" },
-  { key: "favorites", label: "收藏" },
-];
+const FEED_PANEL_ID = "ik-home-feed-panel";
 
-const selectFeed = (mode: Exclude<ArticleFeed, "recommend">) => {
-  // 点击已激活的 feed：切回推荐流。
-  if (mode === feedMode.value) {
-    feedMode.value = "recommend";
-    return;
-  }
-  if (!auth.isLogin) {
-    loginDialog.open();
-    return;
-  }
-  // 关注/收藏是独立流，不与分类叠加：进入时清空已选分类，避免分类 tab 仍高亮
-  // 且后端把 category 与 feed 过滤叠加导致结果是子集。
-  selectedCategory.value = "";
-  feedMode.value = mode;
-};
+interface NavTab {
+  key: string;
+  label: string;
+  icon: any;
+}
 
 /** 当前生效的搜索词：仅推荐流支持文本搜索，关注/收藏强制走列表流。 */
 const activeQuery = () => (feedMode.value === "recommend" ? query.value.trim() : "");
@@ -146,24 +148,112 @@ const activeQuery = () => (feedMode.value === "recommend" ? query.value.trim() :
 /** 搜索态：搜索结果按相关性排，排序 Tab 不参与（「热门」Tab 此时不渲染）。 */
 const isSearching = computed(() => !!query.value.trim());
 
-/**
- * 当前真正生效的排序档：关注 / 收藏各有固定顺序（关注按发布时间、收藏按收藏时间），
- * 搜索按相关性——这些场景后端都不吃 sort，一律收敛到 latest，缓存键与 Tab 高亮
- * 都跟着它，「热门」不会在后端其实没按热度排的时候还亮着。
- *
- * 注意这里是「收敛」不是「等价」：搜索态下 /articles/search 实际按相关性排
- * （parseSearchSort 默认 relevance），而高亮的是「最新」——「热门」Tab 此时整个
- * 不渲染，一行里只剩它可亮，比留一个谁都不亮的空档好读。
- */
 const activeSort = computed<ArticleSort>(() =>
   feedMode.value === "recommend" && !isSearching.value ? sortMode.value : "latest",
 );
 
-/**
- * 排序 Tab（最新 / 热门）：与分类 Tab 同处一行、同款造型，所以语义也一致——整行单选。
- * 点顶部排序即回到「全部频道 + 推荐流」；频道内部保留自己的推荐/最新选择。
- * 关注和收藏仍使用各自的固定排序（见 activeSort）。
- */
+const mainNavTabs = computed<NavTab[]>(() => {
+  if (isSearching.value) {
+    return [
+      { key: "search", label: "搜索结果", icon: MagnifyingGlassIcon },
+      { key: "following", label: "关注", icon: UserGroupIcon },
+      { key: "favorites", label: "收藏", icon: BookmarkIcon },
+    ];
+  }
+  return [
+    { key: "recommend", label: "推荐", icon: SparklesIcon },
+    { key: "latest", label: "最新", icon: ClockIcon },
+    { key: "hot", label: "热门", icon: FireIcon },
+    { key: "following", label: "关注", icon: UserGroupIcon },
+    { key: "favorites", label: "收藏", icon: BookmarkIcon },
+  ];
+});
+
+const currentTab = computed(() => {
+  if (isSearching.value) {
+    return feedMode.value === "recommend" ? "search" : feedMode.value;
+  }
+  if (feedMode.value !== "recommend") {
+    return feedMode.value;
+  }
+  return activeSort.value;
+});
+
+const activeTabTriggerId = computed(() => `ik-tab-${currentTab.value}`);
+
+const isCategoryFilterVisible = computed(
+  () => !isSearching.value && currentTab.value !== "hot" && feedMode.value === "recommend",
+);
+
+let lastLoginOpenTime = 0;
+const openLoginDialogOnce = () => {
+  const now = Date.now();
+  if (now - lastLoginOpenTime > 150) {
+    lastLoginOpenTime = now;
+    loginDialog.open();
+  }
+};
+
+const handleTriggerPointerDown = (key: string, event: Event) => {
+  if ((key === "following" || key === "favorites") && !auth.isLogin) {
+    event.preventDefault();
+    event.stopPropagation();
+    openLoginDialogOnce();
+  }
+};
+
+const handleTriggerKeyDown = (key: string, event: KeyboardEvent) => {
+  if (event.key === "Enter" || event.key === " ") {
+    if ((key === "following" || key === "favorites") && !auth.isLogin) {
+      event.preventDefault();
+      event.stopPropagation();
+      openLoginDialogOnce();
+    }
+  }
+};
+
+const handleTabChange = (val: string | number) => {
+  const tabKey = String(val);
+  if (tabKey === currentTab.value) return;
+
+  if (tabKey === "following" || tabKey === "favorites") {
+    if (!auth.isLogin) {
+      openLoginDialogOnce();
+      return;
+    }
+    selectedCategory.value = "";
+    feedMode.value = tabKey as ArticleFeed;
+    return;
+  }
+
+  if (tabKey === "search") {
+    feedMode.value = "recommend";
+    selectedCategory.value = "";
+    return;
+  }
+
+  if (tabKey === "hot") {
+    if (feedMode.value !== "recommend") feedMode.value = "recommend";
+    selectedCategory.value = "";
+    setSortMode("hot");
+    return;
+  }
+
+  if (tabKey === "recommend" || tabKey === "latest") {
+    if (feedMode.value !== "recommend") {
+      feedMode.value = "recommend";
+      selectedCategory.value = "";
+    }
+    setSortMode(tabKey as ArticleSort);
+  }
+};
+
+const selectAllCategories = () => {
+  if (feedMode.value !== "recommend") feedMode.value = "recommend";
+  if (selectedCategory.value === "") return;
+  selectedCategory.value = "";
+};
+
 const selectSort = (mode: ArticleSort) => {
   if (feedMode.value !== "recommend") feedMode.value = "recommend";
   selectedCategory.value = "";
@@ -1014,89 +1104,6 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ik-home-container ik-stack">
-    <!-- 顶部工具条：左侧频道分类（含最新/热门两个排序 Tab），右侧在线人数。 -->
-    <div class="ik-home-toolbar">
-      <!-- 频道 Tab 条：「最新 / 热门」恒在最前（全部频道下的两条互斥流），
-           其后按 order 排分类。恒渲染（不随 categories 异步加载出现/消失），
-           为分类栏预留固定高度，避免无缓存冷启动时频道列表后到导致下方内容跳动。 -->
-      <nav class="ik-category-tabs" aria-label="委托频道">
-        <!-- 推荐（个性化推荐，默认第一档） -->
-        <button
-          v-if="!isSearching"
-          type="button"
-          class="ik-category-tab"
-          :class="{ 'ik-category-tab--active': selectedCategory === '' && activeSort === 'recommend' }"
-          @click="selectSort('recommend')"
-        >
-          🧿推荐
-        </button>
-        <button
-          type="button"
-          class="ik-category-tab"
-          :class="{ 'ik-category-tab--active': selectedCategory === '' && activeSort === 'latest' }"
-          @click="selectSort('latest')"
-        >
-          最新
-        </button>
-        <!-- 搜索结果按相关性排序，热门榜在这条路径上无意义，故搜索态不渲染 -->
-        <button
-          v-if="!isSearching"
-          type="button"
-          class="ik-category-tab"
-          :class="{ 'ik-category-tab--active': selectedCategory === '' && activeSort === 'hot' }"
-          @click="selectSort('hot')"
-        >
-          热门
-        </button>
-        <button
-          v-for="cat in categories"
-          :key="cat.slug"
-          type="button"
-          class="ik-category-tab"
-          :class="{ 'ik-category-tab--active': selectedCategory === cat.slug }"
-          @click="selectCategory(cat.slug)"
-        >
-          {{ cat.name }}
-        </button>
-
-        <!-- feed 切换：关注 / 收藏，接在分类标签最后。未登录时引导登录；
-             再次点击已激活项切回推荐。 -->
-        <span class="ik-feed-sep" aria-hidden="true"></span>
-        <button
-          v-for="tab in feedTabs"
-          :key="tab.key"
-          type="button"
-          class="ik-feed-tab"
-          :class="{ 'ik-feed-tab--active': feedMode === tab.key }"
-          @click="selectFeed(tab.key)"
-        >
-          {{ tab.label }}
-        </button>
-      </nav>
-
-      <!-- 在线人数：🟢 N 在线 + 头像堆叠 +N -->
-      <div v-if="presenceOnline > 10" class="ik-online" aria-label="在线人数">
-        <span class="ik-online__dot" aria-hidden="true" />
-        <span class="ik-online__count">{{ presenceOnline }} 在线</span>
-        <div v-if="presenceShownAvatars.length" class="ik-online__stack" aria-hidden="true">
-          <img
-            v-for="(url, i) in presenceShownAvatars"
-            :key="url + i"
-            :src="url"
-            class="ik-online__avatar"
-            alt=""
-            loading="lazy"
-          />
-          <span v-if="presenceOverflow > 0" class="ik-online__more">+{{ presenceOverflow }}</span>
-        </div>
-      </div>
-    </div>
-
-    <nav v-if="selectedCategory && !isSearching && feedMode === 'recommend'" class="ik-category-sort" aria-label="频道排序">
-      <button type="button" class="ik-category-tab" :class="{ 'ik-category-tab--active': activeSort === 'recommend' }" @click="setSortMode('recommend')">频道推荐</button>
-      <button type="button" class="ik-category-tab" :class="{ 'ik-category-tab--active': activeSort === 'latest' }" @click="setSortMode('latest')">最新</button>
-    </nav>
-
     <!-- 移动端下拉刷新指示器 -->
     <div
       v-if="pullDistance > 0 || refreshing"
@@ -1113,104 +1120,114 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
-    <div class="ik-feed-updates" aria-live="polite" aria-atomic="true">
-      <Transition name="ik-new-articles-pill" mode="out-in">
-        <button
-          v-if="hasNewArticles && !refreshing"
-          class="ik-new-articles-pill"
-          type="button"
-          :disabled="applyingNewArticles || loading || loadingMore"
-          :aria-busy="applyingNewArticles"
-          @click="applyNewArticles"
-        >
-          <ArrowPathIcon
-            class="ik-new-articles-pill-icon"
-            :class="{ 'ik-refresh-spin': applyingNewArticles }"
-            aria-hidden="true"
-          />
-          <span v-if="applyingNewArticles">正在加载更新…</span>
-          <span v-else>查看 {{ newArticleIds.length }} 条新的或更新的帖子</span>
-        </button>
-        <div
-          v-else-if="updateAnnouncement && !refreshing"
-          class="ik-new-articles-pill ik-new-articles-pill--status"
-          role="status"
-        >{{ updateAnnouncement }}</div>
-      </Transition>
-    </div>
-
-    <ClientOnly>
-      <Transition name="ik-list-fade" mode="out-in">
-        <!-- 骨架屏：loading=true 且 list 为空时显示 -->
-        <div
-          v-if="!list.length && loading"
-          key="skeleton"
-          class="ik-skeleton-state"
-          role="status"
-          aria-live="polite"
-          aria-busy="true"
-        >
-          <span class="ik-sr-only">正在加载委托...</span>
-          <VirtualMasonry
-            class="ik-masonry"
-            :items="skeletonItems"
-            :column-width="240"
-            :gap="feedGap"
-            :min-columns="2"
-            :max-columns="5"
-            :key-mapper="skeletonKeyMapper"
-            :height-mapper="estimateSkeletonHeight"
-            :measure-items="false"
+    <!-- 顶部导航控制台：基于 shadcn-vue / reka-ui 的 Tabs 与 ScrollArea -->
+    <HomeFeedNavigation
+      :model-value="currentTab"
+      :category="selectedCategory"
+      :categories="categories"
+      :searching="isSearching"
+      @update:model-value="handleTabChange"
+      @update:category="(val: string) => (val === '' ? selectAllCategories() : selectCategory(val))"
+    >
+      <div class="ik-feed-updates" aria-live="polite" aria-atomic="true">
+        <Transition name="ik-new-articles-pill" mode="out-in">
+          <button
+            v-if="hasNewArticles && !refreshing"
+            class="ik-new-articles-pill"
+            type="button"
+            :disabled="applyingNewArticles || loading || loadingMore"
+            :aria-busy="applyingNewArticles"
+            @click="applyNewArticles"
           >
-            <template #default="{ item }">
-              <PostCardSkeleton :skeleton="item" />
-            </template>
-          </VirtualMasonry>
-        </div>
+            <ArrowPathIcon
+              class="ik-new-articles-pill-icon"
+              :class="{ 'ik-refresh-spin': applyingNewArticles }"
+              aria-hidden="true"
+            />
+            <span v-if="applyingNewArticles">正在加载更新…</span>
+            <span v-else>查看 {{ newArticleIds.length }} 条新的或更新的帖子</span>
+          </button>
+          <div
+            v-else-if="updateAnnouncement && !refreshing"
+            class="ik-new-articles-pill ik-new-articles-pill--status"
+            role="status"
+          >{{ updateAnnouncement }}</div>
+        </Transition>
+      </div>
 
-        <!-- 空状态：loading=false 且 list 为空时显示 -->
-        <div v-else-if="!visibleList.length && !loading && !hasNextPage" key="empty" class="ik-empty">暂无相关委托... [ o_x ]/</div>
-
-        <!-- 实际内容：list 不为空时显示 -->
-        <div v-else key="list" class="ik-list-state">
-          <VirtualMasonry
-            ref="masonryRef"
-            class="ik-masonry"
-            :items="visibleList"
-            :column-width="240"
-            :gap="feedGap"
-            :min-columns="2"
-            :max-columns="5"
-            :buffer="1800"
-            :estimated-height="300"
-            :height-mapper="estimatePostCardHeight"
-            :key-mapper="masonryKeyMapper"
-            :initial-heights="cachedMeasuredHeights"
+      <ClientOnly>
+        <Transition name="ik-list-fade" mode="out-in">
+          <!-- 骨架屏：loading=true 且 list 为空时显示 -->
+          <div
+            v-if="!list.length && loading"
+            key="skeleton"
+            class="ik-skeleton-state"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
           >
-            <template #default="{ item, index, columnCount }">
-              <PostCard
-                :class="{ 'ik-masonry-card-enter': shouldAnimatePost(item.id) }"
-                :style="shouldAnimatePost(item.id) ? getStaggerDelayStyle(index, columnCount) : undefined"
-                :post="item"
-                :recommendation-enabled="isRecommendationFeed && !postModal.isOpen.value"
-                :highlighted="highlightedArticleIds.has(item.id)"
-                :eager="index < columnCount * 2"
-                @open="goPost"
-                @animationend="finishEnterAnimation(item.id)"
-                v-memo="[item, shouldAnimatePost(item.id), highlightedArticleIds.has(item.id), index < columnCount * 2, isRecommendationFeed, postModal.isOpen.value]"
-              />
-            </template>
-          </VirtualMasonry>
+            <span class="ik-sr-only">正在加载委托...</span>
+            <VirtualMasonry
+              class="ik-masonry"
+              :items="skeletonItems"
+              :column-width="240"
+              :gap="feedGap"
+              :min-columns="2"
+              :max-columns="5"
+              :key-mapper="skeletonKeyMapper"
+              :height-mapper="estimateSkeletonHeight"
+              :measure-items="false"
+            >
+              <template #default="{ item }">
+                <PostCardSkeleton :skeleton="item" />
+              </template>
+            </VirtualMasonry>
+          </div>
 
-          <div ref="loadMoreSentinelRef" class="ik-load-more-sentinel">
-            <div v-if="loadingMore || !hasNextPage" class="ik-scroll-footer">
-              <img v-if="loadingMore" class="ik-scroll-gif" src="/images/Bangboo.gif" alt="加载中" />
-              <span v-else class="ik-meta">已经到底啦 [ O_X ] /</span>
+          <!-- 空状态：loading=false 且 list 为空时显示 -->
+          <div v-else-if="!visibleList.length && !loading && !hasNextPage" key="empty" class="ik-empty">暂无相关委托... [ o_x ]/</div>
+
+          <!-- 实际内容：list 不为空时显示 -->
+          <div v-else key="list" class="ik-list-state">
+            <VirtualMasonry
+              ref="masonryRef"
+              class="ik-masonry"
+              :items="visibleList"
+              :column-width="240"
+              :gap="feedGap"
+              :min-columns="2"
+              :max-columns="5"
+              :buffer="1800"
+              :estimated-height="300"
+              :height-mapper="estimatePostCardHeight"
+              :key-mapper="masonryKeyMapper"
+              :initial-heights="cachedMeasuredHeights"
+            >
+              <template #default="{ item, index, columnCount }">
+                <PostCard
+                  :class="{ 'ik-masonry-card-enter': shouldAnimatePost(item.id) }"
+                  :style="shouldAnimatePost(item.id) ? getStaggerDelayStyle(index, columnCount) : undefined"
+                  :post="item"
+                  :recommendation-enabled="isRecommendationFeed && !postModal.isOpen.value"
+                  :highlighted="highlightedArticleIds.has(item.id)"
+                  :eager="index < columnCount * 2"
+                  @open="goPost"
+                  @animationend="finishEnterAnimation(item.id)"
+                  v-memo="[item, shouldAnimatePost(item.id), highlightedArticleIds.has(item.id), index < columnCount * 2, isRecommendationFeed, postModal.isOpen.value]"
+                />
+              </template>
+            </VirtualMasonry>
+
+            <div ref="loadMoreSentinelRef" class="ik-load-more-sentinel">
+              <div v-if="loadingMore || !hasNextPage" class="ik-scroll-footer">
+                <img v-if="loadingMore" class="ik-scroll-gif" src="/images/Bangboo.gif" alt="加载中" />
+                <span v-else class="ik-meta">已经到底啦 [ O_X ] /</span>
+              </div>
             </div>
           </div>
-        </div>
-      </Transition>
-    </ClientOnly>
+        </Transition>
+      </ClientOnly>
+    </HomeFeedNavigation>
     <!-- Refresh FAB (hidden on mobile) -->
     <z-button
       circle
@@ -1226,7 +1243,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.ik-category-sort { display: flex; gap: 8px; padding: 0 4px; }
 .ik-home-container {
   position: relative;
   width: min(1600px, calc(100% - 40px));
@@ -1242,202 +1258,6 @@ onBeforeUnmount(() => {
 .ik-list-state {
   position: relative;
   z-index: 1;
-}
-
-/* 顶部工具条：频道分类（可换行/横滑），末尾接 feed 切换。 */
-.ik-home-toolbar {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.ik-category-tabs {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  /* 预留一行频道标签高度，避免频道列表异步到达时撑高导致下方瀑布流跳动 */
-  min-height: 30px;
-}
-
-/* 分类与 feed 切换之间的竖向分隔线 */
-.ik-feed-sep {
-  flex: 0 0 auto;
-  width: 1px;
-  align-self: stretch;
-  margin: 2px 2px;
-  background: #333;
-}
-
-/* feed 切换标签（关注/收藏）：与频道标签同款胶囊，接在分类末尾。 */
-.ik-feed-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 30px;
-  padding: 0 14px;
-  border-radius: 9999px;
-  border: 2px solid #222;
-  background: #222222;
-  color: #fff;
-  font-size: 14px;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-
-.ik-feed-tab--active {
-  color: #222;
-  background: var(--ik-primary, #BFFF09);
-  border-color: var(--ik-primary, #BFFF09);
-  font-weight: 700;
-}
-
-/* 与 z-tag 默认标签一致：深底 #1c1c1c + #222 描边、白字、胶囊圆角 */
-.ik-category-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 30px;
-  padding: 0 16px;
-  border-radius: 9999px;
-  border: 2px solid #222;
-  background: #222222;
-  color: #fff;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-
-.ik-category-tab--active {
-  color: #222;
-  background: var(--ik-primary, #BFFF09);
-  border-color: var(--ik-primary, #BFFF09);
-  font-weight: 700;
-}
-
-/* 在线人数：🟢 N 在线 + 头像堆叠 +N */
-.ik-online {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-  align-self: center;
-  margin-left: auto;
-  padding-left: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
-  line-height: 1;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.ik-online__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18);
-  flex-shrink: 0;
-}
-
-.ik-online__count {
-  font-feature-settings: "tnum";
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.78);
-}
-
-.ik-online__stack {
-  display: inline-flex;
-  align-items: center;
-}
-
-.ik-online__avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #1c1c1c;
-  background: #2a2a2a;
-}
-
-.ik-online__avatar:not(:first-child) {
-  margin-left: -8px;
-}
-
-.ik-online__more {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  margin-left: -8px;
-  padding: 0 6px;
-  border-radius: 9999px;
-  border: 2px solid #1c1c1c;
-  background: #333;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 11px;
-  font-weight: 700;
-  font-feature-settings: "tnum";
-}
-
-@media (max-width: 768px) {
-  .ik-home-toolbar {
-    gap: 10px;
-    margin-bottom: 12px;
-  }
-
-  .ik-category-tabs {
-    gap: 8px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-    min-height: 28px;
-  }
-
-  .ik-category-tabs::-webkit-scrollbar {
-    display: none;
-  }
-
-  .ik-category-tab {
-    flex: 0 0 auto;
-    height: 28px;
-    padding: 0 14px;
-    font-size: 13px;
-  }
-
-  .ik-feed-tab {
-    height: 28px;
-    padding: 0 12px;
-    font-size: 13px;
-  }
-
-  .ik-online {
-    gap: 6px;
-    padding-left: 8px;
-    font-size: 12px;
-  }
-
-  .ik-online__avatar,
-  .ik-online__more {
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
-  }
 }
 
 .ik-masonry {
