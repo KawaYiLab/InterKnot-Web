@@ -14,8 +14,6 @@ import {
   TabsList,
   TabsTrigger,
   TabsIndicator,
-  ScrollAreaRoot,
-  ScrollAreaViewport,
 } from "reka-ui";
 
 defineOptions({
@@ -24,12 +22,14 @@ defineOptions({
 
 interface Props {
   modelValue: string;
-  category: string;
-  categories: Category[];
+  category?: string;
+  categories?: Category[];
   searching?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  category: "",
+  categories: () => [],
   searching: false,
 });
 
@@ -73,10 +73,6 @@ const mainNavTabs = computed<NavTab[]>(() => {
   ];
 });
 
-const isCategoryFilterVisible = computed(
-  () => !props.searching && props.modelValue !== "hot" && (props.modelValue === "recommend" || props.modelValue === "latest"),
-);
-
 let lastLoginOpenTime = 0;
 const openLoginDialogOnce = () => {
   const now = Date.now();
@@ -117,11 +113,6 @@ const handleTabChange = (val: string | number) => {
 
   emit("update:modelValue", tabKey);
 };
-
-const handleCategoryClick = (slug: string) => {
-  if (slug === props.category) return;
-  emit("update:category", slug);
-};
 </script>
 
 <template>
@@ -132,29 +123,31 @@ const handleCategoryClick = (slug: string) => {
     @update:model-value="handleTabChange"
   >
     <div class="ik-home-toolbar">
-      <!-- 主流切换 Tabs（推荐 / 最新 / 热门 / 关注 / 收藏） -->
-      <TabsList class="ik-stream-tabs" aria-label="委托流模式">
-        <TabsIndicator class="ik-tabs-indicator" />
-        <TabsTrigger
-          v-for="t in mainNavTabs"
-          :key="t.key"
-          :value="t.key"
-          as-child
-        >
-          <button
-            type="button"
-            :id="'ik-tab-' + t.key"
-            :aria-controls="FEED_PANEL_ID"
-            class="ik-stream-tab"
-            @pointerdown="handleTriggerPointerDown(t.key, $event)"
-            @mousedown="handleTriggerPointerDown(t.key, $event)"
-            @keydown="handleTriggerKeyDown(t.key, $event)"
+      <div class="ik-home-toolbar__controls">
+        <!-- 主流切换 Tabs（推荐 / 最新 / 热门 / 关注 / 收藏） -->
+        <TabsList class="ik-stream-tabs" aria-label="委托流模式">
+          <TabsIndicator class="ik-tabs-indicator" />
+          <TabsTrigger
+            v-for="t in mainNavTabs"
+            :key="t.key"
+            :value="t.key"
+            as-child
           >
-            <component :is="t.icon" class="ik-stream-tab__icon" aria-hidden="true" />
-            {{ t.label }}
-          </button>
-        </TabsTrigger>
-      </TabsList>
+            <button
+              type="button"
+              :id="'ik-tab-' + t.key"
+              :aria-controls="FEED_PANEL_ID"
+              class="ik-stream-tab"
+              @pointerdown="handleTriggerPointerDown(t.key, $event)"
+              @mousedown="handleTriggerPointerDown(t.key, $event)"
+              @keydown="handleTriggerKeyDown(t.key, $event)"
+            >
+              <component :is="t.icon" class="ik-stream-tab__icon" aria-hidden="true" />
+              {{ t.label }}
+            </button>
+          </TabsTrigger>
+        </TabsList>
+      </div>
 
       <!-- 在线人数：🟢 N 在线 + 头像堆叠 +N -->
       <div v-if="presenceOnline > 10" class="ik-online" aria-label="在线人数">
@@ -173,38 +166,6 @@ const handleCategoryClick = (slug: string) => {
         </div>
       </div>
     </div>
-
-    <!-- 频道分类过滤栏（全部 / 各频道） -->
-    <nav v-show="isCategoryFilterVisible" class="ik-category-nav" aria-label="委托频道">
-      <ScrollAreaRoot class="ik-category-scroll-root">
-        <ScrollAreaViewport class="ik-category-scroll-viewport">
-          <div class="ik-category-chips">
-            <button
-              type="button"
-              class="ik-category-chip"
-              :class="{ 'ik-category-chip--active': category === '' }"
-              :aria-pressed="category === '' ? 'true' : 'false'"
-              @click="handleCategoryClick('')"
-            >
-              <span v-if="category === ''" class="ik-category-chip__dot" aria-hidden="true" />
-              全部
-            </button>
-            <button
-              v-for="cat in categories"
-              :key="cat.slug"
-              type="button"
-              class="ik-category-chip"
-              :class="{ 'ik-category-chip--active': category === cat.slug }"
-              :aria-pressed="category === cat.slug ? 'true' : 'false'"
-              @click="handleCategoryClick(cat.slug)"
-            >
-              <span v-if="category === cat.slug" class="ik-category-chip__dot" aria-hidden="true" />
-              {{ cat.name }}
-            </button>
-          </div>
-        </ScrollAreaViewport>
-      </ScrollAreaRoot>
-    </nav>
 
     <!-- Feed 内容主体（作为 Persistent TabPanel） -->
     <div
@@ -309,84 +270,11 @@ const handleCategoryClick = (slug: string) => {
   stroke-width: 2.2;
 }
 
-/* 频道横滑流（ScrollArea） */
-.ik-category-nav {
-  position: relative;
-  width: 100%;
-}
-
-.ik-category-scroll-root {
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-}
-
-.ik-category-scroll-viewport {
-  width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
-}
-
-.ik-category-scroll-viewport::-webkit-scrollbar {
-  display: none;
-}
-
-.ik-category-chips {
-  display: inline-flex;
+.ik-home-toolbar__controls {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 2px 4px;
-  min-height: 32px;
-}
-
-.ik-category-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 15px;
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: #191919;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.ik-category-chip:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  background: #222222;
-  transform: translateY(-1px);
-}
-
-.ik-category-chip:active {
-  transform: scale(0.96);
-}
-
-.ik-category-chip--active,
-.ik-category-chip[aria-pressed="true"] {
-  background: rgba(191, 255, 9, 0.12);
-  border-color: var(--ik-primary, #BFFF09);
-  color: var(--ik-primary, #BFFF09);
-  font-weight: 700;
-  box-shadow: 0 0 10px rgba(191, 255, 9, 0.2);
-}
-
-.ik-category-chip__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ik-primary, #BFFF09);
-  box-shadow: 0 0 6px var(--ik-primary, #BFFF09);
-  flex-shrink: 0;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 /* 在线人数：🟢 N 在线 + 头像堆叠 +N */
@@ -477,10 +365,8 @@ const handleCategoryClick = (slug: string) => {
     height: 14px;
   }
 
-  .ik-category-chip {
-    height: 28px;
-    padding: 0 12px;
-    font-size: 12px;
+  .ik-home-toolbar__controls {
+    gap: 8px;
   }
 
   .ik-online {
