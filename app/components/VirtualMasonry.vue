@@ -433,14 +433,27 @@ watch(
       mappedHeightCache.clear();
       return;
     }
-    // 插入/移动卡片保留其它项的高度；同 ID 的标题或封面更新则重新测量。
+    // 插入/移动卡片保留其它项的高度；仅在卡片不在 DOM 且尺寸估算发生变化时才使已测高度失效。
     const previous = new Map(oldItems.map((item) => [props.keyMapper(item), item]));
     const activeKeys = new Set(newItems.map(props.keyMapper));
     for (const item of newItems) {
       const key = props.keyMapper(item);
-      if (previous.get(key) !== item) {
-        measuredHeights.delete(key);
+      const prevItem = previous.get(key);
+      if (prevItem !== undefined && prevItem !== item) {
         mappedHeightCache.delete(key);
+
+        // 测量高度保留原则：
+        // 1. 若卡片已在 DOM 中（itemRefMap 有记录），ResizeObserver 会自然响应真实 DOM 尺寸变化，
+        //    非尺寸属性（如 isRead、浏览量等）更新时保留真实高度，绝不提前 delete，避免回退到估算值导致闪烁。
+        // 2. 若卡片不在 DOM 中，仅当其估算高度（heightMapper）实际发生变化时，才使 measuredHeights 失效。
+        if (!itemRefMap.has(key) && props.heightMapper) {
+          const colW = actualColumnWidth.value > 0 ? actualColumnWidth.value : props.columnWidth;
+          const oldMapped = props.heightMapper(prevItem, colW);
+          const newMapped = props.heightMapper(item, colW);
+          if (oldMapped !== newMapped) {
+            measuredHeights.delete(key);
+          }
+        }
       }
     }
     for (const key of previous.keys()) {
