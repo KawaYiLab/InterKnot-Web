@@ -124,13 +124,13 @@ const handleTabChange = (val: string | number) => {
 };
 
 // ── 分区筛选（shadcn-vue Select） ──
-// reka 的 SelectItem 不接受空串 value（空串保留给「清空选择」），「全部分区」用哨兵值占位，
+// reka 的 SelectItem 不接受空串 value（空串保留给「清空选择」），「全部」用哨兵值占位，
 // 进出组件时与 props.category 的空串互相转换。
 const ALL_CATEGORIES = "__all__";
 
 const categorySelectValue = computed(() => props.category || ALL_CATEGORIES);
 
-// 当前分区名；分区列表异步到达前（或快照里的分区已下线）查不到时以「分区」占位，不误显示成「全部分区」。
+// 当前分区名；分区列表异步到达前（或快照里的分区已下线）查不到时以「分区」占位，不误显示成「全部」。
 const activeCategoryName = computed(
   () => props.categories.find((c) => c.slug === props.category)?.name ?? "分区",
 );
@@ -235,8 +235,7 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
               <Squares2X2Icon class="ik-category-trigger__icon" aria-hidden="true" />
               <SelectValue class="ik-category-trigger__value">
                 <template v-if="category">{{ activeCategoryName }}</template>
-                <!-- 窄屏只显示「分区」，「全部」两字仅做视觉隐藏（读屏仍读「全部分区」） -->
-                <template v-else><span class="ik-category-trigger__all-prefix">全部</span>分区</template>
+                <template v-else>全部</template>
               </SelectValue>
             </SelectTrigger>
           </div>
@@ -248,7 +247,7 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
             @close-auto-focus="handleCategoryCloseAutoFocus"
             @pointer-down-outside="handleCategoryPointerDownOutside"
           >
-            <SelectItem :value="ALL_CATEGORIES" class="ik-category-menu__item">全部分区</SelectItem>
+            <SelectItem :value="ALL_CATEGORIES" class="ik-category-menu__item">全部</SelectItem>
             <template v-if="categories.length">
               <SelectSeparator class="ik-category-menu__separator" />
               <SelectItem
@@ -604,7 +603,7 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
 }
 
 /* 手机宽度：委托流 Tabs 与分区筛选同处一行——两者都去掉图标（纯文字，风格一致），
-   Tabs 撑满分区触发器之外的宽度，「全部分区」缩成「分区」 */
+   Tabs 撑满分区触发器之外的宽度 */
 @media (max-width: 520px) {
   .ik-home-toolbar__nav {
     flex: 1 1 100%;
@@ -622,16 +621,6 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
   .ik-stream-tab__icon,
   .ik-category-trigger__icon {
     display: none;
-  }
-
-  .ik-category-trigger__all-prefix {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
   }
 }
 </style>
