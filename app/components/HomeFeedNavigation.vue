@@ -396,24 +396,19 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
   stroke-width: 2.2;
 }
 
-/* 分区筛选（shadcn-vue Select）：外层轨道与主流 Tabs 同款深色胶囊；触发器本身透明，
-   悬停只变文字颜色、按下只缩放内容，交互反馈与 Tab 按钮完全一致（轨道不随悬停变化） */
+/* 分区筛选（shadcn-vue Select）：外层轨道与主流 Tabs 同款深色胶囊轨道（统一内边距与阴影），
+   触发器在选中时变为亮绿药丸，尺寸与 Tab 按钮完全一致 */
 .ik-category-track {
   display: inline-flex;
+  align-items: center;
   flex: 0 1 auto;
   min-width: 0;
+  padding: 3px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
   background: #141414;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
-  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-/* 已选具体分区：与左侧 Tab 选中高亮保持一致（实心荧光绿胶囊 + 纯黑文字与图标 + 柔和外发光） */
-.ik-category-track--active {
-  border-color: var(--ik-primary, #BFFF09);
-  background: var(--ik-primary, #BFFF09);
-  box-shadow: 0 0 14px rgba(191, 255, 9, 0.35);
+  user-select: none;
 }
 
 .ik-category-trigger {
@@ -423,8 +418,8 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
   gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
-  height: 38px;
-  padding: 0 14px 0 16px;
+  height: 32px;
+  padding: 0 12px 0 14px;
   border: none;
   border-radius: 9999px;
   background: transparent;
@@ -436,7 +431,7 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
   white-space: nowrap;
   user-select: none;
   cursor: pointer;
-  transition: color 0.15s ease, transform 0.1s ease;
+  transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .ik-category-trigger:hover,
@@ -444,19 +439,17 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
   color: #ffffff;
 }
 
-.ik-category-trigger:active {
-  transform: scale(0.96);
-}
-
 .ik-category-trigger:focus-visible {
   outline: 2px solid rgba(191, 255, 9, 0.7);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
-/* 写在 hover / open 之后：选中分区时文字与图标始终为纯黑粗体，与左侧选中 Tab 一致 */
+/* 已选具体分区：内部触发器化为与左侧 Tab 滑块完全一致的亮绿药丸（高度 32px，嵌在深色轨道内） */
 .ik-category-track--active .ik-category-trigger,
 .ik-category-track--active .ik-category-trigger:hover,
 .ik-category-track--active .ik-category-trigger[data-state="open"] {
+  background: var(--ik-primary, #BFFF09);
+  box-shadow: 0 0 14px rgba(191, 255, 9, 0.35);
   color: #000000;
   font-weight: 700;
 }
@@ -586,7 +579,7 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
 
   .ik-category-trigger {
     gap: 4px;
-    height: 34px;
+    height: 28px;
     padding: 0 10px 0 12px;
     font-size: 13px;
   }
