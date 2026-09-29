@@ -1410,6 +1410,10 @@ onBeforeUnmount(() => {
               <!-- 骨架屏：右栏（与评论自身骨架保持一致） -->
               <div class="ik-dialog__right">
                 <div style="flex:1;padding:16px;overflow:hidden">
+                  <div class="ik-dialog__comments-heading" aria-hidden="true" style="height: 22px; align-items: center; margin-bottom: 12px">
+                    <div class="ik-skel" style="width: 36px; height: 18px; border-radius: 3px;"></div>
+                    <div class="ik-skel" style="width: 20px; height: 14px; border-radius: 3px;"></div>
+                  </div>
                   <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
                     <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
                     <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
