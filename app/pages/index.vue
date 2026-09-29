@@ -978,6 +978,9 @@ const onTouchStart = (e: TouchEvent) => {
   if (!isMobile.value || refreshing.value || loading.value) return;
   // 弹窗/覆盖层打开时：下拉属于覆盖层自身手势，不应触发首页刷新
   if (document.querySelector(".ik-overlay")) return;
+  // 分区下拉等列表浮层内的点按/滑动同理；reka 的 SelectItem 还会在 touchend 上 stopPropagation，
+  // 若在这里开始跟踪，window 收不到 touchend，下拉指示器会残留在屏幕上。
+  if ((e.target as Element | null)?.closest?.("[role='listbox']")) return;
   if (window.scrollY > 5) return;
   const touch = e.touches[0];
   if (!touch) return;
@@ -1120,7 +1123,7 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
-    <!-- 顶部导航控制台：基于 shadcn-vue / reka-ui 的 Tabs 与 ScrollArea -->
+    <!-- 顶部导航控制台：基于 shadcn-vue / reka-ui 的 Tabs（委托流）与 Select（分区筛选） -->
     <HomeFeedNavigation
       :model-value="currentTab"
       :category="selectedCategory"
