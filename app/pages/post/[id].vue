@@ -1133,7 +1133,7 @@ onBeforeUnmount(() => {
                   <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
                 </div>
                 <h1 class="ik-page__title">
-                  <span v-if="post.solvedAt" class="ik-page__solved">已解决</span><span v-if="post.category" class="ik-page__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
+                  <span v-if="post.category" class="ik-page__title-cat">[{{ post.category.name }}]</span>{{ post.title }}
                 </h1>
                 <div
                   v-if="bodyHasContent"
@@ -1951,7 +1951,7 @@ onBeforeUnmount(() => {
 }
 
 .ik-page__comments-heading {
-  display: none;
+  display: flex;
   align-items: baseline;
   gap: 8px;
   margin: 0 0 12px;
@@ -2572,6 +2572,11 @@ onBeforeUnmount(() => {
 
   .ik-page__comments-heading {
     display: flex;
+  }
+
+  /* 移动端输入框内不显示评论数 badge */
+  .ik-engage-bar__comment-badge {
+    display: none;
   }
 
   .ik-page__actions {

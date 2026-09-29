@@ -1398,7 +1398,7 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                   <div class="ik-dialog__detail">
-                    <h1 v-if="headerTitle" class="ik-dialog__title"><span v-if="post?.solvedAt" class="ik-dialog__solved">已解决</span><span v-if="headerCategory" class="ik-dialog__title-cat">[ {{ headerCategory.name }} ]</span>{{ headerTitle }}</h1>
+                    <h1 v-if="headerTitle" class="ik-dialog__title"><span v-if="headerCategory" class="ik-dialog__title-cat">[{{ headerCategory.name }}]</span>{{ headerTitle }}</h1>
                     <div v-else class="ik-skel ik-skel--title"></div>
                     <div class="ik-skel ik-skel--line" style="width:100%"></div>
                     <div class="ik-skel ik-skel--line" style="width:90%"></div>
@@ -1593,7 +1593,7 @@ onBeforeUnmount(() => {
                         <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
                       </div>
                       <h1 class="ik-dialog__title">
-                        <span v-if="post.category" class="ik-dialog__title-cat">[ {{ post.category.name }} ]</span>{{ post.title }}
+                        <span v-if="post.category" class="ik-dialog__title-cat">[{{ post.category.name }}]</span>{{ post.title }}
                       </h1>
                       <div
                         v-if="bodyHasContent"
@@ -2655,7 +2655,7 @@ onBeforeUnmount(() => {
 }
 
 .ik-dialog__comments-heading {
-  display: none;
+  display: flex;
   align-items: baseline;
   gap: 8px;
   margin: 0 0 12px;
@@ -3303,6 +3303,11 @@ onBeforeUnmount(() => {
     display: flex;
   }
 
+  /* 移动端输入框内不显示评论数 badge */
+  .ik-engage-bar__comment-badge {
+    display: none;
+  }
+
   /* 底部互动栏固定在屏幕底部，不随内容滚走 */
   .ik-dialog__actions {
     position: sticky;
@@ -3323,11 +3328,6 @@ onBeforeUnmount(() => {
 
   .ik-dialog__body--emote-open {
     padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
-  }
-
-  /* 小屏直接隐藏"说点什么..."文字，避免与评论数 badge 重叠 */
-  .ik-engage-bar__placeholder span {
-    display: none;
   }
 }
 
