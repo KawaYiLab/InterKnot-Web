@@ -10,7 +10,7 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { StarIcon, ChatBubbleLeftIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
+import { StarIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import type { MentionCandidate, MentionAnchor, MentionRange, DisplaySegment } from "~/composables/useMentionInput";
@@ -1745,14 +1745,6 @@ onBeforeUnmount(() => {
                             />
                             <span>说点什么...</span>
                           </div>
-                          <!-- 移动到输入框内部右居中的评论数小标 -->
-                          <div
-                            v-if="!isCommentEditorActive"
-                            class="ik-engage-bar__comment-badge"
-                          >
-                            <ChatBubbleLeftIcon class="ik-engage-comment-icon" aria-hidden="true" />
-                            <span>{{ postCommentCount }}</span>
-                          </div>
                         </div>
 
                         <div class="ik-engage-bar__interact-container">
@@ -3002,27 +2994,6 @@ onBeforeUnmount(() => {
   opacity: 0.3;
 }
 
-.ik-engage-bar__comment-badge {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: #9a9a9a;
-  font-size: 13px;
-  font-weight: 700;
-  pointer-events: none; /* 让点击穿透，原生触发输入框聚焦 */
-  z-index: 2;
-}
-
-.ik-engage-comment-icon {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
 .ik-engage-bar__action:hover,
 .ik-engage-bar__tool:hover {
   color: var(--ik-primary);
@@ -3301,11 +3272,6 @@ onBeforeUnmount(() => {
 
   .ik-dialog__comments-heading {
     display: flex;
-  }
-
-  /* 移动端输入框内不显示评论数 badge */
-  .ik-engage-bar__comment-badge {
-    display: none;
   }
 
   /* 底部互动栏固定在屏幕底部，不随内容滚走 */
