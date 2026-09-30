@@ -19,12 +19,10 @@ import type { EmoteRange } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
-import type { CommentReadRecord } from "~/composables/useCommentReadHistory";
 import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
 import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
 import { useRecommendationReading, useRecommendations } from "~/composables/useRecommendations";
 import RelatedArticles from "./RelatedArticles.vue";
-import CommentRestorePill from "./CommentRestorePill.vue";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import BilibiliPlayer from "./BilibiliPlayer.vue";
@@ -505,9 +503,6 @@ const { seek, highlightedCommentId, targetFound, seeking } = useCommentSeek({
 });
 
 const commentHistory = useCommentReadHistory();
-const restoreRecord = ref<CommentReadRecord | null>(null);
-const showRestorePill = ref(false);
-const hasArrivedRestore = ref(false);
 const commentsScrollRef = ref<HTMLElement | null>(null);
 const dialogBodyRef = ref<HTMLElement | null>(null);
 
@@ -516,53 +511,6 @@ const getActiveCommentsContainer = (): HTMLElement | null => {
     return dialogBodyRef.value;
   }
   return commentsScrollRef.value;
-};
-
-const checkAndInitRestore = () => {
-  hasArrivedRestore.value = false;
-  showRestorePill.value = false;
-  restoreRecord.value = null;
-
-  if (props.targetCommentId) return;
-
-  const record = commentHistory.getRecord(props.postId);
-  if (record && (record.floor == null || record.floor > 1)) {
-    restoreRecord.value = record;
-    if (commentHistory.autoRestore.value) {
-      void handleRestoreReadingPosition();
-    } else {
-      showRestorePill.value = true;
-    }
-  }
-};
-
-const handleRestoreReadingPosition = async () => {
-  if (!restoreRecord.value?.commentId) return;
-  const ok = await seek(restoreRecord.value.commentId);
-  if (ok && targetFound.value) {
-    hasArrivedRestore.value = true;
-    showRestorePill.value = true;
-    setTimeout(() => {
-      if (hasArrivedRestore.value) {
-        showRestorePill.value = false;
-      }
-    }, 4000);
-  } else {
-    message.warning("未能定位到上次阅读的评论");
-    showRestorePill.value = false;
-  }
-};
-
-const handleBackToTopComments = () => {
-  const container = getActiveCommentsContainer();
-  if (container) {
-    container.scrollTo({ top: 0, behavior: "smooth" });
-  }
-  showRestorePill.value = false;
-};
-
-const dismissRestorePill = () => {
-  showRestorePill.value = false;
 };
 
 let scrollCleanup: (() => void) | null = null;
@@ -576,16 +524,12 @@ const onContainerScroll = () => {
 
   if (res.isTop) {
     commentHistory.clearRecord(props.postId);
-    showRestorePill.value = false;
   } else if (res.commentId && (res.floor == null || res.floor > 1)) {
     commentHistory.saveRecord(props.postId, {
       commentId: res.commentId,
       floor: res.floor,
       authorName: res.authorName,
     });
-    if (showRestorePill.value && !hasArrivedRestore.value && res.commentId !== restoreRecord.value?.commentId) {
-      showRestorePill.value = false;
-    }
   }
 };
 
@@ -606,7 +550,6 @@ const attachScrollListeners = () => {
 watch(commentsVisible, (visible) => {
   if (visible) {
     nextTick(() => {
-      checkAndInitRestore();
       attachScrollListeners();
     });
   }
@@ -624,7 +567,12 @@ const scheduleSeek = (request: PostRequest) => {
   if (!import.meta.client) return;
   const run = () => {
     if (!isCurrentPostRequest(request)) return;
-    void seek();
+    const historyRecord = !props.targetCommentId ? commentHistory.getRecord(props.postId) : null;
+    if (historyRecord?.commentId && (historyRecord.floor == null || historyRecord.floor > 1)) {
+      void seek(historyRecord.commentId);
+    } else {
+      void seek();
+    }
   };
   requestAnimationFrame(() => {
     if (typeof requestIdleCallback !== "undefined") {
@@ -1270,9 +1218,6 @@ const resetAndLoad = async () => {
   commentInputFocused.value = false;
   replyTarget.value = null;
   loading.value = true;
-  restoreRecord.value = null;
-  showRestorePill.value = false;
-  hasArrivedRestore.value = false;
   if (scrollRef.value) {
     scrollRef.value.scrollTop = 0;
   }
@@ -1748,20 +1693,6 @@ onBeforeUnmount(() => {
 
                 <!-- 右栏：评论 + 操作栏 -->
                 <div class="ik-dialog__right">
-                  <Transition name="ik-restore-pill">
-                    <CommentRestorePill
-                      v-if="showRestorePill && restoreRecord"
-                      :record="restoreRecord"
-                      :seeking="seeking"
-                      :arrived="hasArrivedRestore"
-                      :auto-restore="commentHistory.autoRestore.value"
-                      class="ik-dialog__restore-pill"
-                      @restore="handleRestoreReadingPosition"
-                      @dismiss="dismissRestorePill"
-                      @back-to-top="handleBackToTopComments"
-                      @toggle-auto-restore="commentHistory.setAutoRestore"
-                    />
-                  </Transition>
                   <div class="ik-dialog__comments-scroll" ref="commentsScrollRef">
                     <div class="ik-dialog__comments-inner">
                       <h2 class="ik-dialog__comments-heading">评论 <span>{{ postCommentCount }}</span></h2>
@@ -2751,25 +2682,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-/* ── 阅读位置恢复胶囊 ────────────────────────── */
-.ik-dialog__restore-pill {
-  position: absolute;
-  top: 10px;
-  right: 16px;
-  z-index: 25;
-}
-
-.ik-restore-pill-enter-active,
-.ik-restore-pill-leave-active {
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.ik-restore-pill-enter-from,
-.ik-restore-pill-leave-to {
-  opacity: 0;
-  transform: translateY(-8px) scale(0.96);
-}
-
 .ik-dialog__comments-scroll {
   flex: 1;
   min-height: 0;
@@ -3448,20 +3360,6 @@ onBeforeUnmount(() => {
 
   .ik-dialog__body--emote-open {
     padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
-  }
-
-  .ik-dialog__restore-pill {
-    position: fixed;
-    top: auto;
-    bottom: calc(64px + env(safe-area-inset-bottom));
-    right: 16px;
-    z-index: 30;
-  }
-
-  .ik-restore-pill-enter-from,
-  .ik-restore-pill-leave-to {
-    opacity: 0;
-    transform: translateY(12px) scale(0.96);
   }
 }
 
