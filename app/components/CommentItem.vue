@@ -4,10 +4,13 @@ import { formatTime } from "~/utils/time";
 import {
   HandThumbUpIcon,
   ChatBubbleLeftIcon,
-  ArrowUpCircleIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/vue/24/outline";
-import { HandThumbUpIcon as HandThumbUpIconSolid, CheckBadgeIcon } from "@heroicons/vue/24/solid";
+import {
+  HandThumbUpIcon as HandThumbUpIconSolid,
+  CheckBadgeIcon,
+  ArrowUpCircleIcon,
+} from "@heroicons/vue/24/solid";
 import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
 
 import UserHoverCard from "./UserHoverCard.vue";
@@ -151,7 +154,6 @@ watch(
     <div
       class="ik-comment__main"
       :class="{
-        'ik-comment__main--pinned': comment.isPinned,
         'ik-comment__main--target': comment.id === highlightedCommentId,
       }"
     >
@@ -530,25 +532,17 @@ watch(
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 0 6px 6px 6px;
-  background: #3a4a1a;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--ik-primary);
   line-height: 1.5;
 }
 
 .ik-comment__pinned-icon {
-  width: 12px;
-  height: 12px;
-}
-
-.ik-comment__main--pinned {
-  border-left: 3px solid var(--ik-primary);
-  padding-left: 10px;
+  width: 16px;
+  height: 16px;
 }
 
 .ik-comment__accepted-badge {
