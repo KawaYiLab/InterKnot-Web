@@ -543,6 +543,7 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     isPinned: data.isPinned === true,
     pinnedAt: typeof data.pinnedAt === "string" ? data.pinnedAt : null,
     solvedAt: typeof data.solvedAt === "string" ? data.solvedAt : null,
+    allowCommentAccept: data.allowCommentAccept === true,
     isOwner: data.isOwner === true,
     category: toPostCategory(data.category),
     tags: toPostTags(data.tags),
