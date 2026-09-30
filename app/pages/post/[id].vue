@@ -983,7 +983,7 @@ onMounted(async () => {
     const initialTargetId = historyRecord?.commentId && (historyRecord.floor == null || historyRecord.floor > 1)
       ? historyRecord.commentId
       : undefined;
-    const seekOptions = initialTargetId ? { highlight: false, behavior: "auto" as const } : undefined;
+    const seekOptions = initialTargetId ? { highlight: false, behavior: "smooth" as const } : undefined;
     await Promise.all([recordView(), seek(initialTargetId, seekOptions)]);
   } finally {
     pageDataLoading.finish();
