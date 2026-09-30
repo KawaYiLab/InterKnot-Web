@@ -847,6 +847,8 @@ const isOwner = computed(() => post.value?.isOwner === true);
 const isAdmin = computed(() => auth.isLogin && auth.user?.isAdmin === true);
 const canPin = computed(() => auth.isLogin && (isOwner.value || isAdmin.value));
 const canAccept = computed(() => auth.isLogin && (isOwner.value || isAdmin.value));
+// 所在分区是否开启评论采纳（服务端按分区开关下发），与身份权限 canAccept 分开传递。
+const acceptEnabled = computed(() => post.value?.allowCommentAccept === true);
 
 const deletingArticle = ref(false);
 const pinningArticle = ref(false);
@@ -1654,6 +1656,7 @@ onBeforeUnmount(() => {
                           :is-post-owner="auth.isLogin && isOwner"
                           :can-pin="canPin"
                           :can-accept="canAccept"
+                          :accept-enabled="acceptEnabled"
                           :highlighted-comment-id="highlightedCommentId"
                           @like-comment="likeComment"
                           @like-reply="likeReply"

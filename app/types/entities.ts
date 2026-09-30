@@ -307,6 +307,11 @@ export interface Post {
   pinnedAt?: string | null;
   /** 已解决（存在被采纳的最佳答案）的时间（ISO 8601）；null 表示未解决。 */
   solvedAt?: string | null;
+  /**
+   * 所在分区是否开启评论采纳（仅详情接口下发，缺省视为未开启）。未开启时不能采纳新评论，
+   * 存量最佳答案仍可取消采纳。
+   */
+  allowCommentAccept?: boolean;
   category?: PostCategory | null;
   tags?: PostTag[];
   createdAt?: string;

@@ -22,6 +22,11 @@ const props = defineProps<{
   isPostOwner?: boolean;
   canPin?: boolean;
   canAccept?: boolean;
+  /**
+   * 所在分区是否开启评论采纳。未开启时不露出「采纳评论」，但已采纳评论的「取消采纳」保留；
+   * 能不能点仍由 canAccept（帖主 / 管理员）决定。
+   */
+  acceptEnabled?: boolean;
   highlightedCommentId?: string | null;
 }>();
 
@@ -241,7 +246,11 @@ watch(
                 <z-dropdown-item :command="comment.isPinned ? 'unpin' : 'pin'" :disabled="!canPin">
                   {{ comment.isPinned ? '取消置顶' : '置顶评论' }}
                 </z-dropdown-item>
-                <z-dropdown-item :command="comment.isAccepted ? 'unaccept' : 'accept'" :disabled="!canAccept">
+                <z-dropdown-item
+                  v-if="comment.isAccepted || acceptEnabled"
+                  :command="comment.isAccepted ? 'unaccept' : 'accept'"
+                  :disabled="!canAccept"
+                >
                   {{ comment.isAccepted ? '取消采纳' : '采纳评论' }}
                 </z-dropdown-item>
                 <z-dropdown-item command="delete" :disabled="!canDeleteComment">删除评论</z-dropdown-item>
