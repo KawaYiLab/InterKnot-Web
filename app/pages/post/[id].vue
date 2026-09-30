@@ -265,6 +265,44 @@ const getActiveCommentsContainer = (): HTMLElement | null => {
 
 let scrollCleanup: (() => void) | null = null;
 
+const commentsSentinelRef = ref<HTMLElement | null>(null);
+let commentsObserver: IntersectionObserver | null = null;
+
+const teardownCommentsObserver = () => {
+  commentsObserver?.disconnect();
+  commentsObserver = null;
+};
+
+const setupCommentsObserver = () => {
+  if (!import.meta.client) return;
+  teardownCommentsObserver();
+  const sentinel = commentsSentinelRef.value;
+  const root = getActiveCommentsContainer();
+  if (!sentinel || !root) return;
+
+  commentsObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        if (commentsHasNext.value && !commentsLoading.value) {
+          void loadComments();
+        }
+      }
+    },
+    { root, rootMargin: "240px 0px" },
+  );
+  commentsObserver.observe(sentinel);
+};
+
+watch(
+  [commentsSentinelRef, isCompact, commentsLoading, commentsHasNext],
+  () => {
+    nextTick(() => {
+      setupCommentsObserver();
+    });
+  },
+  { flush: "post" },
+);
+
 const onContainerScroll = () => {
   const container = getActiveCommentsContainer();
   if (!container || !comments.value.length || !postId.value || loading.value) return;
@@ -280,6 +318,14 @@ const onContainerScroll = () => {
       floor: res.floor,
       authorName: res.authorName,
     });
+  }
+
+  // 触底隐式续拉保底
+  if (commentsHasNext.value && !commentsLoading.value) {
+    const distToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distToBottom < 300) {
+      void loadComments();
+    }
   }
 };
 
@@ -1009,6 +1055,7 @@ onBeforeUnmount(() => {
   teardownMentionListeners = null;
   scrollCleanup?.();
   scrollCleanup = null;
+  teardownCommentsObserver();
 });
 </script>
 
@@ -1272,11 +1319,15 @@ onBeforeUnmount(() => {
                   @accept-comment="handleAcceptComment"
                   @unaccept-comment="handleUnacceptComment"
                 />
-                <div v-if="commentsHasNext" class="ik-page__load-more">
-                  <z-button :loading="commentsLoading" @click="loadComments">加载更多评论</z-button>
-                </div>
-                <div v-else-if="comments.length" class="ik-page__load-more">
-                  <span class="ik-meta">- 评论已全部加载 -</span>
+                <div
+                  v-if="comments.length"
+                  ref="commentsSentinelRef"
+                  class="ik-comments-sentinel"
+                >
+                  <div v-if="commentsLoading || !commentsHasNext" class="ik-scroll-footer">
+                    <img v-if="commentsLoading" class="ik-scroll-gif" src="/images/Bangboo.gif" alt="加载中" />
+                    <span v-else class="ik-meta">已经到底啦 [ O_X ] /</span>
+                  </div>
                 </div>
                 <div :id="relatedTargetId"></div>
               </div>
@@ -2020,10 +2071,24 @@ onBeforeUnmount(() => {
 
 
 
-.ik-page__load-more {
+.ik-comments-sentinel {
+  width: 100%;
+  min-height: 1px;
+}
+
+.ik-scroll-footer {
+  min-height: 60px;
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 8px 0;
+}
+
+.ik-scroll-gif {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
 }
 
 /* ── Actions Bar ──────────────────────────────── */
