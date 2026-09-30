@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
-import { useMediaQuery } from "@vueuse/core";
+import { useDebounceFn, useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import EmblaCarousel from "embla-carousel";
 import type { EmblaCarouselType } from "embla-carousel";
@@ -18,10 +18,13 @@ import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import type { EmoteRange } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
+import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
+import type { CommentReadRecord } from "~/composables/useCommentReadHistory";
 import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
 import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
 import { useRecommendationReading, useRecommendations } from "~/composables/useRecommendations";
 import RelatedArticles from "./RelatedArticles.vue";
+import CommentRestorePill from "./CommentRestorePill.vue";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import BilibiliPlayer from "./BilibiliPlayer.vue";
@@ -491,7 +494,7 @@ const refreshComments = async () => {
 
 const targetCommentId = computed(() => props.targetCommentId ?? null);
 
-const { seek, highlightedCommentId } = useCommentSeek({
+const { seek, highlightedCommentId, targetFound, seeking } = useCommentSeek({
   targetCommentId,
   comments,
   commentsHasNext,
@@ -499,6 +502,114 @@ const { seek, highlightedCommentId } = useCommentSeek({
   commentsVisible,
   // 目标可能是一条还没展开的回复（列表只内联前 3 条），交给 seek 按需展开。
   loadMoreReplies: api.loadMoreReplies,
+});
+
+const commentHistory = useCommentReadHistory();
+const restoreRecord = ref<CommentReadRecord | null>(null);
+const showRestorePill = ref(false);
+const hasArrivedRestore = ref(false);
+const commentsScrollRef = ref<HTMLElement | null>(null);
+const dialogBodyRef = ref<HTMLElement | null>(null);
+
+const getActiveCommentsContainer = (): HTMLElement | null => {
+  if (isCompact.value) {
+    return dialogBodyRef.value;
+  }
+  return commentsScrollRef.value;
+};
+
+const checkAndInitRestore = () => {
+  hasArrivedRestore.value = false;
+  showRestorePill.value = false;
+  restoreRecord.value = null;
+
+  if (props.targetCommentId) return;
+
+  const record = commentHistory.getRecord(props.postId);
+  if (record && (record.floor == null || record.floor > 1)) {
+    restoreRecord.value = record;
+    if (commentHistory.autoRestore.value) {
+      void handleRestoreReadingPosition();
+    } else {
+      showRestorePill.value = true;
+    }
+  }
+};
+
+const handleRestoreReadingPosition = async () => {
+  if (!restoreRecord.value?.commentId) return;
+  const ok = await seek(restoreRecord.value.commentId);
+  if (ok && targetFound.value) {
+    hasArrivedRestore.value = true;
+    showRestorePill.value = true;
+    setTimeout(() => {
+      if (hasArrivedRestore.value) {
+        showRestorePill.value = false;
+      }
+    }, 4000);
+  } else {
+    message.warning("未能定位到上次阅读的评论");
+    showRestorePill.value = false;
+  }
+};
+
+const handleBackToTopComments = () => {
+  const container = getActiveCommentsContainer();
+  if (container) {
+    container.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  showRestorePill.value = false;
+};
+
+const dismissRestorePill = () => {
+  showRestorePill.value = false;
+};
+
+let scrollCleanup: (() => void) | null = null;
+
+const onContainerScroll = () => {
+  const container = getActiveCommentsContainer();
+  if (!container || !comments.value.length || !props.postId || loading.value) return;
+
+  const res = findTopVisibleComment(container, comments.value);
+  if (!res) return;
+
+  if (res.isTop) {
+    commentHistory.clearRecord(props.postId);
+    showRestorePill.value = false;
+  } else if (res.commentId && (res.floor == null || res.floor > 1)) {
+    commentHistory.saveRecord(props.postId, {
+      commentId: res.commentId,
+      floor: res.floor,
+      authorName: res.authorName,
+    });
+    if (showRestorePill.value && !hasArrivedRestore.value && res.commentId !== restoreRecord.value?.commentId) {
+      showRestorePill.value = false;
+    }
+  }
+};
+
+const debouncedScroll = useDebounceFn(onContainerScroll, 250);
+
+const attachScrollListeners = () => {
+  scrollCleanup?.();
+  const c1 = commentsScrollRef.value;
+  const c2 = dialogBodyRef.value;
+  c1?.addEventListener("scroll", debouncedScroll, { passive: true });
+  c2?.addEventListener("scroll", debouncedScroll, { passive: true });
+  scrollCleanup = () => {
+    c1?.removeEventListener("scroll", debouncedScroll);
+    c2?.removeEventListener("scroll", debouncedScroll);
+  };
+};
+
+watch(commentsVisible, (visible) => {
+  if (visible) {
+    nextTick(() => {
+      checkAndInitRestore();
+      attachScrollListeners();
+    });
+  }
 });
 
 // 同委托切换 commentId（如从通知再打开同一篇委托的另一条评论）时重新定位
@@ -1159,6 +1270,9 @@ const resetAndLoad = async () => {
   commentInputFocused.value = false;
   replyTarget.value = null;
   loading.value = true;
+  restoreRecord.value = null;
+  showRestorePill.value = false;
+  hasArrivedRestore.value = false;
   if (scrollRef.value) {
     scrollRef.value.scrollTop = 0;
   }
@@ -1310,6 +1424,8 @@ onBeforeUnmount(() => {
     clearTimeout(switchResetTimer);
     switchResetTimer = null;
   }
+  scrollCleanup?.();
+  scrollCleanup = null;
   isScrollable.value = false;
 });
 </script>
@@ -1434,7 +1550,7 @@ onBeforeUnmount(() => {
 
             <template v-if="post">
               <!-- 桌面端：双栏布局 -->
-              <div v-show="!loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable, 'ik-dialog__body--emote-open': emotePickerVisible }">
+              <div v-show="!loading" ref="dialogBodyRef" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable, 'ik-dialog__body--emote-open': emotePickerVisible }">
                 <!-- 左栏：封面 + 正文 -->
                 <div class="ik-dialog__left">
                   <div class="ik-dialog__left-scroll" ref="scrollRef">
@@ -1632,7 +1748,21 @@ onBeforeUnmount(() => {
 
                 <!-- 右栏：评论 + 操作栏 -->
                 <div class="ik-dialog__right">
-                  <div class="ik-dialog__comments-scroll">
+                  <Transition name="ik-restore-pill">
+                    <CommentRestorePill
+                      v-if="showRestorePill && restoreRecord"
+                      :record="restoreRecord"
+                      :seeking="seeking"
+                      :arrived="hasArrivedRestore"
+                      :auto-restore="commentHistory.autoRestore.value"
+                      class="ik-dialog__restore-pill"
+                      @restore="handleRestoreReadingPosition"
+                      @dismiss="dismissRestorePill"
+                      @back-to-top="handleBackToTopComments"
+                      @toggle-auto-restore="commentHistory.setAutoRestore"
+                    />
+                  </Transition>
+                  <div class="ik-dialog__comments-scroll" ref="commentsScrollRef">
                     <div class="ik-dialog__comments-inner">
                       <h2 class="ik-dialog__comments-heading">评论 <span>{{ postCommentCount }}</span></h2>
                       <div v-if="showCommentsSkeleton">
@@ -2610,6 +2740,7 @@ onBeforeUnmount(() => {
 
 /* ── Right Column ──────────────────────────────── */
 .ik-dialog__right {
+  position: relative;
   flex: 2;
   min-width: 0;
   display: flex;
@@ -2618,6 +2749,25 @@ onBeforeUnmount(() => {
   background: rgba(0, 0, 0, 0.85);
   border-radius: 16px;
   overflow: hidden;
+}
+
+/* ── 阅读位置恢复胶囊 ────────────────────────── */
+.ik-dialog__restore-pill {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  z-index: 25;
+}
+
+.ik-restore-pill-enter-active,
+.ik-restore-pill-leave-active {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ik-restore-pill-enter-from,
+.ik-restore-pill-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
 }
 
 .ik-dialog__comments-scroll {
@@ -3298,6 +3448,20 @@ onBeforeUnmount(() => {
 
   .ik-dialog__body--emote-open {
     padding-bottom: calc(var(--emote-panel-height) + 120px + env(safe-area-inset-bottom));
+  }
+
+  .ik-dialog__restore-pill {
+    position: fixed;
+    top: auto;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    right: 16px;
+    z-index: 30;
+  }
+
+  .ik-restore-pill-enter-from,
+  .ik-restore-pill-leave-to {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
   }
 }
 

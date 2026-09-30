@@ -41,6 +41,8 @@ export function useCommentSeek({
   const expandedPages = new Map<string, number>();
   const exhaustedParents = new Set<string>();
 
+  const currentTargetId = ref<string | null>(null);
+
   const findComment = (id: string, list: Comment[]): boolean => {
     if (list.length < checkedTopLevelCount.value) {
       // 评论列表被重置，需要重新扫描
@@ -56,7 +58,7 @@ export function useCommentSeek({
   };
 
   const highlightedCommentId = computed(() =>
-    targetFound.value ? targetCommentId.value : null,
+    targetFound.value ? (currentTargetId.value ?? targetCommentId.value) : null,
   );
 
   /**
@@ -104,8 +106,8 @@ export function useCommentSeek({
     return true;
   };
 
-  const scrollToTarget = async () => {
-    if (!targetCommentId.value || !targetFound.value) return;
+  const scrollToTarget = async (targetId: string) => {
+    if (!targetId || !targetFound.value) return;
 
     // 如果调用方延迟渲染评论 DOM（如 PostOverlay 的入场动画），
     // 先等待评论可见再滚动，避免目标元素尚未挂载导致滚动失效。
@@ -132,16 +134,20 @@ export function useCommentSeek({
     }
 
     await nextTick();
-    const id = targetCommentId.value;
+    const safeId = typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(targetId)
+      : targetId.replace(/["\\]/g, "\\$&");
     const el = document.querySelector(
-      `[data-comment-id="${CSS.escape(id)}"]`,
+      `[data-comment-id="${safeId}"]`,
     ) as HTMLElement | null;
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.scrollIntoView?.({ behavior: "smooth", block: "start" });
   };
 
-  const seek = async () => {
-    if (!targetCommentId.value) {
+  const seek = async (overrideTargetId?: string) => {
+    const effectiveTargetId = overrideTargetId ?? targetCommentId.value;
+    currentTargetId.value = effectiveTargetId;
+    if (!effectiveTargetId) {
       targetFound.value = false;
       checkedTopLevelCount.value = 0;
       await loadComments();
@@ -159,16 +165,11 @@ export function useCommentSeek({
       // 顶层评论还能不能继续翻（翻不动了就只剩展开回复这条路）
       let canLoadMore = true;
       while (true) {
-        if (findComment(targetCommentId.value, comments.value)) {
+        if (findComment(effectiveTargetId, comments.value)) {
           targetFound.value = true;
-          await scrollToTarget();
-          return;
+          await scrollToTarget(effectiveTargetId);
+          return true;
         }
-        // 先把顶层评论翻完，再考虑展开回复。顺序反过来会出事：maxReplyExpands 是整次 seek 的
-        // 全局预算，而第一页评论里只要有几条 repliesHasMore，展开优先就会把预算全烧在它们
-        // 身上 —— 目标是靠后那页的顶层评论时，得先白等这些串行请求（还会把无关评论的楼中楼
-        // 自己展开）；目标是靠后那页某条评论下未内联的回复时，预算已归零，那条回复永远展不开，
-        // seek 静默失败。顶层目标只靠翻页就能命中，翻完再展开还能拿到完整列表挑候选。
         if (canLoadMore && commentsHasNext.value) {
           await loadComments();
           // loadComments 出错或返回空页时别再试，转去展开回复（目标可能是已加载评论的回复）
@@ -182,6 +183,7 @@ export function useCommentSeek({
         if (await expandOneRepliesPage()) continue;
         break;
       }
+      return targetFound.value;
     } finally {
       seeking.value = false;
     }
@@ -190,7 +192,8 @@ export function useCommentSeek({
   // 目标评论切换时清除高亮状态，避免旧 target 残留
   watch(
     targetCommentId,
-    () => {
+    (newVal) => {
+      currentTargetId.value = newVal;
       targetFound.value = false;
       checkedTopLevelCount.value = 0;
       replyExpands = 0;
