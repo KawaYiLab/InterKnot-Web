@@ -569,7 +569,7 @@ const scheduleSeek = (request: PostRequest) => {
     if (!isCurrentPostRequest(request)) return;
     const historyRecord = !props.targetCommentId ? commentHistory.getRecord(props.postId) : null;
     if (historyRecord?.commentId && (historyRecord.floor == null || historyRecord.floor > 1)) {
-      void seek(historyRecord.commentId);
+      void seek(historyRecord.commentId, { highlight: false, behavior: "auto" });
     } else {
       void seek();
     }

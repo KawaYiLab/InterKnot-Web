@@ -19,6 +19,13 @@ export interface UseCommentSeekOptions {
   maxReplyExpands?: number;
 }
 
+export interface SeekOptions {
+  /** 是否对目标评论添加高亮特效，默认 true */
+  highlight?: boolean;
+  /** 滚动行为：'smooth' | 'auto'，默认 'smooth' */
+  behavior?: ScrollBehavior;
+}
+
 /**
  * 评论区目标定位 composable：按评论 id 逐页加载，找到后滚动并高亮。
  * 用于 PostOverlay 与 post/[id].vue 共享同一套「定位目标评论」逻辑。
@@ -42,6 +49,7 @@ export function useCommentSeek({
   const exhaustedParents = new Set<string>();
 
   const currentTargetId = ref<string | null>(null);
+  const shouldHighlight = ref(true);
 
   const findComment = (id: string, list: Comment[]): boolean => {
     if (list.length < checkedTopLevelCount.value) {
@@ -58,7 +66,7 @@ export function useCommentSeek({
   };
 
   const highlightedCommentId = computed(() =>
-    targetFound.value ? (currentTargetId.value ?? targetCommentId.value) : null,
+    targetFound.value && shouldHighlight.value ? (currentTargetId.value ?? targetCommentId.value) : null,
   );
 
   /**
@@ -106,7 +114,7 @@ export function useCommentSeek({
     return true;
   };
 
-  const scrollToTarget = async (targetId: string) => {
+  const scrollToTarget = async (targetId: string, behavior: ScrollBehavior = "smooth") => {
     if (!targetId || !targetFound.value) return;
 
     // 如果调用方延迟渲染评论 DOM（如 PostOverlay 的入场动画），
@@ -141,19 +149,21 @@ export function useCommentSeek({
       `[data-comment-id="${safeId}"]`,
     ) as HTMLElement | null;
     if (!el) return;
-    el.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    el.scrollIntoView?.({ behavior, block: "start" });
   };
 
-  const seek = async (overrideTargetId?: string) => {
+  const seek = async (overrideTargetId?: string, options?: SeekOptions) => {
     const effectiveTargetId = overrideTargetId ?? targetCommentId.value;
     currentTargetId.value = effectiveTargetId;
+    shouldHighlight.value = options?.highlight ?? true;
+    const scrollBehavior = options?.behavior ?? "smooth";
     if (!effectiveTargetId) {
       targetFound.value = false;
       checkedTopLevelCount.value = 0;
       await loadComments();
-      return;
+      return false;
     }
-    if (seeking.value) return;
+    if (seeking.value) return false;
     seeking.value = true;
     targetFound.value = false;
     checkedTopLevelCount.value = 0;
@@ -167,7 +177,7 @@ export function useCommentSeek({
       while (true) {
         if (findComment(effectiveTargetId, comments.value)) {
           targetFound.value = true;
-          await scrollToTarget(effectiveTargetId);
+          await scrollToTarget(effectiveTargetId, scrollBehavior);
           return true;
         }
         if (canLoadMore && commentsHasNext.value) {
@@ -194,6 +204,7 @@ export function useCommentSeek({
     targetCommentId,
     (newVal) => {
       currentTargetId.value = newVal;
+      shouldHighlight.value = true;
       targetFound.value = false;
       checkedTopLevelCount.value = 0;
       replyExpands = 0;
