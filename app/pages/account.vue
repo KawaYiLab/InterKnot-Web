@@ -1299,7 +1299,7 @@ useHead({ title: "账号中心" });
               </button>
               <div class="ik-ac-detail-title-wrap">
                 <h2 class="ik-ac-detail-title">网页设置</h2>
-                <p class="ik-ac-detail-desc">自定义当前浏览器的显示与交互偏好</p>
+                <p class="ik-ac-detail-desc">显示与交互偏好</p>
               </div>
               <div v-if="isMobile" class="ik-ac-detail-spacer" />
             </header>
