@@ -146,7 +146,26 @@ const targetCommentId = computed(() => {
 
 const covers = computed(() => post.value?.covers ?? []);
 const hasCovers = computed(() => covers.value.length > 0);
-const isCommentEditorActive = computed(() => commentInputFocused.value);
+const isCommentEditorActive = computed(
+  () =>
+    commentInputFocused.value ||
+    commentImages.uploadTasks.value.length > 0 ||
+    !!newComment.value.trim() ||
+    emoteInsert.hasEmotes.value,
+);
+const hasCommentContent = computed(
+  () =>
+    !!newComment.value.trim() ||
+    emoteInsert.hasEmotes.value ||
+    commentImages.uploadedImageIds.value.length > 0,
+);
+const canSubmitComment = computed(
+  () =>
+    !sendingComment.value &&
+    !commentImages.hasPendingUploads.value &&
+    !commentImages.hasErroredUploads.value &&
+    hasCommentContent.value,
+);
 const postLikeCount = computed(() => post.value?.likesCount ?? 0);
 // 兜底分支（详情接口没给 commentsCount）要把回复也算上，且必须按 totalRepliesOf 取回复总数：
 // 回复分页后 replies 只有前 3 条，拿 comments.length 会只数顶层、明显少算。
@@ -374,7 +393,7 @@ const sendComment = async () => {
     message.warning("有图片上传失败，请重试或移除后再发送");
     return;
   }
-  if (!newComment.value.trim() && !emoteInsert.hasEmotes.value) return;
+  if (!hasCommentContent.value) return;
 
   sendingComment.value = true;
   const isReply = !!replyTarget.value;
@@ -1392,7 +1411,7 @@ onBeforeUnmount(() => {
                       <span>回复 {{ replyTarget.authorName }}</span>
                       <button type="button" class="ik-engage-bar__reply-close" @click="replyTarget = null">✕</button>
                     </div>
-                    <div v-if="!isCommentEditorActive && !newComment.trim() && !emoteInsert.hasEmotes.value" class="ik-engage-bar__placeholder">
+                    <div v-if="!isCommentEditorActive && !newComment.trim() && !emoteInsert.hasEmotes.value && !commentImages.uploadTasks.value.length" class="ik-engage-bar__placeholder">
                       <img
                         :src="auth.user?.avatar || '/images/default-avatar.webp'"
                         alt=""
@@ -1524,7 +1543,7 @@ onBeforeUnmount(() => {
                       <button
                         type="button"
                         class="ik-engage-bar__submit"
-                        :disabled="sendingComment || commentImages.hasPendingUploads.value || commentImages.hasErroredUploads.value || (!newComment.trim() && !emoteInsert.hasEmotes.value)"
+                        :disabled="!canSubmitComment"
                         @click="sendComment"
                       >
                         {{ sendingComment ? "发送中" : "发送" }}

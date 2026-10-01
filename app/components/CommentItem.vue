@@ -193,7 +193,7 @@ watch(
         </div>
 
         <!-- Body -->
-        <div class="ik-comment__body">
+        <div v-if="comment.content?.trim()" class="ik-comment__body">
           <CommentBody :content="comment.content" />
         </div>
 
@@ -295,7 +295,7 @@ watch(
               </UserHoverCard>
               <span v-if="reply.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
             </div>
-            <div class="ik-comment__body ik-comment__body--reply">
+            <div v-if="reply.content?.trim()" class="ik-comment__body ik-comment__body--reply">
               <CommentBody :content="reply.content" />
             </div>
 

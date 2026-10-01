@@ -210,8 +210,7 @@ const canPublish = computed(
     !isLoadingEditor.value &&
     !isCoverUploading.value &&
     !isBodyOverLimit.value &&
-    title.value.trim().length > 0 &&
-    (body.value.trim().length > 0 || externalVideos.value.length > 0 || uploadedImages.value.length > 0),
+    title.value.trim().length > 0,
 );
 
 const coverPayload = computed(() => {
