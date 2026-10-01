@@ -644,6 +644,9 @@ const bubbleText = (msg: DmMessage): BubbleRender => {
     if ((k === "comment" || k === "reply" || k === "mention") && msg.comment?.content) {
       return { mode: "rich", content: msg.comment.content };
     }
+    if ((k === "comment" || k === "reply") && !msg.comment?.content) {
+      return k === "reply" ? "回复了你的评论 [图片]" : "评论了你的帖子 [图片]";
+    }
     // 互动类（like / favorite / denny / system）→ 走后端预渲染的 plain content
   }
   return msg.content ?? "";
