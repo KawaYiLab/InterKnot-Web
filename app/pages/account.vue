@@ -4,6 +4,7 @@ import { useMessage } from "zenless-ui";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  Cog6ToothIcon,
   ComputerDesktopIcon,
   EnvelopeIcon,
   ExclamationTriangleIcon,
@@ -17,6 +18,7 @@ import { normalizeApiError, resolveErrorMessage } from "~/utils/api-error";
 import { formatFullTime } from "~/utils/time";
 import { parseUserAgent } from "~/utils/device";
 import { groupSessionsByDate } from "~/utils/session-display";
+import { useCommentReadHistory } from "~/composables/useCommentReadHistory";
 import type { AuthSessionItem } from "~/types/entities";
 
 const auth = useAuthStore();
@@ -62,7 +64,7 @@ const {
 } = accountData;
 
 // ── 页面视图 ─────────────────────────────────
-type AccountMenuKey = "account" | "devices" | "mihoyo" | "blacklist";
+type AccountMenuKey = "account" | "devices" | "mihoyo" | "blacklist" | "preferences";
 type AccountSubView = "" | "email" | "password" | "delete";
 const activeMenuKey = ref<AccountMenuKey>("account");
 const activeSubView = ref<AccountSubView>("");
@@ -582,6 +584,18 @@ const blacklistMetaText = computed(() => {
   return blockedUsers.value.length ? `${blockedUsers.value.length} 个用户` : "0 个用户";
 });
 
+// ── 网页设置 ─────────────────────────────
+const commentHistory = useCommentReadHistory();
+const autoRestoreComment = computed({
+  get: () => commentHistory.autoRestore.value,
+  set: (val: boolean) => {
+    commentHistory.setAutoRestore(val);
+  },
+});
+const preferencesMetaText = computed(() => {
+  return autoRestoreComment.value ? "自动定位：开" : "自动定位：关";
+});
+
 onMounted(async () => {
   await auth.hydrateFromStorage();
   if (!auth.isLogin) {
@@ -590,13 +604,15 @@ onMounted(async () => {
     return;
   }
   void ensureLoaded();
-  // 支持通过链接直接打开绑定邮箱或设备会话页。
+  // 支持通过链接直接打开绑定邮箱、设备会话或网页设置页。
   if (route.query.view === "email") {
     activeMenuKey.value = "account";
     activeSubView.value = "email";
   } else if (route.query.view === "devices") {
     activeMenuKey.value = "devices";
     void ensureSessions();
+  } else if (route.query.view === "preferences" || route.query.view === "settings") {
+    activeMenuKey.value = "preferences";
   }
 });
 
@@ -645,6 +661,16 @@ useHead({ title: "账号中心" });
               <div class="ik-account-menu__text">
                 <span class="ik-account-menu__title">黑名单</span>
                 <span class="ik-account-menu__meta">{{ blacklistMetaText }}</span>
+              </div>
+            </div>
+          </z-menu-item>
+
+          <z-menu-item name="preferences">
+            <div class="ik-account-menu__content">
+              <Cog6ToothIcon class="ik-account-menu__icon" />
+              <div class="ik-account-menu__text">
+                <span class="ik-account-menu__title">网页设置</span>
+                <span class="ik-account-menu__meta">{{ preferencesMetaText }}</span>
               </div>
             </div>
           </z-menu-item>
@@ -750,6 +776,22 @@ useHead({ title: "账号中心" });
                   黑名单
                 </span>
                 <span class="ik-ac-row__value">{{ blacklistMetaText }}</span>
+                <span class="ik-ac-row__chevron" aria-hidden="true">
+                  <ChevronRightIcon aria-hidden="true" />
+                </span>
+              </button>
+            </div>
+
+            <div class="ik-ac-section">
+              <div class="ik-ac-section__head">
+                <span class="ik-ac-section__label">网页设置</span>
+              </div>
+              <button class="ik-ac-row" @click="onMenuChange('preferences')">
+                <span class="ik-ac-row__label">
+                  <Cog6ToothIcon class="ik-ac-row__icon" aria-hidden="true" />
+                  网页设置
+                </span>
+                <span class="ik-ac-row__value">{{ preferencesMetaText }}</span>
                 <span class="ik-ac-row__chevron" aria-hidden="true">
                   <ChevronRightIcon aria-hidden="true" />
                 </span>
@@ -1246,6 +1288,42 @@ useHead({ title: "账号中心" });
               >
                 加载更多
               </button>
+            </div>
+          </template>
+
+          <!-- 网页设置 -->
+          <template v-else-if="activeMenuKey === 'preferences'">
+            <header class="ik-ac-detail-header ik-ac-detail-header--preferences">
+              <button v-if="isMobile" class="ik-ac-back" aria-label="返回" @click="goBack">
+                <ChevronLeftIcon aria-hidden="true" />
+              </button>
+              <div class="ik-ac-detail-title-wrap">
+                <h2 class="ik-ac-detail-title">网页设置</h2>
+                <p class="ik-ac-detail-desc">自定义当前浏览器的显示与交互偏好</p>
+              </div>
+              <div v-if="isMobile" class="ik-ac-detail-spacer" />
+            </header>
+
+            <div class="ik-ac-detail-body">
+              <div class="ik-ac-setting-list">
+                <div
+                  class="ik-ac-setting-card"
+                  role="button"
+                  tabindex="0"
+                  @click="autoRestoreComment = !autoRestoreComment"
+                  @keydown.enter.space.prevent="autoRestoreComment = !autoRestoreComment"
+                >
+                  <div class="ik-ac-setting-card__info">
+                    <span class="ik-ac-setting-card__title">自动定位评论</span>
+                    <span class="ik-ac-setting-card__desc">
+                      打开委托详情时，自动滚动并恢复至上次阅读的历史评论位置
+                    </span>
+                  </div>
+                  <div class="ik-ac-setting-card__action" @click.stop>
+                    <z-switch v-model="autoRestoreComment" />
+                  </div>
+                </div>
+              </div>
             </div>
           </template>
           </div>
@@ -2102,6 +2180,75 @@ useHead({ title: "账号中心" });
     margin: 0;
   }
 
+  .ik-ac-setting-card {
+    padding: 14px 16px;
+  }
+}
+
+/* ── 网页设置 ── */
+.ik-ac-detail-header--preferences {
+  align-items: flex-start;
+}
+
+.ik-ac-detail-header--preferences .ik-ac-detail-title {
+  text-align: left;
+}
+
+.ik-ac-setting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.ik-ac-setting-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #232326;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ik-ac-setting-card:hover {
+  background: #2a2a2e;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.ik-ac-setting-card:focus-visible {
+  outline: 2px solid var(--ik-primary, #bfff09);
+  outline-offset: 2px;
+}
+
+.ik-ac-setting-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ik-ac-setting-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f1f1f4;
+  line-height: 1.4;
+}
+
+.ik-ac-setting-card__desc {
+  font-size: 13px;
+  color: #a4a4b0;
+  line-height: 1.5;
+}
+
+.ik-ac-setting-card__action {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 /* ═══════════════════════════════════════════════

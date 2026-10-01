@@ -90,6 +90,7 @@ function writeAutoRestore(enabled: boolean) {
 
 function ensureInitialized() {
   if (initialized) return;
+  if (!import.meta.client && typeof window === "undefined") return;
   initialized = true;
   inMemoryRecords = readStorage();
   autoRestoreRef.value = readAutoRestore();

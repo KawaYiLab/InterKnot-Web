@@ -1025,7 +1025,9 @@ onMounted(async () => {
   pageDataLoading.claim();
   try {
     await loadPost();
-    const historyRecord = !targetCommentId.value ? commentHistory.getRecord(postId.value) : null;
+    const historyRecord = !targetCommentId.value && commentHistory.autoRestore.value
+      ? commentHistory.getRecord(postId.value)
+      : null;
     const initialTargetId = historyRecord?.commentId && (historyRecord.floor == null || historyRecord.floor > 1)
       ? historyRecord.commentId
       : undefined;

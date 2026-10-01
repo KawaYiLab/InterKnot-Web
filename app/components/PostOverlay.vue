@@ -613,7 +613,9 @@ const scheduleSeek = (request: PostRequest) => {
   if (!import.meta.client) return;
   const run = () => {
     if (!isCurrentPostRequest(request)) return;
-    const historyRecord = !props.targetCommentId ? commentHistory.getRecord(props.postId) : null;
+    const historyRecord = !props.targetCommentId && commentHistory.autoRestore.value
+      ? commentHistory.getRecord(props.postId)
+      : null;
     if (historyRecord?.commentId && (historyRecord.floor == null || historyRecord.floor > 1)) {
       void seek(historyRecord.commentId, { highlight: false, behavior: "smooth" });
     } else {
