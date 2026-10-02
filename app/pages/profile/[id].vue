@@ -21,6 +21,7 @@ const modalQuery = computed(() => String(route.query.modal || ''));
 const showCardModal = computed(() => modalQuery.value === 'banner');
 const showAvatarModal = computed(() => modalQuery.value === 'avatar');
 const showSettingsModal = computed(() => SETTINGS_MODALS.includes(modalQuery.value));
+const showActionsModal = computed(() => !profile.value?.isSelf && modalQuery.value === 'actions');
 
 const openModal = (name: string) => {
   router.replace({ query: { ...route.query, modal: name } });
@@ -234,6 +235,11 @@ const canBlock = computed<boolean>(() => {
   if (p.isAiAgent) return false;
   if (typeof p.uid !== "number") return false;
   return true;
+});
+
+/** 他人主页是否有可执行的操作项（关注/私信/拉黑），用于控制「更多操作」按钮显隐 */
+const hasOtherActions = computed<boolean>(() => {
+  return canFollow.value || canSendDm.value || canBlock.value;
 });
 
 const blockLoading = ref(false);
@@ -501,19 +507,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <z-button v-if="profile.isSelf" @click="openModal('settings')">更多操作</z-button>
-        <div v-else class="ik-tab-bar__actions">
-          <z-button v-if="canFollow" @click="toggleFollow">
-            {{ profile.isFollowing ? "已关注" : "关注" }}
-          </z-button>
-          <z-button v-if="canSendDm" :loading="dmStarting" @click="startDm">私信</z-button>
-          <z-button
-            v-if="canBlock"
-            :loading="blockLoading"
-            @click="toggleBlock"
-          >
-            {{ profile.isBlockedByMe ? "取消拉黑" : "拉黑" }}
-          </z-button>
-        </div>
+        <z-button v-else-if="hasOtherActions" @click="openModal('actions')">更多操作</z-button>
       </div>
 
       <!-- ── A-Frame (包含名片 + 委托) ────────── -->
@@ -662,7 +656,7 @@ onBeforeUnmount(() => {
         <z-button @click="openModal('banner')">修改名片</z-button>
       </div>
 
-      <!-- 更多操作弹窗 -->
+      <!-- 更多操作弹窗（本人主页） -->
       <ClientOnly>
         <Teleport to="body">
           <Transition name="ik-overlay" appear>
@@ -677,6 +671,26 @@ onBeforeUnmount(() => {
               @bio-updated="onBioUpdated"
               @hidden-updated="onHiddenUpdated"
               @pinned-updated="onPinnedUpdated"
+            />
+          </Transition>
+        </Teleport>
+      </ClientOnly>
+
+      <!-- 更多操作弹窗（他人主页） -->
+      <ClientOnly>
+        <Teleport to="body">
+          <Transition name="ik-overlay" appear>
+            <UserActionsModal
+              v-if="showActionsModal"
+              :can-follow="canFollow"
+              :is-following="!!profile?.isFollowing"
+              :can-send-dm="canSendDm"
+              :can-block="canBlock"
+              :is-blocked="!!profile?.isBlockedByMe"
+              @close="closeModal"
+              @follow="toggleFollow"
+              @dm="startDm"
+              @block="toggleBlock"
             />
           </Transition>
         </Teleport>
@@ -808,11 +822,6 @@ onBeforeUnmount(() => {
   background:
     url("/images/tab-bg-point.webp") repeat,
     linear-gradient(180deg, #161616 0%, #080808 100%);
-}
-.ik-tab-bar__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 .ik-tab-bar__left {
   display: flex;
