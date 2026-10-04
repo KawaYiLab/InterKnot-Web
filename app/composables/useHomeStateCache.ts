@@ -6,7 +6,7 @@
  *
  * 依赖关系：measuredHeights 确保重建后布局完全一致 → scrollY 可直接定位。
  */
-import type { ArticleFeed, ArticleSort, Post } from "~/types/entities";
+import type { ArticleFeed, HomeSort, Post } from "~/types/entities";
 
 export interface HomeStateSnapshot {
   list: Post[];
@@ -21,7 +21,7 @@ export interface HomeStateSnapshot {
   query: string;
   category: string;
   feed: ArticleFeed;
-  sort: ArticleSort;
+  sort: HomeSort;
   /** 最新流已完整对账到的活动时间；与尚未查看的 ID 一起恢复。 */
   reconciledBump?: number | null;
   pendingArticleIds?: string[];

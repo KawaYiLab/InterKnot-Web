@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDebounceFn, useWindowSize, useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
-import type { ArticleFeed, ArticleSort, Category, Post } from "~/types/entities";
+import type { ArticleFeed, ArticleSort, Category, HomeSort, Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import {
   FALLBACK_COVER_ASPECT_RATIO,
@@ -15,6 +15,7 @@ import {
   SparklesIcon,
   ClockIcon,
   FireIcon,
+  EyeIcon,
   BookmarkIcon,
   UserGroupIcon,
   MagnifyingGlassIcon,
@@ -102,11 +103,13 @@ const selectedCategory = ref<string>("");
 // 选择记在 localStorage：刷新或下次进站保持上次看的那条流。默认「最新」。
 const SORT_STORAGE_KEY = "ik:home-sort";
 
-const readStoredSort = (): ArticleSort => {
+const readStoredSort = (): HomeSort => {
   if (!import.meta.client) return "recommend";
   try {
     const val = localStorage.getItem(SORT_STORAGE_KEY);
     if (val === "hot" || val === "latest" || val === "recommend") return val;
+    // 已读状态按账号记录：未登录时记着的「未看」无从过滤，先回落默认档
+    if (val === "unread") return auth.isLogin ? val : "recommend";
     return "recommend";
   } catch {
     // 隐私模式下读取即抛错，回落默认档
@@ -114,7 +117,7 @@ const readStoredSort = (): ArticleSort => {
   }
 };
 
-const sortMode = ref<ArticleSort>(readStoredSort());
+const sortMode = ref<HomeSort>(readStoredSort());
 
 /**
  * 用户主动点排序 Tab：既切当前档，也记进 localStorage 作为下次进站的默认。
@@ -122,7 +125,7 @@ const sortMode = ref<ArticleSort>(readStoredSort());
  * 无论如何都表达了「我以后默认看这条流」（比如先点了分类把当前档带回最新，
  * 再点「最新」时值没变，但偏好确实该落到最新）。
  */
-const setSortMode = (mode: ArticleSort) => {
+const setSortMode = (mode: HomeSort) => {
   sortMode.value = mode;
   try {
     localStorage.setItem(SORT_STORAGE_KEY, mode);
@@ -148,8 +151,16 @@ const activeQuery = () => (feedMode.value === "recommend" ? query.value.trim() :
 /** 搜索态：搜索结果按相关性排，排序 Tab 不参与（「热门」Tab 此时不渲染）。 */
 const isSearching = computed(() => !!query.value.trim());
 
-const activeSort = computed<ArticleSort>(() =>
+const activeHomeSort = computed<HomeSort>(() =>
   feedMode.value === "recommend" && !isSearching.value ? sortMode.value : "latest",
+);
+
+/** 「未看」：最新流里剔除当前账号点开过的帖子。 */
+const isUnreadFeed = computed(() => activeHomeSort.value === "unread");
+
+/** 实际发给列表接口的排序档：「未看」复用最新流的数据与缓存。 */
+const activeSort = computed<ArticleSort>(() =>
+  activeHomeSort.value === "unread" ? "latest" : activeHomeSort.value,
 );
 
 const mainNavTabs = computed<NavTab[]>(() => {
@@ -164,6 +175,7 @@ const mainNavTabs = computed<NavTab[]>(() => {
     { key: "recommend", label: "推荐", icon: SparklesIcon },
     { key: "latest", label: "最新", icon: ClockIcon },
     { key: "hot", label: "热门", icon: FireIcon },
+    { key: "unread", label: "未看", icon: EyeIcon },
     { key: "following", label: "关注", icon: UserGroupIcon },
     { key: "favorites", label: "收藏", icon: BookmarkIcon },
   ];
@@ -176,7 +188,7 @@ const currentTab = computed(() => {
   if (feedMode.value !== "recommend") {
     return feedMode.value;
   }
-  return activeSort.value;
+  return activeHomeSort.value;
 });
 
 const activeTabTriggerId = computed(() => `ik-tab-${currentTab.value}`);
@@ -194,8 +206,11 @@ const openLoginDialogOnce = () => {
   }
 };
 
+// 已读状态按账号记录，游客没有「看过」可言。
+const LOGIN_REQUIRED_TABS = new Set(["unread", "following", "favorites"]);
+
 const handleTriggerPointerDown = (key: string, event: Event) => {
-  if ((key === "following" || key === "favorites") && !auth.isLogin) {
+  if (LOGIN_REQUIRED_TABS.has(key) && !auth.isLogin) {
     event.preventDefault();
     event.stopPropagation();
     openLoginDialogOnce();
@@ -204,7 +219,7 @@ const handleTriggerPointerDown = (key: string, event: Event) => {
 
 const handleTriggerKeyDown = (key: string, event: KeyboardEvent) => {
   if (event.key === "Enter" || event.key === " ") {
-    if ((key === "following" || key === "favorites") && !auth.isLogin) {
+    if (LOGIN_REQUIRED_TABS.has(key) && !auth.isLogin) {
       event.preventDefault();
       event.stopPropagation();
       openLoginDialogOnce();
@@ -239,12 +254,17 @@ const handleTabChange = (val: string | number) => {
     return;
   }
 
-  if (tabKey === "recommend" || tabKey === "latest") {
+  if (tabKey === "unread" && !auth.isLogin) {
+    openLoginDialogOnce();
+    return;
+  }
+
+  if (tabKey === "recommend" || tabKey === "latest" || tabKey === "unread") {
     if (feedMode.value !== "recommend") {
       feedMode.value = "recommend";
       selectedCategory.value = "";
     }
-    setSortMode(tabKey as ArticleSort);
+    setSortMode(tabKey);
   }
 };
 
@@ -304,10 +324,16 @@ const feedUpdates = useArticleFeedUpdates({
   posts: list,
   enabled: feedStreamEnabled,
   scope: computed(() => JSON.stringify([
-    feedMode.value, selectedCategory.value, activeSort.value, query.value, auth.generation,
+    feedMode.value, selectedCategory.value, activeHomeSort.value, query.value, auth.generation,
   ])),
   canApply: () => !listRequestPending && !refreshing.value && !loading.value,
-  load: (ids) => api.getArticleUpdates(ids, selectedCategory.value),
+  load: async (ids) => {
+    const posts = await api.getArticleUpdates(ids, selectedCategory.value);
+    if (!isUnreadFeed.value) return posts;
+    // 已读帖被新回复顶起时不插进「未看」；本来就在列表里的（本次浏览刚点开的）原地保留。
+    const listed = new Set(list.value.map((post) => post.id));
+    return posts.filter((post) => !post.isRead || listed.has(post.id));
+  },
   onApplied: () => {
     seenIds = new Set(list.value.map((post) => post.id));
     const version = requestVersion.value;
@@ -443,6 +469,14 @@ const toUniqueNodes = (nodes: Post[], reset: boolean): Post[] => {
   return unique;
 };
 
+// 「未看」一页凑不满时继续向后翻：老用户的最新流前几页可能几乎都读过，
+// 只取一页会让列表空着或只露出零星几张卡。翻页次数设上限，剩下的交给触底续页。
+const UNREAD_MIN_BATCH = 12;
+const UNREAD_MAX_EXTRA_PAGES = 4;
+
+const dropReadNodes = (nodes: Post[]): Post[] =>
+  nodes.filter((post) => !post.isRead && !unsettledReadIds.has(post.id));
+
 const scrollToTopAfterReset = async (reset: boolean, version: number) => {
   await nextTick();
   if (!disposed && version === requestVersion.value && reset && import.meta.client) {
@@ -473,8 +507,9 @@ const fetchList = async (reset = false) => {
     );
     if (cached) {
       const uniqueNodes = toUniqueNodes(cached.nodes, true);
+      const visibleNodes = isUnreadFeed.value ? dropReadNodes(uniqueNodes) : uniqueNodes;
       enterAnimationIds.value = new Set();
-      list.value = uniqueNodes;
+      list.value = visibleNodes;
       endCursor.value = cached.endCursor;
       hasNextPage.value = cached.hasNextPage;
       cacheHit = true;
@@ -499,8 +534,9 @@ const fetchList = async (reset = false) => {
   }
 
   const currentVersion = ++requestVersion.value;
+  const unreadFeed = isUnreadFeed.value;
   try {
-    const page = await api.searchArticles(
+    const firstPage = await api.searchArticles(
       activeQuery(),
       reset ? "" : endCursor.value,
       selectedCategory.value,
@@ -511,7 +547,20 @@ const fetchList = async (reset = false) => {
       return;
     }
 
-    const uniqueNodes = toUniqueNodes(page.nodes, reset);
+    let page = firstPage;
+    let uniqueNodes = toUniqueNodes(page.nodes, reset);
+    if (unreadFeed) {
+      uniqueNodes = dropReadNodes(uniqueNodes);
+      for (
+        let extra = 0;
+        extra < UNREAD_MAX_EXTRA_PAGES && uniqueNodes.length < UNREAD_MIN_BATCH && page.hasNextPage;
+        extra++
+      ) {
+        page = await api.searchArticles("", page.endCursor, selectedCategory.value, feedMode.value, activeSort.value);
+        if (currentVersion !== requestVersion.value) return;
+        uniqueNodes = [...uniqueNodes, ...dropReadNodes(toUniqueNodes(page.nodes, false))];
+      }
+    }
 
     if (reset) {
       if (refreshing.value) {
@@ -529,7 +578,7 @@ const fetchList = async (reset = false) => {
     hasNextPage.value = page.hasNextPage;
     hasSettledPage = true;
     if (reset || feedUpdates.reconciledBump.value === null) {
-      feedUpdates.seedPollingBaseline(page.nodes);
+      feedUpdates.seedPollingBaseline(firstPage.nodes);
     }
 
     // 缓存命中路径下，scrollToTopAfterReset 不再需要（避免破坏用户期望的滚动位置）
@@ -825,6 +874,11 @@ watch(
     if (!auth.isLogin && feedMode.value !== "recommend") {
       skipFeedWatch = true;
       feedMode.value = "recommend";
+    }
+    // 只改当前档、不写 localStorage：重新登录后进站仍回到用户选的「未看」。
+    if (!auth.isLogin && sortMode.value === "unread") {
+      skipFeedWatch = true;
+      sortMode.value = "recommend";
     }
     void fetchList(true);
   },
@@ -1188,7 +1242,9 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- 空状态：loading=false 且 list 为空时显示 -->
-          <div v-else-if="!visibleList.length && !loading && !hasNextPage" key="empty" class="ik-empty">暂无相关委托... [ o_x ]/</div>
+          <div v-else-if="!visibleList.length && !loading && !hasNextPage" key="empty" class="ik-empty">
+            {{ isUnreadFeed ? "委托都看完啦，暂时没有未看的... [ o_x ]/" : "暂无相关委托... [ o_x ]/" }}
+          </div>
 
           <!-- 实际内容：list 不为空时显示 -->
           <div v-else key="list" class="ik-list-state">

@@ -483,6 +483,12 @@ export type ArticleFeed = "recommend" | "following" | "favorites";
  */
 export type ArticleSort = "recommend" | "latest" | "hot";
 
+/**
+ * 首页排序 Tab 的取值。「未看」不是后端的排序档：它请求最新流，
+ * 再在前端剔除接口标记为已读（点开过）的帖子。
+ */
+export type HomeSort = ArticleSort | "unread";
+
 export type UploadStatus =
   | "pending"
   | "compressing"

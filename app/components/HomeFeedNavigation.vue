@@ -7,6 +7,7 @@ import {
   SparklesIcon,
   ClockIcon,
   FireIcon,
+  EyeIcon,
   BookmarkIcon,
   UserGroupIcon,
   MagnifyingGlassIcon,
@@ -77,10 +78,14 @@ const mainNavTabs = computed<NavTab[]>(() => {
     { key: "recommend", label: "推荐", icon: SparklesIcon },
     { key: "latest", label: "最新", icon: ClockIcon },
     { key: "hot", label: "热门", icon: FireIcon },
+    { key: "unread", label: "未看", icon: EyeIcon },
     { key: "following", label: "关注", icon: UserGroupIcon },
     { key: "favorites", label: "收藏", icon: BookmarkIcon },
   ];
 });
+
+// 已读状态按账号记录，游客没有「看过」可言。
+const LOGIN_REQUIRED_TABS = new Set(["unread", "following", "favorites"]);
 
 let lastLoginOpenTime = 0;
 const openLoginDialogOnce = () => {
@@ -92,7 +97,7 @@ const openLoginDialogOnce = () => {
 };
 
 const handleTriggerPointerDown = (key: string, event: Event) => {
-  if ((key === "following" || key === "favorites") && !auth.isLogin) {
+  if (LOGIN_REQUIRED_TABS.has(key) && !auth.isLogin) {
     event.preventDefault();
     event.stopPropagation();
     openLoginDialogOnce();
@@ -101,7 +106,7 @@ const handleTriggerPointerDown = (key: string, event: Event) => {
 
 const handleTriggerKeyDown = (key: string, event: KeyboardEvent) => {
   if (event.key === "Enter" || event.key === " ") {
-    if ((key === "following" || key === "favorites") && !auth.isLogin) {
+    if (LOGIN_REQUIRED_TABS.has(key) && !auth.isLogin) {
       event.preventDefault();
       event.stopPropagation();
       openLoginDialogOnce();
@@ -113,11 +118,9 @@ const handleTabChange = (val: string | number) => {
   const tabKey = String(val);
   if (tabKey === props.modelValue) return;
 
-  if (tabKey === "following" || tabKey === "favorites") {
-    if (!auth.isLogin) {
-      openLoginDialogOnce();
-      return;
-    }
+  if (LOGIN_REQUIRED_TABS.has(tabKey) && !auth.isLogin) {
+    openLoginDialogOnce();
+    return;
   }
 
   emit("update:modelValue", tabKey);
@@ -198,7 +201,7 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
     <div class="ik-home-toolbar">
       <!-- 委托流 Tabs 与分区筛选是一组，始终同处一行（窄屏时整体收紧，不再把分区挤到第二行） -->
       <div class="ik-home-toolbar__nav">
-        <!-- 主流切换 Tabs（推荐 / 最新 / 热门 / 关注 / 收藏） -->
+        <!-- 主流切换 Tabs（推荐 / 最新 / 热门 / 未看 / 关注 / 收藏） -->
         <TabsList class="ik-stream-tabs" aria-label="委托流模式">
           <TabsIndicator class="ik-tabs-indicator" />
           <TabsTrigger
@@ -621,6 +624,13 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
   .ik-stream-tab__icon,
   .ik-category-trigger__icon {
     display: none;
+  }
+}
+
+/* 360px 级别的手机上六个 Tab 加分区触发器放不下，收窄 Tab 内边距，避免分区名被截成省略号 */
+@media (max-width: 400px) {
+  .ik-stream-tab {
+    padding: 0 7px;
   }
 }
 </style>
