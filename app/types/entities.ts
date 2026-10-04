@@ -480,14 +480,9 @@ export type ArticleFeed = "recommend" | "following" | "favorites";
 /**
  * 首页排序：最新（纯时间序）/ 热门（纯热度榜）。两条流互斥 ——
  * 「最新」里不掺热门帖，「热门」里不掺置顶帖，也不接时间序兜底。
+ * 未看：后端按阅读记录剔除当前账号点开过的帖子后的最新流，需登录。
  */
-export type ArticleSort = "recommend" | "latest" | "hot";
-
-/**
- * 首页排序 Tab 的取值。「未看」不是后端的排序档：它请求最新流，
- * 再在前端剔除接口标记为已读（点开过）的帖子。
- */
-export type HomeSort = ArticleSort | "unread";
+export type ArticleSort = "recommend" | "latest" | "hot" | "unread";
 
 export type UploadStatus =
   | "pending"
