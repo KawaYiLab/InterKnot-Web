@@ -260,25 +260,9 @@ export interface PostTag {
   slug: string;
 }
 
-export interface RecommendationContext {
-  token: string;
-  expiresAt?: number;
-  requestId: string;
-  surface: string;
-  source: string;
-  position: number;
-}
-
-export interface RecommendationEvent {
-  type: "impression" | "dwell";
-  token: string;
-  durationMs?: number;
-}
-
 export interface Post {
   id: string;
   title: string;
-  recommendation?: RecommendationContext;
   body?: string;
   bodyText?: string;
   rawBodyText?: string;
@@ -474,15 +458,15 @@ export interface BlockedUser {
   createdAt?: string;
 }
 
-/** 首页 feed 模式：推荐 / 我关注的作者 / 我的收藏。 */
-export type ArticleFeed = "recommend" | "following" | "favorites";
+/** 首页 feed 模式：全部 / 我关注的作者 / 我的收藏。 */
+export type ArticleFeed = "all" | "following" | "favorites";
 
 /**
  * 首页排序：最新（纯时间序）/ 热门（纯热度榜）。两条流互斥 ——
  * 「最新」里不掺热门帖，「热门」里不掺置顶帖，也不接时间序兜底。
  * 未看：后端按阅读记录剔除当前账号点开过的帖子后的最新流，需登录。
  */
-export type ArticleSort = "recommend" | "latest" | "hot" | "unread";
+export type ArticleSort = "latest" | "hot" | "unread";
 
 export type UploadStatus =
   | "pending"

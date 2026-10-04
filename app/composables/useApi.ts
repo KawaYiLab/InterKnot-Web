@@ -25,8 +25,6 @@ import type {
   ExamSubmitResult,
   MihoyoBinding,
   Post,
-  RecommendationContext,
-  RecommendationEvent,
   PostCategory,
   Tag,
   PostTag,
@@ -550,7 +548,6 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
   return {
     id: String(data.documentId || data.id || ""),
     title: String(data.title || "无标题"),
-    recommendation: toRecommendationContext(data.recommendation),
     body: (data.body as string | undefined) || "",
     bodyText: (data.text as string | undefined) || "",
     rawBodyText: (data.rawBodyText as string | undefined) || "",
@@ -586,18 +583,6 @@ function toPost(raw: unknown, apiBaseUrl: string): Post {
     bumpedBySelf: data.bumpedBySelf === true,
     author: toAuthor(data.author, apiBaseUrl),
   };
-}
-
-function toRecommendationContext(raw: unknown): RecommendationContext | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const value = raw as Record<string, unknown>;
-  if (typeof value.token !== "string" || !value.token || value.token.length > 8192 ||
-      typeof value.requestId !== "string" || !value.requestId ||
-      typeof value.surface !== "string" || typeof value.source !== "string" ||
-      !Number.isInteger(value.position) || Number(value.position) < 0) return undefined;
-  return { token: value.token, requestId: value.requestId, surface: value.surface,
-    source: value.source, position: Number(value.position),
-    ...(typeof value.expiresAt === "number" && Number.isFinite(value.expiresAt) ? { expiresAt: value.expiresAt } : {}) };
 }
 
 function toDraftArticle(raw: Record<string, unknown>): DraftArticle {
@@ -997,7 +982,7 @@ export function useApi() {
     query: string,
     endCur = "",
     category = "",
-    feed: ArticleFeed = "recommend",
+    feed: ArticleFeed = "all",
     sort: ArticleSort = "latest",
     tag = "",
   ): Promise<Pagination<Post>> => {
@@ -1010,7 +995,7 @@ export function useApi() {
     // 攒出来的数字 offset，resolveCursor 把两种形态分开，避免把 "20" 当游标发出去。
     const { cursor, start } = resolveCursor(endCur);
     // tag 单独作为缓存维度，避免与包含分隔符的频道标识碰撞。
-    const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
+    const cacheCategory = feed === "all" ? category : `${feed}|${category}`;
     const page = await cachedRead(
       qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort, tag),
       async () => {
@@ -1020,7 +1005,7 @@ export function useApi() {
             ...(query ? { q: query } : {}),
             ...(category ? { category } : {}),
             ...(tag ? { tag } : {}),
-            ...(feed !== "recommend" ? { feed } : {}),
+            ...(feed !== "all" ? { feed } : {}),
             // sort 只发给列表接口：/search 的 sort 档另有一档「相关性」且是其默认，
             // 搜索结果按相关性排最有用，不该被首页的排序选择顶掉。
             ...(query ? {} : { sort }),
@@ -1101,7 +1086,7 @@ export function useApi() {
     query: string,
     endCur = "",
     category = "",
-    feed: ArticleFeed = "recommend",
+    feed: ArticleFeed = "all",
     sort: ArticleSort = "latest",
     tag = "",
   ): Pagination<Post> | undefined => {
@@ -1110,7 +1095,7 @@ export function useApi() {
     if (!qc) return undefined;
     // 缓存槽的算法必须与 searchArticles 完全一致，否则预填永远命中不到。
     const { cursor, start } = resolveCursor(endCur);
-    const cacheCategory = feed === "recommend" ? category : `${feed}|${category}`;
+    const cacheCategory = feed === "all" ? category : `${feed}|${category}`;
     const page = qc.getQueryData<Pagination<Post>>(
       qk.articles.search(query, cacheCategory, cursor || start, DEFAULT_PAGE_SIZE, sort, tag),
     );
@@ -1230,25 +1215,10 @@ export function useApi() {
     return Number.isFinite(views) && views >= 0 ? views : undefined;
   };
 
-  const sendRecommendationEvents = async (events: RecommendationEvent[], signal?: AbortSignal): Promise<void> => {
-    await $api("/api/recommendations/events", { method: "POST", body: { events }, signal, timeout: 10_000, keepalive: true });
-  };
-
-  const getRecommendationContext = async (articleId: string, signal?: AbortSignal): Promise<RecommendationContext | undefined> => {
+  const getSuggestedArticles = async (articleId: string, limit = 6): Promise<Post[]> => {
     if (import.meta.client) await useAuthStore().ensureCredentials();
-    const response = await $api("/api/recommendations/context", { method: "POST", body: { articleId }, signal, timeout: 8000 });
-    const data = (unwrapData(response) || response) as Record<string, unknown>;
-    return toRecommendationContext(data.recommendation);
-  };
-
-  const setRecommendationDislike = async (articleId: string, disliked: boolean, signal?: AbortSignal): Promise<void> => {
-    await $api("/api/recommendations/dislike", { method: "POST", body: { articleId, disliked }, signal, timeout: 8000 });
-  };
-
-  const getRelatedArticles = async (articleId: string, limit = 6, surface: "related" | "ai" = "related"): Promise<Post[]> => {
-    if (import.meta.client) await useAuthStore().ensureCredentials();
-    const response = await $api(`/api/recommendations/related/${encodeURIComponent(articleId)}`, {
-      query: { limit, surface }, cache: "no-store",
+    const response = await $api(`/api/articles/suggested/${encodeURIComponent(articleId)}`, {
+      query: { limit }, cache: "no-store",
     });
     return (unwrapData<unknown[]>(response) || []).map((item) => toPost(item, apiBaseUrl));
   };
@@ -2779,10 +2749,7 @@ export function useApi() {
     seedSelfUser,
     patchSelfUserCache,
     searchArticles,
-    sendRecommendationEvents,
-    getRecommendationContext,
-    setRecommendationDislike,
-    getRelatedArticles,
+    getSuggestedArticles,
     getArticleUpdates,
     suggestArticles,
     peekArticles,

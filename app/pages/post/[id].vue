@@ -16,7 +16,6 @@ import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useC
 import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
 import BilibiliPlayer from "~/components/BilibiliPlayer.vue";
 import RelatedArticles from "~/components/RelatedArticles.vue";
-import { useRecommendationReading } from "~/composables/useRecommendations";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -38,13 +37,11 @@ const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
 const isBlocked = ref(false);
-const readingBodyRef = ref<HTMLElement | null>(null);
 const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
 const readingActive = computed(() => !loading.value && !loadError.value && !isBlocked.value &&
   !!post.value && post.value.id === String(route.params.id || "") && !post.value.isHidden &&
   !postModal.isOpen.value && !knockModal.visible.value && !isGalleryOpen.value && !isGalleryLoading.value);
-useRecommendationReading(() => post.value?.id, readingActive, readingBodyRef);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
@@ -1252,7 +1249,6 @@ onBeforeUnmount(() => {
 
               <!-- 正文 -->
               <div class="ik-page__detail">
-                <div ref="readingBodyRef">
                 <div v-if="post.isHidden" class="ik-page__hidden-banner" role="alert">
                   <EyeSlashIcon class="ik-page__hidden-icon" aria-hidden="true" />
                   <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
@@ -1283,7 +1279,6 @@ onBeforeUnmount(() => {
                     class="ik-page__tag"
                     @click="goTag(tag.slug)"
                   >#{{ tag.name }}</button>
-                </div>
                 </div>
                 <Teleport defer :to="`#${relatedTargetId}`" :disabled="!isCompact">
                   <RelatedArticles :document-id="post.id" :active="readingActive" :collapsible="isCompact" @open-post="postModal.open($event)" />

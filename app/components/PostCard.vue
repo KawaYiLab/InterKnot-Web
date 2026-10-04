@@ -22,7 +22,6 @@ import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 import { toCardCoverThumbUrl } from "~/utils/image";
 import UserHoverCard from "./UserHoverCard.vue";
-import { useRecommendationImpression, useRecommendations } from "~/composables/useRecommendations";
 
 const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
 
@@ -30,7 +29,6 @@ const props = defineProps<{
   post: Post;
   eager?: boolean;
   highlighted?: boolean;
-  recommendationEnabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -50,10 +48,6 @@ const coverSrc = ref(DEFAULT_COVER_IMAGE);
 const coverImageLoaded = ref(isCoverLoaded(coverSrc.value));
 const coverIsFallback = ref(false);
 const avatarSrc = ref(DEFAULT_AVATAR_IMAGE);
-const cardRef = ref<HTMLElement | null>(null);
-const recommendations = useRecommendations();
-const recommendationEnabled = computed(() => props.recommendationEnabled !== false && !!props.post.recommendation);
-useRecommendationImpression(cardRef, () => props.post, recommendationEnabled);
 
 const hasBackendCoverSize = computed(() =>
   typeof props.post.coverWidth === "number" &&
@@ -124,14 +118,12 @@ const onAvatarError = () => {
 };
 
 const handleOpen = (e: MouseEvent) => {
-  if (recommendationEnabled.value) recommendations.trackClick(props.post);
   emit("open", props.post, e);
 };
 </script>
 
 <template>
   <article
-    ref="cardRef"
     class="ik-card"
     :class="{ 'ik-card--updated': highlighted }"
     @click.capture="handleOpen"

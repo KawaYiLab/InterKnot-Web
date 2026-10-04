@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, useId, watch } from "vue";
 import type { Post } from "~/types/entities";
-import { useRecommendations } from "~/composables/useRecommendations";
 import RelatedArticleRow from "./RelatedArticleRow.vue";
 import Collapsible from "./ui/collapsible/Collapsible.vue";
 import CollapsibleContent from "./ui/collapsible/CollapsibleContent.vue";
@@ -13,7 +12,6 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ "open-post": [documentId: string] }>();
 const api = useApi();
 const auth = useAuthStore();
-const recommendations = useRecommendations();
 // 在首次默认收起时也提供稳定的无障碍关联目标。
 const listId = useId();
 const mounted = ref(false);
@@ -25,7 +23,7 @@ const seeds = computed(() => [...new Set([props.documentId, ...(props.seedIds ||
   .filter((id): id is string => typeof id === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(id)))].slice(0, 2));
 const shown = computed(() => {
   const excluded = new Set([...seeds.value, ...(props.excludeIds || [])]);
-  return posts.value.filter((post) => !excluded.has(post.id) && !recommendations.isDismissed(post.id))
+  return posts.value.filter((post) => !excluded.has(post.id))
     .slice(0, props.surface === "ai" ? 5 : 6);
 });
 const heading = computed(() => (props.surface === "ai" ? "推荐阅读" : "相关委托"));
@@ -40,7 +38,7 @@ watch([() => seeds.value.join(","), () => props.surface, () => auth.token, () =>
     onCleanup(() => { cancelled = true; });
     posts.value = [];
     if (!mounted.value || !props.active || !seeds.value.length) return;
-    const results = await Promise.allSettled(seeds.value.map((id) => api.getRelatedArticles(id, 6, props.surface)));
+    const results = await Promise.allSettled(seeds.value.map((id) => api.getSuggestedArticles(id, 6)));
     if (cancelled) return;
     const seen = new Set<string>();
     const lists = results.map((result) => result.status === "fulfilled" ? result.value : []);
@@ -52,7 +50,6 @@ watch([() => seeds.value.join(","), () => props.surface, () => auth.token, () =>
     posts.value = merged;
   }, { immediate: true });
 function open(post: Post) {
-  recommendations.trackClick(post);
   emit("open-post", post.id);
 }
 </script>
@@ -89,7 +86,7 @@ function open(post: Post) {
     <CollapsibleContent as-child force-mount>
       <ul :id="listId" class="ik-related__list" :hidden="listExpanded ? undefined : true" :inert="listExpanded ? undefined : true">
         <template v-if="listExpanded">
-          <RelatedArticleRow v-for="post in shown" :key="post.id" :post="post" :active="active && listExpanded" :surface="surface" @open="open" />
+          <RelatedArticleRow v-for="post in shown" :key="post.id" :post="post" :surface="surface" @open="open" />
         </template>
       </ul>
     </CollapsibleContent>

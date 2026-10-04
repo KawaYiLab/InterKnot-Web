@@ -3,7 +3,6 @@ import { computed } from "vue";
 import type { WorkflowPostRef } from "~/utils/workflow";
 import RelatedArticles from "~/components/RelatedArticles.vue";
 
-// Workflow references remain evidence. Only the separate reading suggestions use Gorse.
 const props = defineProps<{ posts: WorkflowPostRef[]; citations?: WorkflowPostRef[] }>();
 const emit = defineEmits<{ "open-post": [documentId: string] }>();
 const refs = computed(() => [...(props.citations || []), ...props.posts]);

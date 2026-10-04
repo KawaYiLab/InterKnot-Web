@@ -12,7 +12,6 @@ import {
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
 import {
   ArrowPathIcon,
-  SparklesIcon,
   ClockIcon,
   FireIcon,
   EyeIcon,
@@ -29,7 +28,6 @@ import {
   ScrollAreaViewport,
 } from "reka-ui";
 import { useArticleFeedUpdates } from "~/composables/useArticleFeedUpdates";
-import { useRecommendations } from "~/composables/useRecommendations";
 import { decodeJwtUserId } from "~/utils/request-auth";
 
 // 静态导入核心瀑布流组件，防止下滑加载或冷启动时动态请求分包导致滚动卡顿
@@ -104,16 +102,17 @@ const selectedCategory = ref<string>("");
 const SORT_STORAGE_KEY = "ik:home-sort";
 
 const readStoredSort = (): ArticleSort => {
-  if (!import.meta.client) return "recommend";
+  if (!import.meta.client) return "latest";
   try {
     const val = localStorage.getItem(SORT_STORAGE_KEY);
-    if (val === "hot" || val === "latest" || val === "recommend") return val;
+    if (val === "hot" || val === "latest") return val;
     // 「未看」依赖账号的阅读记录：未登录时先回落默认档
-    if (val === "unread") return auth.isLogin ? val : "recommend";
-    return "recommend";
+    if (val === "unread") return auth.isLogin ? val : "latest";
+    // 已下线的旧档（如「推荐」）一律回落默认档
+    return "latest";
   } catch {
     // 隐私模式下读取即抛错，回落默认档
-    return "recommend";
+    return "latest";
   }
 };
 
@@ -134,9 +133,9 @@ const setSortMode = (mode: ArticleSort) => {
   }
 };
 
-// feed 模式：推荐 / 关注（我关注的作者）/ 收藏（我的收藏）。
+// feed 模式：全部（主信息流）/ 关注（我关注的作者）/ 收藏（我的收藏）。
 // 关注、收藏需登录；缓存键随 feed 一起隔离（见 useApi.searchArticles）。
-const feedMode = ref<ArticleFeed>("recommend");
+const feedMode = ref<ArticleFeed>("all");
 const FEED_PANEL_ID = "ik-home-feed-panel";
 
 interface NavTab {
@@ -145,14 +144,14 @@ interface NavTab {
   icon: any;
 }
 
-/** 当前生效的搜索词：仅推荐流支持文本搜索，关注/收藏强制走列表流。 */
-const activeQuery = () => (feedMode.value === "recommend" ? query.value.trim() : "");
+/** 当前生效的搜索词：仅主信息流支持文本搜索，关注/收藏强制走列表流。 */
+const activeQuery = () => (feedMode.value === "all" ? query.value.trim() : "");
 
 /** 搜索态：搜索结果按相关性排，排序 Tab 不参与（「热门」Tab 此时不渲染）。 */
 const isSearching = computed(() => !!query.value.trim());
 
 const activeSort = computed<ArticleSort>(() =>
-  feedMode.value === "recommend" && !isSearching.value ? sortMode.value : "latest",
+  feedMode.value === "all" && !isSearching.value ? sortMode.value : "latest",
 );
 
 const isUnreadFeed = computed(() => activeSort.value === "unread");
@@ -166,7 +165,6 @@ const mainNavTabs = computed<NavTab[]>(() => {
     ];
   }
   return [
-    { key: "recommend", label: "推荐", icon: SparklesIcon },
     { key: "latest", label: "最新", icon: ClockIcon },
     { key: "hot", label: "热门", icon: FireIcon },
     { key: "unread", label: "未看", icon: EyeIcon },
@@ -177,9 +175,9 @@ const mainNavTabs = computed<NavTab[]>(() => {
 
 const currentTab = computed(() => {
   if (isSearching.value) {
-    return feedMode.value === "recommend" ? "search" : feedMode.value;
+    return feedMode.value === "all" ? "search" : feedMode.value;
   }
-  if (feedMode.value !== "recommend") {
+  if (feedMode.value !== "all") {
     return feedMode.value;
   }
   return activeSort.value;
@@ -188,7 +186,7 @@ const currentTab = computed(() => {
 const activeTabTriggerId = computed(() => `ik-tab-${currentTab.value}`);
 
 const isCategoryFilterVisible = computed(
-  () => !isSearching.value && currentTab.value !== "hot" && feedMode.value === "recommend",
+  () => !isSearching.value && currentTab.value !== "hot" && feedMode.value === "all",
 );
 
 let lastLoginOpenTime = 0;
@@ -236,13 +234,13 @@ const handleTabChange = (val: string | number) => {
   }
 
   if (tabKey === "search") {
-    feedMode.value = "recommend";
+    feedMode.value = "all";
     selectedCategory.value = "";
     return;
   }
 
   if (tabKey === "hot") {
-    if (feedMode.value !== "recommend") feedMode.value = "recommend";
+    if (feedMode.value !== "all") feedMode.value = "all";
     selectedCategory.value = "";
     setSortMode("hot");
     return;
@@ -253,9 +251,9 @@ const handleTabChange = (val: string | number) => {
     return;
   }
 
-  if (tabKey === "recommend" || tabKey === "latest" || tabKey === "unread") {
-    if (feedMode.value !== "recommend") {
-      feedMode.value = "recommend";
+  if (tabKey === "latest" || tabKey === "unread") {
+    if (feedMode.value !== "all") {
+      feedMode.value = "all";
       selectedCategory.value = "";
     }
     setSortMode(tabKey);
@@ -263,13 +261,13 @@ const handleTabChange = (val: string | number) => {
 };
 
 const selectAllCategories = () => {
-  if (feedMode.value !== "recommend") feedMode.value = "recommend";
+  if (feedMode.value !== "all") feedMode.value = "all";
   if (selectedCategory.value === "") return;
   selectedCategory.value = "";
 };
 
 const selectSort = (mode: ArticleSort) => {
-  if (feedMode.value !== "recommend") feedMode.value = "recommend";
+  if (feedMode.value !== "all") feedMode.value = "all";
   selectedCategory.value = "";
   setSortMode(mode);
 };
@@ -279,12 +277,6 @@ const loadingMore = ref(false);
 const refreshing = ref(false);
 
 const list = shallowRef<Post[]>([]);
-const recommendations = useRecommendations();
-const isRecommendationFeed = computed(() => feedMode.value === "recommend" && activeSort.value === "recommend" && !isSearching.value);
-// Keep the original snapshot for undo. Fixed-order latest/following/favorites
-// retain their entries; only recommendation surfaces apply negative feedback.
-const visibleList = computed(() => isRecommendationFeed.value
-  ? list.value.filter((post) => !recommendations.isDismissed(post.id)) : list.value);
 const enterAnimationIds = shallowRef(new Set<string>());
 // 信息流游标：只负责存下来原样回传，绝不做算术（内容是「已加载条数 + 后端不透明 token」，
 // 由 utils/pagination 负责拼和拆）。空串 = 第一页；切游标之前这里的哨兵是 "0"（数字 offset
@@ -310,9 +302,9 @@ const loadMoreObserverRef = shallowRef<IntersectionObserver | null>(null);
 
 // ── 后台轮询：检测有无新委托（仅在无搜索关键词时启用） ─────────
 const NEW_ARTICLES_POLL_MS = 60_000;
-// 推荐、最新、热门都接收 SSE；查看更新时仅把事件批次置顶，其余列表顺序与分页保持不变。
+// 最新、热门、未看都接收 SSE；查看更新时仅把事件批次置顶，其余列表顺序与分页保持不变。
 const feedStreamEnabled = computed(
-  () => feedMode.value === "recommend" && !query.value.trim(),
+  () => feedMode.value === "all" && !query.value.trim(),
 );
 const feedUpdates = useArticleFeedUpdates({
   posts: list,
@@ -668,10 +660,10 @@ const handleRefresh = async () => {
 
 // ── 后台静默轮询：按活动时间跨页对账，补齐断线期间的新帖/顶帖 ────
 const pollLatestArticles = async () => {
-  // 仅在推荐流（无搜索词、非关注/收藏）下做轮询
-  if (feedMode.value !== "recommend") return;
+  // 仅在主信息流（无搜索词、非关注/收藏）下做轮询
+  if (feedMode.value !== "all") return;
   if (query.value.trim()) return;
-  // 活动时间边界只适用于最新流；推荐快照和热门榜不按 bumpedAt 排序，仅接收 SSE。
+  // 活动时间边界只适用于最新流；热门榜和未看流不按 bumpedAt 对账，仅接收 SSE。
   if (activeSort.value !== "latest") return;
   // 不与正在进行的请求/刷新冲突
   if (disposed || polling || listRequestPending || refreshing.value || applyingNewArticles.value) return;
@@ -686,7 +678,7 @@ const pollLatestArticles = async () => {
     api.invalidateQueries(["articles", "search", "", selectedCategory.value]);
     const category = selectedCategory.value;
     await feedUpdates.reconcile(
-      (cursor) => api.searchArticles("", cursor, category, "recommend", "latest"),
+      (cursor) => api.searchArticles("", cursor, category, "all", "latest"),
       () => !disposed && currentVersion === requestVersion.value,
     );
   } catch {
@@ -770,15 +762,15 @@ const debouncedSearch = useDebounceFn(() => fetchList(true), 300);
 watch(
   () => query.value,
   (q) => {
-    // 输入搜索词时回到推荐流（关注/收藏不支持文本搜索）。
+    // 输入搜索词时回到主信息流（关注/收藏不支持文本搜索）。
     // feedMode 变化会触发其 watcher 重拉，避免与 debouncedSearch 重复，这里提前 return。
-    if (q.trim() && feedMode.value !== "recommend") {
-      feedMode.value = "recommend";
+    if (q.trim() && feedMode.value !== "all") {
+      feedMode.value = "all";
       stopPolling();
       return;
     }
     debouncedSearch();
-    // q 非空 ⇒ 进入搜索；空 ⇒ 回到推荐流（轮询照常运行）
+    // q 非空 ⇒ 进入搜索；空 ⇒ 回到主信息流（轮询照常运行）
     if (q.trim()) {
       stopPolling();
     } else {
@@ -797,10 +789,10 @@ watch(
 );
 
 const selectCategory = (slug: string) => {
-  // 选分类即回到推荐流（关注/收藏是独立筛选，不与分类叠加）。
-  if (feedMode.value !== "recommend") feedMode.value = "recommend";
-  // 频道保留推荐/最新选择；热门仍是全站榜单，进入频道时改用推荐。
-  if (sortMode.value === "hot") sortMode.value = "recommend";
+  // 选分类即回到主信息流（关注/收藏是独立筛选，不与分类叠加）。
+  if (feedMode.value !== "all") feedMode.value = "all";
+  // 频道保留最新/未看选择；热门仍是全站榜单，进入频道时改用最新。
+  if (sortMode.value === "hot") sortMode.value = "latest";
   if (slug === selectedCategory.value) return;
   selectedCategory.value = slug;
 };
@@ -843,14 +835,14 @@ watch(
     enterAnimationIds.value = new Set();
     endCursor.value = "";
     hasNextPage.value = true;
-    if (!auth.isLogin && feedMode.value !== "recommend") {
+    if (!auth.isLogin && feedMode.value !== "all") {
       skipFeedWatch = true;
-      feedMode.value = "recommend";
+      feedMode.value = "all";
     }
     // 只改当前档、不写 localStorage：重新登录后进站仍回到用户选的「未看」。
     if (!auth.isLogin && sortMode.value === "unread") {
       skipFeedWatch = true;
-      sortMode.value = "recommend";
+      sortMode.value = "latest";
     }
     void fetchList(true);
   },
@@ -861,7 +853,7 @@ const loadCategories = async () => {
     const list = await api.getCategories();
     if (list.length) categories.value = list;
   } catch {
-    // 频道列表拉取失败不影响推荐流浏览
+    // 频道列表拉取失败不影响主信息流浏览
   }
 };
 void loadCategories();
@@ -888,7 +880,7 @@ let initialFetchPromise: Promise<unknown>;
 // drain 仅在真正会写入 list 时调用，不能在冷启动 fetchList 之前就 drain——fetchList 会重置 seenIds 和 list。
 const consumePendingPosts = () => {
   if (disposed) return;
-  if (feedMode.value !== "recommend") return;
+  if (feedMode.value !== "all") return;
   if (query.value.trim()) return;
   if (activeSort.value === "hot") return;
   if (!pendingPost.peek().length) return;
@@ -907,7 +899,7 @@ const consumePendingPosts = () => {
 
 if (cached && cached.query === query.value && cached.category === selectedCategory.value) {
   // 从缓存恢复：跳过网络请求，直接填充列表状态
-  const restoredFeed = cached.feed ?? "recommend";
+  const restoredFeed = cached.feed ?? "all";
   if (restoredFeed !== feedMode.value) {
     skipFeedWatch = true;
     feedMode.value = restoredFeed;
@@ -1073,7 +1065,7 @@ onMounted(async () => {
   // 滚动恢复由 app/router.options.ts 的 scrollBehavior 统一处理，
   // 此处无需手动 scrollTo——scrollBehavior 在导航到 / 时自动读取缓存的 scrollY。
 
-  // 仅在推荐流下启动轮询；搜索状态由 watch(query) 控制
+  // 仅在主信息流下启动轮询；搜索状态由 watch(query) 控制
   if (!query.value.trim()) startPolling();
 });
 
@@ -1214,7 +1206,7 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- 空状态：loading=false 且 list 为空时显示 -->
-          <div v-else-if="!visibleList.length && !loading && !hasNextPage" key="empty" class="ik-empty">
+          <div v-else-if="!list.length && !loading && !hasNextPage" key="empty" class="ik-empty">
             {{ isUnreadFeed ? "委托都看完啦，暂时没有未看的... [ o_x ]/" : "暂无相关委托... [ o_x ]/" }}
           </div>
 
@@ -1223,7 +1215,7 @@ onBeforeUnmount(() => {
             <VirtualMasonry
               ref="masonryRef"
               class="ik-masonry"
-              :items="visibleList"
+              :items="list"
               :column-width="240"
               :gap="feedGap"
               :min-columns="2"
@@ -1239,12 +1231,11 @@ onBeforeUnmount(() => {
                   :class="{ 'ik-masonry-card-enter': shouldAnimatePost(item.id) }"
                   :style="shouldAnimatePost(item.id) ? getStaggerDelayStyle(index, columnCount) : undefined"
                   :post="item"
-                  :recommendation-enabled="isRecommendationFeed && !postModal.isOpen.value"
                   :highlighted="highlightedArticleIds.has(item.id)"
                   :eager="index < columnCount * 2"
                   @open="goPost"
                   @animationend="finishEnterAnimation(item.id)"
-                  v-memo="[item, shouldAnimatePost(item.id), highlightedArticleIds.has(item.id), index < columnCount * 2, isRecommendationFeed, postModal.isOpen.value]"
+                  v-memo="[item, shouldAnimatePost(item.id), highlightedArticleIds.has(item.id), index < columnCount * 2]"
                 />
               </template>
             </VirtualMasonry>

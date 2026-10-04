@@ -21,7 +21,6 @@ import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
 import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
 import { toCardCoverThumbUrl, toThumbUrl, toCanonicalUrl } from "~/utils/image";
-import { useRecommendationReading, useRecommendations } from "~/composables/useRecommendations";
 import RelatedArticles from "./RelatedArticles.vue";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
@@ -65,12 +64,9 @@ const relatedTargetId = `post-overlay-related-${useId()}`;
 const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
-const readingBodyRef = ref<HTMLElement | null>(null);
 const readingActive = computed(() => postModal.isOpen.value && postModal.postId.value === props.postId &&
   post.value?.id === props.postId && !loading.value && !loadError.value && !post.value?.isHidden &&
   !isGalleryOpen.value && !isGalleryLoading.value);
-useRecommendationReading(() => post.value?.id, readingActive, readingBodyRef);
-const recommendations = useRecommendations();
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
@@ -1087,20 +1083,6 @@ const handleArticleMenuCommand = (command: string | number) => {
     handleReportArticle();
   } else if (command === "pin" || command === "unpin") {
     handlePinArticle();
-  } else if (command === "dislike") {
-    handleDislikeArticle();
-  }
-};
-
-const handleDislikeArticle = () => {
-  if (!post.value) return;
-  if (!auth.isLogin) { loginDialog.open(); return; }
-  // dismiss 的乐观更新是同步的（先记入 dismissed 再发请求，失败自动回滚）。
-  // 受理后用项目通用的 message 提示，并关闭浮层回到信息流；不再提供撤销。
-  void recommendations.dismiss(post.value);
-  if (recommendations.isDismissed(post.value.id)) {
-    message.success("已设为不感兴趣");
-    postModal.close();
   }
 };
 
@@ -1757,7 +1739,6 @@ onBeforeUnmount(() => {
 
                     <!-- 正文 -->
                     <div class="ik-dialog__detail">
-                      <div ref="readingBodyRef">
                       <div v-if="post.isHidden" class="ik-dialog__hidden-banner" role="alert">
                         <EyeSlashIcon class="ik-dialog__hidden-icon" aria-hidden="true" />
                         <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
@@ -1788,7 +1769,6 @@ onBeforeUnmount(() => {
                           class="ik-dialog__tag"
                           @click="goTag(tag.slug)"
                         >#{{ tag.name }}</button>
-                      </div>
                       </div>
                       <Teleport defer :to="`#${relatedTargetId}`" :disabled="!isCompact">
                         <RelatedArticles :document-id="post.id" :active="readingActive" :collapsible="isCompact" @open-post="postModal.open($event)" />
@@ -1972,7 +1952,6 @@ onBeforeUnmount(() => {
                               </button>
                               <template #dropdown>
                                 <z-dropdown-item command="report" :disabled="isOwner">举报委托</z-dropdown-item>
-                                <z-dropdown-item v-if="!isOwner && !post?.isPinned" command="dislike" :disabled="recommendations.pending.value">不感兴趣</z-dropdown-item>
                                 <z-dropdown-item v-if="isAdmin" :command="post?.isPinned ? 'unpin' : 'pin'" :disabled="pinningArticle">{{ post?.isPinned ? '取消置顶' : '置顶' }}</z-dropdown-item>
                                 <z-dropdown-item command="edit" :disabled="!isOwner">编辑委托</z-dropdown-item>
                                 <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除委托</z-dropdown-item>

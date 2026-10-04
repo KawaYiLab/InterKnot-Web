@@ -4,7 +4,6 @@ import { useEventListener } from "@vueuse/core";
 import type { AcceptableValue, PointerDownOutsideEvent } from "reka-ui";
 import type { Category } from "~/types/entities";
 import {
-  SparklesIcon,
   ClockIcon,
   FireIcon,
   EyeIcon,
@@ -75,7 +74,6 @@ const mainNavTabs = computed<NavTab[]>(() => {
     ];
   }
   return [
-    { key: "recommend", label: "推荐", icon: SparklesIcon },
     { key: "latest", label: "最新", icon: ClockIcon },
     { key: "hot", label: "热门", icon: FireIcon },
     { key: "unread", label: "未看", icon: EyeIcon },
@@ -201,7 +199,7 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
     <div class="ik-home-toolbar">
       <!-- 委托流 Tabs 与分区筛选是一组，始终同处一行（窄屏时整体收紧，不再把分区挤到第二行） -->
       <div class="ik-home-toolbar__nav">
-        <!-- 主流切换 Tabs（推荐 / 最新 / 热门 / 未看 / 关注 / 收藏） -->
+        <!-- 主流切换 Tabs（最新 / 热门 / 未看 / 关注 / 收藏） -->
         <TabsList class="ik-stream-tabs" aria-label="委托流模式">
           <TabsIndicator class="ik-tabs-indicator" />
           <TabsTrigger
@@ -226,7 +224,7 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
         </TabsList>
 
         <!-- 分区筛选（shadcn-vue Select）。恒渲染、不随分区列表异步到达而出现/消失，避免下方瀑布流跳动；
-             热门 / 关注 / 收藏下同样可选，选中分区即回到推荐流（见 index.vue 的 selectCategory）。
+             热门 / 关注 / 收藏下同样可选，选中分区即回到主信息流，热门改为最新（见 index.vue 的 selectCategory）。
              外层轨道负责胶囊外观，触发器本身透明——与 Tabs 的「轨道 + 透明按钮」结构一致。 -->
         <Select
           :model-value="categorySelectValue"

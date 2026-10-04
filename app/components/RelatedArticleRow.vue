@@ -2,21 +2,18 @@
 import { computed, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { formatTime, formatFullTime } from "~/utils/time";
-import { useRecommendationImpression } from "~/composables/useRecommendations";
 
 const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
 
-const props = withDefaults(defineProps<{ post: Post; active?: boolean; surface?: "related" | "ai" }>(), { active: true, surface: "related" });
+const props = withDefaults(defineProps<{ post: Post; surface?: "related" | "ai" }>(), { surface: "related" });
 const emit = defineEmits<{ open: [post: Post] }>();
-const element = ref<HTMLElement | null>(null);
-useRecommendationImpression(element, () => props.post, () => props.active);
 
 const avatarSrc = ref(props.post.author?.avatar || DEFAULT_AVATAR_IMAGE);
 watch(() => props.post.author?.avatar, (value) => { avatarSrc.value = value || DEFAULT_AVATAR_IMAGE; });
 const onAvatarError = () => { avatarSrc.value = DEFAULT_AVATAR_IMAGE; };
 // AI 面板保持精简不展示标签；相关委托最多显示 4 个，避免单行过挤。
 const tags = computed(() => (props.surface === "ai" ? [] : (props.post.tags || []).slice(0, 4)));
-// 优先展示最后活动时间（bumpedAt）；related 接口暂未下发时回落到发布时间。
+// 优先展示最后活动时间（bumpedAt）；接口未下发时回落到发布时间。
 const activeAt = computed(() => props.post.bumpedAt || props.post.publishedAt);
 const timeText = computed(() => formatTime(activeAt.value ?? undefined));
 const fullTime = computed(() => formatFullTime(activeAt.value ?? undefined));
@@ -25,7 +22,7 @@ const compact = (n: number) => (n < 1000 ? String(n) : `${(n / 1000).toFixed(1).
 </script>
 
 <template>
-  <li ref="element" class="ik-related__row" :data-post-id="post.id">
+  <li class="ik-related__row" :data-post-id="post.id">
     <button type="button" class="ik-related__link" @click="emit('open', post)">
       <span class="ik-related__title">{{ post.title || "（无标题）" }}</span>
       <span class="ik-related__meta">
