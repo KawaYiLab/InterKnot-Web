@@ -16,7 +16,7 @@ const profile = ref<Profile | null>(null);
 const loadError = ref(false);
 const loading = ref(false);
 
-const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'pinned', 'social', 'logout'];
+const SETTINGS_MODALS = ['settings', 'edit-name', 'edit-bio', 'social', 'logout'];
 const modalQuery = computed(() => String(route.query.modal || ''));
 const showCardModal = computed(() => modalQuery.value === 'banner');
 const showAvatarModal = computed(() => modalQuery.value === 'avatar');
@@ -28,32 +28,42 @@ const openModal = (name: string) => {
 };
 const closeModal = () => {
   const { modal: _, ...rest } = route.query;
-  router.replace({ query: rest });
+  return router.replace({ query: rest });
 };
 
 const articles = ref<Post[]>([]);
-const articleCursor = ref("");
-const articleHasNext = ref(true);
 const articleLoading = ref(false);
 
 const profileId = computed(() => String(route.params.id || ""));
 
-const PROFILE_ARTICLES_MAX = 6;
+// 主页只有一屏的展示位（桌面端单行 6 列），完整列表与展示调整在 /profile/:id/posts。
+const PROFILE_SHOWCASE_SIZE = 6;
 
 const loadProfileArticles = async () => {
-  if (articleLoading.value || !articleHasNext.value) return;
+  if (articleLoading.value) return;
   articleLoading.value = true;
   try {
-    const page = await api.getProfileArticles(profileId.value, articleCursor.value, PROFILE_ARTICLES_MAX);
-    articles.value.push(...page.nodes);
-    articleCursor.value = page.endCursor;
-    articleHasNext.value = false;
+    const page = await api.getProfileArticles(profileId.value, "", PROFILE_SHOWCASE_SIZE);
+    articles.value = page.nodes;
   } catch (err) {
     message.error(resolveErrorMessage(err, "获取用户委托失败"));
   } finally {
     articleLoading.value = false;
   }
 };
+
+const allPostsPath = computed(() => `/profile/${encodeURIComponent(profileId.value)}/posts`);
+// 从弹窗进入时先去掉 ?modal，否则返回主页会重新弹出菜单。
+const goAllPosts = async () => {
+  if (route.query.modal) await closeModal();
+  await navigateTo(allPostsPath.value);
+};
+
+/** 访客可进入全部委托：资料未隐藏、未拉黑。 */
+const canViewPosts = computed<boolean>(() => {
+  const p = profile.value;
+  return !!p && !p.isHidden && !isBlockedRelationship.value;
+});
 
 const formatNumber = (n: number) => {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
@@ -237,9 +247,9 @@ const canBlock = computed<boolean>(() => {
   return true;
 });
 
-/** 他人主页是否有可执行的操作项（关注/私信/拉黑），用于控制「更多操作」按钮显隐 */
+/** 他人主页是否有可执行的操作项（全部委托/关注/私信/拉黑），用于控制「更多操作」按钮显隐 */
 const hasOtherActions = computed<boolean>(() => {
-  return canFollow.value || canSendDm.value || canBlock.value;
+  return canViewPosts.value || canFollow.value || canSendDm.value || canBlock.value;
 });
 
 const blockLoading = ref(false);
@@ -272,8 +282,6 @@ const toggleBlock = async () => {
       // 失败则保持本地乐观更新
     }
     articles.value = [];
-    articleCursor.value = "";
-    articleHasNext.value = true;
     void loadProfileArticles();
   } catch (err) {
     message.error(resolveErrorMessage(err, "操作失败"));
@@ -352,16 +360,6 @@ const onBioUpdated = (bio: string) => {
 const onHiddenUpdated = (h: boolean) => {
   if (profile.value) {
     profile.value = { ...profile.value, profileHidden: h };
-  }
-};
-
-const onPinnedUpdated = async (_pinned: string[] | null) => {
-  // 重置文章列表并重新加载，以应用新的精选配置
-  articles.value = [];
-  articleCursor.value = "";
-  articleHasNext.value = true;
-  if (!profile.value?.isHidden) {
-    await loadProfileArticles();
   }
 };
 
@@ -670,7 +668,7 @@ onBeforeUnmount(() => {
               @name-updated="onNameUpdated"
               @bio-updated="onBioUpdated"
               @hidden-updated="onHiddenUpdated"
-              @pinned-updated="onPinnedUpdated"
+              @posts="goAllPosts"
             />
           </Transition>
         </Teleport>
@@ -682,6 +680,7 @@ onBeforeUnmount(() => {
           <Transition name="ik-overlay" appear>
             <UserActionsModal
               v-if="showActionsModal"
+              :can-view-posts="canViewPosts"
               :can-follow="canFollow"
               :is-following="!!profile?.isFollowing"
               :can-send-dm="canSendDm"
@@ -691,6 +690,7 @@ onBeforeUnmount(() => {
               @follow="toggleFollow"
               @dm="startDm"
               @block="toggleBlock"
+              @posts="goAllPosts"
             />
           </Transition>
         </Teleport>

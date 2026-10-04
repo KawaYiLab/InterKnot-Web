@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted } from "vue";
 import { useBodyScrollLock } from "~/composables/useBodyScrollLock";
 
-defineProps<{
+const props = defineProps<{
+  canViewPosts?: boolean;
   canFollow?: boolean;
   isFollowing?: boolean;
   canSendDm?: boolean;
@@ -12,13 +13,24 @@ defineProps<{
 
 const emit = defineEmits<{
   close: [];
+  posts: [];
   follow: [];
   dm: [];
   block: [];
 }>();
 
+// 拉黑按钮排在最后：前面按钮数为偶数时它独占一行，避免两列网格右侧空缺。
+const blockSpansRow = computed(
+  () => [props.canViewPosts, props.canFollow, props.canSendDm].filter(Boolean).length % 2 === 0,
+);
+
 const handleClose = () => {
   emit("close");
+};
+
+// 父页面负责先去掉 ?modal 再跳转，避免返回主页时菜单重新弹出。
+const handlePosts = () => {
+  emit("posts");
 };
 
 const handleFollow = () => {
@@ -81,6 +93,9 @@ onBeforeUnmount(() => {
           <div class="ik-dialog__body">
             <IkZzzMarquee />
             <div class="ik-actions__list">
+              <z-button v-if="canViewPosts" @click="handlePosts">
+                全部委托
+              </z-button>
               <z-button v-if="canFollow" @click="handleFollow">
                 {{ isFollowing ? "已关注" : "关注" }}
               </z-button>
@@ -90,7 +105,7 @@ onBeforeUnmount(() => {
               <z-button
                 v-if="canBlock"
                 class="ik-actions__btn--block"
-                :class="{ 'ik-actions__btn--span-2': (canFollow && canSendDm) || (!canFollow && !canSendDm) }"
+                :class="{ 'ik-actions__btn--span-2': blockSpansRow }"
                 @click="handleBlock"
               >
                 {{ isBlocked ? "取消拉黑" : "拉黑" }}

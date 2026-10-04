@@ -95,6 +95,8 @@ const qk = {
     articles: (documentId: string, start: number, limit: number) =>
       ["profile", documentId, "articles", start, limit] as QueryKey,
     articlesOf: (documentId: string) => ["profile", documentId, "articles"] as QueryKey,
+    allArticles: (documentId: string, start: number, limit: number) =>
+      ["profile", documentId, "articles", "all", start, limit] as QueryKey,
     comments: (documentId: string, start: number, limit: number) =>
       ["profile", documentId, "comments", start, limit] as QueryKey,
     commentsOf: (documentId: string) => ["profile", documentId, "comments"] as QueryKey,
@@ -232,6 +234,34 @@ interface MediaMeta {
   width?: number;
   height?: number;
 }
+
+export interface PinnedCandidate {
+  documentId: string;
+  title: string;
+  cover: MediaMeta | null;
+  updatedAt?: string;
+}
+
+export interface PinnedArticlesPage {
+  /** null = 未配置（默认展示最新 6 篇）；string[] = 已配置（可能为空） */
+  pinned: string[] | null;
+  /** 已选帖子的卡片数据（按保存顺序）；仅首页返回，旧后端不返回时为 undefined */
+  pinnedItems?: PinnedCandidate[];
+  candidates: PinnedCandidate[];
+  max: number;
+  total?: number;
+  hasNextPage: boolean;
+}
+
+export type ProfileArticlesPage = Pagination<Post> & {
+  /** 访客可见的全部帖子数（不受精选配置影响）；旧后端不返回时为 undefined */
+  articleTotal?: number;
+};
+
+export type ProfileAllArticlesPage = ProfileArticlesPage & {
+  /** 当前精选配置；null = 默认展示最新 6 篇，undefined = 后端未返回 */
+  pinnedIds?: string[] | null;
+};
 
 function normalizeMediaUrl(input: unknown, _apiBaseUrl: string): string {
   if (typeof input !== "string" || !input.trim()) {
@@ -1732,13 +1762,26 @@ export function useApi() {
     };
   };
 
+  const readProfileArticlesMeta = (response: unknown) => {
+    const meta = (response as Record<string, unknown> | null)?.meta;
+    const m = meta && typeof meta === "object" ? (meta as Record<string, unknown>) : {};
+    const articleTotal = typeof m.articleTotal === "number" ? m.articleTotal : undefined;
+    const pinnedIds = Array.isArray(m.pinnedIds)
+      ? m.pinnedIds.filter((id): id is string => typeof id === "string")
+      : m.pinnedIds === null
+        ? null
+        : undefined;
+    return { articleTotal, pinnedIds };
+  };
+
+  /** 主页展示位：已自定义时返回精选（≤6），否则返回最新帖子。 */
   const getProfileArticles = async (
     documentId: string,
     endCur = "",
     limit = DEFAULT_PAGE_SIZE,
-  ): Promise<Pagination<Post>> => {
+  ): Promise<ProfileArticlesPage> => {
     const start = parseStart(endCur);
-    const page = await cachedRead(
+    const page = await cachedRead<ProfileArticlesPage>(
       qk.profile.articles(documentId, start, limit),
       async () => {
         const response = await $api(`/api/profiles/${documentId}/articles`, {
@@ -1750,11 +1793,40 @@ export function useApi() {
         const meta = extractPaginationMeta(response);
         const data = unwrapData<unknown[]>(response) || [];
         const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
-        return page;
+        const { articleTotal } = readProfileArticlesMeta(response);
+        return { ...page, articleTotal };
       },
       STALE_LIST,
     );
-    return mergeReadPage(page);
+    return mergeReadPage(page) as ProfileArticlesPage;
+  };
+
+  /** 「全部委托」页：忽略精选配置，分页列出全部可见帖子。 */
+  const getProfileAllArticles = async (
+    documentId: string,
+    endCur = "",
+    limit = DEFAULT_PAGE_SIZE,
+  ): Promise<ProfileAllArticlesPage> => {
+    const start = parseStart(endCur);
+    const page = await cachedRead<ProfileAllArticlesPage>(
+      qk.profile.allArticles(documentId, start, limit),
+      async () => {
+        const response = await $api(`/api/profiles/${documentId}/articles`, {
+          query: {
+            scope: "all",
+            start: String(start),
+            limit: String(limit),
+          },
+        });
+        const meta = extractPaginationMeta(response);
+        const data = unwrapData<unknown[]>(response) || [];
+        const page = buildPagination(data.map((item) => toPost(item, apiBaseUrl)), start, meta);
+        const { articleTotal, pinnedIds } = readProfileArticlesMeta(response);
+        return { ...page, articleTotal: articleTotal ?? meta?.total, pinnedIds };
+      },
+      STALE_LIST,
+    );
+    return mergeReadPage(page) as ProfileAllArticlesPage;
   };
 
   const getProfileComments = async (
@@ -2327,43 +2399,49 @@ export function useApi() {
     return requireAccountSuccess(response, "ok");
   };
 
+  const toPinnedCandidate = (item: unknown): PinnedCandidate => {
+    const c = (item || {}) as Record<string, unknown>;
+    return {
+      documentId: String(c.documentId || ""),
+      title: String(c.title || ""),
+      cover: extractMediaMeta(c.cover, apiBaseUrl),
+      updatedAt: typeof c.updatedAt === "string" ? c.updatedAt : undefined,
+    };
+  };
+
   const getPinnedArticles = async (
-    limit?: number,
-  ): Promise<{
-    pinned: string[] | null;
-    candidates: Array<{
-      documentId: string;
-      title: string;
-      cover: MediaMeta | null;
-      updatedAt?: string;
-    }>;
-    max: number;
-  }> => {
+    options: { start?: number; limit?: number; q?: string } = {},
+  ): Promise<PinnedArticlesPage> => {
+    const start = Math.max(0, options.start ?? 0);
+    const limit = options.limit;
+    const q = options.q?.trim() ?? "";
     return cachedRead(
-      [...qk.me.pinnedArticles, limit ?? null] as QueryKey,
+      [...qk.me.pinnedArticles, start, limit ?? null, q] as QueryKey,
       async () => {
+        const query: Record<string, string> = {};
+        if (start > 0) query.start = String(start);
+        if (limit != null) query.limit = String(limit);
+        if (q) query.q = q;
         const response = await $api("/api/me/profile/pinned-articles", {
-          query: limit != null ? { limit: String(limit) } : undefined,
+          query: Object.keys(query).length ? query : undefined,
         });
         const data = response as Record<string, unknown>;
         const pinnedRaw = data.pinned;
         const pinned = Array.isArray(pinnedRaw)
           ? pinnedRaw.filter((id): id is string => typeof id === "string")
-          : pinnedRaw === null
-            ? null
-            : null;
+          : null;
         const candidatesRaw = Array.isArray(data.candidates) ? data.candidates : [];
-        const candidates = candidatesRaw.map((item) => {
-          const c = item as Record<string, unknown>;
-          return {
-            documentId: String(c.documentId || ""),
-            title: String(c.title || ""),
-            cover: extractMediaMeta(c.cover, apiBaseUrl),
-            updatedAt: typeof c.updatedAt === "string" ? c.updatedAt : undefined,
-          };
-        });
+        const candidates = candidatesRaw.map(toPinnedCandidate).filter((c) => c.documentId);
+        const pinnedItems = Array.isArray(data.pinnedItems)
+          ? data.pinnedItems.map(toPinnedCandidate).filter((c) => c.documentId)
+          : undefined;
         const max = Number(data.max) || 6;
-        return { pinned, candidates, max };
+        const total = typeof data.total === "number" ? data.total : undefined;
+        // 旧后端不支持 start/total：只当作单页处理，避免反复请求同一页。
+        const hasNextPage = typeof total === "number" && candidates.length > 0
+          ? start + candidates.length < total
+          : false;
+        return { pinned, pinnedItems, candidates, max, total, hasNextPage };
       },
       STALE_ME,
     );
@@ -2737,6 +2815,7 @@ export function useApi() {
     markAsReadBatch,
     getProfile,
     getProfileArticles,
+    getProfileAllArticles,
     getProfileComments,
     getBilibiliInfo,
     createArticleDraft,

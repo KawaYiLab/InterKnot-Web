@@ -15,7 +15,7 @@ const emit = defineEmits<{
   nameUpdated: [name: string];
   bioUpdated: [bio: string];
   hiddenUpdated: [hidden: boolean];
-  pinnedUpdated: [pinned: string[] | null];
+  posts: [];
 }>();
 
 const route = useRoute();
@@ -27,7 +27,6 @@ const authStore = useAuthStore();
 const modalQuery = computed(() => String(route.query.modal || ''));
 const showEditName = computed(() => modalQuery.value === 'edit-name');
 const showEditBio = computed(() => modalQuery.value === 'edit-bio');
-const showPinned = computed(() => modalQuery.value === 'pinned');
 const showSocial = computed(() => modalQuery.value === 'social');
 const showLogout = computed(() => modalQuery.value === 'logout');
 
@@ -148,14 +147,9 @@ const submitBio = async () => {
   }
 };
 
-const openPinned = () => {
-  openSub('pinned');
-};
-const closePinned = () => {
-  closeSub();
-};
-const onPinnedSaved = (pinned: string[] | null) => {
-  emit("pinnedUpdated", pinned);
+// 父页面负责先去掉 ?modal 再跳转，避免返回主页时菜单重新弹出。
+const openAllPosts = () => {
+  emit("posts");
 };
 
 // ── 账号中心（独立页面） ──────────────
@@ -235,10 +229,6 @@ const handleEditNameOverlayClick = (e: MouseEvent) => {
 
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === "Escape") {
-    if (showPinned.value) {
-      // PinnedArticlesModal 内部已自行处理 Escape；此处避免冒泡到顶层
-      return;
-    }
     if (showLogout.value) {
       closeLogout();
     } else if (showSocial.value) {
@@ -304,9 +294,9 @@ onBeforeUnmount(() => {
               <z-button class="ik-settings__action--mobile" disabled>修改称号</z-button>
               <z-button class="ik-settings__action--mobile" disabled>修改勋章</z-button>
               <z-button class="ik-settings__action--mobile" @click="openCardModal">修改名片</z-button>
+              <z-button @click="openAllPosts">全部委托</z-button>
               <z-button @click="openEditName">修改用户名</z-button>
               <z-button @click="openEditBio">修改签名</z-button>
-              <z-button @click="openPinned">修改委托展示</z-button>
               <z-button @click="openSocial">社交设置</z-button>
               <z-button @click="openAccountCenter">账号中心</z-button>
               <z-button @click="openLogout">退出登录</z-button>
@@ -450,17 +440,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Pinned Articles Sub-dialog -->
-    <Teleport to="body">
-      <Transition name="ik-overlay" appear>
-        <PinnedArticlesModal
-          v-if="showPinned"
-          @close="closePinned"
-          @saved="onPinnedSaved"
-        />
       </Transition>
     </Teleport>
 

@@ -344,7 +344,7 @@ img:not(.ik-card__cover).ik-img-revealed {
    ───────────────────────────────────────────────
    适用：所有用 <Transition name="ik-overlay"> 包裹、根类名为 .ik-overlay
    的弹窗（PostOverlay / KnockKnockModal / LoginDialog /
-   ConfirmDialog / ProfileSettingsModal / PinnedArticlesModal /
+   ConfirmDialog / ProfileSettingsModal /
    BusinessCardModal / AvatarModal …）
 
    设计参考 Flutter showZZZDialog，针对 web 端调优。详见
