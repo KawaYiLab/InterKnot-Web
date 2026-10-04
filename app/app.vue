@@ -187,7 +187,12 @@ const overlayOpen = computed(
          弱网下 chunk 加载延迟会让 enter 动画错过首帧 → 用户感知为闪烁。 -->
     <ClientOnly>
       <Teleport to="body">
-        <Transition name="ik-overlay" appear @after-leave="postModal.clearAfterLeave()">
+        <Transition
+          name="ik-overlay"
+          appear
+          @after-enter="postModal.markEntered()"
+          @after-leave="postModal.clearAfterLeave()"
+        >
           <PostOverlay
             v-if="postModal.isOpen.value"
             :post-id="postModal.postId.value || ''"

@@ -13,6 +13,19 @@ import { overlayHistoryState } from "~/utils/overlay-history";
 // 模块级单例，确保所有 usePostModal() 实例共享同一份标记
 let _historyPushed = false;
 let _savedTitle = "";
+// 入场动画是否已结束。PostOverlay 把详情数据的渲染推迟到这之后：预取命中时
+// getPost 会在首帧之前就 resolve，若立即渲染整块正文，会把入场动画的起点整体推后。
+let _entered = true;
+let _enteredWaiters: Array<() => void> = [];
+/** after-enter 未触发（如过渡被打断）时的兜底，略大于 200ms 入场时长 */
+const ENTER_FALLBACK_MS = 400;
+
+function flushEnteredWaiters() {
+  _entered = true;
+  const waiters = _enteredWaiters;
+  _enteredWaiters = [];
+  for (const resolve of waiters) resolve();
+}
 
 const DEFAULT_TITLE = "绳网";
 /** 唯一 token：所有 usePostModal 实例共享，确保 open/close 配对 */
@@ -53,6 +66,7 @@ export function usePostModal() {
     if (!replacingOpenPost) {
       _savedTitle = document.title;
       acquire(SCROLL_LOCK_TOKEN);
+      _entered = false;
     }
 
     postId.value = id;
@@ -100,6 +114,7 @@ export function usePostModal() {
     if (!isOpen.value) return;
     isOpen.value = false;
     _historyPushed = false;
+    flushEnteredWaiters();
     // postId 保留到离场动画结束后再清理
     if (import.meta.client) {
       // 只 release 自己的锁；如果还有别的 overlay（如 KnockKnockModal）持有，
@@ -107,6 +122,27 @@ export function usePostModal() {
       release(SCROLL_LOCK_TOKEN);
       document.title = _savedTitle || DEFAULT_TITLE;
     }
+  }
+
+  /**
+   * 入场动画结束（由 Transition @after-enter 调用）
+   */
+  function markEntered() {
+    flushEnteredWaiters();
+  }
+
+  /**
+   * 等待入场动画结束；浮层已打开（如浮层内切换委托）时立即 resolve
+   */
+  function whenEntered(): Promise<void> {
+    if (_entered || !import.meta.client) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(flushEnteredWaiters, ENTER_FALLBACK_MS);
+      _enteredWaiters.push(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 
   /**
@@ -158,6 +194,9 @@ export function usePostModal() {
     open,
     close,
     setTitle,
+    whenEntered,
+    /** @internal 入场动画结束（由 Transition @after-enter 调用） */
+    markEntered,
     /** @internal 供 app 级别 popstate listener 使用 */
     handlePopState,
     /** @internal 供路由守卫关闭弹窗（不回退 history） */

@@ -187,6 +187,14 @@ export function toThumbUrl(url: string | undefined, width = 360): string {
 }
 
 /**
+ * 瀑布流卡片封面缩略图：有 GPU 加速时用 720px 覆盖 2x–3x DPR；无 GPU 时降到 480px，
+ * 优先保证解码和绘制帧率。委托弹窗的 blur-up 占位图复用同一 URL，直接命中卡片已加载的缓存。
+ */
+export function toCardCoverThumbUrl(url: string | undefined, gpuAccelerated: boolean): string {
+  return toThumbUrl(url, gpuAccelerated ? 720 : 480);
+}
+
+/**
  * 保持原图尺寸，仅转换为 WebP 并压缩到 quality=80 的 URL。
  */
 export function toNoResizeWebpUrl(url: string | undefined): string {

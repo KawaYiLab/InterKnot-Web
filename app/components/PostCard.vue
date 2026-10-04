@@ -20,7 +20,7 @@ function markCoverLoaded(src: string) {
 import { computed, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
-import { toThumbUrl } from "~/utils/image";
+import { toCardCoverThumbUrl } from "~/utils/image";
 import UserHoverCard from "./UserHoverCard.vue";
 import { useRecommendationImpression, useRecommendations } from "~/composables/useRecommendations";
 
@@ -83,9 +83,7 @@ watch(
     if (oldValue && newId === oldValue[0] && newCover === oldValue[1]) return;
     const cover = newCover?.trim();
     // 瀑布流卡片尺寸不大，使用缩略图避免在 CPU / 无 GPU 路径下解码和绘制超大原图。
-    // 有 GPU 加速时用 720px 覆盖 2x–3x DPR；无 GPU 时降到 480px，优先保证解码和绘制帧率。
-    const thumbWidth = gpuAccelerated.value ? 720 : 480;
-    coverSrc.value = cover ? toThumbUrl(cover, thumbWidth) : DEFAULT_COVER_IMAGE;
+    coverSrc.value = cover ? toCardCoverThumbUrl(cover, gpuAccelerated.value) : DEFAULT_COVER_IMAGE;
     coverIsFallback.value = !cover;
     // 同一封面 URL 已加载过时，直接就绪，避免虚拟列表重挂载时重播过渡。
     coverImageLoaded.value = isCoverLoaded(coverSrc.value);

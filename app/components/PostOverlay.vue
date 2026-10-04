@@ -20,7 +20,7 @@ import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
 import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
-import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
+import { toCardCoverThumbUrl, toThumbUrl, toCanonicalUrl } from "~/utils/image";
 import { useRecommendationReading, useRecommendations } from "~/composables/useRecommendations";
 import RelatedArticles from "./RelatedArticles.vue";
 
@@ -56,6 +56,7 @@ const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const reportDialog = useReportDialog();
 const message = useMessage();
+const gpuAccelerated = useGpuAccelerated();
 const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
 const isMobile = useMediaQuery("(max-width: 768px)", { ssrWidth: initialWidth });
 const isCompact = useMediaQuery("(max-width: 1024px)", { ssrWidth: initialWidth });
@@ -92,13 +93,13 @@ const commentsLoading = ref(false);
 // 若此时就按「无评论」显示空提示，会出现「空提示 → 骨架 → 评论」的闪烁。
 // 用此标记把「尚未加载」与「加载完确实为空」区分开：未加载完一律显示骨架。
 const commentsLoaded = ref(false);
-// 入场动画期间延迟渲染评论列表，避免弹窗打开瞬间挂载大量 CommentItem 与 useEmotes 触发 fetch。
+// 正文上屏后再渲染评论列表，避免和正文挂载挤在同一帧里挂载大量 CommentItem 与 useEmotes 触发 fetch。
 const commentsVisible = ref(false);
-let showCommentsTimer: ReturnType<typeof setTimeout> | null = null;
-// 等 200ms 入场动画结束后再给滚动容器加上 will-change/translateZ(0) 提升层，
-// 既保留开场动画阶段少合成层的好处，又让后续上下滚动能复用独立层。
+// 评论列表上屏后再给滚动容器加上 will-change/translateZ(0) 提升层，
+// 既保留开场阶段少合成层的好处，又让后续上下滚动能复用独立层。
 const isScrollable = ref(false);
-let scrollableTimer: ReturnType<typeof setTimeout> | null = null;
+// 弹窗内跑马灯同样等正文、评论都上屏后再启动，避免与它们争抢同一帧。
+const marqueeReady = ref(false);
 
 const showCommentsSkeleton = computed(() => {
   if (!commentsVisible.value && comments.value.length > 0) return true;
@@ -170,14 +171,58 @@ const emoteInsert: EmoteInsertAPI = shallowReactive<EmoteInsertAPI>({
 const emotePickerVisible = ref(false);
 const emotePickerAnchor = ref<{ top: number; left: number; height: number } | null>(null);
 
-// 评论列表在入场动画结束后再渲染，避免弹窗打开瞬间挂载大量 CommentItem 与 useEmotes 触发 fetch。
-function scheduleShowComments() {
-  if (showCommentsTimer) clearTimeout(showCommentsTimer);
+/** 先等两帧让上一步的渲染上屏，再挑主线程空闲时执行；返回取消函数 */
+function afterPaintIdle(run: () => void, timeout = 300): () => void {
+  let cancelled = false;
+  let idleId: number | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const fire = () => {
+    if (!cancelled) run();
+  };
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (cancelled) return;
+    if (typeof requestIdleCallback !== "undefined") idleId = requestIdleCallback(fire, { timeout });
+    else timer = setTimeout(fire, 16);
+  }));
+  return () => {
+    cancelled = true;
+    if (idleId !== null) cancelIdleCallback(idleId);
+    if (timer) clearTimeout(timer);
+  };
+}
+
+let cancelRevealWork: (() => void) | null = null;
+let revealDelayTimer: ReturnType<typeof setTimeout> | null = null;
+
+function cancelScheduledRevealWork() {
+  cancelRevealWork?.();
+  cancelRevealWork = null;
+  if (revealDelayTimer) {
+    clearTimeout(revealDelayTimer);
+    revealDelayTimer = null;
+  }
+}
+
+// 正文上屏后按「评论列表 → 滚动层提升 + 跑马灯」分帧推进，每步都等上一步上屏、
+// 主线程空闲后再做，避免几件重活挤在动画刚停下的同一帧里。
+function scheduleRevealWork() {
+  cancelScheduledRevealWork();
   commentsVisible.value = false;
-  showCommentsTimer = setTimeout(() => {
-    showCommentsTimer = null;
-    commentsVisible.value = true;
-  }, 300);
+  const start = () => {
+    revealDelayTimer = null;
+    cancelRevealWork = afterPaintIdle(() => {
+      commentsVisible.value = true;
+      cancelRevealWork = afterPaintIdle(() => {
+        cancelRevealWork = null;
+        isScrollable.value = true;
+        marqueeReady.value = true;
+      });
+    });
+  };
+  // 浮层内切换委托时，等弹窗主体的重放动画播完再开始
+  const switchRemaining = switchAnimationEndsAt - performance.now();
+  if (switchRemaining > 0) revealDelayTimer = setTimeout(start, switchRemaining);
+  else start();
 }
 
 const toggleEmotePicker = (e: MouseEvent) => {
@@ -258,8 +303,8 @@ const firstCover = computed(() => covers.value[0] ?? null);
 const previewCover = computed(() => {
   const cover = props.preview?.cover?.trim();
   // 预览图仅作为 blur-up 占位，统一走缩略图，避免首页卡片传入大原图
-  // 时 decode() 占用过多资源导致弹窗入场掉帧。
-  return cover ? toThumbUrl(cover) : null;
+  // 时 decode() 占用过多资源导致弹窗入场掉帧。与卡片封面同一 URL，入场时直接命中缓存。
+  return cover ? toCardCoverThumbUrl(cover, gpuAccelerated.value) : null;
 });
 const coverPreviewSrc = (i: number) => {
   const cover = covers.value[i];
@@ -433,6 +478,8 @@ const loadPost = async () => {
   };
   try {
     const loadedPost = await api.getPost(request.postId);
+    // 正文整块挂载开销大，等入场动画结束再渲染；入场期间由骨架屏 + preview 占位。
+    await postModal.whenEntered();
     if (!isCurrentPostRequest(request)) return null;
     post.value = loadedPost;
     if (post.value?.title) {
@@ -1249,11 +1296,13 @@ const onKeyDown = (e: KeyboardEvent) => {
    背景遮罩保持不动，让新委托像「新帖子进场」而非替换。 */
 const dialogRef = ref<HTMLElement | null>(null);
 let switchResetTimer: ReturnType<typeof setTimeout> | null = null;
+let switchAnimationEndsAt = 0;
 
 const replaySwitchAnimation = () => {
   if (!import.meta.client) return;
   const el = dialogRef.value;
   if (!el) return;
+  switchAnimationEndsAt = performance.now() + 200;
   // 重启 CSS animation 必须走「移除 class → 强制同步 reflow → 加回 class」三步：
   // 只靠 nextTick 切换 ref，移除与加回会落在同一绘制帧的微任务里被浏览器合并，
   // animation 属性无变化 → 动画不重放，观感退化为「原地替换内容」。
@@ -1299,7 +1348,7 @@ const resetAndLoad = async () => {
   if (!loadError.value) {
     scheduleSeek(request);
   }
-  scheduleShowComments();
+  scheduleRevealWork();
 };
 
 watch(
@@ -1406,12 +1455,7 @@ onMounted(async () => {
   }
   await nextTick();
   if (!isCurrentPostRequest(request)) return;
-  scheduleShowComments();
-  if (scrollableTimer) clearTimeout(scrollableTimer);
-  scrollableTimer = setTimeout(() => {
-    scrollableTimer = null;
-    isScrollable.value = true;
-  }, 250);
+  scheduleRevealWork();
 });
 
 onBeforeUnmount(() => {
@@ -1425,14 +1469,7 @@ onBeforeUnmount(() => {
   destroyPreview();
   teardownMentionListeners?.();
   teardownMentionListeners = null;
-  if (showCommentsTimer) {
-    clearTimeout(showCommentsTimer);
-    showCommentsTimer = null;
-  }
-  if (scrollableTimer) {
-    clearTimeout(scrollableTimer);
-    scrollableTimer = null;
-  }
+  cancelScheduledRevealWork();
   if (switchResetTimer) {
     clearTimeout(switchResetTimer);
     switchResetTimer = null;
@@ -1506,7 +1543,7 @@ onBeforeUnmount(() => {
 
             <!-- ── Content Area ───────────────────── -->
             <div class="ik-dialog__main">
-              <IkZzzMarquee />
+              <IkZzzMarquee :paused="!marqueeReady" />
 
             <div v-show="loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable }">
               <!-- 骨架屏：左栏 -->
@@ -2082,12 +2119,12 @@ onBeforeUnmount(() => {
   justify-content: center;
   background: transparent;
   --ik-overlay-bg: rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
 }
 
 /* 独立背景层：承载遮罩颜色，用 opacity 过渡替代 .ik-overlay 的 background-color 过渡。
-   移动端/桌面端颜色通过 --ik-overlay-bg 变量切换，入场时只让 opacity 变化，避免全屏 paint。 */
+   移动端/桌面端颜色通过 --ik-overlay-bg 变量切换，入场时只让 opacity 变化，避免全屏 paint。
+   毛玻璃也挂在这一层：元素 opacity 同样作用于 backdrop-filter 的结果，模糊会随遮罩
+   一起淡入淡出；挂在根节点上时模糊不参与过渡，第一帧就直接跳满。 */
 .ik-overlay__backdrop {
   position: absolute;
   inset: 0;
@@ -2095,6 +2132,8 @@ onBeforeUnmount(() => {
   pointer-events: none;
   background: var(--ik-overlay-bg);
   opacity: 1;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 /* 斜线纹理（PatternPainter）—— web 端调优版：
@@ -2113,6 +2152,9 @@ onBeforeUnmount(() => {
     rgba(255, 255, 255, 0.09) 7.5px,
     transparent 8.5px
   );
+  /* 与入场时全局规则给的 will-change 保持一致：入场结束摘掉 will-change 会让这层
+     全屏斜纹降级回父层，触发一次全屏重绘，正好落在动画停下的那一帧。 */
+  will-change: opacity;
 }
 
 /* ── Dialog Shell ──────────────────────────────── */
@@ -2123,6 +2165,13 @@ onBeforeUnmount(() => {
   /* desktop 缩放 1.1x → 实际占 77% */
   transform: scale(1.1);
   transform-origin: center;
+  /* 同上：常驻合成层，避免入场结束时降级并整体重新光栅化 */
+  will-change: transform, opacity;
+}
+
+/* 无 GPU 时入场动画已关闭，常驻合成层只会增加软件合成开销 */
+html.no-gpu .ik-dialog {
+  will-change: auto;
 }
 
 /* 外边框 */
@@ -2222,6 +2271,15 @@ onBeforeUnmount(() => {
 
 .ik-dialog__avatar--placeholder {
   background: #2a2a2a;
+}
+
+/* 头像、关闭按钮和 blur-up 占位图跳过全局 img 淡入：全局规则让新建的 <img> 一直透明到
+   load 事件触发，即使已有缓存也会在入场时一个个「冒出来」。 */
+.ik-dialog__avatar,
+.ik-dialog__close-img,
+.ik-dialog__cover-preview-image {
+  opacity: 1;
+  transition: none;
 }
 
 .ik-dialog__author-info {
@@ -2344,6 +2402,14 @@ onBeforeUnmount(() => {
   background: linear-gradient(90deg, #1a1a1a 25%, #252525 50%, #1a1a1a 75%);
   background-size: 800px 100%;
   animation: ik-shimmer 1.6s ease infinite;
+}
+
+/* background-position 动画无法交给合成器，每帧都要重绘弹窗主体图层；
+   入场 / 离场 / 切换动画期间先停住，让 transform/opacity 动画只走合成器。 */
+.ik-overlay-enter-active .ik-skel,
+.ik-overlay-leave-active .ik-skel,
+.ik-dialog--switching .ik-skel {
+  animation-play-state: paused;
 }
 
 .ik-skel--cover {
@@ -3310,6 +3376,9 @@ onBeforeUnmount(() => {
 @media (max-width: 1024px) {
   .ik-overlay.ik-overlay {
     --ik-overlay-bg: rgba(0, 0, 0, 0.88);
+  }
+
+  .ik-overlay__backdrop {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
@@ -3459,8 +3528,11 @@ onBeforeUnmount(() => {
     max-height: 100dvh;
   }
 
+  /* will-change: transform 同样会成为 fixed 子元素的包含块，必须一起去掉，
+     否则表情面板打开时底部互动栏的 position: fixed 会失效 */
   .ik-dialog--emote-open {
     transform: none;
+    will-change: auto;
   }
 
   .ik-dialog--emote-open .ik-dialog__body--scrollable {
