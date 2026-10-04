@@ -1,4 +1,4 @@
-﻿﻿<script setup lang="ts">
+﻿<script setup lang="ts">
 import { useEventListener } from "@vueuse/core";
 import { BellIcon } from "@heroicons/vue/24/solid";
 import { ClockIcon, XMarkIcon } from "@heroicons/vue/24/outline";
@@ -621,7 +621,7 @@ watch(
                 fill="currentColor"
               />
             </svg>
-            <span class="ik-header-tab__content">推荐</span>
+            <span class="ik-header-tab__content">推送</span>
           </button>
 
           <button
