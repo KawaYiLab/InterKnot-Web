@@ -19,8 +19,7 @@ const message = useMessage();
 type TabKey = "all" | BusinessCardType;
 
 const PAGE_SIZE = 30;
-// 网格单格桌面端约 150px、移动端约 110px，480w 足够覆盖 2x–3x DPR，远小于原图
-const GRID_THUMB_WIDTH = 480;
+const GRID_THUMB_WIDTH = 1280;
 
 interface TabState {
   cards: BusinessCard[];
@@ -751,6 +750,12 @@ onBeforeUnmount(() => {
 .ik-bc-grid-scroll {
   flex: 1;
   height: 100%;
+}
+/* z-scrollbar 按原生滚动条宽度（Windows 约 17px）给 wrap 加负 margin-bottom 来藏横向滚动条，
+   但 wrap 已用 CSS 隐藏了原生滚动条，负 margin 只会让 wrap 超出容器，底部这段被 overflow 裁掉，
+   表现为滚到底时最后一行名片显示不全。 */
+.ik-bc-grid-scroll :deep(.z-scrollbar__wrap) {
+  margin-bottom: 0 !important;
 }
 
 .ik-bc-grid-loading,
