@@ -20,7 +20,7 @@ import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
 import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
-import { toCardCoverThumbUrl, toThumbUrl, toCanonicalUrl } from "~/utils/image";
+import { toCardCoverThumbUrl, toThumbUrl, toCanonicalUrl, toNoResizeWebpUrl } from "~/utils/image";
 import RelatedArticles from "./RelatedArticles.vue";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
@@ -314,6 +314,18 @@ const coverDisplaySrc = (url: string | undefined) => {
   if (!url) return url;
   return toCanonicalUrl(url);
 };
+
+// 多图轮播不能直接放原图：几千像素的原图每次滑入视口都要在光栅线程整张解码
+// （实测 2700×4800 单张 300ms+），合成器等解码完成才提交，切图动画因此严重掉帧。
+// 轮播里用与显示尺寸匹配的缩略图，点开放大预览时仍走原图。
+const SLIDE_DISPLAY_WIDTH_MOBILE = 800;
+const SLIDE_DISPLAY_WIDTH = 1200;
+const slideDisplaySrc = (cover: { url: string; width?: number | null }) => {
+  const maxWidth = isMobile.value ? SLIDE_DISPLAY_WIDTH_MOBILE : SLIDE_DISPLAY_WIDTH;
+  // 原图本身不超过目标宽度时只转 WebP，避免被 CDN 放大变糊
+  if (cover.width && cover.width > 0 && cover.width <= maxWidth) return toNoResizeWebpUrl(cover.url);
+  return toThumbUrl(cover.url, maxWidth);
+};
 const loadedPreviewImageRef = ref<HTMLImageElement | null>(null);
 const setLoadedPreviewImage = (el: Element | ComponentPublicInstance | null) => {
   loadedPreviewImageRef.value = el instanceof HTMLImageElement ? el : null;
@@ -363,10 +375,15 @@ const syncEmblaState = () => {
 };
 
 const destroyEmbla = () => {
-  if (emblaApi.value) {
-    emblaApi.value.destroy();
-    emblaApi.value = undefined;
-  }
+  const api = emblaApi.value;
+  if (!api) return;
+  // destroy() 会清空轨道的 transform。组件卸载时作用域先停（触发这里），
+  // DOM 却要等 200ms 离场动画播完才移除，不保留位移的话离场期间会瞬间跳回第一张。
+  const container = api.containerNode();
+  const transform = container.style.transform;
+  api.destroy();
+  if (transform) container.style.transform = transform;
+  emblaApi.value = undefined;
 };
 
 const initEmbla = (el: HTMLElement) => {
@@ -1651,7 +1668,7 @@ onBeforeUnmount(() => {
                                 </div>
                                 <img
                                   v-if="isCoverNearby(i)"
-                                  :src="coverDisplaySrc(c.url)"
+                                  :src="slideDisplaySrc(c)"
                                   :alt="`${post.title} - ${i + 1}`"
                                   class="ik-dialog__cover"
                                   loading="eager"
@@ -1665,6 +1682,7 @@ onBeforeUnmount(() => {
                                 <div
                                   v-if="!isCoverImageLoaded(i) && (!isCoverNearby(i) || !coverPreviewSrc(i))"
                                   class="ik-skel ik-dialog__cover-skel"
+                                  :class="{ 'ik-dialog__cover-skel--offscreen': i !== coverIndex }"
                                   aria-hidden="true"
                                 ></div>
                               </div>
@@ -2489,6 +2507,12 @@ html.no-gpu .ik-dialog {
   border-radius: inherit;
   pointer-events: none;
   z-index: 1;
+}
+
+/* 轮播轨道是一整个合成层，屏外 slide 的 shimmer（background-position 动画）
+   也会让整条轨道每帧重绘、重新光栅化里面的大图，切图时直接掉帧。 */
+.ik-dialog__cover-skel--offscreen {
+  animation-play-state: paused;
 }
 
 .ik-dialog__cover-preview {
