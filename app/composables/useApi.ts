@@ -64,8 +64,8 @@ const qk = {
     profile: ["me", "profile"] as QueryKey,
     drafts: ["me", "drafts"] as QueryKey,
     draft: (id: string) => ["me", "drafts", id] as QueryKey,
-    businessCards: (type?: BusinessCardType) =>
-      type ? (["me", "business-cards", type] as QueryKey) : (["me", "business-cards"] as QueryKey),
+    businessCards: (type: BusinessCardType | "all", page: number, pageSize: number) =>
+      ["me", "business-cards", type, page, pageSize] as QueryKey,
     avatars: ["me", "avatars"] as QueryKey,
     uploads: (page: number, pageSize: number) => ["me", "uploads", page, pageSize] as QueryKey,
     pinnedArticles: ["me", "pinned-articles"] as QueryKey,
@@ -215,6 +215,12 @@ interface MyBusinessCardsResult {
   cards: BusinessCard[];
   equippedCardDocumentId: string | null;
   equippedCard: BusinessCard | null;
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    pageCount: number;
+  };
 }
 
 interface MyUploadsResult {
@@ -2158,19 +2164,41 @@ export function useApi() {
     return uploaded;
   };
 
-  const getMyBusinessCards = async (type?: BusinessCardType): Promise<MyBusinessCardsResult> => {
+  const getMyBusinessCards = async (
+    type?: BusinessCardType,
+    page = 1,
+    pageSize = 30,
+  ): Promise<MyBusinessCardsResult> => {
+    const safePage = Math.max(1, Math.floor(page));
+    const safePageSize = Math.max(1, Math.floor(pageSize));
     return cachedRead(
-      qk.me.businessCards(type),
+      qk.me.businessCards(type ?? "all", safePage, safePageSize),
       async () => {
         const response = await $api("/api/me/business-cards", {
-          query: type ? { type } : undefined,
+          query: {
+            ...(type ? { type } : {}),
+            page: String(safePage),
+            pageSize: String(safePageSize),
+          },
         });
         const data = response as Record<string, unknown>;
         const rawCards = Array.isArray(data.data) ? data.data : [];
+        const cards = rawCards.map((item) => toBusinessCard(item, apiBaseUrl)).filter(Boolean) as BusinessCard[];
+        const meta = data.meta && typeof data.meta === "object" ? data.meta as Record<string, unknown> : {};
+        const pagination = meta.pagination && typeof meta.pagination === "object"
+          ? meta.pagination as Record<string, unknown>
+          : {};
         return {
-          cards: rawCards.map((item) => toBusinessCard(item, apiBaseUrl)).filter(Boolean) as BusinessCard[],
+          cards,
           equippedCardDocumentId: (data.equippedCardDocumentId as string) || null,
           equippedCard: toBusinessCard(data.equippedCard, apiBaseUrl) || null,
+          pagination: {
+            page: parsePositiveNumber(pagination.page) ?? safePage,
+            pageSize: parsePositiveNumber(pagination.pageSize) ?? safePageSize,
+            // total 为 0 时 parsePositiveNumber 返回 undefined，需单独兜底
+            total: typeof pagination.total === "number" ? pagination.total : cards.length,
+            pageCount: typeof pagination.pageCount === "number" ? pagination.pageCount : safePage,
+          },
         };
       },
       STALE_ME,

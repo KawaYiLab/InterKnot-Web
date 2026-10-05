@@ -2,7 +2,7 @@
 import { useMessage } from "zenless-ui";
 import type { BusinessCard, BusinessCardType, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
-import { toNoResizeWebpUrl } from "~/utils/image";
+import { toThumbUrl } from "~/utils/image";
 
 const props = defineProps<{
   profile: Profile;
@@ -17,22 +17,41 @@ const api = useApi();
 const message = useMessage();
 
 type TabKey = "all" | BusinessCardType;
-const CARD_TYPE_TABS: BusinessCardType[] = ["character", "city", "news"];
-const activeTab = ref<TabKey>("all");
-const cardsByTab = reactive<Record<TabKey, BusinessCard[] | null>>({
-  all: null,
-  character: null,
-  city: null,
-  news: null,
+
+const PAGE_SIZE = 30;
+// 网格单格桌面端约 150px、移动端约 110px，480w 足够覆盖 2x–3x DPR，远小于原图
+const GRID_THUMB_WIDTH = 480;
+
+interface TabState {
+  cards: BusinessCard[];
+  page: number;
+  hasMore: boolean;
+  loaded: boolean;
+  loading: boolean;
+  error: boolean;
+}
+
+const createTabState = (): TabState => ({
+  cards: [],
+  page: 0,
+  hasMore: true,
+  loaded: false,
+  loading: false,
+  error: false,
 });
-const loadingTabs = reactive<Record<TabKey, boolean>>({
-  all: false,
-  character: false,
-  city: false,
-  news: false,
+
+const activeTab = ref<TabKey>("all");
+const tabStates = reactive<Record<TabKey, TabState>>({
+  all: createTabState(),
+  character: createTabState(),
+  city: createTabState(),
+  news: createTabState(),
 });
 const equippedId = ref<string | null>(null);
 const equippedCard = ref<BusinessCard | null>(null);
+// 装备状态只认首个成功响应；之后由本地 equip / unequip 维护，避免翻页的旧响应覆盖刚装备的结果
+const equippedResolved = ref(false);
+const bootstrapping = ref(true);
 const selectedCard = ref<BusinessCard | null>(null);
 const equipping = ref(false);
 
@@ -43,19 +62,33 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: "news", label: "纪闻" },
 ];
 
-const filteredCards = computed(() => cardsByTab[activeTab.value] ?? []);
-const loading = computed(() => loadingTabs[activeTab.value]);
+const activeState = computed(() => tabStates[activeTab.value]);
+const filteredCards = computed(() => activeState.value.cards);
+const gridLoading = computed(() => !activeState.value.loaded && activeState.value.loading);
+const loadingMore = computed(() => activeState.value.loaded && activeState.value.loading);
 
 const findCachedCard = (documentId: string | null) => {
   if (!documentId) return null;
-  for (const cards of Object.values(cardsByTab)) {
-    const card = cards?.find((item) => item.documentId === documentId);
+  for (const state of Object.values(tabStates)) {
+    const card = state.cards.find((item) => item.documentId === documentId);
     if (card) return card;
   }
   return null;
 };
 
 const previewCard = computed(() => selectedCard.value ?? findCachedCard(equippedId.value) ?? equippedCard.value);
+
+// 原图在下层叠一张网格已缓存的缩略图：切换名片时原图未到之前先显示缩略图，不会闪成默认背景
+const previewBannerStyle = computed(() => {
+  const image = previewCard.value?.image;
+  if (!image) return undefined;
+  return { backgroundImage: `url('${image}'), url('${toThumbUrl(image, GRID_THUMB_WIDTH)}')` };
+});
+
+const onThumbError = (event: Event, card: BusinessCard) => {
+  const img = event.target as HTMLImageElement;
+  if (card.image && img.src !== card.image) img.src = card.image;
+};
 
 interface StrapiTextBlock {
   children?: Array<{ text?: string }>;
@@ -81,37 +114,85 @@ const selectCard = (card: BusinessCard) => {
   selectedCard.value = card;
 };
 
-const cacheCards = (key: TabKey, nextCards: BusinessCard[]) => {
-  cardsByTab[key] = nextCards;
-  if (key === "all") {
-    for (const type of CARD_TYPE_TABS) {
-      cardsByTab[type] = nextCards.filter((card) => card.type === type);
+const gridScrollRef = ref<{ scrollTarget?: HTMLElement | null } | null>(null);
+const sentinelRef = ref<HTMLElement | null>(null);
+let sentinelObserver: IntersectionObserver | null = null;
+
+const teardownSentinelObserver = () => {
+  sentinelObserver?.disconnect();
+  sentinelObserver = null;
+};
+
+// 加载完一页后哨兵若仍在可视区内，IntersectionObserver 不会再次回调，需要重新 observe 触发一次检测
+const recheckSentinel = async () => {
+  await nextTick();
+  const el = sentinelRef.value;
+  if (!sentinelObserver || !el) return;
+  sentinelObserver.unobserve(el);
+  sentinelObserver.observe(el);
+};
+
+const loadNextPage = async (key: TabKey) => {
+  const state = tabStates[key];
+  if (state.loading || (state.loaded && !state.hasMore)) return;
+  const nextPage = state.page + 1;
+  state.loading = true;
+  state.error = false;
+  try {
+    const result = await api.getMyBusinessCards(key === "all" ? undefined : key, nextPage, PAGE_SIZE);
+    const seen = new Set(state.cards.map((card) => card.documentId));
+    const fresh = result.cards.filter((card) => !seen.has(card.documentId)).map((card) => markRaw(card));
+    state.cards = state.cards.concat(fresh);
+    state.page = nextPage;
+    state.loaded = true;
+    state.hasMore = result.cards.length > 0 && nextPage < result.pagination.pageCount;
+
+    if (!equippedResolved.value) {
+      equippedResolved.value = true;
+      equippedId.value = result.equippedCardDocumentId;
+      equippedCard.value = result.equippedCard;
     }
+    if (nextPage === 1 && !equippedId.value && activeTab.value === key && !selectedCard.value) {
+      selectedCard.value = state.cards[0] ?? null;
+    }
+  } catch (err) {
+    state.error = true;
+    message.error(resolveErrorMessage(err, "获取名片列表失败"));
+  } finally {
+    state.loading = false;
+    bootstrapping.value = false;
+  }
+  if (!state.error && state.hasMore && activeTab.value === key) {
+    await recheckSentinel();
   }
 };
 
-const loadCardsForTab = async (key: TabKey) => {
-  if (cardsByTab[key] || loadingTabs[key]) return;
-  loadingTabs[key] = true;
-  try {
-    const result = await api.getMyBusinessCards(key === "all" ? undefined : key);
-    cacheCards(key, result.cards);
-    equippedId.value = result.equippedCardDocumentId;
-    equippedCard.value = result.equippedCard;
-    if (!equippedId.value && activeTab.value === key && !selectedCard.value && result.cards.length > 0) {
-      selectedCard.value = result.cards[0] ?? null;
-    }
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "获取名片列表失败"));
-  } finally {
-    loadingTabs[key] = false;
-  }
+watch(
+  sentinelRef,
+  (el) => {
+    teardownSentinelObserver();
+    const root = gridScrollRef.value?.scrollTarget ?? null;
+    if (!el || !root) return;
+    sentinelObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) void loadNextPage(activeTab.value);
+      },
+      { root, rootMargin: "200px 0px" },
+    );
+    sentinelObserver.observe(el);
+  },
+  { flush: "post" },
+);
+
+const handleRetry = () => {
+  void loadNextPage(activeTab.value);
 };
 
 const handleTabChange = (key: TabKey) => {
+  if (activeTab.value === key) return;
   activeTab.value = key;
   selectedCard.value = null;
-  loadCardsForTab(key).catch(() => undefined);
+  if (!tabStates[key].loaded) void loadNextPage(key);
 };
 
 const handleEquip = async () => {
@@ -168,10 +249,11 @@ const SCROLL_LOCK_TOKEN = Symbol("business-card-modal");
 onMounted(async () => {
   window.addEventListener("keydown", handleKeydown);
   acquire(SCROLL_LOCK_TOKEN);
-  await loadCardsForTab(activeTab.value);
+  await loadNextPage(activeTab.value);
 });
 
 onBeforeUnmount(() => {
+  teardownSentinelObserver();
   window.removeEventListener("keydown", handleKeydown);
   release(SCROLL_LOCK_TOKEN);
 });
@@ -227,13 +309,13 @@ onBeforeUnmount(() => {
 
               <!-- Banner preview (top) -->
               <div class="ik-bc-preview">
-                <div v-if="loading" class="ik-bc-preview__banner-card">
+                <div v-if="bootstrapping" class="ik-bc-preview__banner-card">
                   <div class="ik-skel ik-bc-preview__banner-skel"></div>
                 </div>
                 <div v-else class="ik-bc-preview__banner-card">
                   <div
                     class="ik-bc-preview__banner"
-                    :style="previewCard?.image ? { backgroundImage: `url('${previewCard.image}')` } : undefined"
+                    :style="previewBannerStyle"
                   >
                     <div class="ik-bc-preview__user">
                       <div class="ik-bc-preview__avatar-wrap">
@@ -261,14 +343,24 @@ onBeforeUnmount(() => {
 
                 <!-- Card grid (left) -->
                 <div class="ik-bc-grid-wrap">
-                  <div v-if="loading" class="ik-bc-grid-loading">
+                  <div v-if="gridLoading" class="ik-bc-grid-loading">
                     <i class="z-icon-loading ik-spin" /> 加载中...
+                  </div>
+                  <div v-else-if="!filteredCards.length && activeState.error" class="ik-bc-grid-empty">
+                    获取名片失败
+                    <button type="button" class="ik-bc-grid-retry" @click="handleRetry">重试</button>
                   </div>
                   <div v-else-if="!filteredCards.length" class="ik-bc-grid-empty">
                     暂无此类名片
                   </div>
                   <Transition name="ik-fade">
-                  <z-scrollbar v-if="!loading && filteredCards.length" class="ik-bc-grid-scroll">
+                  <!-- key 跟随 tab：切换分类时重置滚动位置，并让哨兵重新绑定观察器 -->
+                  <z-scrollbar
+                    v-if="!gridLoading && filteredCards.length"
+                    :key="activeTab"
+                    ref="gridScrollRef"
+                    class="ik-bc-grid-scroll"
+                  >
                     <div class="ik-bc-grid">
                       <button
                         v-for="card in filteredCards"
@@ -283,9 +375,13 @@ onBeforeUnmount(() => {
                         <div class="ik-bc-grid__thumb">
                           <img
                             v-if="card.image"
-                            :src="toNoResizeWebpUrl(card.image)"
-                            alt=""
+                            :src="toThumbUrl(card.image, GRID_THUMB_WIDTH)"
+                            :alt="card.name"
                             class="ik-bc-grid__img"
+                            loading="lazy"
+                            decoding="async"
+                            draggable="false"
+                            @error="onThumbError($event, card)"
                           />
                           <div v-else class="ik-bc-grid__placeholder">
                             {{ card.name.charAt(0) }}
@@ -294,13 +390,26 @@ onBeforeUnmount(() => {
                         <i v-if="equippedId === card.documentId" class="z-icon-success ik-bc-grid__badge-icon" />
                       </button>
                     </div>
+                    <div v-if="loadingMore" class="ik-bc-grid-more">
+                      <i class="z-icon-loading ik-spin" /> 加载中...
+                    </div>
+                    <div v-else-if="activeState.error" class="ik-bc-grid-more">
+                      加载失败
+                      <button type="button" class="ik-bc-grid-retry" @click="handleRetry">重试</button>
+                    </div>
+                    <div
+                      v-if="activeState.hasMore && !activeState.error"
+                      ref="sentinelRef"
+                      class="ik-bc-grid-sentinel"
+                      aria-hidden="true"
+                    />
                   </z-scrollbar>
                   </Transition>
                 </div>
 
                 <!-- Card detail (right) -->
                 <div class="ik-bc-detail">
-                  <template v-if="loading">
+                  <template v-if="bootstrapping">
                     <div class="ik-skel" style="width:140px;height:24px;border-radius:6px"></div>
                     <div class="ik-skel" style="width:100%;height:14px;border-radius:4px;margin-top:12px"></div>
                     <div class="ik-skel" style="width:80%;height:14px;border-radius:4px;margin-top:8px"></div>
@@ -655,6 +764,29 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.ik-bc-grid-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 32px 4px 0;
+  color: #666;
+  font-size: 13px;
+}
+.ik-bc-grid-retry {
+  padding: 2px 10px;
+  border: 1px solid #333;
+  border-radius: 999px;
+  background: transparent;
+  color: #fbfe00;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ik-bc-grid-retry:hover { border-color: #fbfe00; }
+.ik-bc-grid-sentinel { height: 1px; }
+
 .ik-bc-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -815,6 +947,7 @@ onBeforeUnmount(() => {
   .ik-bc-detail { padding: 12px 0 0; }
   /* 移动端无自定义滚动条，去掉桌面端为滚动条轨道预留的右侧间距 */
   .ik-bc-grid { grid-template-columns: repeat(3, 1fr); padding: 0 12px; }
+  .ik-bc-grid-more { padding-right: 0; }
 }
 
 @media (max-width: 500px) {
