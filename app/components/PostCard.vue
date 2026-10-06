@@ -222,11 +222,10 @@ const handleOpen = (e: MouseEvent) => {
   contain: layout style paint;
 }
 
-/* 悬停 / 新帖高亮的彩色外框画在内容「之上」，并向内多压 1px。
+/* 新帖高亮的彩色外框画在内容「之上」，并向内多压 1px。
    若像以前那样改外层背景色，内层圆角裁剪的抗锯齿边缘会混入内层的深色背景
    （#222 / 封面底色），在彩框与封面之间留下一条暗线，小数像素布局和
    Windows 缩放下尤其明显。 */
-.ik-card::after,
 .ik-card--updated::before {
   content: "";
   position: absolute;
@@ -235,18 +234,6 @@ const handleOpen = (e: MouseEvent) => {
   border-radius: inherit;
   box-shadow: inset 0 0 0 calc(var(--ik-post-card-padding) + 1px) var(--ik-post-card-hover-bg);
   pointer-events: none;
-}
-
-.ik-card::after {
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-
-.ik-card:hover::after {
-  opacity: 1;
-}
-
-.ik-card--updated::before {
   animation: ik-card-highlight-fade 3s ease-out forwards;
 }
 
@@ -272,9 +259,6 @@ const handleOpen = (e: MouseEvent) => {
   .ik-card--updated::before {
     animation: none;
     opacity: 0;
-  }
-  .ik-card::after {
-    transition: none;
   }
 }
 
@@ -328,11 +312,6 @@ const handleOpen = (e: MouseEvent) => {
   transition:
     transform 1.2s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 400ms ease;
-  will-change: transform;
-}
-
-.ik-card:hover :deep(.ik-card__cover) {
-  --ik-cover-scale: 1.06;
 }
 
 :deep(.ik-card__cover--loading) {
