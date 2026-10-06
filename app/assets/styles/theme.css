@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   color-scheme: dark;
 
   --ik-bg: #0a0a0a;
@@ -40,6 +40,7 @@
   --ik-post-card-cover-bg: #151515;
   --ik-post-card-placeholder-bg: #2a2a2a;
   --ik-post-card-divider-bg: #3a3a3a;
+  --ik-post-card-updated-bg: var(--ik-primary);
   --ik-post-card-hover-bg: var(--ik-primary);
 
   /* ── Card – cover ───────────────────────────── */

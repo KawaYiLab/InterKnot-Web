@@ -4,7 +4,7 @@ const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
 
 // 跨实例缓存已经加载过的封面 URL。虚拟列表在上下滚动时会反复挂载/卸载
 // PostCard，这个缓存能让“下滑时已经加载过”的封面在重新上翻进入视口时
-// 直接显示，不再重播 opacity/scale 进场过渡。
+// 直接显示，不再重播 opacity 进场过渡。
 const _loadedCoverUrls = new Set<string>();
 
 function isCoverLoaded(src: string) {
@@ -232,7 +232,7 @@ const handleOpen = (e: MouseEvent) => {
   inset: 0;
   z-index: 2;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 calc(var(--ik-post-card-padding) + 1px) var(--ik-post-card-hover-bg);
+  box-shadow: inset 0 0 0 calc(var(--ik-post-card-padding) + 1px) var(--ik-post-card-updated-bg, var(--ik-primary));
   pointer-events: none;
   animation: ik-card-highlight-fade 3s ease-out forwards;
 }
@@ -302,20 +302,15 @@ const handleOpen = (e: MouseEvent) => {
 }
 
 :deep(.ik-card__cover) {
-  --ik-cover-scale: 1;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  transform: scale(var(--ik-cover-scale));
-  transition:
-    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 400ms ease;
+  transition: opacity 400ms ease;
 }
 
 :deep(.ik-card__cover--loading) {
-  --ik-cover-scale: 1.02;
   opacity: 0;
 }
 
