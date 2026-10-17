@@ -2347,7 +2347,8 @@ export function useApi() {
       nextEligibleAt: str(data.nextEligibleAt) ?? null,
       currentDenny: Number(data.balance) || 0,
       nextConsecutiveDays: num(data.nextStreak) ?? null,
-      nextReward: num(data.nextDenny) ?? null,
+      // 与旧接口同口径：reward 指绳网信用（经验），丁尼固定另发。
+      nextReward: num(data.nextExp) ?? null,
     };
   };
 
@@ -2369,7 +2370,7 @@ export function useApi() {
     const data = await $api<Rec>("/v1/me/check-in", { method: "POST" });
     return {
       message: "签到成功",
-      reward: Number(data.dennyGained) || 0,
+      reward: Number(data.expGained) || 0,
       dennyAdded: Number(data.dennyGained) || 0,
       currentDenny: Number(data.balance) || 0,
       consecutiveDays: Number(data.streak) || 0,
