@@ -32,9 +32,19 @@ function persistUserId(user: Author | null) {
   localStorage.setItem(SESSION_HINT_KEY, id);
 }
 
+/** 上次登录留下的提示：有就先按已登录渲染（页面在 setup 里同步判断登录态），/v1/me 再确认。 */
+function hasSessionHint(): boolean {
+  if (!import.meta.client) return false;
+  try {
+    return !!localStorage.getItem(SESSION_HINT_KEY) && localStorage.getItem(LOGOUT_KEY) !== "pending";
+  } catch {
+    return false;
+  }
+}
+
 export const useAuthStore = defineStore("auth", {
   state: () => ({
-    loggedIn: false,
+    loggedIn: hasSessionHint(),
     user: null as Author | null,
     generation: 0,
     hydrationReady: false,
@@ -61,7 +71,10 @@ export const useAuthStore = defineStore("auth", {
     hydrateFromStorage() {
       return this.restoreSession();
     },
-    /** 有登录提示时用 Cookie 恢复会话；没有提示就是游客，直接就绪。 */
+    /**
+     * 有登录提示时用 Cookie 恢复会话（提示让 loggedIn 一开始就是 true，这里拉资料确认；
+     * Cookie 已失效时 /v1/me 回 401，clearSession 退回游客）。没有提示就是游客，直接就绪。
+     */
     restoreSession(): Promise<void> {
       if (!import.meta.client) return Promise.resolve();
       const existing = restoring.get(this);
