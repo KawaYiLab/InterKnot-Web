@@ -1,11 +1,11 @@
 import type { AiModel } from "~/types/entities";
 
 interface ModelsResponse {
-  data: AiModel[];
+  items: Array<AiModel & { isDefault?: boolean }>;
 }
 
 /**
- * 敲敲可选模型清单（GET /api/agent/models，公开只读）。
+ * 敲敲可选模型清单（GET /v1/ai/models，公开只读）。
  *
  * 清单变动极少（后台手工维护），所以用 useState 全局缓存一次，
  * 已加载过就不再请求；角色卡白名单过滤在使用侧做（见 KnockKnockModal
@@ -24,8 +24,8 @@ export function useAiModels() {
     loading.value = true;
     error.value = null;
     try {
-      const res = await $api<ModelsResponse>("/api/agent/models");
-      models.value = Array.isArray(res?.data) ? res.data : [];
+      const res = await $api<ModelsResponse>("/v1/ai/models");
+      models.value = Array.isArray(res?.items) ? res.items : [];
       loaded.value = true;
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : "加载模型列表失败";

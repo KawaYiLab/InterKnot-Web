@@ -1,14 +1,10 @@
 import type { AgentQuota } from "~/types/entities";
 
-interface QuotaResponse {
-  data: AgentQuota;
-}
-
 /**
- * 敲敲当日额度（GET /api/agent/quota，需登录）。
+ * 敲敲当日额度（GET /v1/ai/quota，需登录）。
  *
- * 用量存在 Redis 的按「配额日」分桶计数器里（日切是**本地 04:00**，不是零点），
- * 所以每次 AI 回复定稿后都该 refresh 一次（token 是事后扣减的）。
+ * 用量按「配额日」记账（日切见 resetAt），token 是事后结算的，
+ * 所以每次 AI 回复定稿后都该 refresh 一次。
  *
  * 用 useState 缓存，敲敲弹窗多处引用共享同一份状态。
  */
@@ -21,8 +17,7 @@ export function useAgentQuota() {
     if (loading.value) return;
     loading.value = true;
     try {
-      const res = await $api<QuotaResponse>("/api/agent/quota");
-      quota.value = res?.data ?? null;
+      quota.value = (await $api<AgentQuota>("/v1/ai/quota")) ?? null;
     } catch {
       // 静默失败：额度条是辅助信息，读不到就不显示，不该打断聊天
       quota.value = null;

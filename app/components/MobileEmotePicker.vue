@@ -72,7 +72,7 @@ loadRecent();
 
 const recentEmotes = computed<Emote[]>(() => {
   if (!recentCodes.value.length || !emotes.value.length) return [];
-  const map = new Map(emotes.value.map((e) => [e.code, e]));
+  const map = new Map(emotes.value.filter((e) => e.selectable).map((e) => [e.code, e]));
   return recentCodes.value
     .map((code) => map.get(code))
     .filter((e): e is Emote => !!e);

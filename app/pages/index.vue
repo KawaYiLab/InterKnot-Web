@@ -28,7 +28,6 @@ import {
   ScrollAreaViewport,
 } from "reka-ui";
 import { useArticleFeedUpdates } from "~/composables/useArticleFeedUpdates";
-import { decodeJwtUserId } from "~/utils/request-auth";
 
 // 静态导入核心瀑布流组件，防止下滑加载或冷启动时动态请求分包导致滚动卡顿
 import VirtualMasonry from "~/components/VirtualMasonry.vue";
@@ -278,10 +277,7 @@ const refreshing = ref(false);
 
 const list = shallowRef<Post[]>([]);
 const enterAnimationIds = shallowRef(new Set<string>());
-// 信息流游标：只负责存下来原样回传，绝不做算术（内容是「已加载条数 + 后端不透明 token」，
-// 由 utils/pagination 负责拼和拆）。空串 = 第一页；切游标之前这里的哨兵是 "0"（数字 offset
-// 的起点），状态快照里可能还留着，useApi 的 resolveCursor 把 "0" 也当第一页认，
-// 所以恢复旧快照不会把它当游标发出去。
+// 信息流游标：后端给的不透明 nextCursor，只负责存下来原样回传。空串 = 第一页。
 const endCursor = ref("");
 const hasNextPage = ref(true);
 const requestVersion = ref(0);
@@ -721,8 +717,6 @@ const onTabVisible = () => {
 useArticleFeedStream({
   enabled: feedStreamEnabled,
   category: selectedCategory,
-  // 明文上报当前登录用户 id：让服务端不把「自己评论顶起 / 自己发布」的帖推回给自己。
-  currentUserId: computed(() => (auth.token ? decodeJwtUserId(auth.token) : null)),
   onTopicEvent: feedUpdates.enqueue,
 });
 

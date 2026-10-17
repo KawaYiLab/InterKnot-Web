@@ -43,7 +43,6 @@ const mihoyo = useMihoyoQr({
   isActive: () => isMihoyo.value && visible.value,
   width: 220,
   onConfirmed: async (res) => {
-    if (!res.auth.token) throw new Error("登录失败：未获取到 Token");
     await onLoginSuccess(res.auth);
   },
   onError: (err) => {
@@ -117,16 +116,13 @@ const resetForm = () => {
   exitMihoyoMode();
 };
 
-const onLoginSuccess = async ({ token, user: loginUser, profile }: AuthResult) => {
-  if (!token) throw new Error("登录失败：未获取到 Token");
-  const user = profile ?? loginUser;
-  auth.setSession(token, user);
-  if (profile) api.seedSelfUser(profile);
+const onLoginSuccess = async ({ user }: AuthResult) => {
+  // 会话 Cookie 已由服务端种下；登录响应只有账号基本信息，头像、余额等再补查一次。
+  auth.setSession(user);
   resetForm();
   close();
   message.success(`登录成功，${user.name || user.username || "欢迎回来"}`);
-  // 旧后端没有 profile 时才补查；新版登录已返回头像、等级和余额。
-  if (!profile) await auth.fetchSelfUser();
+  await auth.fetchSelfUser();
 };
 
 const validateRegisterBase = () => {
@@ -201,9 +197,6 @@ const submit = async () => {
         if (!form.email.trim()) throw new Error("请输入邮箱");
         if (!form.code.trim()) throw new Error("请输入验证码");
         const loginRes = await api.loginWithCode(form.email.trim(), form.code.trim());
-        if (!loginRes.token) {
-          throw new Error("登录失败：未获取到 Token");
-        }
         await onLoginSuccess(loginRes);
         return;
       }
@@ -212,9 +205,6 @@ const submit = async () => {
         throw new Error("请输入邮箱和密码");
       }
       const loginRes = await api.login(form.email.trim(), form.password.trim());
-      if (!loginRes.token) {
-        throw new Error("登录失败：未获取到 Token");
-      }
       await onLoginSuccess(loginRes);
       return;
     }
@@ -228,10 +218,6 @@ const submit = async () => {
       form.code.trim(),
       form.password.trim(),
     );
-
-    if (!registerRes.token) {
-      throw new Error("注册失败：未获取到 Token");
-    }
     await onLoginSuccess(registerRes);
     // 新注册用户需通过入站考试才能发布委托/评论，注册成功后直接引导去考试页
     message.success("注册成功！通过入站考试即可解锁发帖和评论");

@@ -28,11 +28,11 @@ const shown = computed(() => {
 });
 const heading = computed(() => (props.surface === "ai" ? "推荐阅读" : "相关委托"));
 // 展开选择属于当前委托；图库遮挡或布局切换不应清掉用户的选择。
-watch([() => seeds.value.join(","), () => auth.token, () => auth.generation], () => {
+watch([() => seeds.value.join(","), () => auth.isLogin, () => auth.generation], () => {
   expanded.value = false;
 }, { flush: "sync" });
 onMounted(() => { mounted.value = true; });
-watch([() => seeds.value.join(","), () => props.surface, () => auth.token, () => props.active, mounted],
+watch([() => seeds.value.join(","), () => props.surface, () => auth.isLogin, () => props.active, mounted],
   async (_next, _previous, onCleanup) => {
     let cancelled = false;
     onCleanup(() => { cancelled = true; });

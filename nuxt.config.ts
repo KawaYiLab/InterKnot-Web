@@ -1,6 +1,9 @@
 import { defineNuxtConfig } from "nuxt/config";
 import { fileURLToPath } from "node:url";
 
+/** 本地开发时 ik-server 的地址（dev 代理与实时通道直连用）。 */
+const devApiOrigin = (process.env.NUXT_DEV_API_PROXY || "http://localhost:8080").replace(/\/+$/, "");
+
 const zzzuiPackages = fileURLToPath(new URL("./zzzui/packages", import.meta.url));
 const zzzuiSrc = fileURLToPath(new URL("./zzzui/src", import.meta.url));
 
@@ -11,12 +14,26 @@ export default defineNuxtConfig({
   ssr: false,
   nitro: {
     preset: "static",
+    // 本地开发：/v1 转发到 ik-server，保持同源，会话 Cookie 与 CSRF 校验和线上
+    //（nginx 同源反代）一致。Host 原样转发（不改 origin）。
+    // 开发服务器不转发 WebSocket 升级，实时通道见 runtimeConfig.public.realtimeUrl。
+    devProxy: {
+      "/v1": {
+        target: `${devApiOrigin}/v1`,
+        changeOrigin: false,
+      },
+    },
   },
   css: ["~/assets/styles/fonts.css", "~/assets/styles/theme.css"],
   runtimeConfig: {
     public: {
-      // 本地 dev 或 Pages 預覽構建可通過 .env 的 NUXT_PUBLIC_API_BASE_URL 指定後端地址。
+      // 接口与网页同源（生产由 nginx 把 /v1 反代到 ik-server），默认留空。
+      // 本地 dev 走下面的 vite 代理；只有直连别的后端地址时才设 NUXT_PUBLIC_API_BASE_URL。
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || "",
+      // 实时通道（WebSocket）地址；留空 = 与接口同源的 /v1/realtime。
+      // 本地 dev 直连 ik-server（Cookie 不分端口；ik-server 的 allowed_origins 要包含 dev 页面的源）。
+      realtimeUrl: process.env.NUXT_PUBLIC_REALTIME_URL
+        || (process.env.NODE_ENV === "development" ? `${devApiOrigin.replace(/^http/, "ws")}/v1/realtime` : ""),
       appName: "绳网",
     },
   },

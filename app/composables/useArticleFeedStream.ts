@@ -1,102 +1,61 @@
 import { watch, onScopeDispose, type Ref } from "vue";
 
 /**
- * 列表级实时广播（SSE）客户端：订阅 `/api/articles/stream`，收到「新帖」事件时
- * 回调 topicId。用于首页/频道列表顶部「有 N 条新内容」按钮的**即时**路径，
- * 与既有的慢轮询对账互补（轮询兜底 bump 与漏推）。
+ * 列表级实时广播：监听实时通道（/v1/realtime）的 `post.published`（首次发布）与
+ * `post.bumped`（旧帖被新回复顶起），回调 postId。用于首页/频道列表顶部「有 N 条新内容」按钮的
+ * **即时**路径，与既有的慢轮询对账互补（轮询兜底漏推）。
  *
- * - 仅客户端运行；SSR 时是 no-op。
- * - EventSource 自带断线重连；这里只在「是否启用」或「分类」变化时开/关或换频道。
- * - 频道由 category slug 决定：空串 = 全站最新（latest 频道），否则订阅该分类频道。
- *   服务端已按频道过滤，客户端拿到的即是与当前视图相关的事件。
+ * - 仅客户端运行；SSR 时是 no-op。连接由 plugins/realtime.client.ts 维持。
+ * - 新帖事件带 categoryId，按当前频道过滤；顶帖事件不带分区，交给 load 时的列表接口过滤。
+ * - 自己发的帖、自己顶起的帖由列表卡片的 bumpedBySelf 排除（见 useArticleFeedUpdates）。
  */
-/**
- * 对齐 Discourse：`new_topic` = 新帖，`topic_bumped` = 旧帖被新回复顶起。
- * 最新、热门、未看视图都将两者计为「新的或更新的」。
- */
-export interface ArticleFeedTopicEvent {
-  type: "new_topic" | "topic_bumped";
-  topicId: string;
-  categorySlug?: string | null;
-  tagSlugs?: string[];
-  at: string;
-}
-
 export function useArticleFeedStream(opts: {
-  /** 是否应保持连接（首页最新 / 热门 / 未看无搜索时为 true）。 */
+  /** 是否接收（首页最新 / 热门 / 未看无搜索时为 true）。 */
   enabled: Ref<boolean>;
   /** 当前分类 slug；空串 = 全部频道。 */
   category: Ref<string>;
-  /**
-   * 当前登录用户的 users-permissions user id（未登录为 null）。随连接明文上报给服务端，
-   * 仅用于让服务端不把「自己触发的发帖 / 顶帖」事件推回给自己。伪造无收益：流里只有公开 topicId。
-   */
-  currentUserId: Ref<number | null>;
-  /** 收到一条 topic 广播（新帖或顶帖）时调用。 */
+  /** 收到一条帖子广播（新帖或顶帖）时调用。 */
   onTopicEvent: (topicId: string) => void;
 }): { stop: () => void } {
   if (!import.meta.client) return { stop: () => {} };
 
-  const config = useRuntimeConfig();
-  const baseURL = (
-    (config.public as { apiBaseUrl?: string })?.apiBaseUrl ?? ""
-  ).replace(/\/$/, "");
+  const realtime = useRealtime();
+  const api = useApi();
+  // 分区 slug → id：新帖事件只带 categoryId。
+  let categoryIds = new Map<string, string>();
+  const loadCategories = () => {
+    api.getCategories()
+      .then((list) => {
+        categoryIds = new Map(list.map((c) => [c.slug, c.documentId || ""]));
+      })
+      .catch(() => undefined);
+  };
+  watch(opts.category, (slug) => {
+    if (slug && !categoryIds.has(slug)) loadCategories();
+  }, { immediate: true });
 
-  let es: EventSource | null = null;
-
-  const close = () => {
-    if (es) {
-      try {
-        es.close();
-      } catch {
-        /* noop */
+  const offs = [
+    realtime.on<{ postId?: string; categoryId?: string | null; firstPublish?: boolean }>("post.published", (ev) => {
+      const { postId, categoryId, firstPublish } = ev.d || {};
+      // 编辑后重新发布不算新内容（不顶帖）。
+      if (!opts.enabled.value || !postId || firstPublish === false) return;
+      const slug = opts.category.value;
+      if (slug) {
+        const wanted = categoryIds.get(slug);
+        if (wanted && categoryId && wanted !== categoryId) return;
       }
-      es = null;
-    }
+      opts.onTopicEvent(postId);
+    }),
+    realtime.on<{ postId?: string }>("post.bumped", (ev) => {
+      const postId = ev.d?.postId;
+      if (opts.enabled.value && postId) opts.onTopicEvent(postId);
+    }),
+  ];
+
+  const stop = () => {
+    for (const off of offs.splice(0)) off();
   };
+  onScopeDispose(stop);
 
-  const open = () => {
-    close();
-    const category = opts.category.value;
-    const uid = opts.currentUserId.value;
-    const search = new URLSearchParams();
-    if (category) search.set("category", category);
-    // 明文自报自己的 user id：仅用于让服务端不把「我自己顶起 / 发布的帖」推回给我自己
-    //（EventSource 无法带 Authorization 头）。可伪造但无收益：流里只有公开 topicId。
-    if (uid) search.set("uid", String(uid));
-    const qs = search.toString();
-    const params = qs ? `?${qs}` : "";
-    let source: EventSource;
-    try {
-      source = new EventSource(`${baseURL}/api/articles/stream${params}`);
-    } catch {
-      return;
-    }
-    es = source;
-    const onTopic = (ev: Event) => {
-      if (es !== source || !opts.enabled.value || opts.category.value !== category) return;
-      try {
-        const data = JSON.parse(
-          (ev as MessageEvent).data,
-        ) as ArticleFeedTopicEvent;
-        if (typeof data?.topicId === "string" && data.topicId) opts.onTopicEvent(data.topicId);
-      } catch {
-        /* malformed payload — ignore */
-      }
-    };
-    source.addEventListener("new_topic", onTopic);
-    source.addEventListener("topic_bumped", onTopic);
-    // 不手动处理 onerror：EventSource 会按服务端下发的 retry 自行重连。
-  };
-
-  const sync = () => {
-    if (opts.enabled.value) open();
-    else close();
-  };
-
-  // enabled / category / 当前用户 变化：重新评估连接（换频道或登录态变化 = 关旧开新）。
-  watch([opts.enabled, opts.category, opts.currentUserId], sync, { immediate: true });
-  onScopeDispose(close);
-
-  return { stop: close };
+  return { stop };
 }

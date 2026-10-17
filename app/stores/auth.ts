@@ -2,19 +2,17 @@ import { defineStore } from "pinia";
 import { $fetch } from "ofetch";
 import type { Author } from "~/types/entities";
 import { useHomeStateCache } from "~/composables/useHomeStateCache";
-import { isTokenExpired, isTokenNearExpiry } from "~/utils/request-auth";
-import { LOGOUT_KEY, SESSION_HINT_KEY, staleAuthError, withAuthCookieLock } from "~/utils/auth-session";
+import { LOGOUT_KEY, SESSION_HINT_KEY } from "~/utils/auth-session";
 
-const TOKEN_KEY = "access_token";
+// 会话是 HttpOnly Cookie（ik_session），前端读不到也不保存令牌。
+// localStorage 里只留一个提示：上次登录的用户 id。有提示时启动才去问 /v1/me，
+// 游客打开页面不会白发一个 401；另一个标签页换号时也靠它的变化来同步身份。
 const USER_ID_KEY = "user_id";
-let hydration = new WeakMap<object, { generation: number; promise: Promise<void> }>();
-let credentials = new WeakMap<object, { generation: number; promise: Promise<number> }>();
-const renewals = new WeakMap<object, { generation: number; promise: Promise<string | null> }>();
+let restoring = new WeakMap<object, { generation: number; promise: Promise<void> }>();
 const profileLoads = new WeakMap<object, Set<{ generation: number; updates: Partial<Author> }>>();
 
 export function _resetHydratedForTest() {
-  hydration = new WeakMap();
-  credentials = new WeakMap();
+  restoring = new WeakMap();
 }
 
 function resetPersonalizedCache() {
@@ -28,43 +26,58 @@ function resetPersonalizedCache() {
 }
 
 function persistUserId(user: Author | null) {
-  if (!import.meta.client || !user) return;
-  const id = user.authorId || user.documentId;
-  if (id) {
-    localStorage.setItem(USER_ID_KEY, String(id));
+  if (!import.meta.client || !user?.id) return;
+  const id = String(user.id);
+  localStorage.setItem(USER_ID_KEY, id);
+  localStorage.setItem(SESSION_HINT_KEY, id);
+}
+
+/** 上次登录留下的提示：有就先按已登录渲染（页面在 setup 里同步判断登录态），/v1/me 再确认。 */
+function hasSessionHint(): boolean {
+  if (!import.meta.client) return false;
+  try {
+    return !!localStorage.getItem(SESSION_HINT_KEY) && localStorage.getItem(LOGOUT_KEY) !== "pending";
+  } catch {
+    return false;
   }
 }
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
-    token: "" as string,
+    loggedIn: hasSessionHint(),
     user: null as Author | null,
     generation: 0,
     hydrationReady: false,
     credentialsReady: false,
-    credentialRecoveryPending: false,
   }),
   getters: {
-    isLogin: (state) => !!state.token,
+    isLogin: (state) => state.loggedIn,
     /** 已登录但还没通过入站考试（管理员 / AI 账号豁免） */
     needExam: (state): boolean =>
-      !!state.token &&
+      state.loggedIn &&
       !!state.user &&
       state.user.examPassed === false &&
       !state.user.isAdmin &&
       !state.user.isAiAgent,
     profilePath: (state): string | null => {
-      const id = state.user?.authorId || state.user?.documentId;
+      const id = state.user?.id;
       return id ? `/profile/${id}` : null;
     },
   },
   actions: {
     hydrate() {
-      return this.hydrateFromStorage();
+      return this.restoreSession();
     },
-    hydrateFromStorage(): Promise<void> {
+    hydrateFromStorage() {
+      return this.restoreSession();
+    },
+    /**
+     * 有登录提示时用 Cookie 恢复会话（提示让 loggedIn 一开始就是 true，这里拉资料确认；
+     * Cookie 已失效时 /v1/me 回 401，clearSession 退回游客）。没有提示就是游客，直接就绪。
+     */
+    restoreSession(): Promise<void> {
       if (!import.meta.client) return Promise.resolve();
-      const existing = hydration.get(this);
+      const existing = restoring.get(this);
       if (existing?.generation === this.generation) return existing.promise;
       const generation = this.generation;
       const pending = (async () => {
@@ -73,96 +86,28 @@ export const useAuthStore = defineStore("auth", {
             await this.logout();
             return;
           }
-          const restoredGeneration = await this.ensureCredentials();
-          if (this.generation === restoredGeneration && this.token) await this.fetchSelfUser();
+          if (!localStorage.getItem(SESSION_HINT_KEY)) return;
+          await this.fetchSelfUser({ restoring: true });
         } catch {
-          // A transient credential failure is retryable. Requests that require a
-          // usable token report it themselves; app startup must not reject unhandled.
+          // 网络抖动：保持游客态，下次请求或刷新再试，不在启动时抛未处理的异常。
         } finally {
-          this.hydrationReady = true;
+          if (this.generation === generation) {
+            this.hydrationReady = true;
+            this.credentialsReady = true;
+          }
         }
       })().finally(() => {
-        if (hydration.get(this)?.promise === pending) hydration.delete(this);
+        if (restoring.get(this)?.promise === pending) restoring.delete(this);
       });
-      hydration.set(this, { generation, promise: pending });
+      restoring.set(this, { generation, promise: pending });
       return pending;
     },
-    /** Wait only for usable credentials, never for profile loading or remote logout. */
-    ensureCredentials(): Promise<number> {
-      if (!import.meta.client) return Promise.resolve(this.generation);
-      const generation = this.generation;
-      const existing = credentials.get(this);
-      if (existing?.generation === generation) return existing.promise;
-      const pending = (async () => {
-        try {
-          if (localStorage.getItem(LOGOUT_KEY)) return generation;
-          if (!this.token) {
-            const storedToken = localStorage.getItem(TOKEN_KEY);
-            if (storedToken) this.acceptRestoredToken(storedToken);
-          }
-          // Check on every list request: a suspended tab's renewal timer may not
-          // have run. Optional-auth list routes return anonymous 200s for expiry.
-          if ((this.token && isTokenNearExpiry(this.token)) ||
-              (!this.token && localStorage.getItem(SESSION_HINT_KEY))) {
-            const renewed = await this.renewToken();
-            if (!renewed && this.generation !== generation) return generation;
-            if (!renewed && this.token && isTokenExpired(this.token)) {
-              this.credentialRecoveryPending = true;
-              throw new Error("登录状态暂时无法恢复，请稍后重试");
-            }
-          }
-          return this.generation;
-        } finally {
-          this.credentialsReady = true;
-        }
-      })().finally(() => {
-        if (credentials.get(this)?.promise === pending) credentials.delete(this);
-      });
-      credentials.set(this, { generation, promise: pending });
-      return pending;
+    /** 等会话恢复完（信息流等个性化请求要在这之后发，才能带上已读等字段）。 */
+    async ensureCredentials(): Promise<number> {
+      if (import.meta.client && !this.credentialsReady) await this.restoreSession();
+      return this.generation;
     },
-    acceptRestoredToken(token: string) {
-      const recovering = this.credentialsReady && (!this.token || this.credentialRecoveryPending);
-      if (recovering) {
-        // An earlier request may already have rendered/cached anonymous data.
-        // Wake the feed only on recovery, not on a routine access-token rotation.
-        this.generation += 1;
-        resetPersonalizedCache();
-      }
-      this.token = token;
-      this.credentialRecoveryPending = false;
-      localStorage.setItem(TOKEN_KEY, token);
-      localStorage.setItem(SESSION_HINT_KEY, "1");
-      if (recovering && !this.user) void this.fetchSelfUser();
-    },
-    renewToken(): Promise<string | null> {
-      const generation = this.generation;
-      const existing = renewals.get(this);
-      if (existing?.generation === generation) return existing.promise;
-      const config = useRuntimeConfig();
-      const pending = withAuthCookieLock(async () => {
-        if (this.generation !== generation || localStorage.getItem(LOGOUT_KEY)) return null;
-        if (!this.token && !localStorage.getItem(TOKEN_KEY) && !localStorage.getItem(SESSION_HINT_KEY)) return null;
-        const result = await $fetch<{ accessToken?: string; jwt?: string }>("/api/auth/session/refresh", {
-          baseURL: config.public.apiBaseUrl, method: "POST", credentials: "include", retry: 0,
-        });
-        if (this.generation !== generation || localStorage.getItem(LOGOUT_KEY)) return null;
-        const token = result.accessToken || result.jwt;
-        if (typeof token !== "string" || !token) throw new Error("刷新登录响应无效");
-        this.acceptRestoredToken(token);
-        return token;
-      }).catch((err) => {
-        if (this.generation === generation && (err?.statusCode === 401 || err?.statusCode === 403)) {
-          this.clearSession();
-        }
-        return null;
-      }).finally(() => {
-        if (renewals.get(this)?.promise === pending) renewals.delete(this);
-      });
-      renewals.set(this, { generation, promise: pending });
-      return pending;
-    },
-    async fetchSelfUser() {
+    async fetchSelfUser(opts?: { restoring?: boolean }) {
       const generation = this.generation;
       const load = { generation, updates: {} as Partial<Author> };
       const loads = profileLoads.get(this) ?? new Set<typeof load>();
@@ -174,62 +119,69 @@ export const useAuthStore = defineStore("auth", {
         if (this.generation !== generation) return;
         // 请求开始后的签到/投币等更新比返回的资料快照更新，不能被覆盖。
         this.user = { ...user, ...load.updates };
+        // 恢复会话不换代、不清缓存：Cookie 每个请求都带着，恢复前发出的请求服务端
+        // 本来就是按这个账号处理的，结果可以直接用（清掉反而会让在途请求报 CancelledError）。
+        this.loggedIn = true;
         if (Object.keys(load.updates).length) api.patchSelfUserCache(load.updates);
         persistUserId(this.user);
       } catch (err) {
         const apiErr = err as { statusCode?: number };
         if (this.generation === generation && apiErr?.statusCode === 401) this.clearSession();
+        else if (opts?.restoring) throw err;
       } finally {
         loads.delete(load);
         if (!loads.size && profileLoads.get(this) === loads) profileLoads.delete(this);
       }
     },
-    setSession(token: string, user: Author) {
+    /** 登录 / 注册成功：服务端已经种下会话 Cookie，这里只记下身份。 */
+    setSession(user: Author) {
       this.clearSession();
-      this.token = token;
+      this.loggedIn = true;
       this.user = user;
       this.credentialsReady = true;
+      this.hydrationReady = true;
       if (import.meta.client) {
         localStorage.removeItem(LOGOUT_KEY);
-        localStorage.setItem(TOKEN_KEY, token);
-        localStorage.setItem(SESSION_HINT_KEY, "1");
         persistUserId(user);
-        // 首页监听 generation 刷新个性化列表；不要再广播手动刷新事件，
-        // 否则首页和顶部余额会各自重复发起请求。
       }
     },
     async logout() {
       // Explicit logout survives reload even when the server cannot be reached.
       if (import.meta.client) localStorage.setItem(LOGOUT_KEY, "pending");
       this.clearSession();
-      const generation = this.generation;
       if (!import.meta.client) return true;
       const config = useRuntimeConfig();
+      const generation = this.generation;
       try {
-        await withAuthCookieLock(async () => {
-          if (this.generation !== generation) throw staleAuthError();
-          await $fetch("/api/auth/session/logout", {
-            baseURL: config.public.apiBaseUrl, method: "POST", credentials: "include", retry: 0,
-          });
+        await $fetch("/v1/auth/logout", {
+          baseURL: String(config.public.apiBaseUrl || "").replace(/\/+$/, ""),
+          method: "POST",
+          credentials: "include",
+          retry: 0,
         });
         if (this.generation === generation) localStorage.setItem(LOGOUT_KEY, "1");
         return true;
-      } catch {
+      } catch (err) {
+        // 401：会话本来就失效了，也算退出成功。
+        if ((err as { statusCode?: number })?.statusCode === 401) {
+          localStorage.setItem(LOGOUT_KEY, "1");
+          return true;
+        }
         return false;
       }
     },
     clearSession() {
       this.generation += 1;
-      this.token = "";
+      this.loggedIn = false;
       this.user = null;
       this.credentialsReady = true;
-      this.credentialRecoveryPending = false;
       if (import.meta.client) {
-        localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_ID_KEY);
         localStorage.removeItem(SESSION_HINT_KEY);
+        // 旧版（JWT）残留的令牌没有用了，一并清掉。
+        localStorage.removeItem("access_token");
         resetPersonalizedCache();
-        // 通知其它模块（如敲敲 composable）一并清理本地状态 / 断开 SSE
+        // 通知其它模块（如敲敲 composable）一并清理本地状态 / 断开实时连接
         try {
           window.dispatchEvent(new CustomEvent("auth:logout"));
         } catch {

@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/Node-%E2%89%A520.18-339933?logo=nodedotjs&logoColor=white" alt="Node">
 </p>
 
-> 后端：[KawaYiLab/InterKnot-server](https://github.com/KawaYiLab/InterKnot-server)
+> 后端：[KawaYiLab/ikserver-rs](https://github.com/KawaYiLab/ikserver-rs)（Rust，接口前缀 `/v1`）
 
 
 
@@ -48,13 +48,18 @@ cd InterKnot-Web
 npm install
 ```
 
-### 4. 配置环境变量
+### 4. 准备后端
 
-复制示例文件并填写后端地址：
+前端调用 [ikserver-rs](https://github.com/KawaYiLab/ikserver-rs) 的 `/v1` 接口。按它的 `docs/dev-setup.md`
+在本机启动 `ik-server serve`（默认 `http://localhost:8080`），并确认它的 `IK_HTTP__ALLOWED_ORIGINS`
+包含 `http://localhost:3000`。
 
-```bash
-cp .env.example .env
-```
+网页与接口同源：生产环境由 nginx 把页面域名下的 `/v1`（含 WebSocket `/v1/realtime`）反代到 ik-server，
+登录态是 HttpOnly 会话 Cookie。本地开发时：
+
+- `npm run dev` 把 `/v1` 代理到 `NUXT_DEV_API_PROXY`（默认 `http://localhost:8080`）；
+- 开发服务器不转发 WebSocket 升级，实时通道直连 `ws://localhost:8080/v1/realtime`
+  （Cookie 不区分端口，可用 `NUXT_PUBLIC_REALTIME_URL` 改地址）。
 
 ### 5. 启动开发服务器
 

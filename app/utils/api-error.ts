@@ -31,25 +31,17 @@ export function resolveErrorMessage(error: unknown, fallback = "请求失败"): 
   const e = normalizeApiError(error);
   const message = e.message || "";
   const statusCode = typeof e.statusCode === "number" ? e.statusCode : undefined;
-  const retryAfter = e.details?.retryAfter;
-  const attemptsRemaining = e.details?.attemptsRemaining;
-  if (e.code === "REGISTER_CODE_COOLDOWN" && typeof retryAfter === "number") {
-    return `发送太频繁，请 ${retryAfter} 秒后再试`;
-  }
-  if (e.code === "REGISTER_CODE_INVALID" && typeof attemptsRemaining === "number") {
-    return `验证码错误，还可尝试 ${attemptsRemaining} 次`;
-  }
-  // Strapi 策略拒绝（is-owner / is-comment-author 等）。后端抛的是无参 PolicyError，
-  // message 固定为英文 "Policy Failed"，直接展示等于把内部错误名摔给用户。
-  if (e.code === "PolicyError") {
-    return "没有权限执行该操作";
+  // 表单校验失败：后端在 errors[] 里逐字段说明原因，比笼统的「请求参数不合法」有用。
+  if (e.code === "VALIDATION_FAILED" && Array.isArray(e.details?.errors)) {
+    const first = (e.details.errors as Array<{ detail?: unknown }>)[0];
+    if (first && typeof first.detail === "string" && first.detail) return first.detail;
   }
   // 网络错误：无 statusCode 且命中网络错误特征
   if (!statusCode && NETWORK_ERROR_PATTERNS.some((pattern) => message.includes(pattern))) {
     return "网络异常，请稍后重试";
   }
-  // 后端返回了具体的业务 code 或可读 message（即 plugins/api.ts:toApiError 从 body 提取到了 error.code/error.message）
-  // 优先展示后端文案，避免被 5xx 等通用文案覆盖（如后端把 "账号或密码错误" 用 5xx + ValidationError 返回的情况）
+  // 后端返回了具体的业务 code 或可读文案（Problem 的 code / detail，见 plugins/api.ts:toApiError）：
+  // 优先展示后端文案（5xx 的 detail 也是给用户看的通用中文文案）。
   const hasBusinessCode = typeof e.code === "string" && e.code.length > 0;
   const hasBusinessMessage = !!message && message !== "请求失败";
   if (hasBusinessCode || hasBusinessMessage) {
