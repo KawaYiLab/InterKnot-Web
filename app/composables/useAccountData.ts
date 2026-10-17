@@ -53,7 +53,7 @@ function createAccountData() {
   const sessions = ref<AuthSessionItem[]>([]);
   const sessionsLoading = ref(false);
   const sessionsError = ref("");
-  const sessionsRevoking = ref<number | "others" | null>(null);
+  const sessionsRevoking = ref<string | "others" | null>(null);
   const sessionsFetchedAt = ref<number | null>(null);
 
   const security = computed(() => state.value.security);
@@ -198,7 +198,7 @@ function createAccountData() {
     const generation = auth.generation;
     if (!user.documentId) return;
     try {
-      await api.toggleUserBlock(user.documentId);
+      await api.toggleUserBlock(user.documentId, true);
       if (generation !== auth.generation) return;
       message.success("已取消拉黑");
       state.value.blockedUsers = state.value.blockedUsers.filter(
@@ -240,7 +240,7 @@ function createAccountData() {
 
   const ensureSessions = (force = false) => fetchSessions(force);
 
-  const revokeSingleSession = async (id: number): Promise<boolean> => {
+  const revokeSingleSession = async (id: string): Promise<boolean> => {
     const generation = auth.generation;
     if (sessionsRevoking.value !== null) return false;
     const previous = [...sessions.value];

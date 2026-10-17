@@ -400,7 +400,7 @@ const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
  * 他填的是自己主账号的邮箱。告知用户需在当前页面注销小号释放米游社绑定后再登主账号绑定。
  */
 const isEmailTakenByOwnAccount = (err: unknown) =>
-  normalizeApiError(err).code === "EMAIL_ALREADY_TAKEN" && mihoyoOnlyAccount.value;
+  normalizeApiError(err).code === "EMAIL_TAKEN" && mihoyoOnlyAccount.value;
 
 const handleEmailTakenByOwnAccount = async () => {
   const proceedToDelete = await confirmDialog.open({

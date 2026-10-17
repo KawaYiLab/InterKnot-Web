@@ -1,19 +1,17 @@
 /**
- * usePresence —— 在线人数心跳与轮询（模块级单例）。
+ * usePresence —— 在线人数（模块级单例）。
  *
- * - 生成并持久化随机 presenceId（localStorage），用于匿名访客去重。
- * - 定时 POST /api/presence/ping 上报心跳，用返回值更新在线人数与头像堆叠。
- * - 页面隐藏时停止心跳，可见时立即恢复。
- * - 无需登录即可运行。
+ * 在线人数由服务端按实时连接（/v1/realtime）统计，本页面自己的连接由
+ * plugins/realtime.client.ts 维持；这里只定时读 GET /v1/presence 展示人数与头像堆叠。
+ * 页面隐藏时停止轮询，可见时立即恢复。无需登录。
  */
 import { computed } from "vue";
 
-const PING_PATH = "/api/presence/ping";
-const PING_INTERVAL_MS = 20_000;
-const STORAGE_KEY = "presence:id";
+const POLL_INTERVAL_MS = 30_000;
 
-interface PingResponse {
-  data: { online: number; avatars?: string[] };
+interface PresenceResponse {
+  online: number;
+  users?: Array<{ id: string; username: string; avatarUrl: string }>;
 }
 
 interface PresenceState {
@@ -22,31 +20,17 @@ interface PresenceState {
 }
 
 let started = false;
-let pingTimer: ReturnType<typeof setInterval> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-const getPresenceId = (): string => {
-  if (!import.meta.client) return "";
-  let id = localStorage.getItem(STORAGE_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(STORAGE_KEY, id);
-  }
-  return id;
-};
-
-const doPing = async (state: PresenceState): Promise<void> => {
+const doPoll = async (state: PresenceState): Promise<void> => {
   try {
     const { $api } = useNuxtApp();
-    const presenceId = getPresenceId();
-    const resp = await $api<PingResponse>(PING_PATH, {
-      method: "POST",
-      body: { presenceId },
-    });
-    const n = resp?.data?.online;
-    if (typeof n === "number") state.online.value = n;
-    const avatars = resp?.data?.avatars;
-    if (Array.isArray(avatars)) {
-      state.avatars.value = avatars.filter((u): u is string => typeof u === "string");
+    const resp = await $api<PresenceResponse>("/v1/presence");
+    if (typeof resp?.online === "number") state.online.value = resp.online;
+    if (Array.isArray(resp?.users)) {
+      state.avatars.value = resp.users
+        .map((u) => u.avatarUrl)
+        .filter((u): u is string => typeof u === "string" && !!u);
     }
   } catch {
     /* fail-open */
@@ -55,14 +39,14 @@ const doPing = async (state: PresenceState): Promise<void> => {
 
 const onVisibility = (state: PresenceState) => {
   if (document.visibilityState === "hidden") {
-    if (pingTimer) {
-      clearInterval(pingTimer);
-      pingTimer = null;
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
     }
   } else {
-    void doPing(state);
-    if (!pingTimer) {
-      pingTimer = setInterval(() => void doPing(state), PING_INTERVAL_MS);
+    void doPoll(state);
+    if (!pollTimer) {
+      pollTimer = setInterval(() => void doPoll(state), POLL_INTERVAL_MS);
     }
   }
 };
@@ -79,8 +63,9 @@ export function usePresence() {
     if (started) return;
     started = true;
 
-    void doPing(state);
-    pingTimer = setInterval(() => void doPing(state), PING_INTERVAL_MS);
+    // 等实时连接建好再读第一次，自己这条连接才算在内。
+    setTimeout(() => void doPoll(state), 1_500);
+    pollTimer = setInterval(() => void doPoll(state), POLL_INTERVAL_MS);
 
     visibilityHandler = () => onVisibility(state);
     document.addEventListener("visibilitychange", visibilityHandler);
@@ -88,9 +73,9 @@ export function usePresence() {
 
   const stop = () => {
     started = false;
-    if (pingTimer) {
-      clearInterval(pingTimer);
-      pingTimer = null;
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
     }
     if (visibilityHandler) {
       document.removeEventListener("visibilitychange", visibilityHandler);

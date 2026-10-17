@@ -27,6 +27,8 @@ export interface Emote {
   url: string;
   width: number | null;
   height: number | null;
+  /** 是否出现在表情面板里；下架的表情仍要能渲染旧评论 */
+  selectable: boolean;
 }
 
 export interface EmoteGroup {
@@ -37,8 +39,16 @@ export interface EmoteGroup {
 }
 
 interface ManifestResponse {
-  groups?: EmoteGroup[];
-  emotes: Emote[];
+  groups?: Array<{ id: string; name: string; iconUrl?: string | null }>;
+  emotes?: Array<{
+    code: string;
+    name: string;
+    groupId?: string | null;
+    url: string;
+    width?: number | null;
+    height?: number | null;
+    selectable: boolean;
+  }>;
 }
 
 interface ManifestData {
@@ -62,16 +72,25 @@ export function useEmotes() {
   const query = useQuery<ManifestData>({
     queryKey: EMOTE_MANIFEST_KEY as unknown as readonly unknown[],
     queryFn: async () => {
-      // cache: "no-cache" 强制走条件请求，避免旧的浏览器 HTTP 缓存把清单钉住
-      const response = await $api("/api/emotes/manifest", { cache: "no-cache" });
-      const data = (response || {}) as ManifestResponse;
-      const list = Array.isArray(data.emotes) ? data.emotes : [];
+      // cache: "no-cache" 强制走条件请求（服务端带 ETag），避免旧的浏览器 HTTP 缓存把清单钉住
+      const data = ((await $api("/v1/emotes", { cache: "no-cache" })) || {}) as ManifestResponse;
+      const groups = Array.isArray(data.groups) ? data.groups : [];
+      const groupName = new Map(groups.map((g) => [g.id, g.name]));
       return {
-        groups: (Array.isArray(data.groups) ? data.groups : []).map((g) => ({
-          ...g,
+        groups: groups.map((g, order) => ({
+          name: g.name,
+          order,
           iconUrl: g.iconUrl ? normalizeEmoteUrl(g.iconUrl) : null,
         })),
-        emotes: list.map((e) => ({ ...e, url: normalizeEmoteUrl(e.url) })),
+        emotes: (Array.isArray(data.emotes) ? data.emotes : []).map((e) => ({
+          code: e.code,
+          name: e.name,
+          group: (e.groupId && groupName.get(e.groupId)) || "通用",
+          url: normalizeEmoteUrl(e.url),
+          width: e.width ?? null,
+          height: e.height ?? null,
+          selectable: e.selectable !== false,
+        })),
       };
     },
     staleTime: EMOTE_STALE_TIME,
@@ -97,6 +116,8 @@ export function useEmotes() {
       groups.set(g.name, []);
     }
     for (const e of emotes.value) {
+      // 下架的表情只用于渲染旧评论，不出现在面板里
+      if (!e.selectable) continue;
       const name = e.group || "通用";
       let arr = groups.get(name);
       if (!arr) {

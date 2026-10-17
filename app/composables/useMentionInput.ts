@@ -21,7 +21,7 @@ import { computed, nextTick, ref, type Ref } from "vue";
 import { buildMentionToken, parseMentions } from "~/utils/mention";
 
 /**
- * @ 候选项的统一数据结构。后端 `/api/authors/search` 返回此形状，
+ * @ 候选项的统一数据结构。由 `/v1/users/mention-candidates` 的结果映射而来，
  * MentionPicker 渲染、useMentionInput 选中插入也复用同一类型，避免重复定义。
  */
 export interface MentionCandidate {

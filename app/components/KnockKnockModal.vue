@@ -103,15 +103,13 @@ const knockBootstrapDone = ref(false);
 const isOfficialAiPeer = (conv: DmConversationSummary): boolean => {
   if (conv.peer?.isAiAgent === true) return true;
   const uid = conv.peer?.userId;
-  return typeof uid === "number" && aiPeerUserIds.value.has(uid);
+  return typeof uid === "string" && aiPeerUserIds.value.has(uid);
 };
 
 /** 当前登录用户的 user.id；用于区分消息气泡是「我发的」还是「对方发的」 */
-const selfUserId = computed<number | null>(() => {
+const selfUserId = computed<string | null>(() => {
   const id = auth.user?.id;
-  if (typeof id === "number") return id;
-  if (typeof id === "string" && /^\d+$/.test(id)) return Number(id);
-  return null;
+  return id != null && id !== "" ? String(id) : null;
 });
 
 /** 弹窗打开时加载内容；关闭只清选中，登录级 WS 继续更新全站未读。 */
@@ -148,7 +146,7 @@ watch(visible, async (next) => {
     const conv = allConversations.value.find((c) => c.documentId === pendingDm);
     const peerUid = conv?.peer?.userId;
     const aiCard =
-      typeof peerUid === "number"
+      typeof peerUid === "string"
         ? aiCharacters.value.find((c) => c.boundUser?.id === peerUid)
         : undefined;
     if (conv && (conv.peer?.isAiAgent || aiCard)) {
@@ -172,10 +170,10 @@ watch(visible, async (next) => {
 
 /** 官方 AI 绑定的 userId（私聊 Tab 中隐藏，仅在「通话」展示） */
 const aiPeerUserIds = computed(() => {
-  const ids = new Set<number>();
+  const ids = new Set<string>();
   for (const card of aiCharacters.value) {
     const uid = card.boundUser?.id;
-    if (typeof uid === "number") ids.add(uid);
+    if (typeof uid === "string") ids.add(uid);
   }
   return ids;
 });
@@ -285,7 +283,7 @@ const isActiveAiConversation = computed<boolean>(() => {
   const conv = activeConversation.value;
   if (!conv) return false;
   const uid = conv.peer?.userId;
-  return conv.peer?.isAiAgent === true || (typeof uid === "number" && aiPeerUserIds.value.has(uid));
+  return conv.peer?.isAiAgent === true || (typeof uid === "string" && aiPeerUserIds.value.has(uid));
 });
 
 /** 当前选中的 AI 角色卡（从 slug 或当前会话反推） */
@@ -295,7 +293,7 @@ const activeAiCard = computed<AiRoleCard | null>(() => {
   }
   const conv = activeConversation.value;
   const uid = conv?.peer?.userId;
-  if (typeof uid === "number") {
+  if (typeof uid === "string") {
     return aiCharacters.value.find((c) => c.boundUser?.id === uid) ?? null;
   }
   return null;
@@ -406,7 +404,7 @@ const onSelectModel = async (key: string | null) => {
 const aiSessionsForActiveCard = computed<DmConversationSummary[]>(() => {
   const card = activeAiCard.value;
   const uid = card?.boundUser?.id;
-  if (typeof uid !== "number") return [];
+  if (typeof uid !== "string") return [];
   return allConversations.value
     .filter((c) => !c.pseudoKind && c.peer?.userId === uid)
     .sort((a, b) => {
@@ -435,11 +433,11 @@ const canClickPeerProfile = computed<boolean>(() => peerProfileUrl.value !== nul
 
 /** 通话 Tab：按 AI boundUserId 汇总该角色所有会话的未读（pseudo 通知桶不算，见 aiSessionsForActiveCard） */
 const aiUnreadByUserId = computed(() => {
-  const map = new Map<number, number>();
+  const map = new Map<string, number>();
   for (const c of allConversations.value) {
     if (c.pseudoKind) continue;
     const uid = c.peer?.userId;
-    if (typeof uid === "number") {
+    if (typeof uid === "string") {
       map.set(uid, (map.get(uid) ?? 0) + (c.unreadCount ?? 0));
     }
   }
@@ -450,7 +448,7 @@ const aiCharacterRows = computed(() =>
   aiCharacters.value.map((card) => {
     const uid = card.boundUser?.id;
     const unread =
-      typeof uid === "number" ? (aiUnreadByUserId.value.get(uid) ?? 0) : 0;
+      typeof uid === "string" ? (aiUnreadByUserId.value.get(uid) ?? 0) : 0;
     return { card, unread };
   }),
 );
@@ -489,7 +487,7 @@ const createNewAiSession = async () => {
   if (!uid || creatingAiSession.value) return;
   creatingAiSession.value = true;
   try {
-    const summary = await createAiSession(uid);
+    const summary = await createAiSession(card.slug);
     if (card) activeAiSlug.value = card.slug;
     activeConversationId.value = summary.documentId;
     updateUrl("calls", summary.documentId);
@@ -658,7 +656,7 @@ const isAiPeerConversation = computed(() => {
   if (!conv) return false;
   if (conv.peer?.isAiAgent === true) return true;
   const uid = conv.peer?.userId;
-  return typeof uid === "number" && aiPeerUserIds.value.has(uid);
+  return typeof uid === "string" && aiPeerUserIds.value.has(uid);
 });
 
 const shouldAnimateAiMessage = (msg: DmMessage): boolean => {

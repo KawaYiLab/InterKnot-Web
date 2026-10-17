@@ -12,13 +12,13 @@ export interface Author {
   /** 自身资料中的丁尼余额；旧后端未提供时保持 undefined。 */
   denny?: number;
   isAiAgent?: boolean;
-  /** 是否为管理员（仅 /api/me/profile 自身资料返回）。 */
+  /** 是否为管理员（仅当前用户的资料有）。 */
   isAdmin?: boolean;
-  /** 是否已通过入站考试（仅 /api/me/profile 自身资料返回）。 */
+  /** 是否已通过入站考试（仅当前用户的资料有）。 */
   examPassed?: boolean;
 }
 
-/** 账号安全概览（/api/me/security） */
+/** 账号安全概览（/v1/me/security） */
 export interface AccountSecurity {
   email: string;
   provider: "mihoyo" | "local";
@@ -26,14 +26,14 @@ export interface AccountSecurity {
   hasPassword: boolean;
 }
 
-/** 已登录设备与会话（/api/auth/sessions） */
+/** 已登录设备与会话（/v1/me/sessions） */
 export interface AuthSessionItem {
-  id: number;
+  id: string;
   deviceId?: string | null;
   userAgent?: string | null;
   ip?: string;
   location?: string | null;
-  loginMethod?: "password" | "mihoyo" | "email_code" | "password_change" | "password_reset" | "oauth" | null;
+  loginMethod?: "password" | "mihoyo" | "email_code" | "register" | "password_change" | "password_reset" | "oauth" | null;
   loginAt?: string | null;
   isCurrent?: boolean;
   lastSeenAt: string | null;
@@ -124,7 +124,7 @@ export interface ExamReviewQuestion extends ExamQuestion {
   explanation: string | null;
 }
 
-/** GET /api/exam/review 返回 */
+/** GET /v1/exam/review 返回 */
 export interface ExamAttemptReview {
   attemptId: string;
   passed: boolean;
@@ -138,7 +138,7 @@ export interface ExamAttemptReview {
   questions: ExamReviewQuestion[];
 }
 
-/** 平台 AI 角色卡（GET /api/agent/characters） */
+/** 平台 AI 角色卡（GET /v1/ai/characters） */
 export interface AiRoleCard {
   slug: string;
   displayName: string;
@@ -147,7 +147,7 @@ export interface AiRoleCard {
   sortOrder?: number;
   suggestedQuestions?: string[] | null;
   boundUser?: {
-    id: number;
+    id: string;
     login?: string;
     isAiAgent?: boolean;
     authorDocumentId?: string | null;
@@ -161,8 +161,8 @@ export interface AiRoleCard {
 }
 
 /**
- * 敲敲可选的 AI 模型（GET /api/agent/models）。
- * 清单在 Strapi 后台手工维护；`key` 是前后端唯一契约，
+ * 敲敲可选的 AI 模型（GET /v1/ai/models）。
+ * 清单在管理后台维护；`key` 是前后端唯一契约，
  * AstrBot 侧的 provider id 不出网。
  */
 export interface AiModel {
@@ -175,7 +175,7 @@ export interface AiModel {
 }
 
 /**
- * 敲敲当日额度（GET /api/agent/quota，需登录）。
+ * 敲敲当日额度（GET /v1/ai/quota，需登录）。
  *
  * 后端按加权 token 扣额度（真实 token × 该模型的倍率），但接口**只回百分比** ——
  * 额度条要的就是这一个数，token 数与上限都只在后台。
@@ -211,6 +211,8 @@ export interface ExternalVideo {
   coverLoadError?: boolean;
   title?: string | null;
   duration?: number | null;
+  /** 用户提交的原始链接（服务端解析视频用） */
+  source?: string;
 }
 
 export interface BilibiliPage {
@@ -232,7 +234,7 @@ export interface BilibiliVideoInfo {
   owner?: { name?: string; mid?: number };
 }
 
-/** 委托分类（频道）。GET /api/categories/list 返回完整列表。 */
+/** 委托分类（频道）。GET /v1/categories 返回完整列表。 */
 export interface Category {
   documentId?: string;
   name: string;
@@ -387,7 +389,8 @@ export interface Avatar {
 
 export interface Profile {
   documentId: string;
-  uid?: number;
+  /** 用户 id（与 documentId 相同；64 位雪花 id 的字符串形式，不能转 number） */
+  uid?: string;
   login?: string;
   name?: string;
   bio?: string;
@@ -527,100 +530,8 @@ export interface UploadedFile {
   createdAt?: string;
 }
 
-// ── Knock Knock（私信弹窗）相关 ──────────────────────────
-
-export type NotificationType =
-  | "comment"
-  | "reply"
-  | "like"
-  | "favorite"
-  | "mention"
-  | "system";
-
-export interface NotificationSenderAvatar {
-  url: string;
-  width?: number;
-  height?: number;
-}
-
-export interface NotificationSenderAuthor {
-  documentId: string | null;
-  name: string | null;
-  avatar: NotificationSenderAvatar | null;
-}
-
-export interface NotificationSender {
-  id: number | null;
-  username: string | null;
-  level: number | null;
-  author: NotificationSenderAuthor | null;
-}
-
-export interface NotificationArticleRef {
-  documentId: string;
-  title: string;
-  coverAspectRatio: number | null;
-}
-
-export interface NotificationCommentRef {
-  documentId: string;
-  content: string;
-  isAnonymous: boolean;
-}
-
-export interface NotificationDto {
-  documentId: string;
-  type: NotificationType;
-  rawType?: NotificationType;
-  isRead: boolean;
-  createdAt: string;
-  sender: NotificationSender | null;
-  article: NotificationArticleRef | null;
-  comment: NotificationCommentRef | null;
-}
-
-/** 私聊弹窗里的子分类。private chat tab 顶层切换用。 */
-export type KnockCategory = "contacts" | "anonymous" | "other";
-
-/**
- * 一个会话 = 一组关联到同一对端的 notifications 聚合视图。
- * 后端 `/api/knock/conversations` 只返回摘要（无 items）；具体消息流由
- * `/api/knock/conversations/:id/messages` 懒加载，前端按 conversation id 缓存。
- */
-export interface KnockConversation {
-  category: KnockCategory;
-  /** 稳定的会话 key：base64url 编码后的 `${category}:${peerKey}` */
-  id: string;
-  /** 对端身份的原始 key（sender.id / 匿名 seed / "system"） */
-  peerKey: string;
-  peerName: string;
-  peerAvatar: string | null;
-  unread: number;
-  lastPreview: string;
-  lastAt: string;
-  /** 最近一条通知的 type，用于在列表上展示图标 */
-  lastType: NotificationType;
-}
-
-/** 后端 SSE 推送的事件类型 */
-export type KnockSseEventType =
-  | "notification.created"
-  | "notification.read"
-  | "notification.read.bulk";
-
-export interface KnockSseEvent {
-  type: KnockSseEventType;
-  conversationId?: string;
-  notificationId?: string;
-  count?: number;
-
-  at: string;
-}
-
 // ── DM 私聊（真实双向）相关 ──────────────────────────────
-// 后端契约：`server/src/api/conversation/controllers/conversation.ts`
-//          `server/src/api/message/controllers/message.ts`
-//          `server/src/api/conversation/utils/ws-server.ts`
+// 后端契约：ik-server 的 /v1/inbox、/v1/dm/*、/v1/ai/* 与实时事件 dm.*（见 useDmConversations 的翻译层）
 
 export type DmConversationKind = "direct" | "group";
 export type DmMemberRole = "owner" | "admin" | "member";
@@ -645,25 +556,17 @@ export type DmNotificationKind =
   | "accepted";
 
 /**
- * pseudo conversation id 类型标记。真 DM 的 documentId 是 strapi 给的 hash；
- * 这三种 pseudo 仅出现在「会话融合」语义下：
- * - `pseudo:user:${userId}`   通知 sender 但还没和当前用户开 DM
- * - `pseudo:anonymous:${seed}` 匿名通知聚合
- * - `pseudo:system`            系统通知聚合
- *
- * 与真 DM 在前端的区别：
- * - 列表项可正常展示与点击
- * - 选中后能拉到通知历史，但 `pseudo:user` 不能直接私信
- *   （要先调 direct API 升级为真 DM）；anonymous / system 永远不可私信
+ * pseudo 会话 id：收件箱里还没有私聊的通知分组。
+ * - `pseudo:user:${userId}`  某个用户发来的通知；发消息时先开私聊（升级为真会话）
+ * - `pseudo:system`          系统通知，不可回复
  */
 export type DmPseudoConversationId =
-  | `pseudo:user:${number}`
-  | `pseudo:anonymous:${string}`
+  | `pseudo:user:${string}`
   | "pseudo:system";
 
 /** 私聊会话里的对端简要信息（仅 direct 会话非空） */
 export interface DmPeer {
-  userId: number | null;
+  userId: string | null;
   authorDocumentId: string | null;
   name: string;
   avatar: string | null;
@@ -686,10 +589,10 @@ export interface DmLastMessagePreview {
   content: string;
   createdAt: string;
   kind: DmMessageKind;
-  senderUserId: number | null;
+  senderUserId: string | null;
 }
 
-/** GET /api/dm/conversations 返回的单条会话摘要 */
+/** 收件箱（GET /v1/inbox）里的一项：私聊会话或通知分组 */
 export interface DmConversationSummary {
   documentId: string;
   kind: DmConversationKind;
@@ -714,32 +617,17 @@ export interface DmConversationSummary {
   pseudoKind?: "user" | "anonymous" | "system" | null;
   /**
    * 会话级模型选择（仅 AI 私聊会话非空）。
-   * null = 未选择，跟随角色卡默认模型；改动经
-   * `PATCH /api/dm/conversations/:id { aiModelKey }` 并由 WS
-   * `conversation.updated` 回推。
+   * null = 未选择，跟随角色卡默认模型；undefined = 还没从会话设置里读到。改动经
+   * `PATCH /v1/ai/sessions/:id { modelKey }`，并由实时事件 `dm.conversation.updated` 回推。
    */
   aiModelKey?: string | null;
-}
-
-/**
- * GET /api/dm/conversations 的分页 meta。
- *
- * 老后端不返回 meta，前端按「hasMore = false」降级即可（等价于全量一次拿完）。
- */
-export interface DmConversationListMeta {
-  hasMore: boolean;
-  /** `${lastMessageAt}|${documentId}` 的 base64url；无更多时为 null */
-  nextCursor: string | null;
-  /**
-   * 仅第一页返回：跨全部会话（含通知聚合桶）的未读总数。
-   * Header / 底栏红点用它作权威值，之后靠 WS 事件与本地操作增量修正。
-   */
-  totalUnread?: number;
+  /** 统一收件箱（/v1/inbox）里这一项的键：私聊 `dm-<会话 id>`，通知分组 `system` / `user-<用户 id>` */
+  inboxKey?: string;
 }
 
 /** 单条消息的 sender 简要信息（撤回后仍保留发送者，便于灰条占位） */
 export interface DmMessageSender {
-  userId: number | null;
+  userId: string | null;
   authorDocumentId: string | null;
   name: string;
   avatar: string | null;
@@ -751,7 +639,7 @@ export interface DmMessageSender {
 export interface DmMessageReplyTo {
   documentId: string;
   content: string | null;
-  senderUserId: number | null;
+  senderUserId: string | null;
 }
 
 /** kind === "notification" 时的引用委托简要信息 */
@@ -785,11 +673,11 @@ export interface AiWorkflowEvent {
   usage?: { promptTokens?: number; completionTokens?: number };
 }
 
-/** GET /api/dm/conversations/:id/messages 单条消息 */
+/** 会话时间线（GET /v1/inbox/:key/items）里的一条：私信或通知 */
 export interface DmMessage {
   /**
    * 通用消息 documentId。
-   * - 真 DM 消息：strapi message.documentId
+   * - 真 DM 消息：消息 id
    * - 通知虚拟消息：`notif:${notification.documentId}` —— 加前缀避免与 DM
    *   消息 documentId 命名空间冲突，前端做编辑/撤回时也能据此判定不可操作。
    */

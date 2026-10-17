@@ -668,7 +668,7 @@ const handleBlockAuthor = async () => {
   if (isPostAuthorBlockLoading.value) return;
   isPostAuthorBlockLoading.value = true;
   try {
-    const result = await api.toggleUserBlock(authorDocumentId);
+    const result = await api.toggleUserBlock(authorDocumentId, isPostAuthorBlocked.value);
     isPostAuthorBlocked.value = result.blocked;
     message.success(result.blocked ? "已拉黑作者" : "已取消拉黑作者");
     // 让个人页/列表/搜索缓存失效，刷新后应用拉黑过滤
@@ -722,7 +722,7 @@ const favoriteArticle = async () => {
   if (favoriting.value) return;
   favoriting.value = true;
   try {
-    const result = await api.toggleFavorite(post.value.id);
+    const result = await api.toggleFavorite(post.value.id, !!post.value.favorited);
     post.value.favorited = result.favorited;
     post.value.favoritesCount = result.favoritesCount;
     message.success(result.favorited ? "已收藏" : "已取消收藏");
@@ -740,7 +740,7 @@ const likeArticle = async () => {
     return;
   }
   try {
-    const result = await api.toggleLike("article", post.value.id);
+    const result = await api.toggleLike("article", post.value.id, !!post.value.liked);
     post.value.liked = result.liked;
     post.value.likesCount = result.likesCount;
     message.success(result.liked ? "已点赞（￣︶￣）↗　" : "已取消点赞(；′⌒`)");
@@ -858,7 +858,7 @@ const likeComment = async (comment: Comment) => {
     return;
   }
   try {
-    const result = await api.toggleLike("comment", comment.id);
+    const result = await api.toggleLike("comment", comment.id, !!comment.liked);
     comment.liked = result.liked;
     comment.likesCount = result.likesCount;
   } catch (err) {
@@ -872,7 +872,7 @@ const likeReply = async (reply: Comment["replies"][number]) => {
     return;
   }
   try {
-    const result = await api.toggleLike("comment", reply.id);
+    const result = await api.toggleLike("comment", reply.id, !!reply.liked);
     reply.liked = result.liked;
     reply.likesCount = result.likesCount;
   } catch (err) {

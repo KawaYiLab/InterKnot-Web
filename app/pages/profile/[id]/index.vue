@@ -201,7 +201,7 @@ const canSendDm = computed<boolean>(() => {
   if (p.isSelf) return false;
   if (p.profileHidden) return false;
   if (isBlockedRelationship.value) return false;
-  if (typeof p.uid !== "number") return false;
+  if (!p.uid) return false;
   return true;
 });
 
@@ -214,7 +214,7 @@ const startDm = async () => {
     return;
   }
   const p = profile.value;
-  if (!canSendDm.value || !p || typeof p.uid !== "number") return;
+  if (!canSendDm.value || !p || !p.uid) return;
   if (dmStarting.value) return;
   dmStarting.value = true;
   try {
@@ -243,7 +243,7 @@ const canBlock = computed<boolean>(() => {
   if (!p) return false;
   if (p.isSelf) return false;
   if (p.isAiAgent) return false;
-  if (typeof p.uid !== "number") return false;
+  if (!p.uid) return false;
   return true;
 });
 
@@ -264,7 +264,7 @@ const toggleBlock = async () => {
   if (blockLoading.value) return;
   blockLoading.value = true;
   try {
-    const result = await api.toggleUserBlock(p.documentId);
+    const result = await api.toggleUserBlock(p.documentId, !!p.isBlockedByMe);
     const next: Profile = { ...p, isBlockedByMe: result.blocked };
     if (result.blocked) {
       next.isFollowing = false;
@@ -302,7 +302,7 @@ const toggleFollow = async () => {
   if (followLoading.value) return;
   followLoading.value = true;
   try {
-    const result = await api.toggleFollow(p.documentId);
+    const result = await api.toggleFollow(p.documentId, !!p.isFollowing);
     profile.value = {
       ...p,
       isFollowing: result.following,
