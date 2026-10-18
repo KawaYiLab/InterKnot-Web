@@ -3,12 +3,8 @@ import { useDebounceFn, useWindowSize, useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { ArticleFeed, ArticleSort, Category, Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
-import {
-  FALLBACK_COVER_ASPECT_RATIO,
-  estimateTitleLineCount,
-  getCoverAspectRatio,
-  getNormalizedCoverAspectRatio,
-} from "~/utils/cover";
+import { getCoverAspectRatio } from "~/utils/cover";
+import { estimatePostCardHeight } from "~/utils/post-card-height";
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
 import {
   ArrowPathIcon,
@@ -77,21 +73,6 @@ onMounted(() => {
 });
 
 const LOAD_MORE_ROOT_MARGIN = "360px 0px";
-// 固定部分（不含封面、title 高度）：
-//   card padding(4 * 2) + author-row min-height(32) + body gap(8)
-// + body padding-bottom(12) = 60px（PostCard 的 h3 标题 margin 为 0）
-// title 高度按真实行数（1 或 2）动态加，与 PostCard 实际渲染严格匹配，
-// 避免 ResizeObserver 测量后触发 layout 重排引起的滚动跳动。
-const POST_CARD_FIXED_HEIGHT = 60;
-// 外框 padding（--ik-post-card-padding）：封面与 body 的实际宽度 = itemWidth - 4 * 2
-const POST_CARD_PADDING_X = 8;
-const POST_CARD_TITLE_FONT_SIZE = 17;
-const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
-// 卡片 body 横向内边距 = 8 * 2 = 16px，title 可用宽度 = itemWidth - 8 - 16
-const POST_CARD_BODY_PADDING_X = 16;
-// 标题前的 [分类] 前缀右侧 margin
-const POST_CARD_TITLE_CAT_GAP = 4;
-
 const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
 // 频道筛选：空串 = 全部频道（此时由排序 Tab「最新 / 热门」决定看哪条流）。
 const categories = ref<Category[]>([]);
@@ -349,33 +330,6 @@ const isMobile = useMediaQuery("(max-width: 768px)", { ssrWidth: initialWidth })
 // 瀑布流列间距：移动端收窄，避免两列离得过远（与 .ik-home-container 的左右边距协调）
 const feedGap = computed(() => (viewportWidth.value && viewportWidth.value <= 768 ? 14 : 32));
 
-
-const estimatePostCardHeight = (post: Post, itemWidth: number) => {
-  // 无封面文章使用占位图原生比例，与卡片实际渲染保持一致
-  const ratio = post.cover
-    ? getNormalizedCoverAspectRatio(post.coverWidth, post.coverHeight)
-    : FALLBACK_COVER_ASPECT_RATIO;
-  const innerWidth = Math.max(0, itemWidth - POST_CARD_PADDING_X);
-  const coverHeight = innerWidth / ratio;
-
-  // 按 title 真实行数估算：避免短标题被强制占 2 行高度，又避免与实际渲染不一致引发滚动跳动
-  // 有分类时标题前还渲染 [分类名] 前缀，一并计入宽度。
-  const catPrefix = post.category ? `[${post.category.name}]` : "";
-  const titleAvailWidth = Math.max(
-    0,
-    innerWidth - POST_CARD_BODY_PADDING_X - (catPrefix ? POST_CARD_TITLE_CAT_GAP : 0),
-  );
-  const titleLines = estimateTitleLineCount(
-    catPrefix + (post.title ?? ""),
-    titleAvailWidth,
-    POST_CARD_TITLE_FONT_SIZE,
-  );
-  const titleHeight =
-    POST_CARD_TITLE_FONT_SIZE * POST_CARD_TITLE_LINE_HEIGHT * titleLines;
-
-  // 与 VirtualMasonry 对实测高度的取整方式（Math.round）保持一致，避免差 1px 也触发重排
-  return Math.round(coverHeight + POST_CARD_FIXED_HEIGHT + titleHeight);
-};
 
 // 动画时长（与 CSS .ik-masonry-card-enter 严格对应）
 const CARD_ENTER_ANIMATION_MS = 360;

@@ -1,0 +1,84 @@
+import type { Post } from "~/types/entities";
+import {
+  FALLBACK_COVER_ASPECT_RATIO,
+  estimateTitleLineCount,
+  getNormalizedCoverAspectRatio,
+} from "~/utils/cover";
+
+// 固定部分（不含封面、title 高度）：
+//   card padding(4 * 2) + author-row min-height(32) + body gap(8)
+// + body padding-bottom(12) = 60px（PostCard 的 h3 标题 margin 为 0）
+// title 高度按真实行数（1 或 2）动态加，与 PostCard 实际渲染严格匹配，
+// 避免 ResizeObserver 测量后触发 layout 重排引起的滚动跳动。
+const POST_CARD_FIXED_HEIGHT = 60;
+// 外框 padding（--ik-post-card-padding）：封面与 body 的实际宽度 = itemWidth - 4 * 2
+const POST_CARD_PADDING_X = 8;
+const POST_CARD_TITLE_FONT_SIZE = 17;
+const POST_CARD_TITLE_FONT_WEIGHT = 600;
+const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
+// 卡片 body 横向内边距 = 8 * 2 = 16px，title 可用宽度 = itemWidth - 8 - 16
+const POST_CARD_BODY_PADDING_X = 16;
+// 标题前的 [分类] 前缀右侧 margin
+const POST_CARD_TITLE_CAT_GAP = 4;
+// 与 theme.css 中 body 的 font-family 保持一致；运行时优先读 body 的计算值
+const FALLBACK_FONT_FAMILY =
+  '"InterKnot Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
+
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+
+function getMeasureContext() {
+  if (measureCtx !== undefined) return measureCtx;
+  measureCtx = null;
+  if (typeof document === "undefined") return measureCtx;
+  try {
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (ctx) {
+      const family = getComputedStyle(document.body).fontFamily || FALLBACK_FONT_FAMILY;
+      ctx.font = `${POST_CARD_TITLE_FONT_WEIGHT} ${POST_CARD_TITLE_FONT_SIZE}px ${family}`;
+      measureCtx = ctx;
+    }
+  } catch {
+    // 无 canvas（如 jsdom）时回落到字符宽度估算
+  }
+  return measureCtx;
+}
+
+/**
+ * 标题行数（1 或 2，PostCard 用 line-clamp: 2 截断）。
+ * 是否需要换行只取决于整行宽度，所以用 canvas 按卡片标题同款字体量出宽度即可精确判断，
+ * 不受中英文混排、标点、字体差异影响。字体尚未加载时 canvas 与 DOM 同样用回退字体，
+ * 二者仍一致；字体换上后的差异由 ResizeObserver 实测修正。
+ */
+function countTitleLines(prefix: string, title: string, availableWidth: number) {
+  // DOM 会合并连续空白、行首行尾空白不占宽
+  const text = title.replace(/\s+/g, " ");
+  const ctx = getMeasureContext();
+  if (!ctx) {
+    return estimateTitleLineCount(prefix + text, availableWidth, POST_CARD_TITLE_FONT_SIZE);
+  }
+  const prefixWidth = prefix ? ctx.measureText(prefix).width + POST_CARD_TITLE_CAT_GAP : 0;
+  const width = prefixWidth + ctx.measureText(prefix ? text.trimEnd() : text.trim()).width;
+  return width <= availableWidth ? 1 : 2;
+}
+
+/** 按 PostCard 的实际渲染结构估算卡片高度，供 VirtualMasonry 的 heightMapper 使用。 */
+export function estimatePostCardHeight(post: Post, itemWidth: number) {
+  // 无封面文章使用占位图原生比例，与卡片实际渲染保持一致
+  const ratio = post.cover
+    ? getNormalizedCoverAspectRatio(post.coverWidth, post.coverHeight)
+    : FALLBACK_COVER_ASPECT_RATIO;
+  const innerWidth = Math.max(0, itemWidth - POST_CARD_PADDING_X);
+  const coverHeight = innerWidth / ratio;
+
+  // 有分类时标题前还渲染 [分类名] 前缀，一并计入宽度
+  const prefix = post.category ? `[${post.category.name}]` : "";
+  const titleLines = countTitleLines(
+    prefix,
+    post.title ?? "",
+    Math.max(0, innerWidth - POST_CARD_BODY_PADDING_X),
+  );
+  const titleHeight = POST_CARD_TITLE_FONT_SIZE * POST_CARD_TITLE_LINE_HEIGHT * titleLines;
+
+  // 与 VirtualMasonry 对实测高度的取整方式（Math.round）保持一致，避免差 1px 也触发重排
+  return Math.round(coverHeight + POST_CARD_FIXED_HEIGHT + titleHeight);
+}

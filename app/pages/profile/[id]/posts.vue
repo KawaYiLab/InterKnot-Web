@@ -19,6 +19,7 @@ import SheetHeader from "~/components/ui/sheet/SheetHeader.vue";
 import SheetTitle from "~/components/ui/sheet/SheetTitle.vue";
 import VirtualMasonry from "~/components/VirtualMasonry.vue";
 import PostCard from "~/components/PostCard.vue";
+import { estimatePostCardHeight } from "~/utils/post-card-height";
 import PostCardSkeleton from "~/components/PostCardSkeleton.vue";
 import { generateSkeletons, estimateSkeletonHeight, type SkeletonItem } from "~/utils/skeleton";
 
@@ -395,6 +396,7 @@ watch(api.readStatusRevision, () => {
           :min-columns="2"
           :max-columns="5"
           :estimated-height="300"
+          :height-mapper="estimatePostCardHeight"
           :key-mapper="masonryKeyMapper"
         >
           <template #default="{ item, index, columnCount }">
