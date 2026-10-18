@@ -363,8 +363,11 @@ const onHiddenUpdated = (h: boolean) => {
   }
 };
 
+/** 展示用的 UID：会员号（按注册顺序的编号）；后端还没返回时退回账号 id。 */
+const displayUid = computed(() => profile.value?.memberNo ?? profile.value?.uid);
+
 const copyUid = async () => {
-  const uid = profile.value?.uid;
+  const uid = displayUid.value;
   if (uid == null) return;
   try {
     await navigator.clipboard.writeText(String(uid));
@@ -499,7 +502,7 @@ onBeforeUnmount(() => {
       <div class="ik-tab-bar">
         <div class="ik-tab-bar__left">
           <span class="ik-tab-bar__label">UID:</span>
-          <span class="ik-tab-bar__value">{{ profile.uid }}</span>
+          <span class="ik-tab-bar__value">{{ displayUid }}</span>
           <button class="ik-tab-bar__copy" aria-label="复制UID" @click="copyUid">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           </button>

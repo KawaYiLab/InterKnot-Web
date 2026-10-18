@@ -391,6 +391,8 @@ export interface Profile {
   documentId: string;
   /** 用户 id（与 documentId 相同；64 位雪花 id 的字符串形式，不能转 number） */
   uid?: string;
+  /** 会员号：按注册顺序递增的展示编号（旧账号沿用旧 UID）。只用于展示，接口调用仍用 uid */
+  memberNo?: number;
   login?: string;
   name?: string;
   bio?: string;

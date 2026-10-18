@@ -1530,6 +1530,7 @@ export function useApi() {
     return {
       documentId: String(data.id || userId),
       uid: String(data.id || userId),
+      memberNo: num(data.memberNo),
       login: str(data.username),
       name: str(data.username),
       bio: typeof data.bio === "string" ? data.bio : undefined,
