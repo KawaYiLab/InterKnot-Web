@@ -569,7 +569,7 @@ const handleRevokeOthers = async () => {
   const ok = await confirmDialog.open({
     title: "下线其他所有设备",
       message: `确定下线除当前设备外的全部 ${otherCount} 台设备？下线后需重新登录。`,
-      confirmText: "确认下线",
+      confirmText: "确认",
       cancelText: "取消",
       danger: true,
   });
