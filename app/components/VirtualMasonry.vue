@@ -115,6 +115,10 @@ interface LayoutItem {
   height: number;
 }
 
+// 最近一次 layout 中每个 key 实际使用的高度（测量值 / heightMapper / 估算值），
+// 供 ResizeObserver 判断"实测高度是否与布局所用高度不同"，相同则无需重排。
+let layoutHeights = new Map<string | number, number>();
+
 const layout = computed((): {
   items: LayoutItem[];
   columns: LayoutItem[][];
@@ -142,6 +146,7 @@ const layout = computed((): {
   const colHeights = new Array<number>(cols).fill(0);
   const columns = Array.from({ length: cols }, () => [] as LayoutItem[]);
   const result: LayoutItem[] = [];
+  const heights = new Map<string | number, number>();
 
   for (let i = 0; i < props.items.length; i++) {
     const item = props.items[i];
@@ -178,6 +183,7 @@ const layout = computed((): {
 
     const layoutItem = { key, index: i, top, left, width: colW, height: h };
     result.push(layoutItem);
+    heights.set(key, h);
     columns[minCol]?.push(layoutItem);
     colHeights[minCol] = top + h + gap;
   }
@@ -190,6 +196,7 @@ const layout = computed((): {
     if (v > maxCol) maxCol = v;
   }
   const totalHeight = maxCol > 0 ? maxCol - gap : 0;
+  layoutHeights = heights;
   return { items: result, columns, totalHeight };
 });
 
@@ -232,7 +239,23 @@ const BUFFER_REFERENCE_COLUMNS = 5;
 const BUFFER_SCALE_MIN = 0.5;
 const BUFFER_SCALE_MAX = 1.0;
 
-const visibleItems = computed(() => {
+// 渲染只用到 key / index / left / top / width；这些都没变就视为同一个可见集
+function sameVisibleItems(a: LayoutItem[], b: LayoutItem[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]!;
+    const y = b[i]!;
+    if (
+      x.key !== y.key || x.index !== y.index ||
+      x.left !== y.left || x.top !== y.top || x.width !== y.width
+    ) return false;
+  }
+  return true;
+}
+
+// scrollY 每帧都在变，但多数帧并没有卡片进出视口。可见集不变时返回上一次的
+// 数组（computed 的 oldValue），Vue 不会通知依赖方，本组件这一帧就不重渲染。
+const visibleItems = computed((prev?: LayoutItem[]) => {
   const sy = scrollY.value;
   const vh = viewportH.value;
   const cols = columnCount.value;
@@ -271,7 +294,7 @@ const visibleItems = computed(() => {
     }
   }
 
-  return visible;
+  return prev && sameVisibleItems(prev, visible) ? prev : visible;
 });
 
 /* ── 容器与 item 的样式 ────────────────────────── */
@@ -347,9 +370,11 @@ function setupResizeObserver() {
       if (key === undefined) continue;
       const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
       const rounded = Math.round(h);
-      const prev = measuredHeights.get(key);
-      if (prev === undefined || Math.abs(prev - rounded) >= MEASURE_DIFF_THRESHOLD) {
-        measuredHeights.set(key, rounded);
+      measuredHeights.set(key, rounded);
+      // 与布局实际使用的高度比较，而不是与"是否测量过"比较：observe 后首次回调
+      // 必定到来，若首测一律算作变化，每张新挂载的卡片都会触发一次全量重排。
+      const used = layoutHeights.get(key);
+      if (used === undefined || Math.abs(used - rounded) >= MEASURE_DIFF_THRESHOLD) {
         changed = true;
       }
     }

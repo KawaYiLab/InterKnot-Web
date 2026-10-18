@@ -3,12 +3,8 @@ import { useDebounceFn, useWindowSize, useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { ArticleFeed, ArticleSort, Category, Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
-import {
-  FALLBACK_COVER_ASPECT_RATIO,
-  estimateTitleLineCount,
-  getCoverAspectRatio,
-  getNormalizedCoverAspectRatio,
-} from "~/utils/cover";
+import { getCoverAspectRatio } from "~/utils/cover";
+import { estimatePostCardHeight } from "~/utils/post-card-height";
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
 import {
   ArrowPathIcon,
@@ -77,17 +73,6 @@ onMounted(() => {
 });
 
 const LOAD_MORE_ROOT_MARGIN = "360px 0px";
-// 固定部分（不含 title 高度）：
-//   card padding(8) + body padding-bottom(12) + author-row min-height(32)
-// + body gap(8) + title margin(8) = 68px
-// title 高度按真实行数（1 或 2）动态加，与 PostCard 实际渲染严格匹配，
-// 避免 ResizeObserver 测量后触发 layout 重排引起的滚动跳动。
-const POST_CARD_FIXED_HEIGHT = 68;
-const POST_CARD_TITLE_FONT_SIZE = 17;
-const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
-// 卡片 body 横向内边距 = 8 * 2 = 16px，title 可用宽度 = itemWidth - 16
-const POST_CARD_BODY_PADDING_X = 16;
-
 const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
 // 频道筛选：空串 = 全部频道（此时由排序 Tab「最新 / 热门」决定看哪条流）。
 const categories = ref<Category[]>([]);
@@ -346,26 +331,6 @@ const isMobile = useMediaQuery("(max-width: 768px)", { ssrWidth: initialWidth })
 const feedGap = computed(() => (viewportWidth.value && viewportWidth.value <= 768 ? 14 : 32));
 
 
-const estimatePostCardHeight = (post: Post, itemWidth: number) => {
-  // 无封面文章使用占位图原生比例，与卡片实际渲染保持一致
-  const ratio = post.cover
-    ? getNormalizedCoverAspectRatio(post.coverWidth, post.coverHeight)
-    : FALLBACK_COVER_ASPECT_RATIO;
-  const coverHeight = itemWidth / ratio;
-
-  // 按 title 真实行数估算：避免短标题被强制占 2 行高度，又避免与实际渲染不一致引发滚动跳动
-  const titleAvailWidth = Math.max(0, itemWidth - POST_CARD_BODY_PADDING_X);
-  const titleLines = estimateTitleLineCount(
-    post.title,
-    titleAvailWidth,
-    POST_CARD_TITLE_FONT_SIZE,
-  );
-  const titleHeight =
-    POST_CARD_TITLE_FONT_SIZE * POST_CARD_TITLE_LINE_HEIGHT * titleLines;
-
-  return Math.ceil(coverHeight + POST_CARD_FIXED_HEIGHT + titleHeight);
-};
-
 // 动画时长（与 CSS .ik-masonry-card-enter 严格对应）
 const CARD_ENTER_ANIMATION_MS = 360;
 // 兜底清理延迟：略大于动画时长，避免清理过早误伤还在播放的动画
@@ -430,6 +395,16 @@ const finishEnterAnimation = (postId: string) => {
     });
   }
   pendingFinish.add(postId);
+};
+
+// 必须是不捕获 slot 变量的固定函数：写成 `finishEnterAnimation(item.id)` 时编译器
+// 每次渲染都生成新箭头函数，PostCard 未声明该事件，Vue 会把它当作 props 变化，
+// 导致可见卡片随 VirtualMasonry 每次渲染全部重渲染。id 从 data-post-id 读取。
+// animationend 会冒泡，只认卡片自身的入场动画（scoped 下 keyframes 名带后缀）。
+const onCardAnimationEnd = (e: AnimationEvent) => {
+  if (e.target !== e.currentTarget || !e.animationName.startsWith("ik-masonry-card-enter")) return;
+  const postId = (e.currentTarget as HTMLElement).dataset.postId;
+  if (postId) finishEnterAnimation(postId);
 };
 
 const skeletonCount = computed(() => {
@@ -1227,9 +1202,9 @@ onBeforeUnmount(() => {
                   :post="item"
                   :highlighted="highlightedArticleIds.has(item.id)"
                   :eager="index < columnCount * 2"
+                  :data-post-id="item.id"
                   @open="goPost"
-                  @animationend="finishEnterAnimation(item.id)"
-                  v-memo="[item, shouldAnimatePost(item.id), highlightedArticleIds.has(item.id), index < columnCount * 2]"
+                  @animationend="onCardAnimationEnd"
                 />
               </template>
             </VirtualMasonry>
