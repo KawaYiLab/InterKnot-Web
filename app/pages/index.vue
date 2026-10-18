@@ -77,16 +77,20 @@ onMounted(() => {
 });
 
 const LOAD_MORE_ROOT_MARGIN = "360px 0px";
-// 固定部分（不含 title 高度）：
-//   card padding(8) + body padding-bottom(12) + author-row min-height(32)
-// + body gap(8) + title margin(8) = 68px
+// 固定部分（不含封面、title 高度）：
+//   card padding(4 * 2) + author-row min-height(32) + body gap(8)
+// + body padding-bottom(12) = 60px（PostCard 的 h3 标题 margin 为 0）
 // title 高度按真实行数（1 或 2）动态加，与 PostCard 实际渲染严格匹配，
 // 避免 ResizeObserver 测量后触发 layout 重排引起的滚动跳动。
-const POST_CARD_FIXED_HEIGHT = 68;
+const POST_CARD_FIXED_HEIGHT = 60;
+// 外框 padding（--ik-post-card-padding）：封面与 body 的实际宽度 = itemWidth - 4 * 2
+const POST_CARD_PADDING_X = 8;
 const POST_CARD_TITLE_FONT_SIZE = 17;
 const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
-// 卡片 body 横向内边距 = 8 * 2 = 16px，title 可用宽度 = itemWidth - 16
+// 卡片 body 横向内边距 = 8 * 2 = 16px，title 可用宽度 = itemWidth - 8 - 16
 const POST_CARD_BODY_PADDING_X = 16;
+// 标题前的 [分类] 前缀右侧 margin
+const POST_CARD_TITLE_CAT_GAP = 4;
 
 const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
 // 频道筛选：空串 = 全部频道（此时由排序 Tab「最新 / 热门」决定看哪条流）。
@@ -351,19 +355,26 @@ const estimatePostCardHeight = (post: Post, itemWidth: number) => {
   const ratio = post.cover
     ? getNormalizedCoverAspectRatio(post.coverWidth, post.coverHeight)
     : FALLBACK_COVER_ASPECT_RATIO;
-  const coverHeight = itemWidth / ratio;
+  const innerWidth = Math.max(0, itemWidth - POST_CARD_PADDING_X);
+  const coverHeight = innerWidth / ratio;
 
   // 按 title 真实行数估算：避免短标题被强制占 2 行高度，又避免与实际渲染不一致引发滚动跳动
-  const titleAvailWidth = Math.max(0, itemWidth - POST_CARD_BODY_PADDING_X);
+  // 有分类时标题前还渲染 [分类名] 前缀，一并计入宽度。
+  const catPrefix = post.category ? `[${post.category.name}]` : "";
+  const titleAvailWidth = Math.max(
+    0,
+    innerWidth - POST_CARD_BODY_PADDING_X - (catPrefix ? POST_CARD_TITLE_CAT_GAP : 0),
+  );
   const titleLines = estimateTitleLineCount(
-    post.title,
+    catPrefix + (post.title ?? ""),
     titleAvailWidth,
     POST_CARD_TITLE_FONT_SIZE,
   );
   const titleHeight =
     POST_CARD_TITLE_FONT_SIZE * POST_CARD_TITLE_LINE_HEIGHT * titleLines;
 
-  return Math.ceil(coverHeight + POST_CARD_FIXED_HEIGHT + titleHeight);
+  // 与 VirtualMasonry 对实测高度的取整方式（Math.round）保持一致，避免差 1px 也触发重排
+  return Math.round(coverHeight + POST_CARD_FIXED_HEIGHT + titleHeight);
 };
 
 // 动画时长（与 CSS .ik-masonry-card-enter 严格对应）
@@ -430,6 +441,16 @@ const finishEnterAnimation = (postId: string) => {
     });
   }
   pendingFinish.add(postId);
+};
+
+// 必须是不捕获 slot 变量的固定函数：写成 `finishEnterAnimation(item.id)` 时编译器
+// 每次渲染都生成新箭头函数，PostCard 未声明该事件，Vue 会把它当作 props 变化，
+// 导致可见卡片随 VirtualMasonry 每次渲染全部重渲染。id 从 data-post-id 读取。
+// animationend 会冒泡，只认卡片自身的入场动画（scoped 下 keyframes 名带后缀）。
+const onCardAnimationEnd = (e: AnimationEvent) => {
+  if (e.target !== e.currentTarget || !e.animationName.startsWith("ik-masonry-card-enter")) return;
+  const postId = (e.currentTarget as HTMLElement).dataset.postId;
+  if (postId) finishEnterAnimation(postId);
 };
 
 const skeletonCount = computed(() => {
@@ -1227,9 +1248,9 @@ onBeforeUnmount(() => {
                   :post="item"
                   :highlighted="highlightedArticleIds.has(item.id)"
                   :eager="index < columnCount * 2"
+                  :data-post-id="item.id"
                   @open="goPost"
-                  @animationend="finishEnterAnimation(item.id)"
-                  v-memo="[item, shouldAnimatePost(item.id), highlightedArticleIds.has(item.id), index < columnCount * 2]"
+                  @animationend="onCardAnimationEnd"
                 />
               </template>
             </VirtualMasonry>
