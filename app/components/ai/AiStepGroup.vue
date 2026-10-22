@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
   ChevronRightIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
   LightBulbIcon,
   MagnifyingGlassIcon,
+  StopCircleIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/vue/24/outline";
 import type { WorkflowStepView } from "~/utils/workflow";
@@ -53,8 +54,33 @@ function formatMs(ms?: number): string {
   return `${m}m ${s}s`;
 }
 
+/**
+ * 进行中步骤的实时计时：按本机首次看到它运行的时刻算，避免服务端与本机时钟偏差；
+ * 只在有步骤运行时每秒走一次。
+ */
+const now = ref(Date.now());
+const firstSeen = new Map<string, number>();
+let ticker: ReturnType<typeof setInterval> | null = null;
+watch(
+  () => props.steps.filter((s) => s.status === "running").map((s) => s.stepId),
+  (running) => {
+    for (const id of running) if (!firstSeen.has(id)) firstSeen.set(id, Date.now());
+    if (running.length && !ticker) {
+      ticker = setInterval(() => (now.value = Date.now()), 1000);
+    } else if (!running.length && ticker) {
+      clearInterval(ticker);
+      ticker = null;
+    }
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  if (ticker) clearInterval(ticker);
+});
+
 function iconOf(step: WorkflowStepView) {
   if (step.status === "error" || step.kind === "error") return ExclamationTriangleIcon;
+  if (step.kind === "limit") return StopCircleIcon;
   if (step.kind === "thinking") return LightBulbIcon;
   if (step.kind === "search") return MagnifyingGlassIcon;
   if (step.kind === "read") return DocumentTextIcon;
@@ -66,33 +92,21 @@ function titleOf(step: WorkflowStepView): string {
   return step.status === "running" ? "思考中" : "已思考";
 }
 
+/** 行尾只放耗时：进行中走实时计时，结束后只有思考保留用时；失败、上限靠图标与颜色表达 */
 function metaOf(step: WorkflowStepView): string {
-  const parts: string[] = [];
-  if (typeof step.hits === "number") parts.push(`${step.hits} 条结果`);
-  if (step.status !== "running") {
-    const t = formatMs(step.durationMs);
-    if (t) parts.push(t);
+  if (step.status === "running") {
+    const seen = firstSeen.get(step.stepId);
+    const elapsed = seen == null ? 0 : now.value - seen;
+    return elapsed >= 1000 ? `${Math.floor(elapsed / 1000)}s` : "";
   }
-  return parts.join(" · ");
+  return step.kind === "thinking" ? formatMs(step.durationMs) : "";
 }
 
 const failed = computed(() => props.steps.some((s) => s.status === "error"));
 
 const summary = computed(() => {
-  const thinking = props.steps.some((s) => s.kind === "thinking");
-  const tools = props.steps.filter((s) => s.kind !== "thinking" && s.kind !== "error").length;
-  const parts: string[] = [];
-  if (thinking) parts.push("已思考");
-  if (tools) parts.push(`调用了 ${tools} 个工具`);
-  if (failed.value) parts.push("出错");
-  return parts.join("，") || "处理过程";
-});
-
-const summaryMeta = computed(() => {
-  const starts = props.steps.map((s) => s.startedAt).filter((v): v is number => v != null);
-  const ends = props.steps.map((s) => s.finishedAt).filter((v): v is number => v != null);
-  if (!starts.length || !ends.length) return "";
-  return formatMs(Math.max(...ends) - Math.min(...starts));
+  const tools = props.steps.filter((s) => !["thinking", "error", "limit"].includes(s.kind)).length;
+  return tools ? `调用了 ${tools} 个工具` : "已思考";
 });
 </script>
 
@@ -110,7 +124,6 @@ const summaryMeta = computed(() => {
         <WrenchScrewdriverIcon v-else />
       </span>
       <span class="ai-steps__title">{{ summary }}</span>
-      <span v-if="summaryMeta" class="ai-steps__meta">{{ summaryMeta }}</span>
       <ChevronRightIcon class="ai-steps__chevron" />
     </button>
 
@@ -127,8 +140,7 @@ const summaryMeta = computed(() => {
           <WrenchScrewdriverIcon v-else />
         </span>
         <span class="ai-steps__title">{{ summary }}</span>
-        <span v-if="summaryMeta" class="ai-steps__meta">{{ summaryMeta }}</span>
-        <ChevronRightIcon class="ai-steps__chevron is-open" />
+          <ChevronRightIcon class="ai-steps__chevron is-open" />
       </button>
 
       <ol class="ai-steps__list" :class="{ 'is-nested': collapsible && settled }">
@@ -137,7 +149,7 @@ const summaryMeta = computed(() => {
             :is="step.items?.length ? 'button' : 'div'"
             :type="step.items?.length ? 'button' : undefined"
             class="ai-steps__row"
-            :class="[`is-${step.status}`, { 'is-clickable': !!step.items?.length }]"
+            :class="[`is-${step.status}`, `kind-${step.kind}`, { 'is-clickable': !!step.items?.length }]"
             :aria-expanded="step.items?.length ? openItems.has(step.stepId) : undefined"
             @click="step.items?.length ? toggleItems(step.stepId) : undefined"
           >
@@ -275,6 +287,12 @@ button.ai-steps__row:focus-visible {
   color: #b5b5b5;
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* 工具轮数用完：琥珀色提示，不算出错 */
+.ai-steps__row.kind-limit .ai-steps__icon,
+.ai-steps__row.kind-limit .ai-steps__title {
+  color: #d9a441;
 }
 
 .ai-steps__row.is-error .ai-steps__title {

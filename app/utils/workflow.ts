@@ -14,7 +14,7 @@ export type WorkflowStepStatus = "pending" | "running" | "done" | "error";
 
 export interface WorkflowStepView {
   stepId: string;
-  /** thinking | search | read | tool | answer | error */
+  /** thinking | search | read | tool | limit | answer | error */
   kind: string;
   status: WorkflowStepStatus;
   /** 主标题：如「搜索论坛」「阅读帖子」 */
@@ -32,9 +32,6 @@ export interface WorkflowStepView {
   partIndex?: number;
   /** 步骤历时（ms），根据 start/finish 事件 at 字段计算 */
   durationMs?: number;
-  /** 步骤首末事件时刻（ms），用于步骤组的总耗时 */
-  startedAt?: number;
-  finishedAt?: number;
   /** 通用工具的原始名（tool.* 事件） */
   tool?: string;
   /** 检索命中的帖子（forum.search.finish 的 items，≤10） */
@@ -109,8 +106,6 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
       b.finishedAt = Math.max(b.finishedAt, ts);
     }
     step.durationMs = b.finishedAt - b.startedAt;
-    step.startedAt = b.startedAt;
-    step.finishedAt = b.finishedAt;
   };
 
   const postRefs = (raw: unknown): WorkflowPostRef[] =>
@@ -162,7 +157,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
       }
       case "forum.search.finish": {
         const s = upsert(ev.stepId, { kind: "search", status: "done", title: "检索绳网" });
-        s.status = "done";
+        s.status = d.error === true ? "error" : "done";
         s.subtitle = clipQuery(d.query);
         s.hits = typeof d.hits === "number" ? d.hits : undefined;
         if (ts != null) touchTimestamp(s, ts);
@@ -192,7 +187,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
       }
       case "forum.read.finish": {
         const s = upsert(ev.stepId, { kind: "read", status: "done", title: "读取绳网帖子" });
-        s.status = "done";
+        s.status = d.error === true ? "error" : "done";
         if (typeof d.title === "string" && d.title) s.subtitle = `《${d.title}》`;
         if (typeof d.documentId === "string" && d.documentId) s.postId = d.documentId;
         if (ts != null) touchTimestamp(s, ts);
@@ -217,9 +212,14 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
           title: toolTitle(tool, d.title),
           tool,
         });
-        s.status = "done";
+        s.status = d.error === true ? "error" : "done";
         if (ts != null) touchTimestamp(s, ts);
         if (typeof d.ms === "number") s.durationMs = d.ms;
+        break;
+      }
+      case "tool.limit": {
+        // 工具轮数用完（WF-010）：之后模型只能基于已有结果作答
+        upsert(ev.stepId, { kind: "limit", status: "done", title: "已达工具调用上限" });
         break;
       }
       case "answer.start": {
