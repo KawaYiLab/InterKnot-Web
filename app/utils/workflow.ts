@@ -1,6 +1,6 @@
 /**
  * AI 工作流事件聚合（3.3）：把 WorkflowEvent 序列折算成时间线步骤视图。
- * 纯函数，供 AiWorkflowCard / RelatedPosts 与单测复用。
+ * 纯函数，供 AI 时间线、引用来源与单测复用。
  * 事件协议见 server/src/utils/agent/workflow-events.ts。
  */
 import type { AiWorkflowEvent } from "~/types/entities";
@@ -26,8 +26,6 @@ export interface WorkflowStepView {
   /** 工具参数 / 结果（工具卡片展开用） */
   args?: unknown;
   result?: unknown;
-  /** 可展开的帖子列表（搜索命中 / 已读帖子），点击可打开 postModal */
-  posts?: WorkflowPostRef[];
   /** 搜索命中数 */
   hits?: number;
   /** answer 段序号（用于把单个 AI 回复拆成多个气泡） */
@@ -70,19 +68,6 @@ const clipQuery = (q: unknown): string => {
   const s = String(q ?? "").trim();
   return s.length > 24 ? `${s.slice(0, 24)}…` : s;
 };
-
-const asPosts = (v: unknown): WorkflowPostRef[] =>
-  Array.isArray(v)
-    ? v
-        .filter(
-          (it): it is { documentId: string; title: string } =>
-            !!it &&
-            typeof it === "object" &&
-            "documentId" in it &&
-            typeof (it as { documentId: unknown }).documentId === "string",
-        )
-        .map((it) => ({ documentId: it.documentId, title: String(it.title ?? "") }))
-    : [];
 
 /** 事件序列 → 有序步骤视图（同 stepId 的 start/item/finish 聚合为一步） */
 export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[] {
@@ -259,22 +244,6 @@ export function extractCitations(events: AiWorkflowEvent[]): WorkflowPostRef[] {
     if (!documentId || seen.has(documentId)) continue;
     seen.add(documentId);
     out.push({ documentId, title: String(ev.data?.title ?? "") });
-  }
-  return out;
-}
-
-/** 推荐阅读（3.4）：搜索命中但未被引用的帖子（零额外 LLM 成本） */
-export function extractRelatedPosts(events: AiWorkflowEvent[]): WorkflowPostRef[] {
-  const cited = new Set(extractCitations(events).map((p) => p.documentId));
-  const out: WorkflowPostRef[] = [];
-  const seen = new Set<string>();
-  for (const ev of events) {
-    if (ev.type !== "forum.search.finish") continue;
-    for (const post of asPosts(ev.data?.items)) {
-      if (cited.has(post.documentId) || seen.has(post.documentId)) continue;
-      seen.add(post.documentId);
-      out.push(post);
-    }
   }
   return out;
 }

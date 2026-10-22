@@ -10,7 +10,7 @@ import { formatTime, formatFullTime } from "~/utils/time";
 /**
  * 单条 DM 消息（Phase 4 拆分自 KnockKnockModal）：
  * 时间分隔行 + system 分界 + 气泡（头像 / 正文 / 操作条 / 引用卡 /
- * AI 工作流时间线 / 推荐阅读）。纯展示组件——派生数据由父级
+ * AI 工作流时间线 / 引用来源）。纯展示组件——派生数据由父级
  * enrichedMessages 一次算好，交互全部 emit 回容器。
  */
 const props = defineProps<{
@@ -232,13 +232,6 @@ const messageSegments = computed((): string[] | null => {
       <!-- 3.5 引用帖子：回答里出现过的 /post/xxx，始终展示在气泡下方 -->
       <AiCitationList
         v-if="entry.aiRich && entry.citations.length > 0"
-        :citations="entry.citations"
-        @open-post="emit('open-post', $event)"
-      />
-      <!-- 引用/搜索命中仅作为相似推荐种子，证据与上方引用列表保持不变。 -->
-      <AiRelatedPosts
-        v-if="entry.aiRich && !entry.aiStreaming && (entry.relatedPosts.length > 0 || entry.citations.length > 0)"
-        :posts="entry.relatedPosts"
         :citations="entry.citations"
         @open-post="emit('open-post', $event)"
       />

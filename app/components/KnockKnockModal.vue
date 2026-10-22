@@ -18,7 +18,7 @@ import type { AiModel, AiRoleCard, DmConversationSummary, DmMessage } from "~/ty
 import { resolveErrorMessage } from "~/utils/api-error";
 import { stripMentionsToPlain } from "~/utils/mention";
 import { stripEmotesToPlain } from "~/utils/emote";
-import { extractCitations, extractRelatedPosts, isWorkflowSettled } from "~/utils/workflow";
+import { extractCitations, isWorkflowSettled } from "~/utils/workflow";
 import type { BubbleRender, EnrichedMessage } from "~/utils/dm-view";
 import type DmComposer from "~/components/DmComposer.vue";
 import FairyMascotEye from "~/components/fairy/FairyMascotEye.vue";
@@ -860,10 +860,6 @@ const enrichedMessages = computed<EnrichedMessage[]>(() => {
       citations:
         workflowEvents.length > 0 && isWorkflowSettled(workflowEvents)
           ? extractCitations(workflowEvents)
-          : [],
-      relatedPosts:
-        workflowEvents.length > 0 && isWorkflowSettled(workflowEvents)
-          ? extractRelatedPosts(workflowEvents)
           : [],
       copyable: canCopyMessage(msg),
       quote: shouldShowQuote(msg) && msg.article
