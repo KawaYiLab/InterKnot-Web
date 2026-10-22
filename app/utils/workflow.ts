@@ -300,6 +300,18 @@ export type WorkflowFlowBlock =
  * 逐段在正文里按序定位（跳过段间空白）；正文只露出某段的前缀时（流式 / 打字机），这段取已露出的部分并停下。
  * 返回各段对应的正文和剩余未匹配的尾巴；中途对不上返回 null。
  */
+const LEADING_RULES = /^(?:[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*(?:\n|$)|\s*\n)+/;
+/** 末尾的分割线必须前面有空行，否则 `文字\n---` 是 setext 二级标题，不能动 */
+const TRAILING_RULES = /(?:\n[ \t]*\n[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*)+\s*$/;
+
+/**
+ * 去掉气泡首尾的 markdown 分割线：模型常在段落之间写 `---`，分段（GEN-050 / 工具调用打断）正好切在它旁边，
+ * 气泡顶上或底下就会多出一条孤零零的横线。
+ */
+function stripEdgeRules(text: string): string {
+  return text.replace(LEADING_RULES, "").replace(TRAILING_RULES, "").trim();
+}
+
 function alignParts(
   rendered: string,
   parts: string[],
@@ -379,7 +391,8 @@ export function buildWorkflowFlow(
     else blocks.push({ type: "steps", key: `g-${step.stepId}`, steps: [step] });
   };
   const pushText = (key: string, text: string, live: boolean) => {
-    if (text) blocks.push({ type: "text", key, text, live });
+    const trimmed = stripEdgeRules(text);
+    if (trimmed) blocks.push({ type: "text", key, text: trimmed, live });
   };
 
   if (!aligned) {
