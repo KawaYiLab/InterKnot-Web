@@ -92,40 +92,21 @@ function titleOf(step: WorkflowStepView): string {
   return step.status === "running" ? "思考中" : "已思考";
 }
 
+/** 行尾只放耗时：进行中走实时计时，结束后只有思考保留用时；失败、上限靠图标与颜色表达 */
 function metaOf(step: WorkflowStepView): string {
-  const parts: string[] = [];
-  if (step.status === "error" && step.kind !== "error") parts.push("失败");
-  if (typeof step.hits === "number" && step.status !== "error") parts.push(`${step.hits} 条结果`);
   if (step.status === "running") {
     const seen = firstSeen.get(step.stepId);
     const elapsed = seen == null ? 0 : now.value - seen;
-    if (elapsed >= 1000) parts.push(`${Math.floor(elapsed / 1000)}s`);
-  } else if (step.kind !== "limit") {
-    const t = formatMs(step.durationMs);
-    if (t) parts.push(t);
+    return elapsed >= 1000 ? `${Math.floor(elapsed / 1000)}s` : "";
   }
-  return parts.join(" · ");
+  return step.kind === "thinking" ? formatMs(step.durationMs) : "";
 }
 
 const failed = computed(() => props.steps.some((s) => s.status === "error"));
 
 const summary = computed(() => {
-  const thinking = props.steps.some((s) => s.kind === "thinking");
   const tools = props.steps.filter((s) => !["thinking", "error", "limit"].includes(s.kind)).length;
-  const parts: string[] = [];
-  if (thinking) parts.push("已思考");
-  if (tools) parts.push(`调用了 ${tools} 个工具`);
-  if (props.steps.some((s) => s.kind === "limit")) parts.push("已达上限");
-  const errors = props.steps.filter((s) => s.status === "error").length;
-  if (errors) parts.push(`${errors} 个失败`);
-  return parts.join("，") || "处理过程";
-});
-
-const summaryMeta = computed(() => {
-  const starts = props.steps.map((s) => s.startedAt).filter((v): v is number => v != null);
-  const ends = props.steps.map((s) => s.finishedAt).filter((v): v is number => v != null);
-  if (!starts.length || !ends.length) return "";
-  return formatMs(Math.max(...ends) - Math.min(...starts));
+  return tools ? `调用了 ${tools} 个工具` : "已思考";
 });
 </script>
 
@@ -143,7 +124,6 @@ const summaryMeta = computed(() => {
         <WrenchScrewdriverIcon v-else />
       </span>
       <span class="ai-steps__title">{{ summary }}</span>
-      <span v-if="summaryMeta" class="ai-steps__meta">{{ summaryMeta }}</span>
       <ChevronRightIcon class="ai-steps__chevron" />
     </button>
 
@@ -160,8 +140,7 @@ const summaryMeta = computed(() => {
           <WrenchScrewdriverIcon v-else />
         </span>
         <span class="ai-steps__title">{{ summary }}</span>
-        <span v-if="summaryMeta" class="ai-steps__meta">{{ summaryMeta }}</span>
-        <ChevronRightIcon class="ai-steps__chevron is-open" />
+          <ChevronRightIcon class="ai-steps__chevron is-open" />
       </button>
 
       <ol class="ai-steps__list" :class="{ 'is-nested': collapsible && settled }">

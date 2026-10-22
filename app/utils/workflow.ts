@@ -32,9 +32,6 @@ export interface WorkflowStepView {
   partIndex?: number;
   /** 步骤历时（ms），根据 start/finish 事件 at 字段计算 */
   durationMs?: number;
-  /** 步骤首末事件时刻（ms），用于步骤组的总耗时 */
-  startedAt?: number;
-  finishedAt?: number;
   /** 通用工具的原始名（tool.* 事件） */
   tool?: string;
   /** 检索命中的帖子（forum.search.finish 的 items，≤10） */
@@ -109,8 +106,6 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
       b.finishedAt = Math.max(b.finishedAt, ts);
     }
     step.durationMs = b.finishedAt - b.startedAt;
-    step.startedAt = b.startedAt;
-    step.finishedAt = b.finishedAt;
   };
 
   const postRefs = (raw: unknown): WorkflowPostRef[] =>
@@ -224,13 +219,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
       }
       case "tool.limit": {
         // 工具轮数用完（WF-010）：之后模型只能基于已有结果作答
-        const rounds = typeof d.rounds === "number" ? d.rounds : null;
-        upsert(ev.stepId, {
-          kind: "limit",
-          status: "done",
-          title: "已达工具调用上限",
-          subtitle: rounds ? `${rounds} 轮` : undefined,
-        });
+        upsert(ev.stepId, { kind: "limit", status: "done", title: "已达工具调用上限" });
         break;
       }
       case "answer.start": {
