@@ -578,9 +578,8 @@ html.no-gpu .ik-overlay__backdrop {
   opacity: 1 !important;
 }
 
-/* 隐藏弹窗内装饰性斜线纹理和跑马灯。 */
-html.no-gpu .ik-overlay__stripe,
-html.no-gpu .ik-zzz-marquee {
+/* 隐藏弹窗内装饰性斜线纹理（跑马灯已在上面统一隐藏）。 */
+html.no-gpu .ik-overlay__stripe {
   display: none !important;
 }
 

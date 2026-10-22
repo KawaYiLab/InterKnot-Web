@@ -231,13 +231,17 @@ const overlayOpen = computed(
   z-index: -9999 !important;
 }
 
-/* 仅放大作为全屏背景的这一实例（桌面端）；移动端弹窗由组件自身 @media 放大 */
-.ik-global-marquee :deep(.ik-zzz-marquee__band) {
-  width: 260%;
-  height: 260%;
-  left: -80%;
-  top: -80%;
-  font-size: clamp(360px, 48vw, 640px);
+/* 全局实例的字号密度：桌面 ≈ 原来的 640px@1080p（1080 / (2.3 × .746) ≈ 640），
+   手机 ≈ 原来的 360px@844h。几何（band 尺寸、字号）全部由组件的 cq 单位推导，
+   这里只覆盖「每屏几行」这一个参数，避免再把整套魔数复制一份。 */
+.ik-global-marquee {
+  --ik-marquee-rows: 2.3 !important;
+}
+
+@media (max-width: 1024px) {
+  .ik-global-marquee {
+    --ik-marquee-rows: 3.15 !important;
+  }
 }
 
 </style>
