@@ -4,7 +4,7 @@ import { DocumentTextIcon, ArrowPathIcon, ClipboardDocumentIcon, CheckIcon } fro
 import type { DmMessage } from "~/types/entities";
 import type { EnrichedMessage } from "~/utils/dm-view";
 import { hasBubbleLinks, parseBubbleSegments } from "~/utils/dm-view";
-import { buildWorkflowSteps, type WorkflowStepView } from "~/utils/workflow";
+import { buildWorkflowFlow, type WorkflowFlowBlock } from "~/utils/workflow";
 import { formatTime, formatFullTime } from "~/utils/time";
 
 /**
@@ -47,56 +47,31 @@ const systemLabel = computed(
   () => SYSTEM_LABELS[props.entry.msg.content?.trim() ?? ''] ?? props.entry.msg.content,
 );
 
-/** 把当前 AI 回复的 answer.delta 段按 partIndex 排序后取出 */
-const answerSegmentSteps = computed(() => {
-  if (!props.entry.aiRich || !props.entry.workflowEvents.length) return [];
-  const steps = buildWorkflowSteps(props.entry.workflowEvents);
-  return steps
-    .filter((s): s is WorkflowStepView & { text: string; partIndex: number } =>
-      s.kind === "answer" &&
-      typeof s.partIndex === "number" &&
-      typeof s.text === "string" &&
-      s.text.length > 0,
-    )
-    .sort((a, b) => a.partIndex - b.partIndex);
+/**
+ * AI 回复按真实发生顺序展开：过程步骤（思考 / 工具）与回答分段穿插，
+ * 而不是把整个过程塞进气泡上方的一个框里。没有工作流事件时走下面的单气泡渲染。
+ */
+const flowBlocks = computed((): WorkflowFlowBlock[] | null => {
+  const { entry } = props;
+  if (!entry.aiRich || !entry.workflowEvents.length || typeof entry.rendered !== "string") return null;
+  return buildWorkflowFlow(entry.workflowEvents, entry.rendered, { settled: !entry.aiStreaming });
 });
 
-/** 将已渲染正文按 answer 段切分，返回多个气泡文本。最后一段允许与 entry.rendered 存在 citation 解析差异。 */
-function splitBySegments(rendered: string, segs: string[]): string[] {
-  const out: string[] = [];
-  let remaining = rendered;
-  for (let i = 0; i < segs.length; i++) {
-    const seg = segs[i]!;
-    if (remaining.startsWith(seg)) {
-      out.push(seg);
-      remaining = remaining.slice(seg.length);
-    } else if (i === segs.length - 1) {
-      // 末段可能经过了 citation/链接解析，正文长度与原始段不同，直接用剩余正文
-      out.push(remaining || seg);
-      remaining = "";
-    } else {
-      // 中间段对不上：回退到直接展示各段原文
-      return segs;
-    }
-  }
-  if (remaining) out.push(remaining);
-  return out;
-}
+/** 最后一个文字块的下标：「(已编辑)」挂在它上面 */
+const lastTextIndex = computed(() => {
+  const blocks = flowBlocks.value ?? [];
+  for (let i = blocks.length - 1; i >= 0; i--) if (blocks[i]!.type === "text") return i;
+  return -1;
+});
 
-const messageSegments = computed((): string[] | null => {
-  const steps = answerSegmentSteps.value;
-  if (steps.length <= 1) return null;
-  const rendered = typeof props.entry.rendered === "string" ? props.entry.rendered : "";
-  const content = typeof props.entry.msg.content === "string" ? props.entry.msg.content : "";
-  // 流式中或打字机动画进行中：当前展示文本短于最终 content，暂时不拆分
-  if (
-    props.entry.aiStreaming &&
-    (!rendered || !content || rendered.length < content.length)
-  ) {
-    return null;
-  }
-  const segs = steps.map((s) => s.text);
-  return splitBySegments(rendered, segs);
+/** 生成中但此刻既没有在写的气泡、也没有在跑的步骤（工具刚结束、下一轮还没出字）：补一个「正在输入」 */
+const flowWaiting = computed(() => {
+  const blocks = flowBlocks.value;
+  if (!blocks || !props.entry.aiStreaming) return false;
+  const last = blocks[blocks.length - 1];
+  if (!last) return true;
+  if (last.type === "text") return false;
+  return !last.steps.some((s) => s.status === "running");
 });
 </script>
 
@@ -148,27 +123,34 @@ const messageSegments = computed((): string[] | null => {
       <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__msg-avatar-img" draggable="false" />
     </div>
     <div class="ik-knock__msg-body">
-      <!-- 3.3 AI 工作流摘要卡：可展开查看步骤标题，不暴露 reasoning / tool 详情 -->
-      <AiReasoningBlock
-        v-if="entry.aiRich && (entry.aiStreaming || entry.workflowEvents.length > 0)"
-        :msg="entry.msg"
-        :streaming="entry.aiStreaming"
-        :has-answer-content="!!entry.msg.content?.trim()"
-      />
-      <template v-if="messageSegments && messageSegments.length">
-        <div
-          v-for="(seg, segIdx) in messageSegments"
-          :key="segIdx"
-          class="ik-knock__msg-bubble"
-          :class="{ 'is-deleted': !!entry.msg.deletedAt }"
-          :title="fullTime || undefined"
-        >
-          <AiMessageBody
-            :text="seg"
-            :streaming="entry.aiStreaming && segIdx === messageSegments.length - 1"
+      <!-- 3.3 AI 回复：过程步骤与回答气泡按发生顺序穿插（思考原文、工具参数不下发，只展示骨架） -->
+      <template v-if="flowBlocks">
+        <template v-for="(block, blockIdx) in flowBlocks" :key="block.key">
+          <AiStepGroup
+            v-if="block.type === 'steps'"
+            :steps="block.steps"
+            :settled="!entry.aiStreaming"
             @open-post="emit('open-post', $event)"
           />
-          <span v-if="segIdx === messageSegments.length - 1 && entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
+          <div
+            v-else
+            class="ik-knock__msg-bubble"
+            :title="fullTime || undefined"
+          >
+            <AiMessageBody
+              :text="block.text"
+              :streaming="block.live"
+              @open-post="emit('open-post', $event)"
+            />
+            <span v-if="blockIdx === lastTextIndex && entry.msg.editedAt" class="ik-knock__msg-edited">(已编辑)</span>
+          </div>
+        </template>
+        <div v-if="flowWaiting" class="ik-knock__msg-bubble">
+          <span class="ik-knock__msg-typing" aria-label="正在输入">
+            <span class="ik-knock__typing-dot" />
+            <span class="ik-knock__typing-dot" />
+            <span class="ik-knock__typing-dot" />
+          </span>
         </div>
       </template>
       <div
