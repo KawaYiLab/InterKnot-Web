@@ -59,7 +59,12 @@ const TOOL_TITLES: Record<string, string> = {
   get_user_activity: "查询绳网用户动态",
 };
 
-function toolTitle(tool: string): string {
+/**
+ * 时间线文案：优先用后端随事件下发的 `title`（剧情库与站外 MCP 工具，管理后台可改），
+ * 其次查本地文案表，最后回落到工具名。
+ */
+function toolTitle(tool: string, title?: unknown): string {
+  if (typeof title === "string" && title.trim()) return title.trim().slice(0, 32);
   return TOOL_TITLES[tool] ?? `使用 ${tool} 工具`;
 }
 
@@ -171,7 +176,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         const s = upsert(ev.stepId, {
           kind: "tool",
           status: "running",
-          title: toolTitle(tool),
+          title: toolTitle(tool, d.title),
         });
         if (ts != null) touchTimestamp(s, ts);
         break;
@@ -181,7 +186,7 @@ export function buildWorkflowSteps(events: AiWorkflowEvent[]): WorkflowStepView[
         const s = upsert(ev.stepId, {
           kind: "tool",
           status: "done",
-          title: toolTitle(tool),
+          title: toolTitle(tool, d.title),
         });
         s.status = "done";
         if (typeof d.ms === "number") s.durationMs = d.ms;
