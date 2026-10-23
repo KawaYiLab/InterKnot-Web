@@ -112,6 +112,7 @@ interface MessageDto {
   editedAt?: string | null;
   withdrawnAt?: string | null;
   replyTo?: { id: string; senderId?: string | null; content?: string | null; withdrawn: boolean } | null;
+  images?: { id: string; url: string; width?: number | null; height?: number | null }[];
   ai?: { state: string; modelKey?: string | null; workflow?: AiWorkflowEvent[] | null } | null;
 }
 
@@ -175,7 +176,7 @@ interface UseDmConversations {
 
   sendMessage: (
     conversationId: string,
-    payload: { content: string; kind?: DmMessageKind; replyTo?: string },
+    payload: { content: string; kind?: DmMessageKind; replyTo?: string; imageIds?: string[] },
   ) => Promise<DmMessage>;
   editMessage: (
     conversationId: string,
@@ -465,6 +466,14 @@ export function useDmConversations(): UseDmConversations {
           senderUserId: m.replyTo.senderId ?? null,
         }
       : null,
+    images: m.withdrawnAt
+      ? []
+      : (m.images ?? []).map((i) => ({
+          documentId: i.id,
+          url: i.url,
+          width: i.width ?? undefined,
+          height: i.height ?? undefined,
+        })),
     workflow: m.ai?.workflow ?? null,
     aiModelKey: m.ai?.modelKey ?? null,
   });
@@ -916,7 +925,7 @@ export function useDmConversations(): UseDmConversations {
 
   async function sendMessage(
     conversationId: string,
-    payload: { content: string; kind?: DmMessageKind; replyTo?: string },
+    payload: { content: string; kind?: DmMessageKind; replyTo?: string; imageIds?: string[] },
   ): Promise<DmMessage> {
     // pseudo 会话拦截：
     //  - pseudo:user:N → lazy 实质化为真私聊会话
@@ -939,6 +948,7 @@ export function useDmConversations(): UseDmConversations {
           // 服务端按 clientId 去重：网络重试不会发出两条
           clientId: crypto.randomUUID(),
           ...(payload.replyTo ? { replyToId: payload.replyTo } : {}),
+          ...(payload.imageIds?.length ? { imageIds: payload.imageIds } : {}),
         },
       },
     );
@@ -960,7 +970,7 @@ export function useDmConversations(): UseDmConversations {
     patchConversation(actualId, {
       lastMessage: {
         documentId: created.documentId,
-        content: created.content ?? "",
+        content: created.content || (created.images?.length ? "[图片]" : ""),
         createdAt: created.createdAt,
         kind: created.kind,
         senderUserId: created.sender?.userId ?? null,
@@ -1005,7 +1015,7 @@ export function useDmConversations(): UseDmConversations {
       const deletedAt = raw?.withdrawnAt ?? new Date().toISOString();
       patchMessageState(conversationId, {
         items: bucket.items.map((m) =>
-          m.documentId === messageId ? { ...m, deletedAt, content: null } : m,
+          m.documentId === messageId ? { ...m, deletedAt, content: null, images: [] } : m,
         ),
       });
     }

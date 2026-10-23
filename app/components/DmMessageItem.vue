@@ -6,6 +6,7 @@ import type { EnrichedMessage } from "~/utils/dm-view";
 import { hasBubbleLinks, parseBubbleSegments } from "~/utils/dm-view";
 import { buildWorkflowFlow, type WorkflowFlowBlock } from "~/utils/workflow";
 import { formatTime, formatFullTime } from "~/utils/time";
+import { toCanonicalUrl, toThumbUrl } from "~/utils/image";
 
 /**
  * 单条 DM 消息（Phase 4 拆分自 KnockKnockModal）：
@@ -35,6 +36,26 @@ const emit = defineEmits<{
   (e: "regenerate", msg: DmMessage): void;
   (e: "quote-click", msg: DmMessage): void;
 }>();
+
+const { openGallery } = useLightGallery();
+
+/** 附图（撤回后不显示） */
+const images = computed(() => (props.entry.msg.deletedAt ? [] : (props.entry.msg.images ?? [])));
+/** 只发了图没写字：不渲染空的文字气泡 */
+const imageOnly = computed(
+  () => images.value.length > 0 && typeof props.entry.rendered === "string" && !props.entry.rendered.trim(),
+);
+const openImages = (index: number) => {
+  openGallery(
+    images.value.map((image) => ({
+      src: toCanonicalUrl(image.url),
+      thumb: toThumbUrl(image.url),
+      width: image.width,
+      height: image.height,
+    })),
+    index,
+  );
+};
 
 /** 消息时间 hover 详情：气泡 title 显示完整时间戳 */
 const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
@@ -153,8 +174,25 @@ const flowWaiting = computed(() => {
           </span>
         </div>
       </template>
+      <div v-if="images.length" class="ik-knock__msg-images">
+        <button
+          v-for="(image, imageIndex) in images"
+          :key="`${entry.msg.documentId}-image-${imageIndex}`"
+          type="button"
+          class="ik-knock__msg-image"
+          @click="openImages(imageIndex)"
+        >
+          <img
+            :src="toThumbUrl(image.url)"
+            alt="图片"
+            class="ik-knock__msg-image-thumb"
+            decoding="async"
+            referrerpolicy="no-referrer"
+          />
+        </button>
+      </div>
       <div
-        v-else
+        v-if="!flowBlocks && !imageOnly"
         class="ik-knock__msg-bubble"
         :class="{ 'is-deleted': !!entry.msg.deletedAt }"
         :title="fullTime || undefined"
@@ -268,6 +306,40 @@ const flowWaiting = computed(() => {
 </template>
 
 <style scoped>
+/* 附图：气泡上方的缩略图网格，点开看大图 */
+.ik-knock__msg-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 330px;
+}
+
+/* 自己发的：与右侧气泡对齐 */
+.ik-knock__msg.is-mine .ik-knock__msg-images {
+  align-self: flex-end;
+  justify-content: flex-end;
+}
+
+.ik-knock__msg-image {
+  display: block;
+  flex: 0 0 auto;
+  width: 104px;
+  height: 104px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: zoom-in;
+}
+
+.ik-knock__msg-image-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 /* system 分界提示（如「对话已重置」3.3.4） */
 .ik-knock__sys-divider {
   display: flex;

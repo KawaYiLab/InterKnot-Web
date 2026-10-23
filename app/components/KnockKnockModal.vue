@@ -112,8 +112,14 @@ const selfUserId = computed<string | null>(() => {
   return id != null && id !== "" ? String(id) : null;
 });
 
-/** 弹窗打开时加载内容；关闭只清选中，登录级 WS 继续更新全站未读。 */
-watch(visible, async (next) => {
+/**
+ * 弹窗打开时加载内容；关闭只清选中，登录级 WS 继续更新全站未读。
+ *
+ * 本组件是懒加载的（app.vue 的 LazyKnockKnockModal）：直达 /knock 或带 ik_knock 的链接时，
+ * open() 可能早于本组件 setup，visible 一出生就是 true，watch 不会触发——
+ * 所以 onMounted 里还要补一次（见下方），否则列表永远停在「加载中…」。
+ */
+const onVisibleChange = async (next: boolean) => {
   if (!next) {
     const closingId = activeConversationId.value;
     if (closingId) {
@@ -166,6 +172,11 @@ watch(visible, async (next) => {
     activeTab.value = "calls";
     await openCallsTab();
   }
+};
+watch(visible, onVisibleChange);
+onMounted(() => {
+  // 挂载前就已经打开（直达链接）：补跑打开流程
+  if (visible.value) void onVisibleChange(true);
 });
 
 /** 官方 AI 绑定的 userId（私聊 Tab 中隐藏，仅在「通话」展示） */
@@ -285,6 +296,8 @@ const isActiveAiConversation = computed<boolean>(() => {
   const uid = conv.peer?.userId;
   return conv.peer?.isAiAgent === true || (typeof uid === "string" && aiPeerUserIds.value.has(uid));
 });
+/** 私信附图（真人私聊与 AI 会话都能发） */
+const dmImages = useDmImages();
 
 /** 当前选中的 AI 角色卡（从 slug 或当前会话反推） */
 const activeAiCard = computed<AiRoleCard | null>(() => {
@@ -967,6 +980,8 @@ const scrollToBottom = (el: HTMLElement) => {
 
 /** 选中会话时：懒加载消息 → 批量 mark-read → 滚到最新消息 */
 watch(activeConversationId, async (id, oldId) => {
+  // 附图跟着会话走：切会话就丢弃
+  if (id !== oldId) dmImages.clear();
   if (oldId) {
     clearTyping(oldId);
   }
@@ -1336,7 +1351,9 @@ const doSend = async () => {
   if (!cid) return;
   const editingId = editingMessageId.value;
   const newContent = (editingId ? editingDraft.value : draft.value).trim();
-  if (!newContent) return;
+  const imageIds = editingId ? [] : [...dmImages.imageIds.value];
+  if (!editingId && dmImages.uploading.value) return;
+  if (!newContent && !imageIds.length) return;
 
   sending.value = true;
   sendError.value = null;
@@ -1346,10 +1363,11 @@ const doSend = async () => {
       // 仅当用户还在原编辑态时才清理，避免 race 时把别人的编辑态清掉
       if (editingMessageId.value === editingId) cancelEdit();
     } else {
-      await sendMessage(cid, { content: newContent });
+      await sendMessage(cid, { content: newContent, imageIds });
       // 同样：仅当用户还在原会话时才清 draft
       if (activeConversationId.value === cid) {
         draft.value = "";
+        dmImages.clear();
         nextTick(() => {
           const el = messagesRef.value;
           if (el) scrollToBottom(el);
@@ -1448,6 +1466,8 @@ const onKeyDown = (e: KeyboardEvent) => {
   // 如果有更上层的弹窗（如委托详情 overlay）处于打开状态，不关闭敲敲
   // 敲敲自身也是 .ik-overlay，所以检查数量 > 1
   if (document.querySelectorAll(".ik-overlay").length > 1) return;
+  // 图片弹窗自己处理 ESC
+  if (dmImages.showPicker.value) return;
   if (contextMenuMessageId.value) {
     hideContextMenu();
     return;
@@ -1969,7 +1989,13 @@ const handleMobileBack = () => {
                       :streaming="!!activeStreamingMessageId"
                       :stopping="stoppingAi"
                       :suggestions="isActiveAiConversation && !hasActiveConversationMessages ? activeAiSuggestions : undefined"
+                      can-attach
+                      :attachments="dmImages.tasks.value"
                       @send="doSend"
+                      @open-picker="dmImages.openPicker"
+                      @attach="dmImages.add"
+                      @remove-attachment="dmImages.remove"
+                      @retry-attachment="dmImages.retry"
                       @stop="handleStopAi"
                       @cancel-edit="cancelEdit"
                       @typing="handleComposerTyping"
@@ -1982,6 +2008,21 @@ const handleMobileBack = () => {
           </div>
         </div>
       </div>
+    </Transition>
+  </Teleport>
+
+  <!-- AI 私信附图：与评论同一个图片弹窗（上传新图 / 从我的图库挑），层级高于敲敲 -->
+  <Teleport to="body">
+    <Transition name="ik-overlay" appear>
+      <PostImagePickerModal
+        v-if="dmImages.showPicker.value"
+        :existing-ids="dmImages.existingIds.value"
+        :remaining="dmImages.remaining.value"
+        @close="dmImages.showPicker.value = false"
+        @upload="dmImages.add"
+        @select="dmImages.select"
+        @delete="dmImages.removeByServerId($event.documentId)"
+      />
     </Transition>
   </Teleport>
 
