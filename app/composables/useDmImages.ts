@@ -12,9 +12,8 @@ const revoke = (url: string) => {
 };
 
 /**
- * AI 私信的附图：和评论一样走图片弹窗（PostImagePickerModal）——上传新图或从「我的图库」里挑；
- * 粘贴截图直接上传。发送时带上媒体 id。
- * 只有 AI 会话能发图（真人私信不支持图片），由调用方决定是否展示入口。
+ * 私信附图：和评论一样走图片弹窗（PostImagePickerModal）——上传新图或从「我的图库」里挑；
+ * 粘贴截图直接上传。发送时带上媒体 id。真人私聊与 AI 会话都能发；匿名 / 系统通知会话没有输入框。
  */
 export function useDmImages() {
   const api = useApi();

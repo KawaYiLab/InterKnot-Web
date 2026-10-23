@@ -23,7 +23,7 @@ const props = defineProps<{
   stopping: boolean;
   /** AI 会话示例问题（空时不显示） */
   suggestions?: string[];
-  /** 可以附图（只有 AI 会话）：显示附图按钮，支持粘贴图片 */
+  /** 可以附图：显示附图按钮，支持粘贴图片 */
   canAttach?: boolean;
   /** 已选的附图（上传中 / 已上传 / 失败） */
   attachments?: UploadTask[];

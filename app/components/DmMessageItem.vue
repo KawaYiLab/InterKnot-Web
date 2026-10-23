@@ -39,7 +39,7 @@ const emit = defineEmits<{
 
 const { openGallery } = useLightGallery();
 
-/** 附图（AI 会话里用户发的图；撤回后不显示） */
+/** 附图（撤回后不显示） */
 const images = computed(() => (props.entry.msg.deletedAt ? [] : (props.entry.msg.images ?? [])));
 /** 只发了图没写字：不渲染空的文字气泡 */
 const imageOnly = computed(

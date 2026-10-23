@@ -697,7 +697,7 @@ export interface DmMessage {
   deletedAt: string | null;
   sender: DmMessageSender | null;
   replyTo: DmMessageReplyTo | null;
-  /** 附图（只有 AI 会话里有；撤回后为空） */
+  /** 附图（撤回后为空） */
   images?: CoverImage[];
   /** AI 工作流事件序列（3.1）：仅 AI 流式回复定稿后非空，用于回放时间线 */
   workflow?: AiWorkflowEvent[] | null;

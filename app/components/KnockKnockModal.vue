@@ -285,7 +285,7 @@ const isActiveAiConversation = computed<boolean>(() => {
   const uid = conv.peer?.userId;
   return conv.peer?.isAiAgent === true || (typeof uid === "string" && aiPeerUserIds.value.has(uid));
 });
-/** AI 会话的附图（真人私信不支持图片） */
+/** 私信附图（真人私聊与 AI 会话都能发） */
 const dmImages = useDmImages();
 
 /** 当前选中的 AI 角色卡（从 slug 或当前会话反推） */
@@ -1340,7 +1340,7 @@ const doSend = async () => {
   if (!cid) return;
   const editingId = editingMessageId.value;
   const newContent = (editingId ? editingDraft.value : draft.value).trim();
-  const imageIds = editingId || !isActiveAiConversation.value ? [] : [...dmImages.imageIds.value];
+  const imageIds = editingId ? [] : [...dmImages.imageIds.value];
   if (!editingId && dmImages.uploading.value) return;
   if (!newContent && !imageIds.length) return;
 
@@ -1978,7 +1978,7 @@ const handleMobileBack = () => {
                       :streaming="!!activeStreamingMessageId"
                       :stopping="stoppingAi"
                       :suggestions="isActiveAiConversation && !hasActiveConversationMessages ? activeAiSuggestions : undefined"
-                      :can-attach="isActiveAiConversation"
+                      can-attach
                       :attachments="dmImages.tasks.value"
                       @send="doSend"
                       @open-picker="dmImages.openPicker"
