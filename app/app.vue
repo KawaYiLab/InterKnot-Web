@@ -231,17 +231,11 @@ const overlayOpen = computed(
   z-index: -9999 !important;
 }
 
-/* 全局实例的字号密度：桌面 ≈ 原来的 640px@1080p（1080 / (2.3 × .746) ≈ 640），
-   手机 ≈ 原来的 360px@844h。几何（band 尺寸、字号）全部由组件的 cq 单位推导，
-   这里只覆盖「每屏几行」这一个参数，避免再把整套魔数复制一份。 */
-.ik-global-marquee {
-  --ik-marquee-rows: 2.3 !important;
-}
-
-@media (max-width: 1024px) {
-  .ik-global-marquee {
-    --ik-marquee-rows: 3.15 !important;
-  }
+/* 全局实例：任何宽度都用大号预设（组件默认只在移动端用大号）。
+   叠加 .ik-zzz-marquee 提高优先级，稳压组件自身 scoped 的变量声明。 */
+.ik-global-marquee.ik-zzz-marquee {
+  --ik-marquee-band: 260%;
+  --ik-marquee-font: clamp(360px, 48vw, 640px);
 }
 
 </style>
