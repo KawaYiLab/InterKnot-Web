@@ -308,20 +308,23 @@ const flowWaiting = computed(() => {
 <style scoped>
 /* 附图：气泡上方的缩略图网格，点开看大图 */
 .ik-knock__msg-images {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  width: min(100%, 320px);
+  max-width: 330px;
 }
 
+/* 自己发的：与右侧气泡对齐 */
 .ik-knock__msg.is-mine .ik-knock__msg-images {
   align-self: flex-end;
+  justify-content: flex-end;
 }
 
 .ik-knock__msg-image {
   display: block;
-  width: 100%;
-  aspect-ratio: 1 / 1;
+  flex: 0 0 auto;
+  width: 104px;
+  height: 104px;
   padding: 0;
   border: 0;
   border-radius: 10px;
