@@ -7,7 +7,8 @@ import { watch, onScopeDispose, type Ref } from "vue";
  *
  * - 仅客户端运行；SSR 时是 no-op。连接由 plugins/realtime.client.ts 维持。
  * - 新帖事件带 categoryId，按当前频道过滤；顶帖事件不带分区，交给 load 时的列表接口过滤。
- * - 自己发的帖、自己顶起的帖由列表卡片的 bumpedBySelf 排除（见 useArticleFeedUpdates）。
+ * - 自己发的帖、自己顶起的帖：服务端广播时不推给操作者本人；轮询对账路径由列表卡片的 bumpedBySelf 排除
+ *   （见 useArticleFeedUpdates）。
  */
 export function useArticleFeedStream(opts: {
   /** 是否接收（首页最新 / 热门 / 未看无搜索时为 true）。 */
