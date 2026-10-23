@@ -1455,6 +1455,8 @@ const onKeyDown = (e: KeyboardEvent) => {
   // 如果有更上层的弹窗（如委托详情 overlay）处于打开状态，不关闭敲敲
   // 敲敲自身也是 .ik-overlay，所以检查数量 > 1
   if (document.querySelectorAll(".ik-overlay").length > 1) return;
+  // 图片弹窗自己处理 ESC
+  if (dmImages.showPicker.value) return;
   if (contextMenuMessageId.value) {
     hideContextMenu();
     return;
@@ -1979,6 +1981,7 @@ const handleMobileBack = () => {
                       :can-attach="isActiveAiConversation"
                       :attachments="dmImages.tasks.value"
                       @send="doSend"
+                      @open-picker="dmImages.openPicker"
                       @attach="dmImages.add"
                       @remove-attachment="dmImages.remove"
                       @retry-attachment="dmImages.retry"
@@ -1994,6 +1997,21 @@ const handleMobileBack = () => {
           </div>
         </div>
       </div>
+    </Transition>
+  </Teleport>
+
+  <!-- AI 私信附图：与评论同一个图片弹窗（上传新图 / 从我的图库挑），层级高于敲敲 -->
+  <Teleport to="body">
+    <Transition name="ik-overlay" appear>
+      <PostImagePickerModal
+        v-if="dmImages.showPicker.value"
+        :existing-ids="dmImages.existingIds.value"
+        :remaining="dmImages.remaining.value"
+        @close="dmImages.showPicker.value = false"
+        @upload="dmImages.add"
+        @select="dmImages.select"
+        @delete="dmImages.removeByServerId($event.documentId)"
+      />
     </Transition>
   </Teleport>
 

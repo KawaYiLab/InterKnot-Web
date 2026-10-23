@@ -37,7 +37,9 @@ const emit = defineEmits<{
   (e: "typing"): void;
   /** 点击示例问题区的刷新按钮 */
   (e: "refresh-suggestions"): void;
-  /** 选了 / 粘贴了图片 */
+  /** 点附图按钮：打开图片弹窗（上传 / 我的图库） */
+  (e: "open-picker"): void;
+  /** 粘贴了图片 */
   (e: "attach", files: File[]): void;
   (e: "remove-attachment", index: number): void;
   (e: "retry-attachment", index: number): void;
@@ -88,14 +90,6 @@ const sendDisabled = computed(
 );
 
 const showAttach = computed(() => !!props.canAttach && !props.editing);
-const fileInputRef = ref<HTMLInputElement | null>(null);
-
-const onFilesPicked = (e: Event) => {
-  const input = e.target as HTMLInputElement;
-  const files = Array.from(input.files ?? []);
-  input.value = "";
-  if (files.length) emit("attach", files);
-};
 
 /** 粘贴截图直接附图（只在可附图时拦截，文字照常粘贴） */
 const onComposerPaste = (e: ClipboardEvent) => {
@@ -236,26 +230,17 @@ defineExpose({
       class="ik-knock__composer-row"
       :class="{ 'is-disabled': disabled }"
     >
-      <template v-if="showAttach">
-        <button
-          type="button"
-          class="ik-knock__composer-attach"
-          :disabled="disabled"
-          aria-label="添加图片"
-          title="添加图片"
-          @click="fileInputRef?.click()"
-        >
-          <PhotoIcon class="ik-knock__composer-send-icon" aria-hidden="true" />
-        </button>
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
-          multiple
-          hidden
-          @change="onFilesPicked"
-        >
-      </template>
+      <button
+        v-if="showAttach"
+        type="button"
+        class="ik-knock__composer-attach"
+        :disabled="disabled"
+        aria-label="添加图片"
+        title="添加图片"
+        @click="emit('open-picker')"
+      >
+        <PhotoIcon class="ik-knock__composer-send-icon" aria-hidden="true" />
+      </button>
       <textarea
         v-if="editing"
         ref="composerRef"
