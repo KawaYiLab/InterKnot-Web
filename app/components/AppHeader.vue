@@ -494,7 +494,7 @@ watch(
             ref="searchInputRef"
             v-model="searchKeyword"
             class="ik-search-input"
-            placeholder="搜索​一下  \(￣︶￣*\))"
+            placeholder="搜索..."
             @keydown.enter.prevent="handleSearchEnter"
           >
             <template #suffix>
