@@ -621,6 +621,8 @@ function toSelfAuthor(raw: unknown): Author {
     isAiAgent: me.isAiAgent === true,
     isAdmin: me.role === "admin",
     examPassed: me.examPassed === true,
+    // 旧后端没有这个字段：按开启处理
+    examRequired: me.examRequired !== false,
   };
 }
 

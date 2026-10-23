@@ -219,9 +219,11 @@ const submit = async () => {
       form.password.trim(),
     );
     await onLoginSuccess(registerRes);
-    // 新注册用户需通过入站考试才能发布委托/评论，注册成功后直接引导去考试页
-    message.success("注册成功！通过入站考试即可解锁发帖和评论");
-    await navigateTo("/exam");
+    // 新注册用户需通过入站考试才能发布委托/评论，注册成功后直接引导去考试页（站点关闭入站考试时不需要）
+    if (auth.needExam) {
+      message.success("注册成功！通过入站考试即可解锁发帖和评论");
+      await navigateTo("/exam");
+    }
   } catch (err) {
     const label = isReset.value ? "重置失败" : isRegister.value ? "注册失败" : "登录失败";
     message.error(resolveErrorMessage(err, label));
