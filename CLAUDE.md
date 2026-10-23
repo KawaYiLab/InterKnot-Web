@@ -1,5 +1,3 @@
-Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.
-
 <!-- graphify-rules-start (managed by `graphify init`) -->
 ## Use Graphify before grep
 
@@ -13,3 +11,6 @@ This repository is indexed by Graphify: a code graph over its call, dependency, 
 
 Fall back to grep or file reads only for what the graph does not model: literal string or comment matches, non-indexed files, or reading a file you have already located. If no Graphify tools are listed, check the MCP server connection.
 <!-- graphify-rules-end -->
+
+Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.
+
