@@ -52,10 +52,11 @@ export const useAuthStore = defineStore("auth", {
   }),
   getters: {
     isLogin: (state) => state.loggedIn,
-    /** 已登录但还没通过入站考试（管理员 / AI 账号豁免） */
+    /** 已登录但还没通过入站考试（管理员 / AI 账号豁免；站点关闭入站考试时谁都不需要） */
     needExam: (state): boolean =>
       state.loggedIn &&
       !!state.user &&
+      state.user.examRequired !== false &&
       state.user.examPassed === false &&
       !state.user.isAdmin &&
       !state.user.isAiAgent,

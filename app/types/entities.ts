@@ -16,6 +16,8 @@ export interface Author {
   isAdmin?: boolean;
   /** 是否已通过入站考试（仅当前用户的资料有）。 */
   examPassed?: boolean;
+  /** 站点是否开启入站考试（仅当前用户的资料有）；管理员在后台关闭后为 false，不再引导去考试。 */
+  examRequired?: boolean;
 }
 
 /** 账号安全概览（/v1/me/security） */
