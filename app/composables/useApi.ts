@@ -1018,6 +1018,7 @@ export function useApi() {
   /**
    * 实时事件提到的帖子的最新卡片（「有 N 条新内容」）。新帖和被顶起的帖都排在最新流前面，
    * 所以从最新流第一页往后找，最多翻几页；找不到的（已删除 / 被拉黑过滤）就不出现。
+   * 置顶帖只出现在第一页的 `pinned` 里（`items` 不含），也要一起找，否则被顶起的置顶帖会被当成已删除移出列表。
    */
   const getArticleUpdates = async (ids: string[], category = ""): Promise<Post[]> => {
     const wanted = new Set(ids.filter(Boolean));
@@ -1027,14 +1028,14 @@ export function useApi() {
     const found = new Map<string, Post>();
     let cursor = "";
     for (let pageNo = 0; pageNo < 4 && found.size < wanted.size; pageNo += 1) {
-      const res = await $api<CursorPage<Rec>>("/v1/posts", {
+      const res = await $api<CursorPage<Rec> & { pinned?: Rec[] }>("/v1/posts", {
         query: {
           limit: "50",
           ...(category ? { category } : {}),
           ...(cursor ? { cursor } : {}),
         },
       });
-      for (const raw of res.items) {
+      for (const raw of [...(res.pinned ?? []), ...res.items]) {
         const post = toPost(raw);
         if (wanted.has(post.id)) found.set(post.id, post);
       }
