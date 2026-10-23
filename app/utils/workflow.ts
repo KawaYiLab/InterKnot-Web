@@ -297,10 +297,13 @@ export type WorkflowFlowBlock =
 
 /**
  * 把回答分段对齐到已渲染正文上：分段是后端逐段清洗过的原文，正文是整体清洗、可能还在增长的累计文本。
- * 逐段在正文里按序定位（跳过段间空白）；正文只露出某段的前缀时（流式 / 打字机），这段取已露出的部分并停下。
- * 返回各段对应的正文和剩余未匹配的尾巴；中途对不上返回 null。
+ * 逐段在正文里按序定位（跳过段间空白与分割线：后端在报告边界切段时把 `---` 吞掉了，正文里还留着）。
+ * 生成中某段对不上（正文只露出它的前缀，或节流推送的正文落后、未闭合的 markdown 还没被清洗），
+ * 露出的部分先接在这里并停下，等正文追上；回复结束后中途对不上返回 null。
+ * 返回各段对应的正文和剩余未匹配的尾巴。
  */
 const LEADING_RULES = /^(?:[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*(?:\n|$)|\s*\n)+/;
+const PART_GAP = /^(?:\s|(?:-{3,}|\*{3,}|_{3,})[ \t]*(?=\n|$))+/;
 /** 末尾的分割线必须前面有空行，否则 `文字\n---` 是 setext 二级标题，不能动 */
 const TRAILING_RULES = /(?:\n[ \t]*\n[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*)+\s*$/;
 
@@ -320,16 +323,16 @@ function alignParts(
   const texts: string[] = [];
   let cursor = 0;
   for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]!.trim();
-    while (cursor < rendered.length && /\s/.test(rendered[cursor]!)) cursor++;
+    const part = stripEdgeRules(parts[i]!);
+    cursor += PART_GAP.exec(rendered.slice(cursor))?.[0].length ?? 0;
     const rest = rendered.slice(cursor);
     if (rest.startsWith(part)) {
       texts.push(part);
       cursor += part.length;
       continue;
     }
-    if (!settled && part.startsWith(rest.trimEnd())) {
-      // 正文只露出这段的前缀：后面的段还没轮到
+    if (!settled) {
+      // 后面的段还没轮到
       if (rest.trim()) texts.push(rest.trimEnd());
       return { texts, rest: "", partial: true };
     }
