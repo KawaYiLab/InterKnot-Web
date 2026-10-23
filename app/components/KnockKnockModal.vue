@@ -112,8 +112,14 @@ const selfUserId = computed<string | null>(() => {
   return id != null && id !== "" ? String(id) : null;
 });
 
-/** 弹窗打开时加载内容；关闭只清选中，登录级 WS 继续更新全站未读。 */
-watch(visible, async (next) => {
+/**
+ * 弹窗打开时加载内容；关闭只清选中，登录级 WS 继续更新全站未读。
+ *
+ * 本组件是懒加载的（app.vue 的 LazyKnockKnockModal）：直达 /knock 或带 ik_knock 的链接时，
+ * open() 可能早于本组件 setup，visible 一出生就是 true，watch 不会触发——
+ * 所以 onMounted 里还要补一次（见下方），否则列表永远停在「加载中…」。
+ */
+const onVisibleChange = async (next: boolean) => {
   if (!next) {
     const closingId = activeConversationId.value;
     if (closingId) {
@@ -166,6 +172,11 @@ watch(visible, async (next) => {
     activeTab.value = "calls";
     await openCallsTab();
   }
+};
+watch(visible, onVisibleChange);
+onMounted(() => {
+  // 挂载前就已经打开（直达链接）：补跑打开流程
+  if (visible.value) void onVisibleChange(true);
 });
 
 /** 官方 AI 绑定的 userId（私聊 Tab 中隐藏，仅在「通话」展示） */
