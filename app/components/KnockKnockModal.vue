@@ -285,6 +285,8 @@ const isActiveAiConversation = computed<boolean>(() => {
   const uid = conv.peer?.userId;
   return conv.peer?.isAiAgent === true || (typeof uid === "string" && aiPeerUserIds.value.has(uid));
 });
+/** AI 会话的附图（真人私信不支持图片） */
+const dmImages = useDmImages();
 
 /** 当前选中的 AI 角色卡（从 slug 或当前会话反推） */
 const activeAiCard = computed<AiRoleCard | null>(() => {
@@ -967,6 +969,8 @@ const scrollToBottom = (el: HTMLElement) => {
 
 /** 选中会话时：懒加载消息 → 批量 mark-read → 滚到最新消息 */
 watch(activeConversationId, async (id, oldId) => {
+  // 附图跟着会话走：切会话就丢弃
+  if (id !== oldId) dmImages.clear();
   if (oldId) {
     clearTyping(oldId);
   }
@@ -1336,7 +1340,9 @@ const doSend = async () => {
   if (!cid) return;
   const editingId = editingMessageId.value;
   const newContent = (editingId ? editingDraft.value : draft.value).trim();
-  if (!newContent) return;
+  const imageIds = editingId || !isActiveAiConversation.value ? [] : [...dmImages.imageIds.value];
+  if (!editingId && dmImages.uploading.value) return;
+  if (!newContent && !imageIds.length) return;
 
   sending.value = true;
   sendError.value = null;
@@ -1346,10 +1352,11 @@ const doSend = async () => {
       // 仅当用户还在原编辑态时才清理，避免 race 时把别人的编辑态清掉
       if (editingMessageId.value === editingId) cancelEdit();
     } else {
-      await sendMessage(cid, { content: newContent });
+      await sendMessage(cid, { content: newContent, imageIds });
       // 同样：仅当用户还在原会话时才清 draft
       if (activeConversationId.value === cid) {
         draft.value = "";
+        dmImages.clear();
         nextTick(() => {
           const el = messagesRef.value;
           if (el) scrollToBottom(el);
@@ -1969,7 +1976,12 @@ const handleMobileBack = () => {
                       :streaming="!!activeStreamingMessageId"
                       :stopping="stoppingAi"
                       :suggestions="isActiveAiConversation && !hasActiveConversationMessages ? activeAiSuggestions : undefined"
+                      :can-attach="isActiveAiConversation"
+                      :attachments="dmImages.tasks.value"
                       @send="doSend"
+                      @attach="dmImages.add"
+                      @remove-attachment="dmImages.remove"
+                      @retry-attachment="dmImages.retry"
                       @stop="handleStopAi"
                       @cancel-edit="cancelEdit"
                       @typing="handleComposerTyping"
