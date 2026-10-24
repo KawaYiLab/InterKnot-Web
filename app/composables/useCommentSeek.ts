@@ -7,16 +7,13 @@ export interface UseCommentSeekOptions {
   comments: Ref<Comment[]>;
   commentsHasNext: Ref<boolean>;
   loadComments: () => Promise<void>;
+  /**
+   * 从某条评论所在的楼层重新加载时间线（GET comments?anchor=）。目标不在已加载的楼层里时
+   * 直接跳过去，不用一页页往后翻。
+   */
+  loadAround: (commentId: string) => Promise<void>;
   /** 评论 DOM 是否已渲染（如 PostOverlay 的 commentsVisible），未渲染则先等待 */
   commentsVisible?: Ref<boolean>;
-  /**
-   * 展开某条顶层评论的下一页回复，返回新增条数（0 = 到底）。
-   * 评论列表只内联前 3 条回复，目标回复可能还没加载，得靠它按需展开；
-   * 不传则退化为「只在已加载的回复里找」（老行为）。
-   */
-  loadMoreReplies?: (comment: Comment) => Promise<number>;
-  /** 一次 seek 里最多展开多少页回复，防止在回复几百条的帖子里无限翻 */
-  maxReplyExpands?: number;
 }
 
 export interface SeekOptions {
@@ -27,7 +24,7 @@ export interface SeekOptions {
 }
 
 /**
- * 评论区目标定位 composable：按评论 id 逐页加载，找到后滚动并高亮。
+ * 评论区目标定位 composable：目标已加载就直接滚过去，否则从目标所在楼层重新加载，找到后滚动并高亮。
  * 用于 PostOverlay 与 post/[id].vue 共享同一套「定位目标评论」逻辑。
  */
 export function useCommentSeek({
@@ -35,84 +32,19 @@ export function useCommentSeek({
   comments,
   commentsHasNext,
   loadComments,
+  loadAround,
   commentsVisible,
-  loadMoreReplies,
-  maxReplyExpands = 8,
 }: UseCommentSeekOptions) {
   const targetFound = ref(false);
   const seeking = ref(false);
-  // 标记已检查过的顶层评论数量，避免每次 findComment 都全量扫描
-  const checkedTopLevelCount = ref(0);
-  // 本次 seek 已展开的回复页数，以及各条顶层评论各自展开了几页 / 哪些已经翻到底
-  let replyExpands = 0;
-  const expandedPages = new Map<string, number>();
-  const exhaustedParents = new Set<string>();
-
   const currentTargetId = ref<string | null>(null);
   const shouldHighlight = ref(true);
 
-  const findComment = (id: string, list: Comment[]): boolean => {
-    if (list.length < checkedTopLevelCount.value) {
-      // 评论列表被重置，需要重新扫描
-      checkedTopLevelCount.value = 0;
-    }
-    for (let i = checkedTopLevelCount.value; i < list.length; i++) {
-      const c = list[i]!;
-      if (c.id === id) return true;
-      if (c.replies?.some((r) => r.id === id)) return true;
-    }
-    checkedTopLevelCount.value = list.length;
-    return false;
-  };
+  const isLoaded = (id: string) => comments.value.some((c) => c.id === id);
 
   const highlightedCommentId = computed(() =>
     targetFound.value && shouldHighlight.value ? (currentTargetId.value ?? targetCommentId.value) : null,
   );
-
-  /**
-   * 挑一条最值得展开回复的顶层评论：已展开页数最少的优先（回复很多的那条不该独吞预算），
-   * 同等页数时按列表顺序 —— 评论列表是 desc，从通知点进来的目标多半靠前。
-   */
-  const pickExpandCandidate = (): Comment | undefined => {
-    let best: Comment | undefined;
-    let bestPages = Number.POSITIVE_INFINITY;
-    for (const comment of comments.value) {
-      if (comment.repliesHasMore !== true || exhaustedParents.has(comment.id)) continue;
-      const pages = expandedPages.get(comment.id) ?? 0;
-      if (pages < bestPages) {
-        best = comment;
-        bestPages = pages;
-        if (pages === 0) break;
-      }
-    }
-    return best;
-  };
-
-  /**
-   * 展开一页回复。返回 true 表示花掉了一次展开机会（值得回到 findComment 复查），
-   * false 表示没有可展开的评论或预算已用尽 —— 外层循环靠预算封顶，不会无限展开。
-   * 一次只翻一页：目标往往就在第一页里，没必要把整棵回复树拉完。
-   */
-  const expandOneRepliesPage = async (): Promise<boolean> => {
-    if (!loadMoreReplies || replyExpands >= maxReplyExpands) return false;
-    const comment = pickExpandCandidate();
-    if (!comment) return false;
-    replyExpands += 1;
-    expandedPages.set(comment.id, (expandedPages.get(comment.id) ?? 0) + 1);
-    let added = 0;
-    try {
-      added = await loadMoreReplies(comment);
-    } catch {
-      // 展开失败不该让整个定位流程报错；标记为到底，避免对同一条反复重试
-    }
-    if (!added) {
-      exhaustedParents.add(comment.id);
-      return true;
-    }
-    // 新回复 append 在已扫过的评论里，增量扫描会漏掉，这里强制下一轮全量重扫
-    checkedTopLevelCount.value = 0;
-    return true;
-  };
 
   const scrollToTarget = async (targetId: string, behavior: ScrollBehavior = "smooth") => {
     if (!targetId || !targetFound.value) return;
@@ -159,41 +91,20 @@ export function useCommentSeek({
     const scrollBehavior = options?.behavior ?? "smooth";
     if (!effectiveTargetId) {
       targetFound.value = false;
-      checkedTopLevelCount.value = 0;
       await loadComments();
       return false;
     }
     if (seeking.value) return false;
     seeking.value = true;
     targetFound.value = false;
-    checkedTopLevelCount.value = 0;
-    replyExpands = 0;
-    expandedPages.clear();
-    exhaustedParents.clear();
     try {
-      let prevLength = comments.value.length;
-      // 顶层评论还能不能继续翻（翻不动了就只剩展开回复这条路）
-      let canLoadMore = true;
-      while (true) {
-        if (findComment(effectiveTargetId, comments.value)) {
-          targetFound.value = true;
-          await scrollToTarget(effectiveTargetId, scrollBehavior);
-          return true;
-        }
-        if (canLoadMore && commentsHasNext.value) {
-          await loadComments();
-          // loadComments 出错或返回空页时别再试，转去展开回复（目标可能是已加载评论的回复）
-          if (comments.value.length === prevLength) {
-            canLoadMore = false;
-            continue;
-          }
-          prevLength = comments.value.length;
-          continue;
-        }
-        if (await expandOneRepliesPage()) continue;
-        break;
-      }
-      return targetFound.value;
+      // 首屏还没拉时先拉第一页：目标多半就在里面，省一次跳转。
+      if (!comments.value.length && commentsHasNext.value) await loadComments();
+      if (!isLoaded(effectiveTargetId)) await loadAround(effectiveTargetId);
+      if (!isLoaded(effectiveTargetId)) return false;
+      targetFound.value = true;
+      await scrollToTarget(effectiveTargetId, scrollBehavior);
+      return true;
     } finally {
       seeking.value = false;
     }
@@ -206,10 +117,6 @@ export function useCommentSeek({
       currentTargetId.value = newVal;
       shouldHighlight.value = true;
       targetFound.value = false;
-      checkedTopLevelCount.value = 0;
-      replyExpands = 0;
-      expandedPages.clear();
-      exhaustedParents.clear();
     },
     { immediate: true },
   );

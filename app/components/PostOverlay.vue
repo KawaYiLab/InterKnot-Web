@@ -19,7 +19,7 @@ import type { EmoteRange } from "~/composables/useEmoteInsert";
 import { isAnyGalleryOpen } from "~/composables/useLightGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
-import { commentsCountAfterDelete, totalRepliesOf } from "~/composables/useApi";
+import { countNewReply, prependKeepingPosition, removeFromTimeline } from "~/utils/comment-timeline";
 import { toCardCoverThumbUrl, toThumbUrl, toCanonicalUrl, toNoResizeWebpUrl } from "~/utils/image";
 import RelatedArticles from "./RelatedArticles.vue";
 
@@ -80,9 +80,18 @@ const headerCreatedAt = computed<string | undefined>(() =>
 const headerTitle = computed<string>(() => post.value?.title ?? props.preview?.title ?? "");
 const headerCategory = computed(() => post.value?.category ?? props.preview?.category ?? null);
 
+// 评论时间线：按楼层从旧到新。featured 是第一页额外给的采纳 / 置顶（在时间线里也照常出现）。
 const comments = ref<Comment[]>([]);
+const featuredComments = ref<Comment[]>([]);
 const commentsCursor = ref("");
 const commentsHasNext = ref(true);
+// 从中间某条评论开始加载时，往前（更早的楼层）翻页的游标。
+const commentsPrevCursor = ref("");
+const commentsLoadingEarlier = ref(false);
+// 置顶 / 采纳的评论本来就是时间线第一条时，顶部不再重复显示一份。
+const featuredOnTop = computed(() =>
+  featuredComments.value.filter((c) => c.id !== comments.value[0]?.id),
+);
 const commentsLoading = ref(false);
 // 首次评论加载是否已结束。评论加载被刻意延后（scheduleLoadComments 用
 // rAF + requestIdleCallback），在它真正开始前 commentsLoading 仍是 false，
@@ -112,7 +121,7 @@ const newComment = ref("");
 const sendingComment = ref(false);
 const commentInputBoxRef = ref<HTMLElement | null>(null);
 const commentInputFocused = ref(false);
-const replyTarget = ref<{ id: string; authorName: string } | null>(null);
+const replyTarget = ref<{ id: string; authorName: string; floor?: number } | null>(null);
 const commentAnonymous = ref(false);
 
 /** 真实底层 textarea：z-input 是个包装，原生 keydown / overlay 都需要它 */
@@ -280,12 +289,7 @@ const canSubmitComment = computed(
     hasCommentContent.value,
 );
 const postLikeCount = computed(() => post.value?.likesCount ?? 0);
-// 兜底分支（详情接口没给 commentsCount）要把回复也算上，且必须按 totalRepliesOf 取回复总数：
-// 回复分页后 replies 只有前 3 条，拿 replies.length 会明显少算。
-const postCommentCount = computed(() =>
-  post.value?.commentsCount
-  ?? comments.value.reduce((sum, comment) => sum + 1 + totalRepliesOf(comment), 0),
-);
+const postCommentCount = computed(() => post.value?.commentsCount ?? comments.value.length);
 
 const syncCommentInputHeight = async () => {
   await nextTick();
@@ -545,6 +549,7 @@ const loadComments = async () => {
       commentsCursor.value === "",
     );
     if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
+    if (!commentsCursor.value) featuredComments.value = page.featured;
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
@@ -559,12 +564,65 @@ const loadComments = async () => {
   }
 };
 
+/** 从某条评论所在的楼层重新加载时间线（通知跳转、点引用跳到还没加载的楼层）。 */
+const loadCommentsAround = async (commentId: string) => {
+  if (isCommentLoadingCancelled) return;
+  const loadId = ++currentCommentLoadId;
+  commentsLoading.value = true;
+  try {
+    const page = await api.getComments(props.postId, "", false, commentId);
+    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
+    // 锚点不可见时后端按第一页处理，这时顶部的采纳 / 置顶照常给。
+    if (!page.prevCursor) featuredComments.value = page.featured;
+    comments.value = page.nodes;
+    commentsCursor.value = page.endCursor;
+    commentsHasNext.value = page.hasNextPage;
+    commentsPrevCursor.value = page.prevCursor;
+  } catch (err) {
+    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
+    message.error(resolveErrorMessage(err, "获取评论失败"));
+  } finally {
+    if (loadId === currentCommentLoadId) {
+      commentsLoading.value = false;
+      commentsLoaded.value = true;
+    }
+  }
+};
+
+const loadEarlierComments = async () => {
+  if (!commentsPrevCursor.value || commentsLoadingEarlier.value) return;
+  commentsLoadingEarlier.value = true;
+  const loadId = currentCommentLoadId;
+  try {
+    const page = await api.getComments(props.postId, commentsPrevCursor.value);
+    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
+    await prependKeepingPosition(
+      comments.value[0]?.id,
+      () => {
+        comments.value.unshift(...page.nodes);
+        commentsPrevCursor.value = page.prevCursor;
+      },
+      getActiveCommentsContainer(),
+    );
+  } catch (err) {
+    message.error(resolveErrorMessage(err, "获取评论失败"));
+  } finally {
+    commentsLoadingEarlier.value = false;
+  }
+};
+
+const resetCommentTimeline = () => {
+  comments.value = [];
+  featuredComments.value = [];
+  commentsCursor.value = "";
+  commentsPrevCursor.value = "";
+  commentsHasNext.value = true;
+};
+
 const refreshComments = async () => {
   commentsLoading.value = false;
   currentCommentLoadId++;
-  comments.value = [];
-  commentsCursor.value = "";
-  commentsHasNext.value = true;
+  resetCommentTimeline();
   commentsLoaded.value = false;
   await loadComments();
 };
@@ -577,9 +635,12 @@ const { seek, highlightedCommentId, targetFound, seeking } = useCommentSeek({
   commentsHasNext,
   loadComments,
   commentsVisible,
-  // 目标可能是一条还没展开的回复（列表只内联前 3 条），交给 seek 按需展开。
-  loadMoreReplies: api.loadMoreReplies,
+  loadAround: loadCommentsAround,
 });
+
+const jumpToComment = (commentId: string) => {
+  void seek(commentId);
+};
 
 const commentHistory = useCommentReadHistory();
 const commentsScrollRef = ref<HTMLElement | null>(null);
@@ -743,66 +804,18 @@ const sendComment = async () => {
     // serializeWith 把显示串里的 mention 段还原成 `@[name](docId)` token，
     // 表情占位符还原成 `:ik-xxx:` token
     const serialized = emoteInsert.serializeWith(mention.mentions.value).trim();
-    const parentId = replyTarget.value?.id;
-    const res = await api.addPostComment({
+    const created = await api.addPostComment({
       postId: props.postId,
       content: serialized,
       authorDocumentId: auth.user?.authorId,
-      parentId,
+      replyToId: replyTarget.value?.id,
       isAnonymous: commentAnonymous.value || undefined,
       images: commentImages.uploadedImageIds.value,
     });
-    const resData = (res as Record<string, unknown>).data as Record<string, unknown> | undefined;
-    const localId = String(resData?.documentId || resData?.id || `local-${Date.now()}`);
-    const localAuthor: import("~/types/entities").Author = commentAnonymous.value
-      ? { name: "匿名用户" }
-      : {
-          documentId: auth.user?.authorId || auth.user?.documentId,
-          name: auth.user?.name || auth.user?.username || "我",
-          avatar: auth.user?.avatar,
-          level: auth.user?.level,
-        };
-    const localImages = commentImages.uploadTasks.value
-      .filter((task) => task.status === "done" && task.serverUrl)
-      .map((task) => ({ url: task.serverUrl! }));
-    if (isReply && parentId) {
-      const parent = comments.value.find((c) => c.id === parentId);
-      if (parent) {
-        parent.replies.push({
-          id: localId,
-          // 本地乐观插入用 token 串，CommentBody 会自动渲染成芯片
-          content: serialized,
-          liked: false,
-          likesCount: 0,
-          createdAt: new Date().toISOString(),
-          author: localAuthor,
-          images: localImages,
-        });
-        // 「展开更多回复(N)」的 N 是 repliesCount - replies.length，乐观插入必须同步抬计数，
-        // 否则刚回复一条就把 N 少算 1（甚至把最后一页的按钮提前藏掉）。
-        parent.repliesCount = Math.max(parent.replies.length, (parent.repliesCount ?? 0) + 1);
-      }
-    } else {
-      const pinnedIndex = comments.value.findIndex((c) => c.isPinned);
-      const insertIndex = pinnedIndex >= 0 ? pinnedIndex + 1 : 0;
-      let maxFloor = 0;
-      for (const comment of comments.value) {
-        if (!comment.isPinned && typeof comment.floor === "number") {
-          maxFloor = Math.max(maxFloor, comment.floor);
-        }
-      }
-      comments.value.splice(insertIndex, 0, {
-        id: localId,
-        content: serialized,
-        liked: false,
-        likesCount: 0,
-        createdAt: new Date().toISOString(),
-        author: localAuthor,
-        images: localImages,
-        replies: [],
-        isPinned: false,
-        floor: maxFloor + 1,
-      });
+    countNewReply([comments.value, featuredComments.value], created);
+    // 新评论排在时间线最后：已经翻到底时直接接上，否则等用户翻到那里再加载。
+    if (!commentsHasNext.value && !comments.value.some((c) => c.id === created.id)) {
+      comments.value.push(created);
     }
     const el = commentInputBoxRef.value?.querySelector("textarea, input") as HTMLTextAreaElement | null;
     if (el) {
@@ -822,6 +835,7 @@ const sendComment = async () => {
       post.value.commentsCount = (post.value.commentsCount ?? 0) + 1;
     }
     message.success(isReply ? "回复发送成功" : "评论发送成功");
+    if (!commentsHasNext.value) void nextTick(() => jumpToComment(created.id));
   } catch (err) {
     message.error(resolveErrorMessage(err, "发送失败"));
   } finally {
@@ -1000,32 +1014,11 @@ const toggleAnonymous = () => {
 };
 
 const startReply = (comment: Comment) => {
-  replyTarget.value = { id: comment.id, authorName: comment.author?.name || "匿名用户" };
-  focusCommentInput();
-};
-
-const startReplyToReply = (reply: Comment["replies"][number], parentComment: Comment) => {
-  // 楼中楼是「扁平到顶层」的单层结构：parentId 仍指向顶层 comment，
-  // 但被回复 reply 的作者会丢失通知链路与视觉语境。
-  // 修复方式：自动在 textarea 最前预填一个指向被回复 reply 作者的 @mention chip。
-  // 这样 mention 通知系统会把通知发给被回复者；CommentBody 渲染也会自然带「回复 @X」语境。
-  replyTarget.value = { id: parentComment.id, authorName: reply.author?.name || "匿名用户" };
-  const replyAuthor = reply.author;
-  const myAuthorId = auth.user?.authorId;
-  if (
-    replyAuthor?.documentId &&
-    replyAuthor?.name &&
-    // 自己回复自己时不预填——notifyMentions 也会跳过 self-mention，纯属冗余
-    replyAuthor.documentId !== myAuthorId
-  ) {
-    mention.prependMentionChip({
-      documentId: replyAuthor.documentId,
-      name: replyAuthor.name,
-      username: null,
-      avatar: replyAuthor.avatar ?? null,
-      level: replyAuthor.level ?? null,
-    });
-  }
+  replyTarget.value = {
+    id: comment.id,
+    authorName: comment.author?.name || "匿名用户",
+    floor: comment.floor,
+  };
   focusCommentInput();
 };
 
@@ -1120,14 +1113,6 @@ const handleReportComment = (comment: Comment) => {
   reportDialog.open({ targetType: "comment", targetId: comment.id, targetLabel: "评论" });
 };
 
-const handleReportReply = (reply: Comment["replies"][number]) => {
-  if (!auth.isLogin) {
-    loginDialog.open();
-    return;
-  }
-  reportDialog.open({ targetType: "comment", targetId: reply.id, targetLabel: "回复" });
-};
-
 const favoriting = ref(false);
 
 const favoriteArticle = async () => {
@@ -1164,59 +1149,24 @@ const likeComment = async (comment: Comment) => {
   }
 };
 
-const likeReply = async (reply: Comment["replies"][number]) => {
-  if (!auth.isLogin) {
-    loginDialog.open();
-    return;
-  }
-  try {
-    const result = await api.toggleLike("comment", reply.id, !!reply.liked);
-    reply.liked = result.liked;
-    reply.likesCount = result.likesCount;
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "回复点赞失败"));
-  }
-};
-
 const handleDeleteComment = async (comment: Comment) => {
   const ok = await confirmDialog.open({
     title: "删除评论",
-    message: totalRepliesOf(comment) > 0
-      ? "确定删除这条评论及其所有回复吗？此操作无法撤销。"
-      : "确定删除这条评论吗？此操作无法撤销。",
+    message: "确定删除这条评论吗？此操作无法撤销。",
     confirmText: "删除",
     danger: true,
   });
   if (!ok) return;
   try {
     await api.deleteComment(comment.id);
-    comments.value = comments.value.filter((c) => c.id !== comment.id);
+    comments.value = removeFromTimeline(comments.value, comment);
+    featuredComments.value = removeFromTimeline(featuredComments.value, comment);
     if (post.value) {
-      post.value.commentsCount = commentsCountAfterDelete(post.value.commentsCount, comment);
+      post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1);
     }
     message.success("评论已删除");
   } catch (err) {
     message.error(resolveErrorMessage(err, "删除评论失败"));
-  }
-};
-
-const handleDeleteReply = async (reply: Comment["replies"][number], parentComment: Comment) => {
-  const ok = await confirmDialog.open({ title: "删除回复", message: "确定删除这条回复吗？", confirmText: "删除", danger: true });
-  if (!ok) return;
-  try {
-    await api.deleteComment(reply.id);
-    parentComment.replies = parentComment.replies.filter((r) => r.id !== reply.id);
-    // 回复总数跟着减，否则「展开更多回复(N)」会多算一条；下限压在已加载条数上。
-    parentComment.repliesCount = Math.max(
-      parentComment.replies.length,
-      (parentComment.repliesCount ?? parentComment.replies.length + 1) - 1,
-    );
-    if (post.value) {
-      post.value.commentsCount = Math.max(0, (post.value.commentsCount ?? 0) - 1);
-    }
-    message.success("回复已删除");
-  } catch (err) {
-    message.error(resolveErrorMessage(err, "删除回复失败"));
   }
 };
 
@@ -1320,9 +1270,7 @@ const replaySwitchAnimation = () => {
 const resetAndLoad = async () => {
   teardownCommentsObserver();
   post.value = null;
-  comments.value = [];
-  commentsCursor.value = "";
-  commentsHasNext.value = true;
+  resetCommentTimeline();
   commentsLoaded.value = false;
   commentsLoading.value = false;
   currentCommentLoadId++;
@@ -1813,6 +1761,35 @@ onBeforeUnmount(() => {
                       <div v-else-if="showCommentsEmpty" class="ik-empty" style="padding: 40px 0">啥都木有¯\(°_o)/¯</div>
                       <template v-if="commentsVisible">
                         <CommentItem
+                          v-for="comment in featuredOnTop"
+                          :key="`featured-${comment.id}`"
+                          featured
+                          :comment="comment"
+                          :current-user-author-id="auth.user?.authorId"
+                          :is-post-owner="auth.isLogin && isOwner"
+                          :can-pin="canPin"
+                          :can-accept="canAccept"
+                          :accept-enabled="acceptEnabled"
+                          @like-comment="likeComment"
+                          @reply-comment="startReply"
+                          @jump-to="jumpToComment"
+                          @delete-comment="handleDeleteComment"
+                          @report-comment="handleReportComment"
+                          @pin-comment="handlePinComment"
+                          @unpin-comment="handleUnpinComment"
+                          @accept-comment="handleAcceptComment"
+                          @unaccept-comment="handleUnacceptComment"
+                        />
+                        <button
+                          v-if="commentsPrevCursor"
+                          type="button"
+                          class="ik-comments-earlier"
+                          :disabled="commentsLoadingEarlier"
+                          @click="loadEarlierComments"
+                        >
+                          {{ commentsLoadingEarlier ? "加载中…" : "加载更早的评论" }}
+                        </button>
+                        <CommentItem
                           v-for="(comment, idx) in comments"
                           :key="comment.id"
                           :comment="comment"
@@ -1824,13 +1801,10 @@ onBeforeUnmount(() => {
                           :accept-enabled="acceptEnabled"
                           :highlighted-comment-id="highlightedCommentId"
                           @like-comment="likeComment"
-                          @like-reply="likeReply"
                           @reply-comment="startReply"
-                          @reply-to-reply="startReplyToReply"
+                          @jump-to="jumpToComment"
                           @delete-comment="handleDeleteComment"
-                          @delete-reply="handleDeleteReply"
                           @report-comment="handleReportComment"
-                          @report-reply="handleReportReply"
                           @pin-comment="handlePinComment"
                           @unpin-comment="handleUnpinComment"
                           @accept-comment="handleAcceptComment"
@@ -1906,7 +1880,7 @@ onBeforeUnmount(() => {
                             :emotes="emoteInsert.emotes.value"
                           />
                           <div v-if="replyTarget && isCommentEditorActive" class="ik-engage-bar__reply-hint">
-                            <span>回复 {{ replyTarget.authorName }}</span>
+                            <span>回复 <template v-if="replyTarget.floor">F{{ replyTarget.floor }} </template>{{ replyTarget.authorName }}</span>
                             <button type="button" class="ik-engage-bar__reply-close" @click="replyTarget = null">✕</button>
                           </div>
                           <div v-if="!isCommentEditorActive && !newComment.trim() && !emoteInsert.hasEmotes.value && !commentImages.uploadTasks.value.length" class="ik-engage-bar__placeholder">
@@ -2874,6 +2848,24 @@ html.no-gpu .ik-dialog {
 .ik-comments-sentinel {
   width: 100%;
   min-height: 1px;
+}
+
+.ik-comments-earlier {
+  display: block;
+  width: 100%;
+  padding: 10px 0;
+  border: none;
+  border-top: 3px solid #1e1e1e;
+  background: transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: var(--ik-cursor-pointer);
+  transition: color 140ms ease;
+}
+
+.ik-comments-earlier:hover:not(:disabled) {
+  color: var(--ik-primary);
 }
 
 .ik-scroll-footer {

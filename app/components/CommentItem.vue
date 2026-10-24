@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { Comment, CommentReply } from "~/types/entities";
+import type { Comment } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import {
   HandThumbUpIcon,
   ChatBubbleLeftIcon,
   EllipsisVerticalIcon,
+  ArrowUturnLeftIcon,
 } from "@heroicons/vue/24/outline";
 import {
   HandThumbUpIcon as HandThumbUpIconSolid,
@@ -31,17 +32,20 @@ const props = defineProps<{
    */
   acceptEnabled?: boolean;
   highlightedCommentId?: string | null;
+  /**
+   * 列表顶部的采纳 / 置顶副本：同一条评论在时间线里还会出现在自己的楼层，
+   * 副本不带 data-comment-id，定位与阅读断点都只认时间线里那一条。
+   */
+  featured?: boolean;
 }>();
 
 const emit = defineEmits<{
   likeComment: [comment: Comment];
-  likeReply: [reply: CommentReply];
   replyComment: [comment: Comment];
-  replyToReply: [reply: CommentReply, parentComment: Comment];
+  /** 点了引用：跳到被回复的那条评论。 */
+  jumpTo: [commentId: string];
   deleteComment: [comment: Comment];
-  deleteReply: [reply: CommentReply, parentComment: Comment];
   reportComment: [comment: Comment];
-  reportReply: [reply: CommentReply, parentComment: Comment];
   pinComment: [comment: Comment];
   unpinComment: [comment: Comment];
   acceptComment: [comment: Comment];
@@ -52,12 +56,7 @@ const isOwnComment = computed(() =>
   !!props.currentUserAuthorId && props.comment.author?.documentId === props.currentUserAuthorId,
 );
 
-const isOwnReply = (reply: CommentReply) =>
-  !!props.currentUserAuthorId && reply.author?.documentId === props.currentUserAuthorId;
-
 const canDeleteComment = computed(() => props.isPostOwner === true || isOwnComment.value);
-
-const canDeleteReply = (reply: CommentReply) => props.isPostOwner === true || isOwnReply(reply);
 
 const handleCommentMenuCommand = (command: string | number) => {
   if (command === "pin") emit("pinComment", props.comment);
@@ -68,17 +67,18 @@ const handleCommentMenuCommand = (command: string | number) => {
   else if (command === "report") emit("reportComment", props.comment);
 };
 
-const handleReplyMenuCommand = (reply: CommentReply, command: string | number) => {
-  if (command === "delete" && canDeleteReply(reply)) emit("deleteReply", reply, props.comment);
-  else if (command === "report") emit("reportReply", reply, props.comment);
-};
-
 const floorLabel = computed(() => {
-  if (props.comment.isPinned) return "";
   if (typeof props.comment.floor === "number") return `F${props.comment.floor}`;
   if (props.index != null) return `F${props.index + 1}`;
   return "";
 });
+
+const replyTo = computed(() => props.comment.replyTo ?? null);
+
+const jumpToReplyTarget = () => {
+  const id = replyTo.value?.comment?.id;
+  if (id) emit("jumpTo", id);
+};
 
 const openCommentImages = (images?: Comment["images"], index = 0) => {
   if (!images?.length) return;
@@ -92,69 +92,14 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
     index,
   );
 };
-
-// ── 回复分页 ──────────────────────────────────────
-// 评论列表接口只内联前 3 条回复，剩下的点「展开更多」按需拉。展开到的回复由
-// api.loadMoreReplies 直接 append 到 comment.replies（翻页游标记在评论对象上），
-// 所以这里只留纯 UI 状态：加载中 / 出错 / 已到底。
-const api = useApi();
-const repliesLoading = ref(false);
-const repliesError = ref(false);
-const repliesExhausted = ref(false);
-
-/** 还没展开的回复条数。后端没给 repliesCount 时算出来是 0，按钮自然不出现。 */
-const hiddenRepliesCount = computed(() =>
-  Math.max(0, (props.comment.repliesCount ?? 0) - (props.comment.replies?.length ?? 0)),
-);
-
-const canExpandReplies = computed(
-  () =>
-    !repliesExhausted.value
-    && (props.comment.repliesHasMore === true || hiddenRepliesCount.value > 0),
-);
-
-const expandRepliesLabel = computed(() => {
-  if (repliesLoading.value) return "加载中…";
-  if (repliesError.value) return "加载失败，点击重试";
-  return hiddenRepliesCount.value > 0
-    ? `展开更多回复(${hiddenRepliesCount.value})`
-    : "展开更多回复";
-});
-
-const expandReplies = async () => {
-  if (repliesLoading.value) return;
-  repliesLoading.value = true;
-  repliesError.value = false;
-  try {
-    const added = await api.loadMoreReplies(props.comment);
-    // 到底了就收起按钮。只看 hiddenRepliesCount 不够：repliesCount 与实际可见条数存在
-    // 口径差时（隐藏/拉黑过滤），差值永远大于 0，按钮会一直挂在那儿点不动。
-    if (!added || props.comment.repliesHasMore !== true) repliesExhausted.value = true;
-  } catch {
-    repliesError.value = true;
-  } finally {
-    repliesLoading.value = false;
-  }
-};
-
-// 组件实例被复用到另一条评论上时（列表重排/复用 key）重置展开态，避免把上一条的
-// 「已到底」错带给新评论。
-watch(
-  () => props.comment.id,
-  () => {
-    repliesLoading.value = false;
-    repliesError.value = false;
-    repliesExhausted.value = false;
-  },
-);
 </script>
 
 <template>
-  <div class="ik-comment" :data-comment-id="comment.id">
+  <div class="ik-comment" :data-comment-id="featured ? undefined : comment.id">
     <div
       class="ik-comment__main"
       :class="{
-        'ik-comment__main--target': comment.id === highlightedCommentId,
+        'ik-comment__main--target': !featured && comment.id === highlightedCommentId,
       }"
     >
       <div class="ik-comment__avatar-col">
@@ -189,8 +134,26 @@ watch(
             <CheckBadgeIcon class="ik-comment__accepted-icon" />
             已采纳
           </span>
-          <span v-else-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
+          <span v-if="floorLabel" class="ik-comment__floor">{{ floorLabel }}</span>
         </div>
+
+        <!-- 回复了哪条 -->
+        <button
+          v-if="replyTo"
+          type="button"
+          class="ik-comment__quote"
+          :class="{ 'ik-comment__quote--gone': !replyTo.comment }"
+          :disabled="!replyTo.comment"
+          @click="jumpToReplyTarget"
+        >
+          <ArrowUturnLeftIcon class="ik-comment__quote-icon" aria-hidden="true" />
+          <span class="ik-comment__quote-floor">F{{ replyTo.floor }}</span>
+          <template v-if="replyTo.comment">
+            <span class="ik-comment__quote-name">{{ replyTo.comment.authorName }}</span>
+            <span class="ik-comment__quote-text">{{ replyTo.comment.excerpt }}</span>
+          </template>
+          <span v-else class="ik-comment__quote-text">{{ replyTo.deleted ? "原评论已删除" : "原评论不可见" }}</span>
+        </button>
 
         <!-- Body -->
         <div v-if="comment.content?.trim()" class="ik-comment__body">
@@ -232,6 +195,7 @@ watch(
             </button>
             <button class="ik-comment__action-btn" @click="emit('replyComment', comment)">
               <ChatBubbleLeftIcon class="ik-comment__icon" />
+              <span v-if="comment.replyCount" class="ik-comment__action-count">{{ comment.replyCount }}</span>
             </button>
             <z-dropdown
               trigger="click"
@@ -262,108 +226,6 @@ watch(
         </div>
       </div>
     </div>
-
-    <!-- ── Replies ─────────────────────────── -->
-    <div v-if="comment.replies?.length || canExpandReplies" class="ik-comment__replies">
-        <div
-          v-for="reply in comment.replies"
-          :key="reply.id"
-          class="ik-comment__reply"
-          :class="{ 'ik-comment__reply--target': reply.id === highlightedCommentId }"
-          :data-comment-id="reply.id"
-        >
-          <div class="ik-comment__reply-avatar-col">
-            <UserHoverCard :author-id="reply.author?.documentId" :clickable="!!reply.author?.documentId">
-              <div class="ik-comment__avatar-wrap">
-                <img
-                  :src="reply.author?.avatar || '/images/default-avatar.webp'"
-                  :alt="reply.author?.name || ''"
-                  class="ik-comment__avatar ik-comment__avatar--sm"
-                  decoding="async"
-                  @error="($event.target as HTMLImageElement).src = '/images/default-avatar.webp'"
-                />
-                <span v-if="reply.author?.level && reply.author?.documentId" class="ik-comment__level ik-comment__level--sm">{{ reply.author.level }}</span>
-              </div>
-            </UserHoverCard>
-          </div>
-          <div class="ik-comment__reply-content-col">
-            <div class="ik-comment__author-row">
-              <UserHoverCard :author-id="reply.author?.documentId" :clickable="!!reply.author?.documentId">
-                <span class="ik-comment__name">
-                  {{ reply.author?.name || "匿名用户" }}
-                </span>
-              </UserHoverCard>
-              <span v-if="reply.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
-            </div>
-            <div v-if="reply.content?.trim()" class="ik-comment__body ik-comment__body--reply">
-              <CommentBody :content="reply.content" />
-            </div>
-
-            <div v-if="reply.images?.length" class="ik-comment__media-grid ik-comment__media-grid--reply">
-              <button
-                v-for="(image, imageIndex) in reply.images"
-                :key="`${reply.id}-image-${imageIndex}`"
-                type="button"
-                class="ik-comment__media-item"
-                @click="openCommentImages(reply.images, imageIndex)"
-              >
-                <img
-                  :src="toThumbUrl(image.url)"
-                  :alt="reply.author?.name || '回复图片'"
-                  class="ik-comment__media-thumb"
-                  decoding="async"
-                  referrerpolicy="no-referrer"
-                />
-              </button>
-            </div>
-            <div class="ik-comment__footer">
-              <div class="ik-comment__meta">
-                <span class="ik-comment__time">{{ formatTime(reply.createdAt) }}</span>
-              </div>
-              <div class="ik-comment__actions">
-                <button
-                  class="ik-comment__action-btn"
-                  :class="{ 'ik-comment__action-btn--active': reply.liked }"
-                  @click="emit('likeReply', reply)"
-                >
-                  <HandThumbUpIconSolid v-if="reply.liked" class="ik-comment__icon" />
-                  <HandThumbUpIcon v-else class="ik-comment__icon" />
-                  <span v-if="reply.likesCount" class="ik-comment__action-count">{{ reply.likesCount }}</span>
-                </button>
-                <button class="ik-comment__action-btn" @click="emit('replyToReply', reply, comment)">
-                  <ChatBubbleLeftIcon class="ik-comment__icon" />
-                </button>
-                <z-dropdown
-                  trigger="click"
-                  size="small"
-                  class="ik-comment__more"
-                  direction="auto"
-                  @command="(command: string | number) => handleReplyMenuCommand(reply, command)"
-                >
-                  <button type="button" class="ik-comment__action-btn" title="更多操作">
-                    <EllipsisVerticalIcon class="ik-comment__icon" aria-hidden="true" />
-                  </button>
-                  <template #dropdown>
-                    <z-dropdown-item command="report" :disabled="isOwnReply(reply)">举报评论</z-dropdown-item>
-                    <z-dropdown-item command="delete" :disabled="!canDeleteReply(reply)">删除评论</z-dropdown-item>
-                  </template>
-                </z-dropdown>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div v-if="canExpandReplies" class="ik-comment__replies-more">
-          <button
-            type="button"
-            class="ik-comment__replies-more-btn"
-            :class="{ 'ik-comment__replies-more-btn--error': repliesError }"
-            :disabled="repliesLoading"
-            @click="expandReplies"
-          >
-            {{ expandRepliesLabel }}
-          </button>
-        </div>
-    </div>
   </div>
 </template>
 
@@ -385,15 +247,13 @@ watch(
   gap: 12px;
 }
 
-.ik-comment__main--target,
-.ik-comment__reply--target {
+.ik-comment__main--target {
   position: relative;
   padding: 16px 12px 20px 12px;
 }
 
 /* 进入视口时先用主题色背景给出明显反馈，随后背景渐隐恢复正常，只保留左侧强调线 */
-.ik-comment__main--target::before,
-.ik-comment__reply--target::before {
+.ik-comment__main--target::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -404,8 +264,7 @@ watch(
   animation: ik-comment-target-flash 1.2s ease-out forwards;
 }
 
-.ik-comment__main--target::after,
-.ik-comment__reply--target::after {
+.ik-comment__main--target::after {
   content: "";
   position: absolute;
   top: 0;
@@ -426,10 +285,6 @@ watch(
   }
 }
 
-.ik-comment__reply--target {
-  padding: 12px 12px 16px 12px;
-}
-
 /* ── Avatar column ────────────────────────────── */
 .ik-comment__avatar-col {
   flex-shrink: 0;
@@ -441,11 +296,6 @@ watch(
   border-radius: 999px;
   object-fit: cover;
   background: #1b1b1b;
-}
-
-.ik-comment__avatar--sm {
-  width: 28px;
-  height: 28px;
 }
 
 /* ── Content column ───────────────────────────── */
@@ -495,15 +345,6 @@ watch(
   box-sizing: border-box;
 }
 
-.ik-comment__level--sm {
-  top: -2px;
-  left: -2px;
-  min-width: 13px;
-  height: 13px;
-  padding: 0 2px;
-  font-size: 8px;
-}
-
 .ik-comment__ai-badge {
   flex-shrink: 0;
   padding: 0 6px;
@@ -533,7 +374,6 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
   font-size: 14px;
   font-weight: 700;
   color: var(--ik-primary);
@@ -550,7 +390,6 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
   font-size: 14px;
   font-weight: 700;
   color: #4ade80;
@@ -560,6 +399,55 @@ watch(
 .ik-comment__accepted-icon {
   width: 16px;
   height: 16px;
+}
+
+/* ── 引用：回复了哪条 ─────────────────────────── */
+.ik-comment__quote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border: none;
+  border-left: 3px solid #444;
+  border-radius: 0 6px 6px 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: #888;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: var(--ik-cursor-pointer);
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.ik-comment__quote:hover:not(:disabled) {
+  border-left-color: var(--ik-primary);
+  color: #bbb;
+}
+
+.ik-comment__quote--gone {
+  cursor: default;
+  font-style: italic;
+}
+
+.ik-comment__quote-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.ik-comment__quote-floor,
+.ik-comment__quote-name {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.ik-comment__quote-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* ── Body ──────────────────────────────────────── */
@@ -572,19 +460,11 @@ watch(
   word-wrap: break-word;
 }
 
-.ik-comment__body--reply {
-  font-size: 14px;
-}
-
 .ik-comment__media-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: 8px;
   margin-top: 10px;
-}
-
-.ik-comment__media-grid--reply {
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
 }
 
 .ik-comment__media-item {
@@ -686,63 +566,6 @@ watch(
   transition: opacity 0.18s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* ── Replies ───────────────────────────────────── */
-.ik-comment__replies {
-  margin-left: 48px;
-  margin-top: 10px;
-  padding: 4px 0 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.ik-comment__reply {
-  display: flex;
-  gap: 10px;
-  padding: 10px 0;
-}
-
-.ik-comment__reply + .ik-comment__reply {
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.ik-comment__reply-avatar-col {
-  flex-shrink: 0;
-}
-
-.ik-comment__reply-content-col {
-  flex: 1;
-  min-width: 0;
-}
-
-/* ── 「展开更多回复」 ──────────────────────────── */
-.ik-comment__replies-more {
-  padding: 8px 0 2px;
-}
-
-.ik-comment__replies-more-btn {
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #888;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: var(--ik-cursor-pointer);
-  transition: color 140ms ease;
-}
-
-.ik-comment__replies-more-btn:hover:not(:disabled) {
-  color: var(--ik-primary);
-}
-
-.ik-comment__replies-more-btn:disabled {
-  color: #666;
-  cursor: default;
-}
-
-.ik-comment__replies-more-btn--error {
-  color: #ff6b6b;
-}
-
 /* ── Mobile ────────────────────────────────────── */
 @media (max-width: 800px) {
   .ik-comment {
@@ -762,13 +585,5 @@ watch(
     height: 32px;
   }
 
-  .ik-comment__avatar--sm {
-    width: 24px;
-    height: 24px;
-  }
-
-  .ik-comment__replies {
-    margin-left: 42px;
-  }
 }
 </style>

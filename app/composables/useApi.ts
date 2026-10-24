@@ -19,7 +19,7 @@ import type {
   BusinessCardType,
   Category,
   Comment,
-  CommentReply,
+  CommentReplyTo,
   CoverImage,
   DailyExpStatus,
   DraftArticle,
@@ -196,7 +196,8 @@ interface SendCodeResult {
 interface PostCommentPayload {
   postId: string;
   content: string;
-  parentId?: string;
+  /** 回复哪条评论 */
+  replyToId?: string;
   authorDocumentId?: string;
   isAnonymous?: boolean;
   /** 自己图库里的媒体 id */
@@ -493,56 +494,36 @@ function toPost(raw: unknown): Post {
   };
 }
 
-/**
- * 单条回复的映射。回复有两个来源：评论列表内联的前几条，以及「展开更多」走的
- * /v1/comments/:id/replies —— 两处都是 CommentView，映射必须是同一份。
- */
-function toCommentReply(raw: unknown): CommentReply {
-  const reply = (raw || {}) as Rec;
+function toReplyTo(raw: unknown): CommentReplyTo | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Rec;
+  const floor = num(data.floor);
+  if (floor === undefined) return null;
+  const quoted = data.comment as Rec | null | undefined;
   return {
-    id: String(reply.id || ""),
-    content: String(reply.body || ""),
-    images: toCoverImages(reply.images),
-    liked: reply.liked === true,
-    likesCount: Number(reply.likeCount ?? 0),
-    createdAt: str(reply.createdAt),
-    author: toAuthor(reply.author as AuthorDto | undefined),
+    floor,
+    deleted: data.deleted === true,
+    comment: quoted
+      ? {
+          id: String(quoted.id || ""),
+          authorName: toAuthor(quoted.author as AuthorDto | undefined).name || "匿名用户",
+          excerpt: String(quoted.excerpt || ""),
+        }
+      : null,
   };
 }
 
-/**
- * 每条顶层评论「已展开到第几页回复」的游标。用 WeakMap 挂在评论对象上，而不是塞进 Comment
- * 类型：游标是纯客户端翻页状态，不该混进后端返回的实体形状；评论列表被重建（切帖 / 刷新 /
- * 置顶后重拉）时旧对象随之回收，游标自动失效，不用到处手动重置。
- */
-const repliesCursors = new WeakMap<
-  Comment,
-  { cursor: string; done: boolean; inflight?: Promise<number> }
->();
-
-/** 顶层评论的可见回复总数：优先用后端口径的 repliesCount（列表接口只内联前几条回复）。 */
-export function totalRepliesOf(comment: Pick<Comment, "replies" | "repliesCount">): number {
-  const loaded = comment.replies?.length ?? 0;
-  const total = comment.repliesCount;
-  return typeof total === "number" && total > loaded ? total : loaded;
+/** 一页评论：时间线（按楼层从旧到新）+ 第一页额外的采纳 / 置顶。 */
+export interface CommentsPage extends Pagination<Comment> {
+  /** 采纳与置顶（只在第一页有；它们在时间线里也照常出现在自己的楼层）。 */
+  featured: Comment[];
+  /** 往前（更早的楼层）翻页的游标；从中间开始时才有。 */
+  prevCursor: string;
 }
 
-/**
- * 删掉一条顶层评论后帖子剩下的评论总数。回复分页后 comment.replies 只有前几条，
- * 按 replies.length 扣减会漏掉没展开的回复，必须按 repliesCount 扣。
- */
-export function commentsCountAfterDelete(
-  commentsCount: number | undefined,
-  comment: Pick<Comment, "replies" | "repliesCount">,
-): number {
-  return Math.max(0, (commentsCount ?? 0) - 1 - totalRepliesOf(comment));
-}
-
-/** ThreadView（顶层评论 + 前几条回复）或作者主页的评论 → Comment。 */
+/** CommentView 或作者主页的评论 → Comment。 */
 function toComment(raw: unknown): Comment {
   const data = (raw || {}) as Rec;
-  const replies = Array.isArray(data.replies) ? data.replies.map(toCommentReply) : [];
-  const repliesCount = typeof data.replyCount === "number" ? data.replyCount : replies.length;
   return {
     id: String(data.id || ""),
     content: String(data.body || ""),
@@ -551,12 +532,8 @@ function toComment(raw: unknown): Comment {
     likesCount: Number(data.likeCount ?? 0),
     createdAt: str(data.createdAt),
     author: toAuthor(data.author as AuthorDto | undefined),
-    replies,
-    repliesCount,
-    repliesHasMore:
-      typeof data.repliesHasMore === "boolean"
-        ? data.repliesHasMore
-        : repliesCount > replies.length,
+    replyTo: toReplyTo(data.replyTo),
+    replyCount: Number(data.replyCount ?? 0),
     articleId: str(data.postId),
     articleTitle: str(data.postTitle),
     isPinned: data.isPinned === true,
@@ -1180,12 +1157,37 @@ export function useApi() {
 
   // ── 评论 ──────────────────────────────────────────
 
+  /**
+   * 帖子的评论，按楼层从旧到新。`anchor`（评论 id）时从那条评论所在的楼层开始，
+   * 并给出往前翻的 prevCursor；锚点不在本帖或不可见时后端按第一页处理。
+   */
   const getComments = async (
     postId: string,
     endCur = "",
     force = false,
-  ): Promise<Pagination<Comment>> => {
+    anchor = "",
+  ): Promise<CommentsPage> => {
     const cursor = endCur && endCur !== "0" ? endCur : "";
+    const fetchPage = async (): Promise<CommentsPage> => {
+      const res = await $api<
+        CursorPage<Rec> & { pinned?: Rec | null; accepted?: Rec | null; prevCursor?: string | null }
+      >(`/v1/posts/${encodeURIComponent(postId)}/comments`, {
+        query: {
+          limit: String(DEFAULT_PAGE_SIZE),
+          ...(cursor ? { cursor } : {}),
+          ...(!cursor && anchor ? { anchor } : {}),
+        },
+      });
+      // 最佳答案在最前，其次置顶（两者后端已互斥去重）。
+      const featured = [res.accepted, res.pinned].filter((c): c is Rec => !!c).map(toComment);
+      return {
+        ...toPage(res.items.map(toComment), res.nextCursor),
+        featured,
+        prevCursor: res.prevCursor || "",
+      };
+    };
+    // 从某条评论开始的那一页是一次性的跳转，不进缓存。
+    if (anchor && !cursor) return fetchPage();
     // 弹窗/页面首次加载首屏评论时，强制让该帖子评论缓存失效，避免直接命中旧缓存
     if (force && !cursor) {
       const queryKey = qk.articles.comments(postId, cursor, DEFAULT_PAGE_SIZE);
@@ -1196,96 +1198,22 @@ export function useApi() {
         invalidate(queryKey);
       }
     }
-    return cachedRead(
-      qk.articles.comments(postId, cursor, DEFAULT_PAGE_SIZE),
-      async () => {
-        const res = await $api<CursorPage<Rec> & { pinned?: Rec | null; accepted?: Rec | null }>(
-          `/v1/posts/${encodeURIComponent(postId)}/comments`,
-          { query: { limit: String(DEFAULT_PAGE_SIZE), ...(cursor ? { cursor } : {}) } },
-        );
-        const nodes = res.items.map(toComment);
-        // 顶部顺序：最佳答案在最前，其次置顶（两者后端已互斥去重），再普通楼层。
-        if (!cursor && res.pinned) nodes.unshift(toComment(res.pinned));
-        if (!cursor && res.accepted) nodes.unshift(toComment(res.accepted));
-        return toPage(nodes, res.nextCursor);
-      },
-      STALE_LIST,
-    );
-  };
-
-  /**
-   * 某条顶层评论的回复分页（GET /v1/comments/:id/replies，旧的在前）。
-   * 刻意不进 TanStack 缓存：回复是「按需往下展开」的增量数据。
-   */
-  const getCommentReplies = async (
-    commentId: string,
-    endCur = "",
-    limit = DEFAULT_PAGE_SIZE,
-  ): Promise<Pagination<CommentReply>> => {
-    const res = await $api<CursorPage<Rec>>(`/v1/comments/${encodeURIComponent(commentId)}/replies`, {
-      query: {
-        // 空串 = 从头开始，此时不带 cursor 参数
-        ...(endCur ? { cursor: endCur } : {}),
-        limit: String(limit),
-      },
-    });
-    return toPage(res.items.map(toCommentReply), res.nextCursor);
-  };
-
-  /**
-   * 展开某条顶层评论的下一页回复：原地 append 到 comment.replies，并同步 repliesHasMore /
-   * repliesCount。返回本次真正新增的条数，0 表示到底了 —— 「展开更多」按钮和 useCommentSeek
-   * 的自动展开都靠这个返回值收手，别改成返回 void。
-   *
-   * 同一条评论并发展开会合流到同一个请求上：两路各发一次的话拿到的是同一页，后完成的那路
-   * 去重后新增 0 条，会被调用方误当成「到底了」。
-   */
-  const loadMoreReplies = async (comment: Comment): Promise<number> => {
-    const state = repliesCursors.get(comment) ?? { cursor: "", done: false };
-    repliesCursors.set(comment, state);
-    if (state.done) return 0;
-    if (state.inflight) return state.inflight;
-    const run = async () => {
-      const page = await getCommentReplies(comment.id, state.cursor);
-      state.cursor = page.endCursor;
-      state.done = !page.hasNextPage;
-      // 首次展开时 cursor 为空、后端从头给，前几条与列表接口已内联的重合；按 id 去重再 append。
-      // 本地乐观插入的回复也在这里被认出来，不会变成两条。
-      const existing = new Set(comment.replies.map((r) => r.id));
-      const fresh = page.nodes.filter((r) => r.id && !existing.has(r.id));
-      comment.replies.push(...fresh);
-      // 乐观插入的回复是 push 到数组末尾的，而这里 append 的是比它更早的历史回复：
-      // createdAt 齐全时按时间重排一次，与后端 asc 口径对齐。
-      if (comment.replies.every((r) => typeof r.createdAt === "string")) {
-        comment.replies.sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
-      }
-      comment.repliesHasMore = page.hasNextPage;
-      // 已加载条数反超后端口径（乐观插入 / 隐藏过滤口径差）时抬上去，否则「展开更多(N)」会算出负数。
-      if ((comment.repliesCount ?? 0) < comment.replies.length) {
-        comment.repliesCount = comment.replies.length;
-      }
-      return fresh.length;
-    };
-    const inflight = run().finally(() => {
-      state.inflight = undefined;
-    });
-    state.inflight = inflight;
-    return inflight;
+    return cachedRead(qk.articles.comments(postId, cursor, DEFAULT_PAGE_SIZE), fetchPage, STALE_LIST);
   };
 
   const addPostComment = async ({
     postId,
     content,
-    parentId,
+    replyToId,
     isAnonymous,
     images,
-  }: PostCommentPayload) => {
+  }: PostCommentPayload): Promise<Comment> => {
     const res = await $api<Rec>(`/v1/posts/${encodeURIComponent(postId)}/comments`, {
       method: "POST",
       headers: { "Idempotency-Key": crypto.randomUUID() },
       body: {
         body: content,
-        ...(parentId ? { parentId } : {}),
+        ...(replyToId ? { replyToId } : {}),
         ...(isAnonymous ? { isAnonymous: true } : {}),
         ...(images?.length ? { imageIds: images } : {}),
       },
@@ -1293,7 +1221,7 @@ export function useApi() {
     // 评论数 & 评论列表改变
     invalidate(qk.articles.commentsOf(postId));
     invalidate(qk.articles.detail(postId));
-    return { data: { documentId: String(res.id || ""), ...toCommentReply(res) } };
+    return toComment(res);
   };
 
   const deleteComment = async (commentId: string): Promise<void> => {
@@ -2552,8 +2480,6 @@ export function useApi() {
     pinArticle,
     unpinArticle,
     getComments,
-    getCommentReplies,
-    loadMoreReplies,
     addPostComment,
     deleteComment,
     pinComment,
