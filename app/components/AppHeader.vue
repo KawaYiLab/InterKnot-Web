@@ -3,6 +3,7 @@ import { useEventListener } from "@vueuse/core";
 import { BellIcon } from "@heroicons/vue/24/solid";
 import { ClockIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import { LEVEL_THRESHOLDS, MAX_LEVEL } from "~/utils/level";
+import { toThumbUrl } from "~/utils/image";
 import type { SearchSuggestion } from "~/composables/useApi";
 
 const route = useRoute();
@@ -94,7 +95,8 @@ const mineTabText = computed(() => {
 const userLevel = computed(() => auth.user?.level ?? 1);
 const userExp = computed(() => auth.user?.exp ?? 0);
 const userName = computed(() => auth.user?.name || "用户");
-const userAvatar = computed(() => auth.user?.avatar || "/images/default-avatar.webp");
+// 36px 头像只需缩略图；与 PostCard 头像同为 360 宽，可直接命中缓存
+const userAvatar = computed(() => (auth.user?.avatar ? toThumbUrl(auth.user.avatar) : "/images/default-avatar.webp"));
 
 // 等级阈值表 - 与后端 server/src/utils/level.ts 保持一致
 

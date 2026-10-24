@@ -294,7 +294,7 @@ const handleOpen = (e: MouseEvent) => {
   align-items: center;
   padding: 2px 10px;
   border-radius: 999px;
-  background: #16a34a;
+  background: #15803d;
   color: #fff;
   font-size: 13px;
   font-weight: 700;

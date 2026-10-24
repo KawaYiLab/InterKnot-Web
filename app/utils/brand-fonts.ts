@@ -29,11 +29,17 @@
    因此改用 FontFace API 延后注册：首页第一张首屏封面加载完成时（PostCard）
    触发；没有封面的页面由 plugins/fonts.client.ts 在 window load 后兜底触发。
 
+   ## 版式偏移（CLS）
+   swap 换字体时字宽改变，会让巨型背景跑马灯整片位移（Lighthouse 实测
+   CLS 0.545，几乎全来自它）。所以跑马灯等 brandFontsReady 为 true 后才渲染
+   文字，从一开始就用品牌字体排版；字体加载失败也会置 true，回退系统字体。
+
    ## 字符覆盖
    各约 6800 常用汉字（GB2312 量级）。用户生成内容里的生僻字 / emoji 会
    逐字回退到 fallback 栈的系统中文黑体，属预期行为。
    ═══════════════════════════════════════════════════════ */
 
+import { ref } from "vue";
 
 const FONT_FACES = [
   { file: "zh-cn-light", weight: "1 699" },
@@ -42,16 +48,26 @@ const FONT_FACES = [
 
 let registered = false;
 
+/** 两档字体都已加载完成（或失败）。 */
+export const brandFontsReady = ref(false);
+
 export function loadBrandFonts() {
-  if (registered || typeof FontFace === "undefined") return;
+  if (registered) return;
   registered = true;
-  for (const { file, weight } of FONT_FACES) {
-    document.fonts.add(
+  if (typeof FontFace === "undefined") {
+    brandFontsReady.value = true;
+    return;
+  }
+  const faces = FONT_FACES.map(
+    ({ file, weight }) =>
       new FontFace("InterKnot Sans", `url("/${file}.woff2") format("woff2"), url("/${file}.ttf") format("truetype")`, {
         weight,
         style: "normal",
         display: "swap",
       }),
-    );
-  }
+  );
+  for (const face of faces) document.fonts.add(face);
+  Promise.allSettled(faces.map((face) => face.load())).then(() => {
+    brandFontsReady.value = true;
+  });
 }

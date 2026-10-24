@@ -1223,6 +1223,7 @@ onBeforeUnmount(() => {
     <z-button
       circle
       class="ik-refresh-fab"
+      aria-label="刷新"
       :loading="refreshing"
       :disabled="applyingNewArticles"
       @click="handleRefresh"

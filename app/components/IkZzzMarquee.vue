@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { brandFontsReady } from "~/utils/brand-fonts";
 
 const props = withDefaults(
   defineProps<{
@@ -58,7 +59,8 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="ik-zzz-marquee" :class="{ 'is-running': isRunning }" aria-hidden="true">
-    <div class="ik-zzz-marquee__band">
+    <!-- 等品牌字体就绪再渲染：字宽一变整片文字都会位移，计入 CLS（见 utils/brand-fonts.ts） -->
+    <div v-if="brandFontsReady" class="ik-zzz-marquee__band">
       <div
         v-for="(row, index) in ROWS"
         :key="index"
@@ -83,6 +85,10 @@ onBeforeUnmount(() => {
 @keyframes ik-zzz-marquee-rtl {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(-50%, 0, 0); }
+}
+
+@keyframes ik-zzz-marquee-fade-in {
+  from { opacity: 0; }
 }
 
 /*
@@ -124,6 +130,7 @@ onBeforeUnmount(() => {
   gap: 0.006em;
   font-size: var(--ik-marquee-font);
   transform: translateY(5vh) rotate(-15deg);
+  animation: ik-zzz-marquee-fade-in 0.8s ease-out;
 }
 
 .ik-zzz-marquee__row {
@@ -176,6 +183,7 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ik-zzz-marquee__band,
   .ik-zzz-marquee__track {
     animation: none;
   }
