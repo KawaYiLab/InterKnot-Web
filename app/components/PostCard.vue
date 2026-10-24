@@ -211,7 +211,7 @@ const handleOpen = (e: MouseEvent) => {
         </div>
 
         <h3 class="ik-card__title" :class="{ 'ik-card__title--read': post.isRead }">
-          <span v-if="post.category" class="ik-card__title-cat">[{{ post.category.name }}]</span>{{ post.title }}
+          {{ post.title }}
         </h3>
         <p v-if="excerpt" class="ik-card__excerpt">{{ excerpt }}</p>
       </div>
@@ -302,10 +302,6 @@ const handleOpen = (e: MouseEvent) => {
   font-size: 13px;
   font-weight: 700;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-}
-
-.ik-card__title-cat {
-  margin-right: 4px;
 }
 
 :deep(.ik-card__cover) {

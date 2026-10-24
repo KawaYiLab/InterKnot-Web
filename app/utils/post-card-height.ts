@@ -23,8 +23,6 @@ const POST_CARD_BODY_PADDING_X = 16;
 const POST_CARD_EXCERPT_FONT = "400 15px";
 const POST_CARD_EXCERPT_LINE_HEIGHT = 21;
 const POST_CARD_BODY_GAP = 8;
-// 标题前的 [分类] 前缀右侧 margin
-const POST_CARD_TITLE_CAT_GAP = 4;
 // 与 theme.css 中 body 的 font-family 保持一致；运行时优先读 body 的计算值
 const FALLBACK_FONT_FAMILY =
   '"InterKnot Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
@@ -54,17 +52,15 @@ function getMeasureContext() {
  * 不受中英文混排、标点、字体差异影响。字体尚未加载时 canvas 与 DOM 同样用回退字体，
  * 二者仍一致；字体换上后的差异由 ResizeObserver 实测修正。
  */
-function countTitleLines(prefix: string, title: string, availableWidth: number) {
+function countTitleLines(title: string, availableWidth: number) {
   // DOM 会合并连续空白、行首行尾空白不占宽
-  const text = title.replace(/\s+/g, " ");
+  const text = title.replace(/\s+/g, " ").trim();
   const ctx = getMeasureContext();
   if (!ctx) {
-    return estimateTitleLineCount(prefix + text, availableWidth, POST_CARD_TITLE_FONT_SIZE);
+    return estimateTitleLineCount(text, availableWidth, POST_CARD_TITLE_FONT_SIZE);
   }
   ctx.font = `${POST_CARD_TITLE_FONT_WEIGHT} ${POST_CARD_TITLE_FONT_SIZE}px ${fontFamily}`;
-  const prefixWidth = prefix ? ctx.measureText(prefix).width + POST_CARD_TITLE_CAT_GAP : 0;
-  const width = prefixWidth + ctx.measureText(prefix ? text.trimEnd() : text.trim()).width;
-  return width <= availableWidth ? 1 : 2;
+  return ctx.measureText(text).width <= availableWidth ? 1 : 2;
 }
 
 /** 摘要行数（0–2）。量法同标题。 */
@@ -85,10 +81,7 @@ export function estimatePostCardHeight(post: Post, itemWidth: number) {
   const innerWidth = Math.max(0, itemWidth - POST_CARD_PADDING_X);
   const coverHeight = innerWidth / ratio;
 
-  // 有分类时标题前还渲染 [分类名] 前缀，一并计入宽度
-  const prefix = post.category ? `[${post.category.name}]` : "";
   const titleLines = countTitleLines(
-    prefix,
     post.title ?? "",
     Math.max(0, innerWidth - POST_CARD_BODY_PADDING_X),
   );
