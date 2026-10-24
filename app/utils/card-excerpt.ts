@@ -13,6 +13,8 @@ export function toCardExcerpt(raw: string | null | undefined): string {
     .replace(/!\[[^\]]*$/, "")
     .replace(/\[([^\]]*)\]\([^)]*\)?/g, "$1")
     .replace(/<[^>]*>?/g, "")
+    // 嵌套 / 残缺标签去一轮后仍可能拼出 `<script`，残留的尖括号一律删掉
+    .replace(/[<>]/g, "")
     .replace(/(^|\s)(#{1,6}|>|[-*+]|\d+\.)(?=\s)/g, "$1")
     .replace(/[*_~`]{1,3}/g, "")
     .replace(/\s+/g, " ")
