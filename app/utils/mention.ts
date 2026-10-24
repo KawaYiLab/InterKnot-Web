@@ -4,11 +4,13 @@
  * 评论正文里的 @ 提及以 markdown-style 标记存储：
  *   `@[显示名](authorDocumentId)`
  *
+ * ID 兼容两种格式：ik-server 的数字 ID（如 `49`）和旧 Strapi 的 documentId。
+ *
  * 与 `server/src/api/comment/utils/mention.ts` 的正则 / 行为保持一致。
  * 两端独立维护避免跨仓引用；改动时务必同步两侧。
  */
 
-export const MENTION_REGEX = /@\[([^\[\]\n]{1,40})\]\(([A-Za-z0-9]{6,32})\)/g;
+export const MENTION_REGEX = /@\[([^\[\]\n]{1,40})\]\(([A-Za-z0-9]{1,32})\)/g;
 
 export interface MentionToken {
   /** token 内书写的显示名（写入时的快照，不一定等于现在的 author.name） */
