@@ -437,8 +437,8 @@ const handleOpen = (e: MouseEvent) => {
 /* 字号 / 行高改动需同步 utils/post-card-height.ts */
 .ik-card__excerpt {
   margin: 0;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 15px;
+  line-height: 21px;
   color: var(--ik-post-card-excerpt-color);
   overflow: hidden;
   display: -webkit-box;

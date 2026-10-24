@@ -19,9 +19,9 @@ const POST_CARD_TITLE_FONT_WEIGHT = 600;
 const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
 // 卡片 body 横向内边距 = 8 * 2 = 16px，title 可用宽度 = itemWidth - 8 - 16
 const POST_CARD_BODY_PADDING_X = 16;
-// 正文摘要（.ik-card__excerpt）：13px / 行高 18px，最多 2 行，与标题之间隔一个 body gap
-const POST_CARD_EXCERPT_FONT = "400 13px";
-const POST_CARD_EXCERPT_LINE_HEIGHT = 18;
+// 正文摘要（.ik-card__excerpt）：15px / 行高 21px，最多 2 行，与标题之间隔一个 body gap
+const POST_CARD_EXCERPT_FONT = "400 15px";
+const POST_CARD_EXCERPT_LINE_HEIGHT = 21;
 const POST_CARD_BODY_GAP = 8;
 // 标题前的 [分类] 前缀右侧 margin
 const POST_CARD_TITLE_CAT_GAP = 4;
@@ -71,7 +71,7 @@ function countTitleLines(prefix: string, title: string, availableWidth: number) 
 function countExcerptLines(text: string, availableWidth: number) {
   if (!text) return 0;
   const ctx = getMeasureContext();
-  if (!ctx) return estimateTitleLineCount(text, availableWidth, 13);
+  if (!ctx) return estimateTitleLineCount(text, availableWidth, 15);
   ctx.font = `${POST_CARD_EXCERPT_FONT} ${fontFamily}`;
   return ctx.measureText(text).width <= availableWidth ? 1 : 2;
 }
