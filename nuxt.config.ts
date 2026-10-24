@@ -24,7 +24,7 @@ export default defineNuxtConfig({
       },
     },
   },
-  css: ["~/assets/styles/fonts.css", "~/assets/styles/theme.css"],
+  css: ["~/assets/styles/theme.css"],
   runtimeConfig: {
     public: {
       // 接口与网页同源（生产由 nginx 把 /v1 反代到 ik-server），默认留空。
@@ -85,12 +85,6 @@ export default defineNuxtConfig({
             description: "新艾利都最大的匿名委托中枢。",
             url: "https://interk.net/",
           }),
-        },
-        // Cloudflare Web Analytics
-        {
-          src: "https://static.cloudflareinsights.com/beacon.min.js",
-          defer: true,
-          "data-cf-beacon": '{"token": "87a21c330b51466ca19ec0b32ff89a51"}',
         },
       ],
     },

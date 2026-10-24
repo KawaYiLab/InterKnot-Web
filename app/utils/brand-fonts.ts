@@ -20,28 +20,38 @@
    本就属正文侧，所以只把 700+ 这种真·标题交给粗档；600 及以下留细档，
    同一文件渲染、不合成、不变形，层级改由字号与颜色承担。
 
-   ## 加载策略：font-display: swap，不 preload
-   两文件各约 1.8MB，是 App 打包一次即可、web 每次访问都要传的东西。
+   ## 加载策略：首屏加载完再注册，font-display: swap，不 preload
+   两文件各约 1.8MB（TTF），是 App 打包一次即可、web 每次访问都要传的东西。
+   web 优先用同名 .woff2（由 TTF 无损转换，各约 0.85–1MB），TTF 仅作兜底。
    swap = 先用系统字体立即渲染，字体到位后再替换，绝不阻塞首屏文字。
-   刻意不 preload：避免把 3.6MB 抬进首屏关键路径。
+   刻意不 preload，也不写成全局 CSS 的 @font-face：后者在首次渲染文字时就会
+   以最高优先级开始下载，和首屏委托封面抢带宽，弱网下 LCP 被拖慢十几秒。
+   因此改用 FontFace API 延后注册：首页第一张首屏封面加载完成时（PostCard）
+   触发；没有封面的页面由 plugins/fonts.client.ts 在 window load 后兜底触发。
 
    ## 字符覆盖
    各约 6800 常用汉字（GB2312 量级）。用户生成内容里的生僻字 / emoji 会
    逐字回退到 fallback 栈的系统中文黑体，属预期行为。
-   ═══════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════ */
 
-@font-face {
-  font-family: "InterKnot Sans";
-  src: url("/zh-cn-light.ttf") format("truetype");
-  font-weight: 1 699;
-  font-style: normal;
-  font-display: swap;
-}
 
-@font-face {
-  font-family: "InterKnot Sans";
-  src: url("/zh-cn-bold.ttf") format("truetype");
-  font-weight: 700 900;
-  font-style: normal;
-  font-display: swap;
+const FONT_FACES = [
+  { file: "zh-cn-light", weight: "1 699" },
+  { file: "zh-cn-bold", weight: "700 900" },
+];
+
+let registered = false;
+
+export function loadBrandFonts() {
+  if (registered || typeof FontFace === "undefined") return;
+  registered = true;
+  for (const { file, weight } of FONT_FACES) {
+    document.fonts.add(
+      new FontFace("InterKnot Sans", `url("/${file}.woff2") format("woff2"), url("/${file}.ttf") format("truetype")`, {
+        weight,
+        style: "normal",
+        display: "swap",
+      }),
+    );
+  }
 }

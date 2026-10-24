@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import PostOverlay from "~/components/PostOverlay.vue";
+import type { Ref } from "vue";
 import { OVERLAY_KNOCK_KEY, overlayHistoryState } from "~/utils/overlay-history";
 
 const auth = useAuthStore();
 const router = useRouter();
 const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
+const loginDialog = useLoginDialog();
 const benefitsModal = useBenefitsModal();
 const checkInReminder = useCheckInReminder();
 const gpuAccelerated = useGpuAccelerated();
@@ -100,6 +102,22 @@ onBeforeUnmount(() => {
   }
 });
 
+// 登录 / 敲敲弹窗首次打开时才挂载：它们的 chunk（含 qrcode、markdown、DOMPurify）
+// 不必在首屏下载执行、和委托列表抢带宽。挂载后保留，以便关闭时播放离场动画。
+const mountOnceVisible = (visible: Ref<boolean>) => {
+  const mounted = ref(visible.value);
+  if (!mounted.value) {
+    const stop = watch(visible, (v) => {
+      if (!v) return;
+      mounted.value = true;
+      stop();
+    });
+  }
+  return mounted;
+};
+const loginDialogMounted = mountOnceVisible(loginDialog.visible);
+const knockModalMounted = mountOnceVisible(knockModal.visible);
+
 const handleOverlayClose = () => {
   postModal.close();
 };
@@ -141,7 +159,7 @@ const overlayOpen = computed(
 
     <!-- 登录弹窗 -->
     <ClientOnly>
-      <LazyLoginDialog />
+      <LazyLoginDialog v-if="loginDialogMounted" />
     </ClientOnly>
 
     <!-- 确认弹窗 -->
@@ -174,7 +192,7 @@ const overlayOpen = computed(
 
     <!-- 敲敲弹窗（消息通知 / 私聊 / 群聊入口） -->
     <ClientOnly>
-      <LazyKnockKnockModal />
+      <LazyKnockKnockModal v-if="knockModalMounted" />
     </ClientOnly>
 
     <!-- 委托详情弹窗（从首页点击卡片时弹出）

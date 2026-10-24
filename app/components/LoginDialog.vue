@@ -311,7 +311,8 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <Transition name="ik-overlay">
+    <!-- appear：app.vue 在首次打开时才挂载本组件，首次打开也要播放入场动画 -->
+    <Transition name="ik-overlay" appear>
       <div v-if="visible" class="ik-overlay" @mousedown.self="handleClose">
         <!-- 斜线纹理背景（与委托弹窗一致） -->
         <div class="ik-overlay__stripe" aria-hidden="true"></div>

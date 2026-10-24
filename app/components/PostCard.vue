@@ -20,6 +20,7 @@ function markCoverLoaded(src: string) {
 import { computed, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
+import { loadBrandFonts } from "~/utils/brand-fonts";
 import { toCardCoverThumbUrl } from "~/utils/image";
 import UserHoverCard from "./UserHoverCard.vue";
 
@@ -98,9 +99,12 @@ watch(
 const onCoverLoad = () => {
   coverImageLoaded.value = true;
   markCoverLoaded(coverSrc.value);
+  // 首屏封面到位后再拉品牌字体，避免两者抢带宽拖慢 LCP
+  if (props.eager) loadBrandFonts();
 };
 
 const onCoverError = () => {
+  if (props.eager) loadBrandFonts();
   if (coverSrc.value === DEFAULT_COVER_IMAGE) {
     coverImageLoaded.value = true;
     markCoverLoaded(coverSrc.value);

@@ -1533,7 +1533,8 @@ const handleMobileBack = () => {
 
 <template>
   <Teleport to="body">
-    <Transition name="ik-overlay">
+    <!-- appear：app.vue 在首次打开时才挂载本组件，首次打开也要播放入场动画 -->
+    <Transition name="ik-overlay" appear>
       <div
         v-if="visible"
         class="ik-overlay"
