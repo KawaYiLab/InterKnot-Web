@@ -22,6 +22,7 @@ import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 import { loadBrandFonts } from "~/utils/brand-fonts";
 import { toCardCoverThumbUrl } from "~/utils/image";
+import { toCardExcerpt } from "~/utils/card-excerpt";
 import UserHoverCard from "./UserHoverCard.vue";
 
 const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
@@ -37,6 +38,7 @@ const emit = defineEmits<{
 }>();
 
 const authorName = computed(() => props.post.author?.name || "未知作者");
+const excerpt = computed(() => toCardExcerpt(props.post.bodyText));
 
 // 悬浮卡仅在支持悬停的设备（桌面鼠标）才有意义；触屏上它本就不弹，却仍会
 // 为每张卡片实例化多个 composable。用此开关在移动端彻底不挂载，省掉浪费。
@@ -211,6 +213,7 @@ const handleOpen = (e: MouseEvent) => {
         <h3 class="ik-card__title" :class="{ 'ik-card__title--read': post.isRead }">
           <span v-if="post.category" class="ik-card__title-cat">[{{ post.category.name }}]</span>{{ post.title }}
         </h3>
+        <p v-if="excerpt" class="ik-card__excerpt">{{ excerpt }}</p>
       </div>
     </NuxtLink>
   </article>
@@ -429,6 +432,20 @@ const handleOpen = (e: MouseEvent) => {
 
 .ik-card__title--read {
   color: var(--ik-post-card-title-read-color);
+}
+
+/* 字号 / 行高改动需同步 utils/post-card-height.ts */
+.ik-card__excerpt {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ik-post-card-excerpt-color);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
 }
 
 </style>

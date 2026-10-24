@@ -4,6 +4,7 @@ import {
   estimateTitleLineCount,
   getNormalizedCoverAspectRatio,
 } from "~/utils/cover";
+import { toCardExcerpt } from "~/utils/card-excerpt";
 
 // 固定部分（不含封面、title 高度）：
 //   card padding(4 * 2) + author-row min-height(32) + body gap(8)
@@ -18,6 +19,10 @@ const POST_CARD_TITLE_FONT_WEIGHT = 600;
 const POST_CARD_TITLE_LINE_HEIGHT = 1.25;
 // 卡片 body 横向内边距 = 8 * 2 = 16px，title 可用宽度 = itemWidth - 8 - 16
 const POST_CARD_BODY_PADDING_X = 16;
+// 正文摘要（.ik-card__excerpt）：13px / 行高 18px，最多 2 行，与标题之间隔一个 body gap
+const POST_CARD_EXCERPT_FONT = "400 13px";
+const POST_CARD_EXCERPT_LINE_HEIGHT = 18;
+const POST_CARD_BODY_GAP = 8;
 // 标题前的 [分类] 前缀右侧 margin
 const POST_CARD_TITLE_CAT_GAP = 4;
 // 与 theme.css 中 body 的 font-family 保持一致；运行时优先读 body 的计算值
@@ -25,6 +30,7 @@ const FALLBACK_FONT_FAMILY =
   '"InterKnot Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
 
 let measureCtx: CanvasRenderingContext2D | null | undefined;
+let fontFamily = FALLBACK_FONT_FAMILY;
 
 function getMeasureContext() {
   if (measureCtx !== undefined) return measureCtx;
@@ -33,8 +39,7 @@ function getMeasureContext() {
   try {
     const ctx = document.createElement("canvas").getContext("2d");
     if (ctx) {
-      const family = getComputedStyle(document.body).fontFamily || FALLBACK_FONT_FAMILY;
-      ctx.font = `${POST_CARD_TITLE_FONT_WEIGHT} ${POST_CARD_TITLE_FONT_SIZE}px ${family}`;
+      fontFamily = getComputedStyle(document.body).fontFamily || FALLBACK_FONT_FAMILY;
       measureCtx = ctx;
     }
   } catch {
@@ -56,9 +61,19 @@ function countTitleLines(prefix: string, title: string, availableWidth: number) 
   if (!ctx) {
     return estimateTitleLineCount(prefix + text, availableWidth, POST_CARD_TITLE_FONT_SIZE);
   }
+  ctx.font = `${POST_CARD_TITLE_FONT_WEIGHT} ${POST_CARD_TITLE_FONT_SIZE}px ${fontFamily}`;
   const prefixWidth = prefix ? ctx.measureText(prefix).width + POST_CARD_TITLE_CAT_GAP : 0;
   const width = prefixWidth + ctx.measureText(prefix ? text.trimEnd() : text.trim()).width;
   return width <= availableWidth ? 1 : 2;
+}
+
+/** 摘要行数（0–2）。量法同标题。 */
+function countExcerptLines(text: string, availableWidth: number) {
+  if (!text) return 0;
+  const ctx = getMeasureContext();
+  if (!ctx) return estimateTitleLineCount(text, availableWidth, 13);
+  ctx.font = `${POST_CARD_EXCERPT_FONT} ${fontFamily}`;
+  return ctx.measureText(text).width <= availableWidth ? 1 : 2;
 }
 
 /** 按 PostCard 的实际渲染结构估算卡片高度，供 VirtualMasonry 的 heightMapper 使用。 */
@@ -78,7 +93,14 @@ export function estimatePostCardHeight(post: Post, itemWidth: number) {
     Math.max(0, innerWidth - POST_CARD_BODY_PADDING_X),
   );
   const titleHeight = POST_CARD_TITLE_FONT_SIZE * POST_CARD_TITLE_LINE_HEIGHT * titleLines;
+  const excerptLines = countExcerptLines(
+    toCardExcerpt(post.bodyText),
+    Math.max(0, innerWidth - POST_CARD_BODY_PADDING_X),
+  );
+  const excerptHeight = excerptLines
+    ? POST_CARD_BODY_GAP + POST_CARD_EXCERPT_LINE_HEIGHT * excerptLines
+    : 0;
 
   // 与 VirtualMasonry 对实测高度的取整方式（Math.round）保持一致，避免差 1px 也触发重排
-  return Math.round(coverHeight + POST_CARD_FIXED_HEIGHT + titleHeight);
+  return Math.round(coverHeight + POST_CARD_FIXED_HEIGHT + titleHeight + excerptHeight);
 }
