@@ -65,30 +65,6 @@ function migrateImageUrl(url: string): string {
   return clean;
 }
 
-/**
- * im.tiwat.cn 已切到 Cloudflare，ESA 的 image_process 参数会被忽略（直接回源原图，
- * 封面动辄数 MB）。本站图片统一改走 Cloudflare Image Transformations：
- * https://im.tiwat.cn/cdn-cgi/image/<options>/<path>
- * format=auto 按 Accept 头协商 AVIF / WebP，动图会转成动画 WebP；
- * onerror=redirect 让转换失败（超限等）时回落到原图，而不是裂图。
- */
-function buildCdnCgiImageUrl(canonicalUrl: string, options: string): string {
-  const u = new URL(canonicalUrl);
-  u.pathname = `/cdn-cgi/image/${options}${u.pathname}`;
-  return u.toString();
-}
-
-function cdnCgiOptions(width?: number): string {
-  return [width ? `width=${width}` : "", "format=auto", "quality=80", "onerror=redirect"].filter(Boolean).join(",");
-}
-
-/** 后端仍下发 ESA 参数的本站 URL（头像、thumbUrl 等）转成等效的 cdn-cgi URL，保留宽度。 */
-function esaToCdnCgiUrl(url: string): string {
-  const process = new URL(url).searchParams.get("image_process") ?? "";
-  const width = Number(/(?:^|[,/])w_(\d+)/.exec(process)?.[1]) || undefined;
-  return buildCdnCgiImageUrl(stripImageProcessQuery(url), cdnCgiOptions(width));
-}
-
 function buildEsaImageUrl(canonicalUrl: string, process: string): string {
   const sep = canonicalUrl.includes("?") ? "&" : "?";
   return `${canonicalUrl}${sep}image_process=${process}`;
@@ -161,14 +137,12 @@ function stripCdnCgiImagePath(url: string): string {
  * - 重写旧域名 image.tiwat.cn 到 im.tiwat.cn
  * - 去掉旧七牛云的 -small.webp 后缀
  * - 相对路径补齐为图片 CDN 绝对 URL
- * - 本站带 ESA image_process 参数的缩略图转为 cdn-cgi 等效 URL
  * - blob/data URL 原样返回
  */
 export function toMediaUrl(url: string | undefined): string {
   if (!url) return "";
   if (isInlineUrl(url)) return url;
-  const clean = migrateImageUrl(url);
-  return isAppImageHost(clean) && hasImageProcess(clean) ? esaToCdnCgiUrl(clean) : clean;
+  return migrateImageUrl(url);
 }
 
 /**
@@ -200,16 +174,16 @@ export function toThumbUrl(url: string | undefined, width = 360): string {
     return replaceR2Width(clean, width);
   }
 
-  if (isAppImageHost(clean)) {
-    return buildCdnCgiImageUrl(stripImageProcessQuery(clean), cdnCgiOptions(width));
-  }
-
   if (hasImageProcess(clean)) {
     return ensureEsaResizeWidth(clean, width);
   }
 
-  // 外部封面图（如 Bilibili）不需要/不支持缩略图处理，直接返回原图。
-  return clean;
+  // 外部封面图（如 Bilibili）不需要/不支持 ESA 处理，直接返回原图。
+  if (!isAppImageHost(clean)) {
+    return clean;
+  }
+
+  return buildEsaImageUrl(clean, `resize,w_${width}/format,webp/quality,q_80`);
 }
 
 /**
@@ -231,10 +205,6 @@ export function toNoResizeWebpUrl(url: string | undefined): string {
 
   if (isCdnCgiImageUrl(clean)) {
     return removeR2Width(clean);
-  }
-
-  if (isAppImageHost(clean)) {
-    return buildCdnCgiImageUrl(stripImageProcessQuery(clean), cdnCgiOptions());
   }
 
   if (hasImageProcess(clean)) {
