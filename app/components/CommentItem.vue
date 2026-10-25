@@ -265,10 +265,12 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 .ik-comment__main--target {
   position: relative;
+  /* 将负层级的高亮背景留在评论内，避免沉到页面底色后面。 */
+  isolation: isolate;
   padding: 16px 12px 20px 12px;
 }
 
-/* 进入视口时先用主题色背景给出明显反馈，随后背景渐隐恢复正常，只保留左侧强调线 */
+/* 进入视口时先用主题色背景给出明显反馈，随后背景渐隐恢复正常。 */
 .ik-comment__main--target::before {
   content: "";
   position: absolute;
@@ -278,18 +280,6 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   opacity: 0.2;
   pointer-events: none;
   animation: ik-comment-target-flash 1.2s ease-out forwards;
-}
-
-.ik-comment__main--target::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 4px;
-  background: var(--ik-primary);
-  opacity: 0.8;
-  pointer-events: none;
 }
 
 @keyframes ik-comment-target-flash {
