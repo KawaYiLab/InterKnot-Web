@@ -147,9 +147,8 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
           @click="jumpToReplyTarget"
         >
           <ArrowUturnLeftIcon class="ik-comment__quote-icon" aria-hidden="true" />
-          <span class="ik-comment__quote-floor">F{{ replyTo.floor }}</span>
           <template v-if="replyTo.comment">
-            <span class="ik-comment__quote-name">{{ replyTo.comment.authorName }}</span>
+            <span class="ik-comment__quote-name">@{{ replyTo.comment.authorName }}</span>
             <span class="ik-comment__quote-text">{{ replyTo.comment.excerpt }}</span>
           </template>
           <span v-else class="ik-comment__quote-text">{{ replyTo.deleted ? "原评论已删除" : "原评论不可见" }}</span>
@@ -402,27 +401,28 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 }
 
 /* ── 引用：回复了哪条 ─────────────────────────── */
+/* 绝区零对话气泡：左上直角（同楼层号 .ik-comment__floor），深底细描边，@名字用品牌荧光绿 */
 .ik-comment__quote {
   display: flex;
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  margin-top: 6px;
-  padding: 4px 10px;
-  border: none;
-  border-left: 3px solid #444;
-  border-radius: 0 6px 6px 0;
-  background: rgba(255, 255, 255, 0.04);
-  color: #888;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid #2a2a2a;
+  border-radius: 0 10px 10px 10px;
+  background: #151515;
+  color: #8a8a8a;
   font-size: 12px;
   line-height: 1.5;
   text-align: left;
   cursor: var(--ik-cursor-pointer);
-  transition: border-color 140ms ease, color 140ms ease;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
 }
 
 .ik-comment__quote:hover:not(:disabled) {
-  border-left-color: var(--ik-primary);
+  border-color: var(--ik-primary);
+  background: #1b1b1b;
   color: #bbb;
 }
 
@@ -437,10 +437,10 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   flex-shrink: 0;
 }
 
-.ik-comment__quote-floor,
 .ik-comment__quote-name {
   flex-shrink: 0;
   font-weight: 700;
+  color: var(--ik-primary);
 }
 
 .ik-comment__quote-text {
