@@ -316,14 +316,13 @@ export interface Post {
   author: Author;
 }
 
-export interface CommentReply {
-  id: string;
-  content: string;
-  images?: CoverImage[];
-  liked?: boolean;
-  likesCount?: number;
-  createdAt?: string;
-  author: Author;
+/** 被回复的评论。评论区是扁平楼层：每条评论都占一层，可以回复任意一条。 */
+export interface CommentReplyTo {
+  floor: number;
+  /** 原评论已删除。 */
+  deleted: boolean;
+  /** 原评论摘要；已删除、被隐藏或作者与你有拉黑关系时为空。 */
+  comment?: { id: string; authorName: string; excerpt: string } | null;
 }
 
 export interface Comment {
@@ -334,26 +333,20 @@ export interface Comment {
   likesCount?: number;
   createdAt?: string;
   author: Author;
-  replies: CommentReply[];
-  /**
-   * 该顶层评论的可见回复总数（后端已扣掉隐藏/拉黑）。
-   * 列表接口只带前 3 条回复，replies.length 不再等于回复总数，凡是要「回复有多少条」的
-   * 地方都得用这个字段。后端尚未部署时缺省，由 toComment 用 replies.length 兜底。
-   */
-  repliesCount?: number;
-  /** 是否还有没加载的回复（repliesCount > replies.length）。缺省时按 false 处理。 */
-  repliesHasMore?: boolean;
+  /** 回复了哪条评论；直接评论帖子时为空。 */
+  replyTo?: CommentReplyTo | null;
+  /** 收到的可见回复数。 */
+  replyCount?: number;
   articleId?: string;
   articleTitle?: string;
-  /** 是否被置顶（仅顶层评论可能为 true）。 */
   isPinned?: boolean;
   /** 置顶时间（ISO 8601）。 */
   pinnedAt?: string;
-  /** 是否被帖主/管理员采纳为最佳答案（仅顶层评论）。 */
+  /** 是否被帖主/管理员采纳为最佳答案。 */
   isAccepted?: boolean;
   /** 采纳时间（ISO 8601）。 */
   acceptedAt?: string;
-  /** 展示楼层号（列表接口按 desc 顺序返回），置顶评论无楼层号。 */
+  /** 楼层号：本帖第几条评论，删除前面的评论不会变。作者主页的评论没有。 */
   floor?: number;
 }
 

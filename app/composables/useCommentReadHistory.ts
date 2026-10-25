@@ -176,15 +176,6 @@ export function findTopVisibleComment(
         authorName: c.author?.name,
       };
     }
-    const reply = c.replies?.find((r) => r.id === commentId);
-    if (reply) {
-      return {
-        isTop: false,
-        commentId,
-        floor: c.floor,
-        authorName: reply.author?.name || c.author?.name,
-      };
-    }
   }
 
   return {
