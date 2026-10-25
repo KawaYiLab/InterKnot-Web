@@ -25,7 +25,8 @@ const forwarded = useForwardPropsEmits(props, emits);
   </TooltipPortal>
 </template>
 
-<style scoped>
+<style>
+/* Reka 将实际内容放在 Portal / Popper 内层，无法继承根节点的 scoped 标记。 */
 .ik-tooltip-content {
   z-index: 10000;
   overflow: hidden;

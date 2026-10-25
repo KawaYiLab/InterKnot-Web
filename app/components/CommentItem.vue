@@ -5,6 +5,7 @@ import {
   HandThumbUpIcon,
   ChatBubbleLeftIcon,
   EllipsisVerticalIcon,
+  ArrowUturnLeftIcon,
 } from "@heroicons/vue/24/outline";
 import {
   HandThumbUpIcon as HandThumbUpIconSolid,
@@ -15,6 +16,10 @@ import { toThumbUrl, toCanonicalUrl } from "~/utils/image";
 
 import UserHoverCard from "./UserHoverCard.vue";
 import CommentBody from "./CommentBody.vue";
+import Tooltip from "./ui/tooltip/Tooltip.vue";
+import TooltipContent from "./ui/tooltip/TooltipContent.vue";
+import TooltipProvider from "./ui/tooltip/TooltipProvider.vue";
+import TooltipTrigger from "./ui/tooltip/TooltipTrigger.vue";
 
 const { openGallery } = useLightGallery();
 
@@ -137,20 +142,34 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
         </div>
 
         <!-- 回复了哪条 -->
-        <button
-          v-if="replyTo"
-          type="button"
-          class="ik-comment__quote"
-          :class="{ 'ik-comment__quote--gone': !replyTo.comment }"
-          :disabled="!replyTo.comment"
-          @click="jumpToReplyTarget"
-        >
-          <template v-if="replyTo.comment">
-            <span class="ik-comment__quote-name">@{{ replyTo.comment.authorName }}</span>
-            <span class="ik-comment__quote-text">{{ replyTo.comment.excerpt }}</span>
-          </template>
-          <span v-else class="ik-comment__quote-text">{{ replyTo.deleted ? "原评论已删除" : "原评论不可见" }}</span>
-        </button>
+        <TooltipProvider v-if="replyTo" :delay-duration="450">
+          <Tooltip :disabled="!replyTo.comment">
+            <TooltipTrigger as-child>
+              <button
+                type="button"
+                class="ik-comment__quote"
+                :class="{ 'ik-comment__quote--gone': !replyTo.comment }"
+                :disabled="!replyTo.comment"
+                :aria-label="replyTo.comment ? `查看 @${replyTo.comment.authorName} 的原评论：${replyTo.comment.excerpt}` : undefined"
+                @click="jumpToReplyTarget"
+              >
+                <template v-if="replyTo.comment">
+                  <span class="ik-comment__quote-author">
+                    <ArrowUturnLeftIcon class="ik-comment__quote-icon" aria-hidden="true" />
+                    <span class="ik-comment__quote-name">回复 @{{ replyTo.comment.authorName }}</span>
+                  </span>
+                  <span class="ik-comment__quote-text">{{ replyTo.comment.excerpt || "查看原评论" }}</span>
+                </template>
+                <span v-else class="ik-comment__quote-text">{{ replyTo.deleted ? "原评论已删除" : "原评论不可见" }}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent v-if="replyTo.comment" side="top" align="start" class="ik-comment__quote-preview">
+              <span class="ik-comment__quote-preview-name">@{{ replyTo.comment.authorName }}</span>
+              <p v-if="replyTo.comment.excerpt" class="ik-comment__quote-preview-text">{{ replyTo.comment.excerpt }}</p>
+              <span class="ik-comment__quote-preview-hint">点击跳转到原评论</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <!-- Body -->
         <div v-if="comment.content?.trim()" class="ik-comment__body">
@@ -399,18 +418,21 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 }
 
 /* ── 引用：回复了哪条 ─────────────────────────── */
-/* 绝区零对话气泡：左上直角（同楼层号 .ik-comment__floor），深底细描边，「@名字 摘要」，@名字用品牌荧光绿 */
+/* 用轻量引用线融入正文；shadcn-vue Tooltip 展示被截断的摘要与跳转提示。 */
 .ik-comment__quote {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
   max-width: 100%;
   margin-top: 8px;
-  padding: 6px 12px;
-  border: 1px solid #2a2a2a;
-  border-radius: 0 10px 10px 10px;
-  background: #151515;
-  color: #8a8a8a;
+  padding: 5px 10px;
+  border: 0;
+  border-left: 2px solid #3a3a3a;
+  border-radius: 0 4px 4px 0;
+  background: rgba(255, 255, 255, 0.025);
+  color: #969696;
+  font-family: inherit;
   font-size: 12px;
   line-height: 1.5;
   text-align: left;
@@ -418,28 +440,78 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
 }
 
-.ik-comment__quote:hover:not(:disabled) {
-  border-color: var(--ik-primary);
-  background: #1b1b1b;
+.ik-comment__quote:hover:not(:disabled),
+.ik-comment__quote:focus-visible {
+  border-left-color: var(--ik-primary);
+  background: rgba(255, 255, 255, 0.05);
   color: #bbb;
 }
 
+.ik-comment__quote:focus-visible {
+  outline: 2px solid var(--ik-primary);
+  outline-offset: 3px;
+}
+
 .ik-comment__quote--gone {
+  background: transparent;
+  color: #777;
   cursor: default;
-  font-style: italic;
 }
 
-.ik-comment__quote-name {
+.ik-comment__quote-author {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: #b0b0b0;
+}
+
+.ik-comment__quote-icon {
+  width: 12px;
+  height: 12px;
   flex-shrink: 0;
-  font-weight: 700;
-  color: var(--ik-primary);
+  color: #808080;
 }
 
+.ik-comment__quote-name,
 .ik-comment__quote-text {
+  display: block;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.ik-comment__quote-name {
+  font-weight: 500;
+}
+
+.ik-comment__quote-text {
+  font-size: 13px;
+}
+
+:global(.ik-comment__quote-preview) {
+  max-width: min(360px, calc(100vw - 32px));
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ik-comment__quote-preview-name {
+  display: block;
+  color: #b0b0b0;
+  font-weight: 600;
+}
+
+.ik-comment__quote-preview-text {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+
+.ik-comment__quote-preview-hint {
+  display: block;
+  margin-top: 6px;
+  color: #909090;
+  font-size: 11px;
 }
 
 /* ── Body ──────────────────────────────────────── */

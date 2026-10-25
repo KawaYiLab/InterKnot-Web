@@ -68,7 +68,7 @@ const newComment = ref("");
 const sendingComment = ref(false);
 const commentInputBoxRef = ref<HTMLElement | null>(null);
 const commentInputFocused = ref(false);
-const replyTarget = ref<{ id: string; authorName: string; floor?: number } | null>(null);
+const replyTarget = ref<{ id: string; authorName: string } | null>(null);
 const commentAnonymous = ref(false);
 
 /** 真实底层 textarea：z-input 是个包装，原生 keydown / overlay 都需要它 */
@@ -542,7 +542,6 @@ const startReply = (comment: Comment) => {
   replyTarget.value = {
     id: comment.id,
     authorName: comment.author?.name || "匿名用户",
-    floor: comment.floor,
   };
   focusCommentInput();
 };
@@ -1366,7 +1365,7 @@ onBeforeUnmount(() => {
                       :emotes="emoteInsert.emotes.value"
                     />
                     <div v-if="replyTarget && isCommentEditorActive" class="ik-engage-bar__reply-hint">
-                      <span>回复 <template v-if="replyTarget.floor">F{{ replyTarget.floor }} </template>{{ replyTarget.authorName }}</span>
+                      <span>回复 {{ replyTarget.authorName }}</span>
                       <button type="button" class="ik-engage-bar__reply-close" @click="replyTarget = null">✕</button>
                     </div>
                     <div v-if="!isCommentEditorActive && !newComment.trim() && !emoteInsert.hasEmotes.value && !commentImages.uploadTasks.value.length" class="ik-engage-bar__placeholder">
