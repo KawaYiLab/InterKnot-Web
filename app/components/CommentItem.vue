@@ -5,7 +5,6 @@ import {
   HandThumbUpIcon,
   ChatBubbleLeftIcon,
   EllipsisVerticalIcon,
-  ArrowUturnLeftIcon,
 } from "@heroicons/vue/24/outline";
 import {
   HandThumbUpIcon as HandThumbUpIconSolid,
@@ -146,7 +145,6 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
           :disabled="!replyTo.comment"
           @click="jumpToReplyTarget"
         >
-          <ArrowUturnLeftIcon class="ik-comment__quote-icon" aria-hidden="true" />
           <template v-if="replyTo.comment">
             <span class="ik-comment__quote-name">@{{ replyTo.comment.authorName }}</span>
             <span class="ik-comment__quote-text">{{ replyTo.comment.excerpt }}</span>
@@ -401,7 +399,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 }
 
 /* ── 引用：回复了哪条 ─────────────────────────── */
-/* 绝区零对话气泡：左上直角（同楼层号 .ik-comment__floor），深底细描边，@名字用品牌荧光绿 */
+/* 绝区零对话气泡：左上直角（同楼层号 .ik-comment__floor），深底细描边，「@名字 摘要」，@名字用品牌荧光绿 */
 .ik-comment__quote {
   display: flex;
   align-items: center;
@@ -429,12 +427,6 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 .ik-comment__quote--gone {
   cursor: default;
   font-style: italic;
-}
-
-.ik-comment__quote-icon {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
 }
 
 .ik-comment__quote-name {
