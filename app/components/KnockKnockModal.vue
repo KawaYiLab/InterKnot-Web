@@ -101,6 +101,8 @@ const DEFAULT_AI_SUGGESTIONS = [
 const knockBootstrapDone = ref(false);
 
 const isOfficialAiPeer = (conv: DmConversationSummary): boolean => {
+  // AI 发来的通知分组（评论区回复等）不是 AI 会话，和真人的通知分组一样留在私聊 Tab
+  if (conv.pseudoKind) return false;
   if (conv.peer?.isAiAgent === true) return true;
   const uid = conv.peer?.userId;
   return typeof uid === "string" && aiPeerUserIds.value.has(uid);
@@ -155,7 +157,7 @@ const onVisibleChange = async (next: boolean) => {
       typeof peerUid === "string"
         ? aiCharacters.value.find((c) => c.boundUser?.id === peerUid)
         : undefined;
-    if (conv && (conv.peer?.isAiAgent || aiCard)) {
+    if (conv && !conv.pseudoKind && (conv.peer?.isAiAgent || aiCard)) {
       activeTab.value = "calls";
       activeAiSlug.value = aiCard?.slug ?? null;
       activeConversationId.value = pendingDm;
@@ -292,9 +294,7 @@ watch(
 /** 当前会话是否为官方 AI 角色（决定是否显示会话管理按钮） */
 const isActiveAiConversation = computed<boolean>(() => {
   const conv = activeConversation.value;
-  if (!conv) return false;
-  const uid = conv.peer?.userId;
-  return conv.peer?.isAiAgent === true || (typeof uid === "string" && aiPeerUserIds.value.has(uid));
+  return !!conv && isOfficialAiPeer(conv);
 });
 /** 私信附图（真人私聊与 AI 会话都能发） */
 const dmImages = useDmImages();
@@ -549,12 +549,18 @@ const openCallsTab = async () => {
  * 当前激活会话是否禁止发送消息：
  *  - pseudo:anonymous（匿名通知）：对端没有真实身份，无法回复
  *  - pseudo:system（系统通知）：单向通知，不可回复
- *  - pseudo:user：可发，发出去的瞬间会 lazy 实质化为真 DM（见 useDmConversations.sendMessage）
+ *  - pseudo:user：可发，发出去的瞬间会 lazy 实质化为真 DM（见 useDmConversations.sendMessage）；
+ *    AI 发来的通知分组除外：和 AI 聊天走「通话」Tab，这里发出去只会建出一条不会被回复的普通私聊
  */
+const isAiNotificationBucket = (conv: DmConversationSummary): boolean =>
+  conv.pseudoKind === "user" &&
+  (conv.peer?.isAiAgent === true ||
+    (typeof conv.peer?.userId === "string" && aiPeerUserIds.value.has(conv.peer.userId)));
+
 const composerDisabled = computed<boolean>(() => {
   const conv = activeConversation.value;
   if (!conv) return true;
-  return conv.pseudoKind === "anonymous" || conv.pseudoKind === "system";
+  return conv.pseudoKind === "anonymous" || conv.pseudoKind === "system" || isAiNotificationBucket(conv);
 });
 
 /** 对端是否正在输入：当前会话的 typing 用户列表非空且不含自己 */
@@ -666,10 +672,7 @@ const bubbleText = (msg: DmMessage): BubbleRender => {
 /** 与官方 AI 私聊（通话 Tab 绑定的 fairy 等） */
 const isAiPeerConversation = computed(() => {
   const conv = activeConversation.value;
-  if (!conv) return false;
-  if (conv.peer?.isAiAgent === true) return true;
-  const uid = conv.peer?.userId;
-  return typeof uid === "string" && aiPeerUserIds.value.has(uid);
+  return !!conv && isOfficialAiPeer(conv);
 });
 
 const shouldAnimateAiMessage = (msg: DmMessage): boolean => {
