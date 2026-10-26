@@ -533,9 +533,8 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 .ik-comment__body {
   margin-top: 4px;
   font-size: 15px;
-  font-weight: 700;
   line-height: 1.7;
-  color: #d6d6d6;
+  color: #f0f0f0;
   white-space: pre-wrap;
   word-wrap: break-word;
 }

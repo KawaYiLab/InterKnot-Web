@@ -2784,9 +2784,8 @@ html.no-gpu .ik-dialog {
 .ik-dialog__content {
   margin: 0;
   font-size: 16px;
-  font-weight: 700;
   line-height: 1.75;
-  color: #d6d6d6;
+  color: #e0e0e0;
   /* 由 markdown-it 渲染成 HTML，无需 pre-wrap；详见 utils/format-body.ts。 */
   white-space: normal;
   word-wrap: break-word;

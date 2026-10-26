@@ -1971,9 +1971,8 @@ onBeforeUnmount(() => {
 .ik-page__content {
   margin: 0;
   font-size: 16px;
-  font-weight: 700;
   line-height: 1.75;
-  color: #d6d6d6;
+  color: #e0e0e0;
   /* 内容已由 markdown-it 渲染成正规 HTML（含 <br>/<p>），这里不再用 pre-wrap，
      否则源串里保留的字面换行会被重复渲染出多余空行。 */
   white-space: normal;
