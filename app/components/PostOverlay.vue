@@ -1479,11 +1479,11 @@ onBeforeUnmount(() => {
                   <span v-if="post" class="ik-dialog__popularity">
                     <HeartIcon class="ik-dialog__popularity-icon" aria-hidden="true" />{{ postLikeCount }}
                   </span>
-                  <div v-else class="ik-skel" style="width:72px;height:24px;border-radius:8px"></div>
+                  <div v-else class="ik-skel" style="width:60px;height:16px;border-radius:3px"></div>
                 </div>
                 <div v-else class="ik-dialog__author-info">
                   <div class="ik-skel" style="width:100px;height:20px;border-radius:3px"></div>
-                  <div class="ik-skel" style="width:72px;height:24px;border-radius:8px"></div>
+                  <div class="ik-skel" style="width:60px;height:16px;border-radius:3px"></div>
                 </div>
               </div>
               <button class="ik-dialog__close" aria-label="关闭" @click="handleClose">
@@ -2194,7 +2194,7 @@ html.no-gpu .ik-dialog {
   z-index: 2;
   display: flex;
   align-items: center;
-  padding: 12px 20px;
+  padding: 8px 16px;
   gap: 8px;
   flex-shrink: 0;
   border-radius: 18px 0 0 0;
@@ -2239,17 +2239,17 @@ html.no-gpu .ik-dialog {
 .ik-dialog__header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
 }
 
 .ik-dialog__avatar-shell {
   flex-shrink: 0;
-  width: 72px;
-  height: 72px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
-  border: 5px solid #2d2d2d;
+  border: 3px solid #2d2d2d;
   overflow: hidden;
 }
 
@@ -2278,7 +2278,7 @@ html.no-gpu .ik-dialog {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -2289,10 +2289,10 @@ html.no-gpu .ik-dialog {
 }
 
 .ik-dialog__author-name {
-  font-size: 20px;
-  font-weight: 900;
-  line-height: 26px;
-  color: #d8d8d8;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2328,19 +2328,19 @@ html.no-gpu .ik-dialog {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  height: 24px;
-  padding: 0 8px 0 6px;
-  border-radius: 8px;
+  height: 18px;
+  padding: 0 6px 0 4px;
+  border-radius: 6px;
   background: #2a2a2a;
   color: #fff;
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 900;
   line-height: 1;
 }
 
 .ik-dialog__popularity-icon {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
 }
 
 .ik-dialog__time {
@@ -2396,7 +2396,7 @@ html.no-gpu .ik-dialog {
 }
 
 .ik-dialog__close-img {
-  height: 44px;
+  height: 32px;
   width: auto;
   display: block;
   user-select: none;
@@ -3492,38 +3492,6 @@ html.no-gpu .ik-dialog {
 
   .ik-dialog--switching {
     animation-name: ik-dialog-switch-in-mobile;
-  }
-
-  .ik-dialog__header {
-    padding: 8px 16px;
-  }
-
-  .ik-dialog__header-left {
-    gap: 12px;
-  }
-
-  .ik-dialog__avatar-shell {
-    width: 48px;
-    height: 48px;
-    border-width: 3px;
-  }
-
-  .ik-dialog__author-info {
-    gap: 4px;
-  }
-
-  .ik-dialog__author-name {
-    font-size: 16px;
-    line-height: 20px;
-  }
-
-  .ik-dialog__popularity {
-    height: 20px;
-    font-size: 14px;
-  }
-
-  .ik-dialog__close-img {
-    height: 34px;
   }
 
   /* 移动端整体变为一条整页滚动的单栏：封面 + 正文 + 评论一起滚 */
