@@ -8,14 +8,16 @@ import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
 import { toCanonicalUrl, toThumbUrl } from "~/utils/image";
 import { StarIcon, AtSymbolIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
-import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
+import { HeartIcon, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
+import { useScrollHint } from "~/composables/useScrollHint";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
 import { countNewReply, prependKeepingPosition, removeFromTimeline } from "~/utils/comment-timeline";
 import BilibiliPlayer from "~/components/BilibiliPlayer.vue";
 import RelatedArticles from "~/components/RelatedArticles.vue";
+import ScrollHintArrows from "~/components/ScrollHintArrows.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
@@ -75,6 +77,9 @@ const commentAnonymous = ref(false);
 const commentTextareaRef = ref<HTMLTextAreaElement | null>(null);
 
 const scrollRef = ref<HTMLElement | null>(null);
+/** 桌面端正文单独一列滚动（封面固定在左侧）；移动端跟着整页滚，不用它。 */
+const detailScrollRef = ref<HTMLElement | null>(null);
+const detailHint = useScrollHint(detailScrollRef);
 
 /**
  * 评论编辑器的 @ 提及处理。
@@ -320,6 +325,7 @@ const jumpToComment = (commentId: string) => {
 
 const commentHistory = useCommentReadHistory();
 const commentsScrollRef = ref<HTMLElement | null>(null);
+const commentsHint = useScrollHint(commentsScrollRef);
 const pageBodyRef = ref<HTMLElement | null>(null);
 
 const getActiveCommentsContainer = (): HTMLElement | null => {
@@ -1026,10 +1032,10 @@ onBeforeUnmount(() => {
         <div class="ik-page__inner">
           <div class="ik-page__header">
             <div class="ik-page__header-left">
-              <div class="ik-skel" style="width:40px;height:40px;border-radius:999px"></div>
-              <div style="display:flex;flex-direction:column;gap:4px">
-                <div class="ik-skel" style="width:100px;height:18px;border-radius:3px"></div>
-                <div class="ik-skel" style="width:60px;height:14px;border-radius:3px"></div>
+              <div class="ik-skel" style="width:72px;height:72px;border-radius:999px"></div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <div class="ik-skel" style="width:140px;height:22px;border-radius:3px"></div>
+                <div class="ik-skel" style="width:72px;height:24px;border-radius:8px"></div>
               </div>
             </div>
           </div>
@@ -1041,12 +1047,14 @@ onBeforeUnmount(() => {
                 <div class="ik-page__cover-wrap">
                   <div class="ik-skel ik-skel--cover"></div>
                 </div>
+                <div class="ik-page__detail-frame">
                 <div class="ik-page__detail">
                   <div class="ik-skel ik-skel--title"></div>
                   <div class="ik-skel ik-skel--line" style="width:100%"></div>
                   <div class="ik-skel ik-skel--line" style="width:90%"></div>
                   <div class="ik-skel ik-skel--line" style="width:75%"></div>
                   <div class="ik-skel ik-skel--line" style="width:60%"></div>
+                </div>
                 </div>
               </div>
             </div>
@@ -1136,10 +1144,8 @@ onBeforeUnmount(() => {
                   </span>
                 </UserHoverCard>
               </div>
-              <span class="ik-page__time">
-                {{ formatTime(post.firstPublishedAt || post.publishedAt || post.createdAt) }}
-                <template v-if="post.editedAt"> · 编辑于 {{ formatTime(post.editedAt) }}</template>
-                <template v-if="post.views"> · {{ post.views }} 阅读</template>
+              <span class="ik-page__popularity">
+                <HeartIcon class="ik-page__popularity-icon" aria-hidden="true" />{{ postLikeCount }}
               </span>
             </div>
           </div>
@@ -1157,7 +1163,7 @@ onBeforeUnmount(() => {
                 <template v-if="hasCovers">
                   <div
                     class="ik-page__cover-border"
-                    :style="{ aspectRatio: String(coverAspectRatio) }"
+                    :style="{ '--ik-cover-ratio': String(coverAspectRatio) }"
                   >
                     <img
                       :src="firstCoverDisplayUrl"
@@ -1175,16 +1181,17 @@ onBeforeUnmount(() => {
                   <div
                     v-for="(video, idx) in post.externalVideos"
                     :key="`video-${idx}`"
-                    class="ik-page__cover-border"
-                    :style="{ aspectRatio: String(coverAspectRatio) }"
+                    class="ik-page__cover-border ik-page__cover-border--video"
+                    :style="{ '--ik-cover-ratio': String(coverAspectRatio) }"
                   >
                     <BilibiliPlayer :video="video" />
                   </div>
                 </template>
               </div>
 
-              <!-- 正文 -->
-              <div class="ik-page__detail">
+              <!-- 正文：桌面端在封面右侧单独滚动 -->
+              <div class="ik-page__detail-frame">
+              <div ref="detailScrollRef" class="ik-page__detail">
                 <div v-if="post.isHidden" class="ik-page__hidden-banner" role="alert">
                   <EyeSlashIcon class="ik-page__hidden-icon" aria-hidden="true" />
                   <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
@@ -1216,15 +1223,24 @@ onBeforeUnmount(() => {
                     @click="goTag(tag.slug)"
                   >#{{ tag.name }}</button>
                 </div>
+                <p class="ik-page__time">
+                  {{ formatTime(post.firstPublishedAt || post.publishedAt || post.createdAt) }}
+                  <template v-if="post.editedAt"> · 编辑于 {{ formatTime(post.editedAt) }}</template>
+                  <template v-if="post.views"> · {{ post.views }} 阅读</template>
+                </p>
                 <Teleport defer :to="`#${relatedTargetId}`" :disabled="!isCompact">
                   <RelatedArticles :document-id="post.id" :active="readingActive" :collapsible="isCompact" @open-post="postModal.open($event)" />
                 </Teleport>
+              </div>
+              <ScrollHintArrows v-if="!isCompact" :up="detailHint.up.value" :down="detailHint.down.value" />
               </div>
             </div>
           </div>
 
           <!-- 右栏：评论 + 操作栏 -->
           <div class="ik-page__right">
+            <div class="ik-page__comments-frame">
+            <ScrollHintArrows v-if="!isCompact" :up="commentsHint.up.value" :down="commentsHint.down.value" />
             <div class="ik-page__comments-scroll" ref="commentsScrollRef">
               <div class="ik-page__comments-inner">
                 <h2 class="ik-page__comments-heading">评论 <span>{{ postCommentCount }}</span></h2>
@@ -1253,6 +1269,7 @@ onBeforeUnmount(() => {
                   featured
                   :comment="comment"
                   :current-user-author-id="auth.user?.authorId"
+                  :post-author-id="post.author?.documentId"
                   :is-post-owner="auth.isLogin && isOwner"
                   :can-pin="canPin"
                   :can-accept="canAccept"
@@ -1282,6 +1299,7 @@ onBeforeUnmount(() => {
                   :comment="comment"
                   :index="idx"
                   :current-user-author-id="auth.user?.authorId"
+                  :post-author-id="post.author?.documentId"
                   :is-post-owner="auth.isLogin && isOwner"
                   :can-pin="canPin"
                   :can-accept="canAccept"
@@ -1304,11 +1322,12 @@ onBeforeUnmount(() => {
                 >
                   <div v-if="commentsLoading || !commentsHasNext" class="ik-scroll-footer">
                     <img v-if="commentsLoading" class="ik-scroll-gif" src="/images/Bangboo.gif" alt="加载中" />
-                    <span v-else class="ik-meta">已经到底啦 [ O_X ] /</span>
+                    <span v-else class="ik-comments-end">— 已无更多评论 —</span>
                   </div>
                 </div>
                 <div :id="relatedTargetId"></div>
               </div>
+            </div>
             </div>
 
             <!-- 底部操作栏 -->
@@ -1615,6 +1634,9 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 1;
   width: min(1280px, calc(100vw - 32px));
+  /* 固定高度：封面卡片和两列各自滚动都要靠它撑开 */
+  height: calc(100vh - 78px - 32px);
+  height: calc(100dvh - 78px - 32px);
   max-height: calc(100vh - 78px - 32px);
   max-height: calc(100dvh - 78px - 32px);
   display: flex;
@@ -1654,7 +1676,7 @@ onBeforeUnmount(() => {
   z-index: 2;
   display: flex;
   align-items: center;
-  padding: 8px 16px;
+  padding: 12px 20px;
   gap: 8px;
   flex-shrink: 0;
   border-radius: 18px 0 0 0;
@@ -1675,17 +1697,17 @@ onBeforeUnmount(() => {
 .ik-page__header-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
   flex: 1;
   min-width: 0;
 }
 
 .ik-page__avatar-shell {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 72px;
+  height: 72px;
   border-radius: 999px;
-  border: 3px solid #2d2d2d;
+  border: 5px solid #2d2d2d;
   overflow: hidden;
 }
 
@@ -1700,7 +1722,8 @@ onBeforeUnmount(() => {
 .ik-page__author-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -1711,10 +1734,10 @@ onBeforeUnmount(() => {
 }
 
 .ik-page__author-name {
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 20px;
-  color: #fff;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 26px;
+  color: #d8d8d8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1746,7 +1769,27 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 
+.ik-page__popularity {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border-radius: 8px;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ik-page__popularity-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .ik-page__time {
+  margin: 16px 0 0;
   font-size: 12px;
   line-height: 16px;
   color: #808080;
@@ -1789,7 +1832,9 @@ onBeforeUnmount(() => {
 
 .ik-page__left-scroll {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
   background: rgba(0, 0, 0, 0.85);
   margin: 16px 8px 16px 16px;
   border-radius: 16px;
@@ -1801,19 +1846,32 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-/* 封面 */
+/* 封面：桌面端是左侧一张撑满高度的竖卡，图片在卡内居中、上下留黑 */
 .ik-page__cover-wrap {
-  padding: 16px 24px 16px 16px;
+  flex: 0 0 52%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
 }
 
 .ik-page__cover-border {
   position: relative;
   width: 100%;
-  max-height: 50vh;
-  border-radius: 12px;
-  border: 4px solid #313132;
+  height: 100%;
+  border-radius: 16px;
+  border: 4px solid #3d3d3d;
+  box-shadow: 0 0 0 3px #111;
   overflow: hidden;
   background: #0a0a0a;
+}
+
+/* 视频按自身比例排，不撑满整列 */
+.ik-page__cover-border--video {
+  height: auto;
+  aspect-ratio: var(--ik-cover-ratio, 16 / 9);
 }
 
 .ik-page__cover {
@@ -1837,9 +1895,30 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-/* 正文 */
+/* 正文：封面右侧单独滚动的一列 */
+.ik-page__detail-frame {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
 .ik-page__detail {
-  padding: 0 16px 32px;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 20px 20px 32px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.ik-page__detail::-webkit-scrollbar {
+  display: none;
+}
+
+/* 有封面时正文紧贴封面卡片 */
+.ik-page__cover-wrap + .ik-page__detail-frame .ik-page__detail {
+  padding-left: 4px;
 }
 
 .ik-page__hidden-banner {
@@ -1879,9 +1958,10 @@ onBeforeUnmount(() => {
 }
 
 .ik-page__title {
-  margin: 0 0 16px;
-  font-size: 26px;
+  margin: 0 0 12px;
+  font-size: 20px;
   font-weight: 900;
+  line-height: 1.5;
   letter-spacing: 0.5px;
   color: #fff;
 }
@@ -1889,8 +1969,9 @@ onBeforeUnmount(() => {
 .ik-page__content {
   margin: 0;
   font-size: 16px;
-  line-height: 1.7;
-  color: #e0e0e0;
+  font-weight: 700;
+  line-height: 1.75;
+  color: #d6d6d6;
   /* 内容已由 markdown-it 渲染成正规 HTML（含 <br>/<p>），这里不再用 pre-wrap，
      否则源串里保留的字面换行会被重复渲染出多余空行。 */
   white-space: normal;
@@ -2007,6 +2088,14 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.ik-page__comments-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .ik-page__comments-scroll {
   flex: 1;
   min-height: 0;
@@ -2031,7 +2120,8 @@ onBeforeUnmount(() => {
 }
 
 .ik-page__comments-heading {
-  display: flex;
+  /* 桌面端照游戏不显示标题，移动端再打开 */
+  display: none;
   align-items: baseline;
   gap: 8px;
   margin: 0 0 12px;
@@ -2081,6 +2171,13 @@ onBeforeUnmount(() => {
   padding: 8px 0;
 }
 
+.ik-comments-end {
+  color: #5a5a5a;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
 .ik-scroll-gif {
   width: 60px;
   height: 60px;
@@ -2097,7 +2194,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 8px;
   background: transparent;
-  border-top: 1px solid #202020;
+  border-top: 3px solid #2a2a2a;
 }
 
 .ik-engage-bar {
@@ -2134,10 +2231,10 @@ onBeforeUnmount(() => {
 .ik-engage-bar__textarea :deep(.z-textarea) {
   min-height: 44px;
   max-height: 64px;
-  border: 1px solid #303030 !important;
+  border: 3px solid #3a3a3a !important;
   border-radius: 999px !important;
   box-shadow: none !important;
-  background: #171717 !important;
+  background: #1a1a1a !important;
   overflow: hidden;
   transition: border-color 160ms ease,
               background-color 160ms ease,
@@ -2231,6 +2328,8 @@ onBeforeUnmount(() => {
   padding: 0 16px;
   color: #8b8b8b;
   font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -2585,6 +2684,7 @@ onBeforeUnmount(() => {
 
   .ik-page__shell {
     width: calc(100vw - 20px);
+    height: auto;
     max-height: calc(100vh - 66px - 24px);
     max-height: calc(100dvh - 66px - 24px);
   }
@@ -2595,6 +2695,34 @@ onBeforeUnmount(() => {
 
   .ik-page__inner {
     border-radius: 18px 0 18px 18px;
+  }
+
+  .ik-page__header {
+    padding: 8px 16px;
+  }
+
+  .ik-page__header-left {
+    gap: 12px;
+  }
+
+  .ik-page__avatar-shell {
+    width: 48px;
+    height: 48px;
+    border-width: 3px;
+  }
+
+  .ik-page__author-info {
+    gap: 4px;
+  }
+
+  .ik-page__author-name {
+    font-size: 16px;
+    line-height: 20px;
+  }
+
+  .ik-page__popularity {
+    height: 20px;
+    font-size: 14px;
   }
 
   .ik-page__body {
@@ -2631,17 +2759,33 @@ onBeforeUnmount(() => {
     transform: none;
   }
 
+  .ik-page__left-scroll {
+    display: block;
+  }
+
   .ik-page__cover-wrap {
+    display: block;
     padding: 0;
   }
 
   .ik-page__cover-border {
+    height: auto;
+    /* 移动端按图片比例撑开（模板里按封面写入 --ik-cover-ratio） */
+    aspect-ratio: var(--ik-cover-ratio, auto);
     border-radius: 0;
     border-width: 0 0 4px;
+    box-shadow: none;
     max-height: none;
   }
 
-  .ik-page__detail {
+  .ik-page__detail-frame,
+  .ik-page__comments-frame {
+    display: contents;
+  }
+
+  .ik-page__detail,
+  .ik-page__cover-wrap + .ik-page__detail-frame .ik-page__detail {
+    overflow: visible;
     padding: 16px;
   }
 

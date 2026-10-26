@@ -27,6 +27,8 @@ const props = defineProps<{
   comment: Comment;
   index?: number;
   currentUserAuthorId?: string;
+  /** 帖子作者 id：评论者是楼主时名字前加「[楼主]」。匿名帖没有 id，不标。 */
+  postAuthorId?: string;
   isPostOwner?: boolean;
   canPin?: boolean;
   canAccept?: boolean;
@@ -60,6 +62,10 @@ const isOwnComment = computed(() =>
   !!props.currentUserAuthorId && props.comment.author?.documentId === props.currentUserAuthorId,
 );
 
+const isPostAuthor = computed(() =>
+  !!props.postAuthorId && props.comment.author?.documentId === props.postAuthorId,
+);
+
 const canDeleteComment = computed(() => props.isPostOwner === true || isOwnComment.value);
 
 const handleCommentMenuCommand = (command: string | number) => {
@@ -72,8 +78,8 @@ const handleCommentMenuCommand = (command: string | number) => {
 };
 
 const floorLabel = computed(() => {
-  if (typeof props.comment.floor === "number") return `F${props.comment.floor}`;
-  if (props.index != null) return `F${props.index + 1}`;
+  if (typeof props.comment.floor === "number") return `${props.comment.floor}F`;
+  if (props.index != null) return `${props.index + 1}F`;
   return "";
 });
 
@@ -99,7 +105,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 </script>
 
 <template>
-  <div class="ik-comment" :data-comment-id="featured ? undefined : comment.id">
+  <div class="ik-comment" :class="{ 'ik-comment--self': isOwnComment }" :data-comment-id="featured ? undefined : comment.id">
     <div
       class="ik-comment__main"
       :class="{
@@ -126,7 +132,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
         <div class="ik-comment__author-row">
           <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
             <span class="ik-comment__name">
-              {{ comment.author?.name || "匿名用户" }}
+              <template v-if="isPostAuthor">[楼主]</template>{{ comment.author?.name || "匿名用户" }}
             </span>
           </UserHoverCard>
           <span v-if="comment.author?.isAiAgent" class="ik-comment__ai-badge">AI</span>
@@ -251,16 +257,16 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 /* ── Root ─────────────────────────────────────── */
 .ik-comment {
-  padding: 14px 0;
+  padding: 16px 0;
 }
 
 .ik-comment + .ik-comment {
-  border-top: 3px solid #1e1e1e;
+  border-top: 3px solid #2a2a2a;
 }
 
 .ik-comment__main {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
 .ik-comment__main--target {
@@ -297,11 +303,14 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 }
 
 .ik-comment__avatar {
-  width: 36px;
-  height: 36px;
+  display: block;
+  width: 52px;
+  height: 52px;
+  border: 3px solid #2d2d2d;
   border-radius: 999px;
   object-fit: cover;
   background: #1b1b1b;
+  box-sizing: border-box;
 }
 
 /* ── Content column ───────────────────────────── */
@@ -323,9 +332,10 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 }
 
 .ik-comment__name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #999;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 24px;
+  color: #e6e6e6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -366,13 +376,25 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 .ik-comment__floor {
   flex-shrink: 0;
   margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 0 6px 6px 6px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 11px;
-  font-weight: 500;
-  color: #999;
-  line-height: 1.5;
+  min-width: 48px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #3a3a3a;
+  font-size: 15px;
+  font-weight: 900;
+  color: #8f8f8f;
+  line-height: 24px;
+  text-align: center;
+}
+
+/* 当前登录账户自己的评论：名字和楼层药丸高亮为黄色 */
+.ik-comment--self .ik-comment__name {
+  color: var(--ik-comment-self, #ffcc00);
+}
+
+.ik-comment--self .ik-comment__floor {
+  background: var(--ik-comment-self, #ffcc00);
+  color: #000;
 }
 
 .ik-comment__pinned-badge {
@@ -506,10 +528,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
 /* ── Body ──────────────────────────────────────── */
 .ik-comment__body {
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 15px;
-  line-height: 1.6;
-  color: #f0f0f0;
+  font-weight: 700;
+  line-height: 1.7;
+  color: #d6d6d6;
   white-space: pre-wrap;
   word-wrap: break-word;
 }
@@ -635,8 +658,8 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   }
 
   .ik-comment__avatar {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
   }
 
 }
