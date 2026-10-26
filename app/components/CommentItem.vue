@@ -378,7 +378,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
   margin-left: auto;
   min-width: 48px;
   padding: 0 10px;
-  border-radius: 8px;
+  border-radius: 0 8px 8px 8px;
   background: #3a3a3a;
   font-size: 15px;
   font-weight: 900;
