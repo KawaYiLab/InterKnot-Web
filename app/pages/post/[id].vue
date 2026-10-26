@@ -21,7 +21,7 @@ import ScrollHintArrows from "~/components/ScrollHintArrows.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
-const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useImageGallery();
+const { isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useImageGallery();
 
 const route = useRoute();
 const api = useApi();
@@ -43,7 +43,7 @@ const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
 const readingActive = computed(() => !loading.value && !loadError.value && !isBlocked.value &&
   !!post.value && post.value.id === String(route.params.id || "") && !post.value.isHidden &&
-  !postModal.isOpen.value && !knockModal.visible.value && !isGalleryOpen.value && !isGalleryLoading.value);
+  !postModal.isOpen.value && !knockModal.visible.value);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);

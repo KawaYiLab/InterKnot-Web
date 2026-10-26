@@ -37,7 +37,7 @@ import MobileEmotePicker from "./MobileEmotePicker.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
-const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useImageGallery();
+const { isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useImageGallery();
 
 const props = defineProps<{
   postId: string;
@@ -67,8 +67,7 @@ const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
 const readingActive = computed(() => postModal.isOpen.value && postModal.postId.value === props.postId &&
-  post.value?.id === props.postId && !loading.value && !loadError.value && !post.value?.isHidden &&
-  !isGalleryOpen.value && !isGalleryLoading.value);
+  post.value?.id === props.postId && !loading.value && !loadError.value && !post.value?.isHidden);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
