@@ -21,7 +21,7 @@ import TooltipContent from "./ui/tooltip/TooltipContent.vue";
 import TooltipProvider from "./ui/tooltip/TooltipProvider.vue";
 import TooltipTrigger from "./ui/tooltip/TooltipTrigger.vue";
 
-const { openGallery } = useLightGallery();
+const { openGallery } = useImageGallery();
 
 const props = defineProps<{
   comment: Comment;
@@ -90,14 +90,17 @@ const jumpToReplyTarget = () => {
   if (id) emit("jumpTo", id);
 };
 
+const mediaGridRef = ref<HTMLElement | null>(null);
+
 const openCommentImages = (images?: Comment["images"], index = 0) => {
   if (!images?.length) return;
   openGallery(
-    images.map((image) => ({
+    images.map((image, i) => ({
       src: toCanonicalUrl(image.url),
       thumb: toThumbUrl(image.url),
       width: image.width,
       height: image.height,
+      element: () => mediaGridRef.value?.querySelectorAll<HTMLElement>(".ik-comment__media-thumb")[i],
     })),
     index,
   );
@@ -182,7 +185,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
           <CommentBody :content="comment.content" />
         </div>
 
-        <div v-if="comment.images?.length" class="ik-comment__media-grid">
+        <div v-if="comment.images?.length" ref="mediaGridRef" class="ik-comment__media-grid">
           <button
             v-for="(image, imageIndex) in comment.images"
             :key="`${comment.id}-image-${imageIndex}`"

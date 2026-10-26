@@ -21,7 +21,7 @@ import ScrollHintArrows from "~/components/ScrollHintArrows.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
-const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useLightGallery();
+const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useImageGallery();
 
 const route = useRoute();
 const api = useApi();
@@ -199,11 +199,13 @@ const syncCommentInputHeight = async () => {
 };
 
 const openCoverPreview = () => {
-  const images = covers.value.map((c) => ({
+  const images = covers.value.map((c, i) => ({
     src: toCanonicalUrl(c.url),
     thumb: toThumbUrl(c.url),
     width: c.width,
     height: c.height,
+    // 页面上只显示第一张封面，其余几张关闭时淡出
+    element: i === 0 ? () => pageBodyRef.value?.querySelector<HTMLElement>(".ik-page__cover") : undefined,
   }));
   if (images.length) openGallery(images, 0);
 };
@@ -978,7 +980,7 @@ const attachMentionToTextarea = () => {
 };
 
 onMounted(async () => {
-  // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
+  // 大图画廊（PhotoSwipe）完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
   // 让只看文字、不点图的用户不必下载这套资源。
   pageDataLoading.claim();
   try {

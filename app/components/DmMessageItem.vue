@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { DocumentTextIcon, ArrowPathIcon, ClipboardDocumentIcon, CheckIcon } from "@heroicons/vue/24/outline";
 import type { DmMessage } from "~/types/entities";
 import type { EnrichedMessage } from "~/utils/dm-view";
@@ -37,7 +37,7 @@ const emit = defineEmits<{
   (e: "quote-click", msg: DmMessage): void;
 }>();
 
-const { openGallery } = useLightGallery();
+const { openGallery } = useImageGallery();
 
 /** 附图（撤回后不显示） */
 const images = computed(() => (props.entry.msg.deletedAt ? [] : (props.entry.msg.images ?? [])));
@@ -45,13 +45,16 @@ const images = computed(() => (props.entry.msg.deletedAt ? [] : (props.entry.msg
 const imageOnly = computed(
   () => images.value.length > 0 && typeof props.entry.rendered === "string" && !props.entry.rendered.trim(),
 );
+const imagesRef = ref<HTMLElement | null>(null);
+
 const openImages = (index: number) => {
   openGallery(
-    images.value.map((image) => ({
+    images.value.map((image, i) => ({
       src: toCanonicalUrl(image.url),
       thumb: toThumbUrl(image.url),
       width: image.width,
       height: image.height,
+      element: () => imagesRef.value?.querySelectorAll<HTMLElement>(".ik-knock__msg-image-thumb")[i],
     })),
     index,
   );
@@ -174,7 +177,7 @@ const flowWaiting = computed(() => {
           </span>
         </div>
       </template>
-      <div v-if="images.length" class="ik-knock__msg-images">
+      <div v-if="images.length" ref="imagesRef" class="ik-knock__msg-images">
         <button
           v-for="(image, imageIndex) in images"
           :key="`${entry.msg.documentId}-image-${imageIndex}`"

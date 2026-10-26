@@ -107,10 +107,7 @@ export default defineNuxtConfig({
         'vue-advanced-cropper',
         'isomorphic-dompurify',
         'markdown-it',
-        'lightgallery',
-        'lightgallery/plugins/zoom',
-        'lightgallery/plugins/thumbnail',
-        'lightgallery/plugins/fullscreen',
+        'photoswipe',
       ],
     },
     resolve: {

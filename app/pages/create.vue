@@ -1052,16 +1052,20 @@ function onDrop(e: DragEvent) {
   }
 }
 
-/* ── Cover preview (lightGallery, done tasks only) ── */
-const { openGallery: openLightGallery, preload: preloadGallery } = useLightGallery();
+/* ── Cover preview (PhotoSwipe, done tasks only) ── */
+const { openGallery: openLightGallery, preload: preloadGallery } = useImageGallery();
 
-function openCoverPreview(index: number) {
+function openCoverPreview(index: number, event?: MouseEvent) {
   const task = uploadTasks.value[index];
   if (!task || task.status !== "done") return;
   // 仅收集已上传完成的图，保持当前显示顺序
   const doneTasks = uploadTasks.value.filter((t) => t.status === "done");
   if (!doneTasks.length) return;
-  const images = doneTasks.map((t) => ({ src: t.serverUrl || t.previewUrl }));
+  // 桌面 / 移动端各有一套缩略图网格，从被点的那套里按上传顺序取 <img>，让大图从原位放大
+  const grid = (event?.currentTarget as HTMLElement | null)?.parentElement ?? null;
+  const thumbAt = (t: (typeof doneTasks)[number]) => () =>
+    grid?.querySelectorAll<HTMLElement>(".ik-cover-thumb__img, .ik-mobile-cover-tile__img")[uploadTasks.value.indexOf(t)];
+  const images = doneTasks.map((t) => ({ src: t.serverUrl || t.previewUrl, element: thumbAt(t) }));
   const currentIndex = doneTasks.findIndex((t) => t.localId === task.localId);
   openLightGallery(images, currentIndex >= 0 ? currentIndex : 0);
 }
@@ -1342,7 +1346,7 @@ if (import.meta.client) {
                 @drop="onThumbDrop($event, idx)"
                 @dragend="onThumbDragEnd"
                 @mouseenter="task.status === 'done' && preloadGallery()"
-                @click="openCoverPreview(idx)"
+                @click="openCoverPreview(idx, $event)"
               >
                 <img
                   :src="toThumbUrl(task.previewUrl)"
@@ -1608,7 +1612,7 @@ if (import.meta.client) {
           v-for="(task, idx) in uploadTasks"
           :key="task.localId"
           class="ik-mobile-cover-tile"
-          @click="task.status === 'done' && openCoverPreview(idx)"
+          @click="task.status === 'done' && openCoverPreview(idx, $event)"
         >
           <img
             :src="toThumbUrl(task.previewUrl)"

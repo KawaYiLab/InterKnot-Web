@@ -290,39 +290,38 @@ img:not(.ik-card__cover).ik-img-revealed {
   opacity: 1;
 }
 
-/* ── lightGallery overrides ──────────────────── */
-.lg-backdrop {
-  z-index: 10000 !important;
-}
-.lg-outer {
-  z-index: 10001 !important;
+/* ── PhotoSwipe（大图画廊）主题 ──────────────── */
+.pswp {
+  --pswp-bg: #000;
+  --pswp-placeholder-bg: #161616;
+  --pswp-icon-color: #f1f1f1;
+  --pswp-icon-color-secondary: #000;
+  --pswp-icon-stroke-color: #000;
+  --pswp-preloader-color-secondary: var(--ik-primary);
 }
 
-/* 工具栏图标 hover / active */
-.lg-toolbar .lg-icon:hover,
-.lg-actions .lg-icon:hover {
+/* 画廊自己管理占位图到大图的切换，跳过上面的全局图片淡入 */
+.pswp .pswp__img {
+  opacity: 1;
+  transition: none;
+}
+
+.pswp__button:hover .pswp__icn,
+.pswp__button:focus-visible .pswp__icn {
+  fill: var(--ik-primary);
+}
+
+.pswp__counter {
   color: var(--ik-primary);
+  font-weight: 900;
+  opacity: 1;
 }
 
-/* 进度条 */
-.lg-progress-bar .lg-progress {
-  background-color: var(--ik-primary) !important;
-}
-
-/* 计数器 */
-.lg-counter {
-  color: var(--ik-primary);
-}
-
-/* 当前缩略图边框 */
-.lg-thumb-item.active,
-.lg-thumb-item:hover {
-  border-color: var(--ik-primary) !important;
-}
-
-/* 自动播放按钮 active 状态 */
-.lg-autoplay-button:hover .lg-icon {
-  color: var(--ik-primary);
+/* 移动端长按即可保存，不显示下载按钮 */
+@media (max-width: 768px) {
+  .pswp__button--download {
+    display: none;
+  }
 }
 
 /* ── Message toast 覆盖（高于弹窗 z-index:9000，位于 header 下方）── */

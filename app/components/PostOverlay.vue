@@ -17,7 +17,7 @@ import { useScrollHint } from "~/composables/useScrollHint";
 import type { MentionCandidate, MentionAnchor, MentionRange, DisplaySegment } from "~/composables/useMentionInput";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import type { EmoteRange } from "~/composables/useEmoteInsert";
-import { isAnyGalleryOpen } from "~/composables/useLightGallery";
+import { isAnyGalleryOpen } from "~/composables/useImageGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
 import { countNewReply, prependKeepingPosition, removeFromTimeline } from "~/utils/comment-timeline";
@@ -37,7 +37,7 @@ import MobileEmotePicker from "./MobileEmotePicker.vue";
 
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
-const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useLightGallery();
+const { isOpen: isGalleryOpen, isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useImageGallery();
 
 const props = defineProps<{
   postId: string;
@@ -359,14 +359,26 @@ const coverAspectRatio = computed(() => {
   return 643 / 408;
 });
 
+/** 第 i 张封面在页面上的 <img>（轮播只渲染当前附近的几张，所以关闭时再取）。 */
+const coverImageEl = (i: number): HTMLElement | null => {
+  if (covers.value.length === 1) return dialogBodyRef.value?.querySelector<HTMLElement>(".ik-dialog__cover") ?? null;
+  const slide = emblaRef.value?.querySelectorAll<HTMLElement>(".ik-dialog__cover-slide")[i];
+  return slide?.querySelector<HTMLElement>(".ik-dialog__cover") ?? null;
+};
+
 const openCoverPreview = (index = 0) => {
-  const images = covers.value.map((c) => ({
+  const images = covers.value.map((c, i) => ({
     src: toCanonicalUrl(c.url),
     thumb: toThumbUrl(c.url),
     width: c.width,
     height: c.height,
+    element: () => coverImageEl(i),
   }));
-  if (images.length) openGallery(images, Math.min(Math.max(index, 0), images.length - 1));
+  if (!images.length) return;
+  openGallery(images, Math.min(Math.max(index, 0), images.length - 1), {
+    // 画廊里翻页时轮播跟着跳过去，关闭时才能缩回对应的那张
+    onChange: (i: number) => emblaApi.value?.scrollTo(i, true),
+  });
 };
 
 /* ── 封面轮播 ─────────────────────────────────── */
@@ -1393,7 +1405,7 @@ function ensureMentionInputInitialized() {
 
 onMounted(async () => {
   window.addEventListener("keydown", onKeyDown);
-  // lightgallery 完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
+  // 大图画廊（PhotoSwipe）完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
   // 让只看文字、不点图的用户不必下载这套资源。
   loading.value = true;
   const request = await loadPost();
