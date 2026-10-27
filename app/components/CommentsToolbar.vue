@@ -39,23 +39,28 @@ const options: { value: CommentSort; label: string }[] = [
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 8px;
+  gap: 16px;
+  padding: 4px 0 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #1e1e1e;
 }
 
 .ik-comments-toolbar__count {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   margin: 0;
   color: #ededed;
-  font-size: 16px;
-  line-height: 1.4;
+  font-size: 18px;
+  line-height: 1;
   font-weight: 700;
 }
 
 .ik-comments-toolbar__count span {
-  margin-left: 4px;
-  color: #9a9a9a;
-  font-size: 13px;
-  font-weight: 400;
+  color: #8a8a8a;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .ik-sort {
@@ -86,13 +91,13 @@ const options: { value: CommentSort; label: string }[] = [
 .ik-sort__option {
   position: relative;
   z-index: 1;
-  min-width: 52px;
-  height: 26px;
-  padding: 0 12px;
+  min-width: 64px;
+  height: 32px;
+  padding: 0 16px;
   border: none;
   background: transparent;
   color: #9a9a9a;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   cursor: var(--ik-cursor-pointer);
   transition: color 200ms ease;
