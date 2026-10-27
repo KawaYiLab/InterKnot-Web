@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
 });
 
 function iconOf(step: WorkflowStepView) {
-  if (step.status === "error" || step.kind === "error") return ExclamationTriangleIcon;
+  if (step.kind === "error") return ExclamationTriangleIcon;
   if (step.kind === "limit") return StopCircleIcon;
   if (step.kind === "thinking") return LightBulbIcon;
   if (step.kind === "search") return MagnifyingGlassIcon;
@@ -105,7 +105,11 @@ function metaOf(step: WorkflowStepView): string {
   return step.kind === "thinking" ? formatMs(step.durationMs) : "";
 }
 
-const failed = computed(() => props.steps.some((s) => s.status === "error"));
+/**
+ * 只有整条回复生成出错才标红。单个工具调用失败（参数不对、文档不存在）是模型试探后自己改参数重试的常态，
+ * 照常显示，不吓人。
+ */
+const failed = computed(() => props.steps.some((s) => s.kind === "error"));
 
 const summary = computed(() => {
   const tools = props.steps.filter((s) => !["thinking", "error", "limit"].includes(s.kind)).length;
@@ -156,7 +160,7 @@ const summary = computed(() => {
             :aria-expanded="step.items?.length ? openItems.has(step.stepId) : undefined"
             @click="step.items?.length ? toggleItems(step.stepId) : undefined"
           >
-            <span class="ai-steps__icon" :class="{ 'is-error': step.status === 'error' }">
+            <span class="ai-steps__icon" :class="{ 'is-error': step.kind === 'error' }">
               <span v-if="step.status === 'running'" class="ai-steps__spinner" />
               <component :is="iconOf(step)" v-else />
             </span>
@@ -298,7 +302,7 @@ button.ai-steps__row:focus-visible {
   color: #d9a441;
 }
 
-.ai-steps__row.is-error .ai-steps__title {
+.ai-steps__row.kind-error .ai-steps__title {
   color: #ff8a8a;
 }
 
