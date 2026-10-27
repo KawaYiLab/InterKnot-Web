@@ -47,7 +47,7 @@ const options: { value: CommentSort; label: string }[] = [
 
 .ik-comments-toolbar__count {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   margin: 0;
   color: #ededed;
@@ -58,7 +58,7 @@ const options: { value: CommentSort; label: string }[] = [
 
 .ik-comments-toolbar__count span {
   color: #8a8a8a;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
