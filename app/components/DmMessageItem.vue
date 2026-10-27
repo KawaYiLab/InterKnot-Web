@@ -86,14 +86,15 @@ const lastTextIndex = computed(() => {
   return -1;
 });
 
-/** 生成中但此刻既没有在写的气泡、也没有在跑的步骤（工具刚结束、下一轮还没出字）：补一个「正在输入」 */
+/**
+ * 生成中、末尾还没有在写的气泡（思考 / 检索中，或工具刚结束、下一轮还没出字）：补一个「正在输入」。
+ * 步骤跑着的时候也保留，不然它会在步骤开始时消失、结束后又冒出来，页面跟着上下跳；
+ * 开始出字时由回答气泡原地接替。
+ */
 const flowWaiting = computed(() => {
   const blocks = flowBlocks.value;
   if (!blocks || !props.entry.aiStreaming) return false;
-  const last = blocks[blocks.length - 1];
-  if (!last) return true;
-  if (last.type === "text") return false;
-  return !last.steps.some((s) => s.status === "running");
+  return blocks[blocks.length - 1]?.type !== "text";
 });
 </script>
 
