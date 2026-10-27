@@ -14,7 +14,7 @@ import { useScrollHint } from "~/composables/useScrollHint";
 import { useEmoteInsert } from "~/composables/useEmoteInsert";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
-import { countNewReply, prependKeepingPosition, removeFromTimeline } from "~/utils/comment-timeline";
+import { countNewReply, prependKeepingPosition, refreshKeepingPosition, removeFromTimeline } from "~/utils/comment-timeline";
 import BilibiliPlayer from "~/components/BilibiliPlayer.vue";
 import RelatedArticles from "~/components/RelatedArticles.vue";
 import ScrollHintArrows from "~/components/ScrollHintArrows.vue";
@@ -330,13 +330,19 @@ const jumpToComment = (commentId: string) => {
 };
 
 const changeCommentSort = async (sort: CommentSort) => {
+  if (sort === commentSort.value) return;
   commentSort.value = sort;
-  getActiveCommentsContainer()?.scrollTo({ top: 0 });
-  await refreshComments();
+  if (isCompact.value) {
+    await refreshKeepingPosition(pageBodyRef.value, commentsInnerRef.value, refreshComments);
+  } else {
+    commentsScrollRef.value?.scrollTo({ top: 0 });
+    await refreshComments();
+  }
 };
 
 const commentHistory = useCommentReadHistory();
 const commentsScrollRef = ref<HTMLElement | null>(null);
+const commentsInnerRef = ref<HTMLElement | null>(null);
 const commentsHint = useScrollHint(commentsScrollRef);
 const pageBodyRef = ref<HTMLElement | null>(null);
 
@@ -1262,7 +1268,7 @@ onBeforeUnmount(() => {
             <div class="ik-page__comments-frame">
             <ScrollHintArrows v-if="!isCompact" :up="commentsHint.up.value" :down="commentsHint.down.value" />
             <div class="ik-page__comments-scroll" ref="commentsScrollRef">
-              <div class="ik-page__comments-inner">
+              <div ref="commentsInnerRef" class="ik-page__comments-inner">
                 <CommentsToolbar
                   v-if="postCommentCount > 1"
                   :count="postCommentCount"

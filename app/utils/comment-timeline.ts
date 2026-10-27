@@ -52,3 +52,51 @@ export async function prependKeepingPosition(
   if (scroller) scroller.scrollTop += delta;
   else window.scrollBy(0, delta);
 }
+
+const scrollPositionCleanup = new WeakMap<HTMLElement, () => void>();
+
+/** 刷新移动端评论时保留列表高度，避免骨架屏收缩和浏览器滚动锚定挪动整页。 */
+export async function refreshKeepingPosition(
+  scroller: HTMLElement | null,
+  content: HTMLElement | null,
+  refresh: () => Promise<void>,
+) {
+  if (!scroller || !content) {
+    await refresh();
+    return;
+  }
+
+  const height = content.getBoundingClientRect().height;
+  scrollPositionCleanup.get(content)?.();
+  const minHeight = content.style.minHeight;
+  const overflowAnchor = scroller.style.overflowAnchor;
+  content.style.minHeight = `${height}px`;
+  scroller.style.overflowAnchor = "none";
+  try {
+    await refresh();
+  } finally {
+    await nextTick();
+    // 以刷新完成时的位置为准，保留用户在请求期间继续滚动的操作。
+    const scrollTop = scroller.scrollTop;
+    const requiredHeight = scrollTop + scroller.clientHeight;
+    content.style.minHeight = minHeight;
+    const naturalScrollHeight = scroller.scrollHeight;
+    const missingHeight = requiredHeight - naturalScrollHeight;
+    if (missingHeight > 0) {
+      // 新列表过短或请求失败时，只补足维持当前位置所需的高度，防止浏览器强制回滚。
+      content.style.minHeight = `${Math.ceil(content.getBoundingClientRect().height + missingHeight)}px`;
+      const release = () => {
+        content.style.minHeight = minHeight;
+        scroller.removeEventListener("scroll", onScroll);
+        scrollPositionCleanup.delete(content);
+      };
+      const onScroll = () => {
+        if (scroller.scrollTop <= Math.max(0, naturalScrollHeight - scroller.clientHeight)) release();
+      };
+      scroller.addEventListener("scroll", onScroll, { passive: true });
+      scrollPositionCleanup.set(content, release);
+    }
+    scroller.scrollTop = scrollTop;
+    scroller.style.overflowAnchor = overflowAnchor;
+  }
+}
