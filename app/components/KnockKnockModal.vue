@@ -655,8 +655,6 @@ const isAiPeerConversation = computed(() => {
 const shouldAnimateAiMessage = (msg: DmMessage): boolean => {
   if (!aiRevealSessionReady.value || !isAiPeerConversation.value) return false;
   if (isMine(msg) || msg.kind !== "text" || msg.deletedAt) return false;
-  // 流式消息（3.2.3）：增量本身就是逐段到达，直接展示累计文本，不再叠加打字机
-  if (isStreamingMessage(msg.documentId)) return false;
   return !historyBaselineIds.value.has(msg.documentId);
 };
 
@@ -668,19 +666,14 @@ const tryRevealNewAiMessages = () => {
     if (historyBaselineIds.value.has(msg.documentId)) continue;
     if (isMine(msg) || msg.kind !== "text" || msg.deletedAt) continue;
     if (isAiRevealComplete(msg.documentId)) continue;
-    // 流式消息由 message.delta 实时填充，跳过打字机扫描
-    if (isStreamingMessage(msg.documentId)) continue;
-    const text = msg.content?.trim();
-    if (!text) continue;
-    startAiReveal(msg.documentId, text);
+    // 流式消息（3.2.3）也走放字：增量按批到达，由放字匀速释放，结束后放完剩下的字
+    startAiReveal(msg.documentId, msg.content ?? "", isStreamingMessage(msg.documentId));
   }
 };
 
 const bubbleTextForDisplay = (msg: DmMessage): BubbleRender => {
   const base = bubbleText(msg);
   if (typeof base !== "string") return base;
-  // 流式接收中：直接展示当前累计文本
-  if (isStreamingMessage(msg.documentId)) return base;
   // 打开会话时的历史消息：永远全文（不受打字机 state 影响）
   if (historyBaselineIds.value.has(msg.documentId)) return base;
   return aiDisplayText(msg.documentId, base, shouldAnimateAiMessage(msg));
@@ -1117,21 +1110,21 @@ watch(
 );
 
 /**
- * 流式消息不走打字机：增量已经逐字到达，bubbleTextForDisplay 直接展示累计文本。
- * 这里在它进入流式集合时立即标记 typewriter「已完成」，使其定稿后保持静态全文，
- * 避免后续新消息到来（activeMessages.length 增长）时被 tryRevealNewAiMessages 重放一遍动画。
+ * 新 AI 消息的正文增长（message.delta）或流式结束：把最新累计文本交给放字。
+ * 只看不在历史基线里的消息，签名里带长度和流式状态，增量一到就触发。
  */
 watch(
-  () =>
-    activeMessages.value
-      .filter((m) => isStreamingMessage(m.documentId))
-      .map((m) => m.documentId)
-      .join(","),
-  (joined) => {
-    if (!joined) return;
-    primeAiRevealCompleted(joined.split(","));
+  () => {
+    if (!aiRevealSessionReady.value || !isAiPeerConversation.value) return "";
+    const baseline = historyBaselineIds.value;
+    return activeMessages.value
+      .filter((m) => !baseline.has(m.documentId) && !isMine(m))
+      .map((m) => `${m.documentId}:${m.content?.length ?? 0}:${isStreamingMessage(m.documentId) ? 1 : 0}`)
+      .join(",");
   },
-  { immediate: true },
+  (signature) => {
+    if (signature) tryRevealNewAiMessages();
+  },
 );
 
 /** enrichedMessages 已经覆盖 aiRevealTick，无需单独 watcher。 */
