@@ -51,14 +51,14 @@ const options: { value: CommentSort; label: string }[] = [
   gap: 8px;
   margin: 0;
   color: #ededed;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   font-weight: 700;
 }
 
 .ik-comments-toolbar__count span {
   color: #8a8a8a;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -91,13 +91,13 @@ const options: { value: CommentSort; label: string }[] = [
 .ik-sort__option {
   position: relative;
   z-index: 1;
-  min-width: 64px;
-  height: 32px;
-  padding: 0 16px;
+  min-width: 48px;
+  height: 24px;
+  padding: 0 12px;
   border: none;
   background: transparent;
   color: #9a9a9a;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   cursor: var(--ik-cursor-pointer);
   transition: color 200ms ease;
