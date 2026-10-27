@@ -69,7 +69,7 @@ const play = (el: HTMLTextAreaElement | HTMLInputElement) => {
       if (p.x < edge) return true;
       p.x += Math.random() > 0.5 ? 1 : -1;
       p.y += Math.random() > 0.5 ? 1 : -1;
-      p.r -= 0.05 * Math.random();
+      p.r -= 0.04 + 0.06 * Math.random();
       return p.r > 0;
     });
     ctx.clearRect(0, 0, width, height);
