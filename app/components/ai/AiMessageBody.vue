@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { formatChatMarkdown } from "~/utils/format-chat";
+import { wrapGeneratingTail } from "~/utils/text-generate";
 
 /**
  * AI 会话气泡的富文本正文：markdown 渲染 + 代码高亮 + 代码块复制 +
@@ -41,11 +42,13 @@ const decorateCodeBlocks = (html: string): string =>
     );
   });
 
-const html = computed(() =>
-  decorateCodeBlocks(
+const html = computed(() => {
+  const rendered = decorateCodeBlocks(
     formatChatMarkdown(displayText.value, { highlight: !props.streaming }),
-  ),
-);
+  );
+  // 生成中：末尾几个字从模糊里浮现（Inspira「Text Generate Effect」）
+  return props.streaming ? wrapGeneratingTail(rendered) : rendered;
+});
 
 const rootRef = ref<HTMLElement | null>(null);
 
@@ -418,6 +421,27 @@ const onClick = async (e: MouseEvent) => {
 
 .ik-ai-md :deep(.hljs-deletion) {
   color: #ffa198;
+}
+
+/* ── 生成中的尾巴：越靠后的字越淡越模糊（见 utils/text-generate.ts） ── */
+.ik-ai-md :deep(.ik-tg) {
+  transition: opacity 120ms linear, filter 120ms linear;
+}
+
+.ik-ai-md :deep(.ik-tg-1) { opacity: 0.15; filter: blur(4px); }
+.ik-ai-md :deep(.ik-tg-2) { opacity: 0.25; filter: blur(3.5px); }
+.ik-ai-md :deep(.ik-tg-3) { opacity: 0.35; filter: blur(3px); }
+.ik-ai-md :deep(.ik-tg-4) { opacity: 0.5; filter: blur(2.4px); }
+.ik-ai-md :deep(.ik-tg-5) { opacity: 0.62; filter: blur(1.8px); }
+.ik-ai-md :deep(.ik-tg-6) { opacity: 0.75; filter: blur(1.2px); }
+.ik-ai-md :deep(.ik-tg-7) { opacity: 0.85; filter: blur(0.7px); }
+.ik-ai-md :deep(.ik-tg-8) { opacity: 0.93; filter: blur(0.3px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-ai-md :deep(.ik-tg) {
+    opacity: 1;
+    filter: none;
+  }
 }
 
 /* ── 流式光标：最后一个块级元素尾部闪烁 ▍ ── */

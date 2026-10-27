@@ -7,6 +7,7 @@ import { hasBubbleLinks, parseBubbleSegments } from "~/utils/dm-view";
 import { buildWorkflowFlow, type WorkflowFlowBlock } from "~/utils/workflow";
 import { formatTime, formatFullTime } from "~/utils/time";
 import { toCanonicalUrl, toThumbUrl } from "~/utils/image";
+import InspiraBorderBeam from "~/components/inspira/BorderBeam.vue";
 
 /**
  * 单条 DM 消息（Phase 4 拆分自 KnockKnockModal）：
@@ -161,6 +162,7 @@ const flowWaiting = computed(() => {
             class="ik-knock__msg-bubble"
             :title="fullTime || undefined"
           >
+            <InspiraBorderBeam v-if="block.live" class="ik-knock__msg-beam" :size="70" :duration="2" :border-width="3" />
             <AiMessageBody
               :text="block.text"
               :streaming="block.live"
@@ -170,6 +172,7 @@ const flowWaiting = computed(() => {
           </div>
         </template>
         <div v-if="flowWaiting" class="ik-knock__msg-bubble">
+          <InspiraBorderBeam class="ik-knock__msg-beam" :size="70" :duration="2" :border-width="3" />
           <span class="ik-knock__msg-typing" aria-label="正在输入">
             <span class="ik-knock__typing-dot" />
             <span class="ik-knock__typing-dot" />
@@ -200,6 +203,14 @@ const flowWaiting = computed(() => {
         :class="{ 'is-deleted': !!entry.msg.deletedAt }"
         :title="fullTime || undefined"
       >
+        <!-- AI 生成中：气泡外沿绕一束光 -->
+        <InspiraBorderBeam
+          v-if="!entry.isMine && (entry.aiStreaming || entry.pendingStream)"
+          class="ik-knock__msg-beam"
+          :size="70"
+          :duration="2"
+          :border-width="3"
+        />
         <template v-if="typeof entry.rendered === 'object'">
           <CommentBody :content="entry.rendered.content" />
         </template>
@@ -487,17 +498,45 @@ const flowWaiting = computed(() => {
   color: #000;
 }
 
-/* ── 消息入场动画（仅增量到达的新消息，仅动画 transform + opacity 不触发重排） ── */
+/* ── 消息入场动画（仅增量到达的新消息，仅动画 transform + opacity 不触发重排） ──
+ * 仿 Inspira「Animated List」的弹簧入场：从气泡一侧的底角缩放弹出，略微回弹。 */
 @keyframes ik-msg-enter {
-  from {
+  0% {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px) scale(0.85);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.02);
+  }
+  100% {
+    transform: none;
   }
 }
 
-.ik-knock__msg.is-new,
+@keyframes ik-divider-enter {
+  from {
+    opacity: 0;
+  }
+}
+
+.ik-knock__msg.is-new {
+  transform-origin: bottom left;
+  animation: ik-msg-enter 420ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+.ik-knock__msg.is-new.is-mine {
+  transform-origin: bottom right;
+}
+
 .ik-knock__time-divider.is-new {
-  animation: ik-msg-enter 300ms ease-out both;
+  animation: ik-divider-enter 300ms ease-out both;
+}
+
+/* 生成中的光束绕在气泡外沿（气泡是白底，光束放里面看不见） */
+.ik-knock__msg-bubble .ik-knock__msg-beam {
+  inset: -4px;
+  border-radius: 20px;
 }
 
 /* 流式占位气泡内的加载点（首个 delta 未到达前） */

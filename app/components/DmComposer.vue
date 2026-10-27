@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { PaperAirplaneIcon, StopIcon } from "@heroicons/vue/24/solid";
 import { ArrowPathIcon, PhotoIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import type { UploadTask } from "~/types/entities";
+import InspiraShineBorder from "~/components/inspira/ShineBorder.vue";
+import InspiraVanishCanvas from "~/components/inspira/VanishCanvas.vue";
 
 /**
  * DM 输入区（Phase 4 拆分自 KnockKnockModal）：
@@ -14,6 +16,8 @@ const props = defineProps<{
   /** pseudo:anonymous / pseudo:system 会话禁止发送 */
   disabled: boolean;
   placeholder: string;
+  /** 输入框为空时轮播的占位文案（≥2 条才轮播，否则用 placeholder） */
+  rotatingPlaceholders?: string[];
   sending: boolean;
   /** 处于编辑消息模式（决定输入框绑定 editingDraft 还是 draft） */
   editing: boolean;
@@ -49,6 +53,7 @@ const draft = defineModel<string>("draft", { default: "" });
 const editingDraft = defineModel<string>("editingDraft", { default: "" });
 
 const composerRef = ref<HTMLTextAreaElement | null>(null);
+const vanishRef = ref<InstanceType<typeof InspiraVanishCanvas> | null>(null);
 
 /**
  * 1.5 输入框自动增高：内容驱动高度，上限由 CSS max-height（min(40vh,320px)）
@@ -91,6 +96,43 @@ const sendDisabled = computed(
 
 const showAttach = computed(() => !!props.canAttach && !props.editing);
 
+/** 轮播占位（Inspira「Placeholders And Vanish Input」）：只在空输入、非编辑态时轮播 */
+const PLACEHOLDER_INTERVAL_MS = 3000;
+const placeholderIndex = ref(0);
+const rotating = computed(
+  () => (props.rotatingPlaceholders?.length ?? 0) > 1 && !props.editing && !props.disabled && !draft.value,
+);
+const rotatingText = computed(() => {
+  const list = props.rotatingPlaceholders ?? [];
+  return list.length ? list[placeholderIndex.value % list.length] : "";
+});
+let placeholderTimer: ReturnType<typeof setInterval> | null = null;
+watch(
+  rotating,
+  (on) => {
+    if (placeholderTimer) clearInterval(placeholderTimer);
+    placeholderTimer = null;
+    if (!on || !import.meta.client) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    placeholderTimer = setInterval(() => {
+      placeholderIndex.value++;
+    }, PLACEHOLDER_INTERVAL_MS);
+  },
+  { immediate: true },
+);
+watch(() => props.rotatingPlaceholders, () => {
+  placeholderIndex.value = 0;
+});
+onBeforeUnmount(() => {
+  if (placeholderTimer) clearInterval(placeholderTimer);
+});
+
+/** 发送：新消息的字先碎成粒子散掉（编辑保存不播） */
+const send = () => {
+  if (!sendDisabled.value && !props.editing && composerRef.value) vanishRef.value?.play(composerRef.value);
+  emit("send");
+};
+
 /** 粘贴截图直接附图（只在可附图时拦截，文字照常粘贴） */
 const onComposerPaste = (e: ClipboardEvent) => {
   if (!showAttach.value) return;
@@ -124,7 +166,7 @@ const onComposerKeyDown = (e: KeyboardEvent) => {
   if (e.key !== "Enter") return;
   if (e.shiftKey || e.ctrlKey || e.metaKey) return; // 组合键允许换行
   e.preventDefault();
-  emit("send");
+  send();
 };
 
 /** 父级 beginEdit 时聚焦输入框 */
@@ -230,6 +272,7 @@ defineExpose({
       class="ik-knock__composer-row"
       :class="{ 'is-disabled': disabled }"
     >
+      <InspiraShineBorder v-if="!disabled" class="ik-knock__composer-shine" :border-width="2" />
       <button
         v-if="showAttach"
         type="button"
@@ -241,31 +284,43 @@ defineExpose({
       >
         <PhotoIcon class="ik-knock__composer-send-icon" aria-hidden="true" />
       </button>
-      <textarea
-        v-if="editing"
-        ref="composerRef"
-        v-model="editingDraft"
-        class="ik-knock__composer-input"
-        placeholder="编辑消息…"
-        rows="1"
-        maxlength="4000"
-        :disabled="disabled"
-        @keydown="onComposerKeyDown"
-        @input="autoGrowComposer"
-      />
-      <textarea
-        v-else
-        ref="composerRef"
-        v-model="draft"
-        class="ik-knock__composer-input"
-        :placeholder="placeholder"
-        rows="1"
-        maxlength="4000"
-        :disabled="disabled"
-        @keydown="onComposerKeyDown"
-        @input="onComposerInput"
-        @paste="onComposerPaste"
-      />
+      <div class="ik-knock__composer-field">
+        <textarea
+          v-if="editing"
+          ref="composerRef"
+          v-model="editingDraft"
+          class="ik-knock__composer-input"
+          placeholder="编辑消息…"
+          rows="1"
+          maxlength="4000"
+          :disabled="disabled"
+          @keydown="onComposerKeyDown"
+          @input="autoGrowComposer"
+        />
+        <textarea
+          v-else
+          ref="composerRef"
+          v-model="draft"
+          class="ik-knock__composer-input"
+          :class="{ 'is-rotating': rotating }"
+          :placeholder="rotating ? rotatingText : placeholder"
+          rows="1"
+          maxlength="4000"
+          :disabled="disabled"
+          @keydown="onComposerKeyDown"
+          @input="onComposerInput"
+          @paste="onComposerPaste"
+        />
+        <Transition name="ik-ph">
+          <span
+            v-if="rotating"
+            :key="placeholderIndex"
+            class="ik-knock__composer-placeholder"
+            aria-hidden="true"
+          >{{ rotatingText }}</span>
+        </Transition>
+        <InspiraVanishCanvas ref="vanishRef" />
+      </div>
       <button
         v-if="streaming && !editing"
         type="button"
@@ -284,9 +339,10 @@ defineExpose({
         v-else
         type="button"
         class="ik-knock__composer-send"
+        :class="{ 'is-ready': !sendDisabled }"
         :disabled="sendDisabled"
         :aria-label="editing ? '保存编辑' : '发送'"
-        @click="emit('send')"
+        @click="send"
       >
         <PaperAirplaneIcon
           class="ik-knock__composer-send-icon"
@@ -353,6 +409,7 @@ defineExpose({
 }
 
 .ik-knock__composer-row {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 8px;
@@ -365,6 +422,22 @@ defineExpose({
 
 .ik-knock__composer-row:focus-within {
   border-color: #fbfe00;
+}
+
+/* 流光边框叠在静态描边上；聚焦后描边已经是黄色，流光退场 */
+.ik-knock__composer-shine {
+  transition: opacity 200ms ease;
+}
+
+.ik-knock__composer-row:focus-within .ik-knock__composer-shine {
+  opacity: 0;
+}
+
+.ik-knock__composer-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
 }
 
 /* pseudo:anonymous / pseudo:system 会话：输入框整体禁用态 */
@@ -400,7 +473,42 @@ defineExpose({
   color: rgba(255, 255, 255, 0.32);
 }
 
+/* 轮播占位由下面的浮层来演，原生占位只留给读屏 */
+.ik-knock__composer-input.is-rotating::placeholder {
+  color: transparent;
+}
+
+.ik-knock__composer-placeholder {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  right: 12px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.ik-ph-enter-active,
+.ik-ph-leave-active {
+  transition: opacity 300ms ease, transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ik-ph-enter-from {
+  opacity: 0;
+  transform: translateY(60%);
+}
+
+.ik-ph-leave-to {
+  opacity: 0;
+  transform: translateY(-60%);
+}
+
 .ik-knock__composer-send {
+  position: relative;
   flex-shrink: 0;
   width: 36px;
   height: 36px;
@@ -421,6 +529,33 @@ defineExpose({
 
 .ik-knock__composer-send:active:not(:disabled) {
   transform: scale(0.94);
+}
+
+/* 可以发送时：发送钮外扩两圈波纹（Inspira「Ripple」） */
+.ik-knock__composer-send.is-ready::before,
+.ik-knock__composer-send.is-ready::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid #fbfe00;
+  pointer-events: none;
+  animation: ik-send-ripple 2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+
+.ik-knock__composer-send.is-ready::after {
+  animation-delay: 1s;
+}
+
+@keyframes ik-send-ripple {
+  from {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.8);
+  }
 }
 
 .ik-knock__composer-send:disabled {
@@ -608,6 +743,19 @@ button.ik-knock__composer-attachment-state {
   background: rgba(251, 254, 0, 0.1);
   border-color: rgba(251, 254, 0, 0.35);
   color: #fbfe00;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-knock__composer-send.is-ready::before,
+  .ik-knock__composer-send.is-ready::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .ik-ph-enter-active,
+  .ik-ph-leave-active {
+    transition: none;
+  }
 }
 
 @media (max-width: 768px) {
