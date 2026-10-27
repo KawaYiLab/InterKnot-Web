@@ -205,7 +205,6 @@ const pick = (key: string | null) => {
 .ik-model__btn:hover:not(:disabled),
 .ik-model__btn.is-open {
   color: #fff;
-  border-color: #fbfe00;
 }
 
 .ik-model__btn:disabled {
@@ -272,7 +271,7 @@ const pick = (key: string | null) => {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 6px 6px;
-  border: 2px solid #fbfe00;
+  border: 2px solid #313131;
   border-radius: 18px;
   background: #050505 url("/images/tab-bg-point.webp") repeat;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
