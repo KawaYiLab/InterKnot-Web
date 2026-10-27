@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { PaperAirplaneIcon, StopIcon } from "@heroicons/vue/24/solid";
 import { ArrowPathIcon, PhotoIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import type { UploadTask } from "~/types/entities";
 import InspiraShineBorder from "~/components/inspira/ShineBorder.vue";
@@ -321,36 +320,25 @@ defineExpose({
         </Transition>
         <InspiraVanishCanvas ref="vanishRef" />
       </div>
-      <button
+      <z-button
         v-if="streaming && !editing"
-        type="button"
-        class="ik-knock__composer-send is-stop"
+        class="ik-knock__composer-send"
         :disabled="stopping"
         aria-label="停止生成"
         title="停止生成"
         @click="emit('stop')"
       >
-        <span class="ik-knock__composer-send-label" aria-hidden="true">停止</span>
-        <StopIcon
-          class="ik-knock__composer-send-icon"
-          aria-hidden="true"
-        />
-      </button>
-      <button
+        停止
+      </z-button>
+      <z-button
         v-else
-        type="button"
         class="ik-knock__composer-send"
         :disabled="sendDisabled"
         :aria-label="editing ? '保存编辑' : '发送'"
         @click="send"
       >
-        <span v-if="!sendDisabled" class="ik-knock__composer-send-sheen" aria-hidden="true" />
-        <span class="ik-knock__composer-send-label" aria-hidden="true">{{ editing ? "保存" : "发送" }}</span>
-        <PaperAirplaneIcon
-          class="ik-knock__composer-send-icon"
-          aria-hidden="true"
-        />
-      </button>
+        {{ editing ? "保存" : "发送" }}
+      </z-button>
     </div>
   </div>
 </template>
@@ -520,86 +508,9 @@ defineExpose({
   transform: translateY(-60%);
 }
 
-/* 发送钮：顶栏「我的」tab 同款的左斜右圆黄块 + 粗斜体字 */
+/* 发送 / 停止：zzzui 默认按钮 */
 .ik-knock__composer-send {
-  position: relative;
   flex-shrink: 0;
-  height: 40px;
-  min-width: 88px;
-  padding: 0 16px 0 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  overflow: hidden;
-  border: 0;
-  border-radius: 0 999px 999px 0;
-  clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%);
-  background: #fbfe00;
-  color: #000;
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 800;
-  font-style: italic;
-  cursor: pointer;
-  transition: background 140ms ease, transform 100ms ease, color 140ms ease;
-}
-
-.ik-knock__composer-send-label {
-  position: relative;
-  line-height: 1;
-}
-
-.ik-knock__composer-send:hover:not(:disabled) {
-  background: #e8eb00;
-}
-
-/* clip-path 会裁掉 outline，键盘焦点改用内描边 */
-.ik-knock__composer-send:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 3px #000;
-}
-
-.ik-knock__composer-send:active:not(:disabled) {
-  transform: scale(0.95);
-}
-
-/* 可以发送时：一道白光周期性扫过（Inspira「Shimmer Button」） */
-.ik-knock__composer-send-sheen {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.85) 50%, transparent 65%);
-  transform: translateX(-120%);
-  animation: ik-send-sheen 2.4s ease-in-out infinite;
-}
-
-@keyframes ik-send-sheen {
-  60%,
-  100% {
-    transform: translateX(120%);
-  }
-}
-
-.ik-knock__composer-send:disabled {
-  background: #2a2a2a;
-  color: rgba(255, 255, 255, 0.35);
-  cursor: not-allowed;
-}
-
-/* 2.1 停止生成：流式中发送按钮切换为红色停止钮 */
-.ik-knock__composer-send.is-stop {
-  background: #ff3838;
-  color: #fff;
-}
-
-.ik-knock__composer-send.is-stop:hover:not(:disabled) {
-  background: #e62e2e;
-}
-
-.ik-knock__composer-send.is-stop:disabled {
-  background: rgba(255, 56, 56, 0.35);
-  color: rgba(255, 255, 255, 0.6);
 }
 
 .ik-knock__composer-send-icon {
@@ -769,10 +680,6 @@ button.ik-knock__composer-attachment-state {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ik-knock__composer-send-sheen {
-    display: none;
-  }
-
   .ik-ph-enter-active,
   .ik-ph-leave-active {
     transition: none;
