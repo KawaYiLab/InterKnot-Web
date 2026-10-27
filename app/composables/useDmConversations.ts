@@ -236,6 +236,12 @@ let subscribed = false;
 let typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const TYPING_TTL_MS = 3_000;
 let finalizedAtByConv = new Map<string, number>();
+/**
+ * 逐块增量（dm.message.append）：messageId → 已经接上的最后一个 seq。
+ * 有记录说明这条消息走增量，节流的 message.delta 就不用了；断号时删掉记录，
+ * 在下一份全文快照到来之前退回 message.delta。
+ */
+let appendSeqByMessage = new Map<string, number>();
 const TYPING_IGNORE_AFTER_FINALIZE_MS = 1_500;
 let notificationRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 const NOTIFICATION_REFRESH_DEBOUNCE_MS = 250;
@@ -1247,6 +1253,7 @@ export function useDmConversations(): UseDmConversations {
     const msg = toDmMessage(raw);
     // AI 回复以 edited 定稿（done / stopped / failed），不是用户编辑：不写 editedAt。
     const isStreamingFinalize = !!raw.ai && AI_DONE_STATES.has(raw.ai.state);
+    appendSeqByMessage.delete(mid);
     if (streamingMessageIds.value.has(mid)) {
       const next = new Set(streamingMessageIds.value);
       next.delete(mid);
@@ -1295,12 +1302,7 @@ export function useDmConversations(): UseDmConversations {
     };
   };
 
-  // 流式回复增量：服务端推的是累计全文，直接覆盖。
-  const onMessageDelta = (event: DmStreamEvent<{ content: string }>) => {
-    const cid = event.conversationId;
-    const mid = event.messageId;
-    const content = event.data?.content;
-    if (!cid || !mid || typeof content !== "string") return;
+  const setStreamingContent = (cid: string, mid: string, content: string) => {
     if (!streamingMessageIds.value.has(mid)) {
       const next = new Set(streamingMessageIds.value);
       next.add(mid);
@@ -1313,6 +1315,42 @@ export function useDmConversations(): UseDmConversations {
         m.documentId === mid ? { ...m, content } : m,
       ),
     });
+  };
+
+  // 流式回复节流快照：服务端推的是累计全文，直接覆盖。已经在走逐块增量的消息忽略它。
+  const onMessageDelta = (event: DmStreamEvent<{ content: string }>) => {
+    const cid = event.conversationId;
+    const mid = event.messageId;
+    const content = event.data?.content;
+    if (!cid || !mid || typeof content !== "string") return;
+    if (appendSeqByMessage.has(mid)) return;
+    setStreamingContent(cid, mid, content);
+  };
+
+  // 流式回复逐块增量：content 是全文快照，text 接在已有正文后面（seq 必须连续）。
+  const onMessageAppend = (event: DmStreamEvent<{ seq: number; text?: string; content?: string }>) => {
+    const cid = event.conversationId;
+    const mid = event.messageId;
+    const seq = event.data?.seq;
+    if (!cid || !mid || typeof seq !== "number") return;
+    const { text, content } = event.data ?? {};
+    if (typeof content === "string") {
+      appendSeqByMessage.set(mid, seq);
+      setStreamingContent(cid, mid, content);
+      return;
+    }
+    if (typeof text !== "string") return;
+    if (appendSeqByMessage.get(mid) !== seq - 1) {
+      appendSeqByMessage.delete(mid);
+      return;
+    }
+    const current = messagesById.value[cid]?.items?.find((m) => m.documentId === mid);
+    if (!current) {
+      appendSeqByMessage.delete(mid);
+      return;
+    }
+    appendSeqByMessage.set(mid, seq);
+    setStreamingContent(cid, mid, (current.content ?? "") + text);
   };
 
   const onMessageDeleted = (event: DmStreamEvent<{ deletedAt?: string }>) => {
@@ -1462,6 +1500,9 @@ export function useDmConversations(): UseDmConversations {
     unsubscribeAll.push(stream.on<RawMessageData>("message.created", onMessageCreated));
     unsubscribeAll.push(stream.on<RawMessageData>("message.edited", onMessageEdited));
     unsubscribeAll.push(stream.on<{ content: string }>("message.delta", onMessageDelta));
+    unsubscribeAll.push(
+      stream.on<{ seq: number; text?: string; content?: string }>("message.append", onMessageAppend),
+    );
     unsubscribeAll.push(stream.on<{ event: AiWorkflowEvent }>("message.workflow", onMessageWorkflow));
     unsubscribeAll.push(stream.on<{ deletedAt?: string }>("message.deleted", onMessageDeleted));
     unsubscribeAll.push(stream.on("inbox.read", onInboxRead));
@@ -1518,6 +1559,7 @@ export function useDmConversations(): UseDmConversations {
     unreadTotal.value = null;
     typingTimers = new Map();
     finalizedAtByConv = new Map();
+    appendSeqByMessage = new Map();
   };
 
   const isStreamingMessage = (documentId: string): boolean =>

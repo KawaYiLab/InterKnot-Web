@@ -22,6 +22,7 @@ export type DmStreamEventType =
   | "message.created"
   | "message.edited"
   | "message.delta"
+  | "message.append"
   | "message.workflow"
   | "message.deleted"
   | "typing"
@@ -81,6 +82,14 @@ function translate(t: string, d: Payload): DmStreamEvent<unknown> | null {
       };
     case "dm.message.delta":
       return { type: "message.delta", conversationId, messageId, data: { content: d.content }, at: at() };
+    case "dm.message.append":
+      return {
+        type: "message.append",
+        conversationId,
+        messageId,
+        data: { seq: d.seq, text: d.text, content: d.content },
+        at: at(),
+      };
     case "dm.message.workflow":
       return { type: "message.workflow", conversationId, messageId, data: { event: d.event }, at: at() };
     case "dm.typing":
