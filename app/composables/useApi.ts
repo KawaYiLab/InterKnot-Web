@@ -80,8 +80,8 @@ const qk = {
     searchAll: ["articles", "search"] as QueryKey,
     detail: (id: string) => ["articles", "detail", id] as QueryKey,
     detailAll: ["articles", "detail"] as QueryKey,
-    comments: (postId: string, cursor: string, limit: number) =>
-      ["articles", "comments", postId, cursor, limit] as QueryKey,
+    comments: (postId: string, cursor: string, limit: number, sort: CommentSort = "oldest") =>
+      ["articles", "comments", postId, cursor, limit, sort] as QueryKey,
     commentsOf: (postId: string) =>
       ["articles", "comments", postId] as QueryKey,
   },
@@ -513,12 +513,21 @@ function toReplyTo(raw: unknown): CommentReplyTo | null {
   };
 }
 
-/** 一页评论：时间线（按楼层从旧到新）+ 第一页额外的采纳 / 置顶。 */
+/** 评论时间线的顺序：楼层从旧到新 / 从新到旧。 */
+export type CommentSort = "oldest" | "newest";
+
+/** 一页评论：时间线（按 sort 排）+ 第一页额外的采纳 / 置顶。 */
 export interface CommentsPage extends Pagination<Comment> {
   /** 采纳与置顶（只在第一页有；它们在时间线里也照常出现在自己的楼层）。 */
   featured: Comment[];
-  /** 往前（更早的楼层）翻页的游标；从中间开始时才有。 */
+  /** 往回翻页（列表上方）的游标；从中间开始时才有。 */
   prevCursor: string;
+}
+
+export interface CommentsOptions {
+  sort?: CommentSort;
+  /** 从这条评论所在的楼层开始。 */
+  anchor?: string;
 }
 
 /** CommentView 或作者主页的评论 → Comment。 */
@@ -1158,17 +1167,17 @@ export function useApi() {
   // ── 评论 ──────────────────────────────────────────
 
   /**
-   * 帖子的评论，按楼层从旧到新。`anchor`（评论 id）时从那条评论所在的楼层开始，
-   * 并给出往前翻的 prevCursor；锚点不在本帖或不可见时后端按第一页处理。
+   * 帖子的评论，按 `sort` 排（默认楼层从旧到新）。`anchor`（评论 id）时从那条评论所在的楼层开始，
+   * 并给出往回翻的 prevCursor；锚点不在本帖或不可见时后端按第一页处理。翻页时 `sort` 要和第一页一致。
    */
   const getComments = async (
     postId: string,
     endCur = "",
     force = false,
-    anchor = "",
+    { sort = "oldest", anchor = "" }: CommentsOptions = {},
   ): Promise<CommentsPage> => {
     const cursor = endCur && endCur !== "0" ? endCur : "";
-    const fetchPage = async (): Promise<CommentsPage> => {
+        const fetchPage = async (): Promise<CommentsPage> => {
       const res = await $api<
         CursorPage<Rec> & { pinned?: Rec | null; accepted?: Rec | null; prevCursor?: string | null }
       >(`/v1/posts/${encodeURIComponent(postId)}/comments`, {
@@ -1176,6 +1185,7 @@ export function useApi() {
           limit: String(DEFAULT_PAGE_SIZE),
           ...(cursor ? { cursor } : {}),
           ...(!cursor && anchor ? { anchor } : {}),
+          ...(sort !== "oldest" ? { sort } : {}),
         },
       });
       // 最佳答案在最前，其次置顶（两者后端已互斥去重）。
@@ -1190,7 +1200,7 @@ export function useApi() {
     if (anchor && !cursor) return fetchPage();
     // 弹窗/页面首次加载首屏评论时，强制让该帖子评论缓存失效，避免直接命中旧缓存
     if (force && !cursor) {
-      const queryKey = qk.articles.comments(postId, cursor, DEFAULT_PAGE_SIZE);
+      const queryKey = qk.articles.comments(postId, cursor, DEFAULT_PAGE_SIZE, sort);
       const state = $queryClient?.getQueryState(queryKey);
       // 如果已经有强制请求在 flight，直接复用该 promise，不再重复失效/重拉
       if (state?.fetchStatus !== "fetching") {
@@ -1198,7 +1208,7 @@ export function useApi() {
         invalidate(queryKey);
       }
     }
-    return cachedRead(qk.articles.comments(postId, cursor, DEFAULT_PAGE_SIZE), fetchPage, STALE_LIST);
+    return cachedRead(qk.articles.comments(postId, cursor, DEFAULT_PAGE_SIZE, sort), fetchPage, STALE_LIST);
   };
 
   const addPostComment = async ({
