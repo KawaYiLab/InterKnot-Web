@@ -152,6 +152,7 @@ const overlayOpen = computed(
     </ClientOnly>
 
     <AppHeader />
+    <SiteBanner />
     <main class="ik-page">
       <NuxtPage />
     </main>

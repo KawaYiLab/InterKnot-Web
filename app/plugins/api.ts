@@ -41,6 +41,7 @@ export function toApiError(
 export default defineNuxtPlugin(() => {
   const auth = useAuthStore();
   const config = useRuntimeConfig();
+  const site = useSiteStatus();
   // 网页与接口同源（nginx 把 /v1 反代到 ik-server，见 ikserver-rs ADR 0002），
   // 会话靠 HttpOnly Cookie，不再在前端保存令牌。apiBaseUrl 只在本地联调别的地址时设置。
   const baseURL = String(config.public.apiBaseUrl || "").replace(/\/+$/, "");
@@ -70,6 +71,11 @@ export default defineNuxtPlugin(() => {
       // 未通过入站考试的写操作被后端拒绝：广播事件，由 app.vue 引导去 /exam
       if (import.meta.client && apiErr?.statusCode === 403 && apiErr?.code === "EXAM_REQUIRED") {
         window.dispatchEvent(new Event("exam:required"));
+      }
+      // 站点进入只读维护：5xx 的 detail 是统一文案，换成后台填的维护说明；并让横幅马上刷新出来。
+      if (import.meta.client && apiErr?.statusCode === 503 && apiErr?.code === "READ_ONLY") {
+        apiErr.message = site.readOnly.value?.message || "绳网正在维护，暂时只能浏览，请稍后再来";
+        window.dispatchEvent(new Event("site:read-only"));
       }
       // 会话过期 / 被吊销：本地也退出登录。登录接口本身的 401（密码错误）不算。
       if (
