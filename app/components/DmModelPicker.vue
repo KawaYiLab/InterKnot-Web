@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { ChevronDownIcon, CheckIcon } from "@heroicons/vue/24/outline";
 import type { AiModel } from "~/types/entities";
 
 /**
- * 模型切换（会话级）：标题栏里角色名右侧。模型不多时平铺成分段切换，多了收进下拉。
+ * 模型切换（会话级）：标题栏里角色名右侧的胶囊。后台配的模型名往往很长，
+ * 胶囊里只放截断后的当前模型名；点开时胶囊原地「长大」成面板（仿 Inspira UI 的
+ * Scroll Island 形变），面板里完整显示模型名、角标与说明。换模型时名字做一次模糊翻转（Flip Words）。
  * 只负责展示与交互，选择结果 emit 给容器（数据仍由 useDmConversations 单源）。
  * 原先挂在 DmComposer 输入行上，移到标题栏后与「这条回复用了哪个模型」的气泡标签分工更清楚。
  */
@@ -25,12 +27,16 @@ const emit = defineEmits<{
 }>();
 
 const visible = computed(() => (props.models?.length ?? 0) > 0);
-/** 模型不多时直接平铺成分段切换（和侧栏 tab 同款），一次点击就换；多了才收进下拉 */
-const SEGMENT_MAX = 3;
-const segmented = computed(() => (props.models?.length ?? 0) <= SEGMENT_MAX);
 
 const open = ref(false);
 const rootRef = ref<HTMLElement | null>(null);
+const btnRef = ref<HTMLButtonElement | null>(null);
+/** 面板收起时裁成触发胶囊的大小，展开时从这个尺寸长开 */
+const triggerSize = ref({ w: 0, h: 0 });
+const measureTrigger = () => {
+  const btn = btnRef.value;
+  if (btn) triggerSize.value = { w: btn.offsetWidth, h: btn.offsetHeight };
+};
 
 /** 会话未选模型时按角色卡默认展示，两者都空则回落到首个可选模型 */
 const effectiveModel = computed<AiModel | null>(() => {
@@ -83,8 +89,13 @@ watch(
 
 const toggle = () => {
   if (props.streaming) return;
+  measureTrigger();
   open.value = !open.value;
 };
+
+// 模型名变了胶囊宽度跟着变，收起态的裁剪尺寸要跟上
+watch(buttonLabel, () => nextTick(measureTrigger));
+watch(visible, (v) => v && nextTick(measureTrigger), { immediate: true });
 
 const pick = (key: string | null) => {
   close();
@@ -96,174 +107,105 @@ const pick = (key: string | null) => {
 
 <template>
   <div
-    v-if="visible && segmented"
-    class="ik-model-seg"
-    :class="{ 'is-disabled': streaming }"
-    role="radiogroup"
-    aria-label="切换模型"
+    v-if="visible"
+    ref="rootRef"
+    class="ik-model"
+    :style="{ '--ik-trigger-w': `${triggerSize.w}px`, '--ik-trigger-h': `${triggerSize.h}px` }"
   >
     <button
-      v-for="m in models"
-      :key="m.key"
-      type="button"
-      role="radio"
-      class="ik-model-seg__item"
-      :class="{ 'is-active': activeKey === m.key }"
-      :aria-checked="activeKey === m.key"
-      :disabled="streaming"
-      :title="m.description ? `${m.displayName}：${m.description}` : m.displayName"
-      @click="pick(m.key)"
-    >
-      {{ m.displayName }}
-      <span v-if="m.key === defaultModelKey && modelKey && activeKey !== m.key" class="ik-model-seg__dot" aria-label="角色默认" />
-    </button>
-  </div>
-  <div v-else-if="visible" ref="rootRef" class="ik-model">
-    <button
+      ref="btnRef"
       type="button"
       class="ik-model__btn"
-      :class="{ 'is-open': open }"
+      :class="{ 'is-open': open, 'has-badge': !!effectiveModel?.badge }"
       :disabled="streaming"
       :aria-expanded="open"
       aria-haspopup="listbox"
       :title="`切换模型（当前：${buttonLabel}）`"
       @click.stop="toggle"
     >
-      <span class="ik-model__name">{{ buttonLabel }}</span>
+      <Transition name="ik-flip" mode="out-in">
+        <span :key="buttonLabel" class="ik-model__name">{{ buttonLabel }}</span>
+      </Transition>
+      <span v-if="effectiveModel?.badge" class="ik-model__item-badge">{{ effectiveModel.badge }}</span>
       <ChevronDownIcon class="ik-model__caret" aria-hidden="true" />
     </button>
-    <Transition name="ik-model-pop">
-      <div v-if="open" class="ik-model__menu" role="listbox">
-        <button
-          v-for="m in models"
-          :key="m.key"
-          type="button"
-          class="ik-model__item"
-          :class="{ 'is-active': activeKey === m.key }"
-          role="option"
-          :aria-selected="activeKey === m.key"
-          @click.stop="pick(m.key)"
-        >
-          <span class="ik-model__item-main">
-            <span class="ik-model__item-head">
-              <span class="ik-model__item-name">{{ m.displayName }}</span>
-              <span v-if="m.badge" class="ik-model__item-badge">{{ m.badge }}</span>
-              <span v-if="m.key === defaultModelKey" class="ik-model__item-default">默认</span>
-            </span>
-            <span v-if="m.description" class="ik-model__item-desc">{{ m.description }}</span>
+    <!-- 面板始终挂着：收起时裁成胶囊大小并隐藏，展开时从胶囊处长开 -->
+    <div
+      class="ik-model__island"
+      :class="{ 'is-open': open }"
+      role="listbox"
+      aria-label="选择模型"
+      :aria-hidden="!open"
+      :inert="!open"
+    >
+      <button type="button" class="ik-model__island-head" tabindex="-1" @click.stop="close">
+        <span class="ik-model__island-title">选择模型</span>
+        <ChevronDownIcon class="ik-model__caret is-up" aria-hidden="true" />
+      </button>
+      <button
+        v-for="m in models"
+        :key="m.key"
+        type="button"
+        class="ik-model__item"
+        :class="{ 'is-active': activeKey === m.key }"
+        role="option"
+        :aria-selected="activeKey === m.key"
+        @click.stop="pick(m.key)"
+      >
+        <span class="ik-model__item-main">
+          <span class="ik-model__item-head">
+            <span class="ik-model__item-name">{{ m.displayName }}</span>
+            <span v-if="m.badge" class="ik-model__item-badge">{{ m.badge }}</span>
+            <span v-if="m.key === defaultModelKey" class="ik-model__item-default">默认</span>
           </span>
-          <CheckIcon v-if="activeKey === m.key" class="ik-model__item-check" aria-hidden="true" />
-        </button>
-        <!-- 已显式选过模型时才给「跟随角色默认」的回退入口 -->
-        <button
-          v-if="modelKey"
-          type="button"
-          class="ik-model__item is-reset"
-          role="option"
-          :aria-selected="false"
-          @click.stop="pick(null)"
-        >
-          <span class="ik-model__item-name">跟随角色默认</span>
-        </button>
-      </div>
-    </Transition>
+          <span v-if="m.description" class="ik-model__item-desc">{{ m.description }}</span>
+        </span>
+        <CheckIcon v-if="activeKey === m.key" class="ik-model__item-check" aria-hidden="true" />
+      </button>
+      <!-- 已显式选过模型时才给「跟随角色默认」的回退入口 -->
+      <button
+        v-if="modelKey"
+        type="button"
+        class="ik-model__item is-reset"
+        role="option"
+        :aria-selected="false"
+        @click.stop="pick(null)"
+      >
+        <span class="ik-model__item-name">跟随角色默认</span>
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* 分段切换：深灰粗描边 + 黑底点阵的小胶囊，选中段亮黄（同侧栏 tab） */
-.ik-model-seg {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 2px solid #313131;
-  border-radius: 999px;
-  background: #050505 url("/images/tab-bg-point.webp") repeat;
-}
-
-.ik-model-seg.is-disabled {
-  opacity: 0.55;
-}
-
-.ik-model-seg__item {
-  position: relative;
-  height: 24px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #bdbdbd;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
-  font-style: italic;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 140ms ease, color 140ms ease;
-}
-
-.ik-model-seg__item:hover:not(:disabled):not(.is-active) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ik-model-seg__item.is-active {
-  background: #fbfe00;
-  color: #000;
-}
-
-.ik-model-seg__item:disabled {
-  cursor: not-allowed;
-}
-
-.ik-model-seg__item:focus-visible {
-  outline: 2px solid #fbfe00;
-  outline-offset: 1px;
-}
-
-/* 已经手动换过模型时，在角色默认的那一段上点个小点 */
-.ik-model-seg__dot {
-  position: absolute;
-  top: 3px;
-  right: 4px;
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.6;
-}
-
 .ik-model {
   position: relative;
   flex-shrink: 0;
+  min-width: 0;
 }
 
-/* 模型多时的下拉触发器：与分段切换同款外框 */
+/* 触发胶囊：黑底点阵 + 深灰粗描边（同侧栏 tab 条），模型名过长截断 */
 .ik-model__btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  max-width: 180px;
+  gap: 6px;
   height: 30px;
-  padding: 0 10px 0 12px;
+  padding: 0 8px 0 12px;
   border: 2px solid #313131;
   border-radius: 999px;
   background: #050505 url("/images/tab-bg-point.webp") repeat;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.82);
   font-size: 12.5px;
   font-weight: 700;
-  font-style: italic;
   line-height: 1.2;
   cursor: pointer;
-  transition: color 140ms ease;
+  transition: color 140ms ease, border-color 140ms ease;
 }
 
 .ik-model__btn:hover:not(:disabled),
 .ik-model__btn.is-open {
   color: #fff;
+  border-color: #fbfe00;
 }
 
 .ik-model__btn:disabled {
@@ -277,9 +219,29 @@ const pick = (key: string | null) => {
 }
 
 .ik-model__name {
+  display: inline-block;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Flip Words：换模型时旧名字往上模糊淡出，新名字从下面清晰起来 */
+.ik-flip-enter-active,
+.ik-flip-leave-active {
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1), filter 180ms ease;
+}
+
+.ik-flip-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+  filter: blur(6px);
+}
+
+.ik-flip-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+  filter: blur(6px);
 }
 
 .ik-model__caret {
@@ -289,43 +251,68 @@ const pick = (key: string | null) => {
   transition: transform 140ms ease;
 }
 
-.ik-model__btn.is-open .ik-model__caret {
+.ik-model__btn.is-open .ik-model__caret,
+.ik-model__caret.is-up {
   transform: rotate(180deg);
 }
 
-/* 下拉面板：向下展开，贴着标题栏 */
-.ik-model__menu {
+/*
+ * 面板：左上角与胶囊对齐。收起态用 clip-path 裁成胶囊的大小（看起来就是胶囊本身），
+ * 展开时 clip-path 放开到整块面板，形成「胶囊长成面板」的形变。
+ */
+.ik-model__island {
   position: absolute;
-  top: calc(100% + 8px);
-  left: -4px;
+  top: 0;
+  left: 0;
   z-index: 40;
-  min-width: 232px;
-  max-width: 300px;
-  max-height: min(60vh, 360px);
+  width: max-content;
+  min-width: max(260px, var(--ik-trigger-w));
+  max-width: min(360px, 80vw);
+  max-height: min(60vh, 380px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px;
-  border-radius: 14px;
-  background: rgba(20, 20, 20, 0.96);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
-  transform-origin: top left;
-}
-
-/* 弹出动效：从触发器左上角轻微展开，收起更快一点 */
-.ik-model-pop-enter-active {
-  transition: opacity 140ms ease, transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.ik-model-pop-leave-active {
-  transition: opacity 100ms ease, transform 100ms ease;
-}
-
-.ik-model-pop-enter-from,
-.ik-model-pop-leave-to {
+  padding: 0 6px 6px;
+  border: 2px solid #fbfe00;
+  border-radius: 18px;
+  background: #050505 url("/images/tab-bg-point.webp") repeat;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+  clip-path: inset(0 calc(100% - var(--ik-trigger-w)) calc(100% - var(--ik-trigger-h)) 0 round 15px);
   opacity: 0;
-  transform: translateY(-4px) scale(0.97);
+  visibility: hidden;
+  transition:
+    clip-path 280ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 120ms ease 160ms,
+    visibility 0s linear 280ms;
+}
+
+.ik-model__island.is-open {
+  clip-path: inset(0 round 18px);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    clip-path 360ms cubic-bezier(0.2, 0.9, 0.3, 1.05),
+    opacity 80ms ease,
+    visibility 0s;
+}
+
+.ik-model__island-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 26px;
+  padding: 0 6px 0 6px;
+  margin-bottom: 4px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ik-model__island-title {
+  white-space: nowrap;
 }
 
 .ik-model__item {
@@ -334,9 +321,9 @@ const pick = (key: string | null) => {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 9px 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   background: transparent;
   color: rgba(255, 255, 255, 0.82);
   text-align: left;
@@ -345,7 +332,7 @@ const pick = (key: string | null) => {
 }
 
 .ik-model__item:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
@@ -354,22 +341,24 @@ const pick = (key: string | null) => {
   outline-offset: -2px;
 }
 
-/* 当前生效的模型：品牌色淡底 + 左侧短竖条，扫一眼就知道选的是哪个 */
+/* 当前生效的模型：整行亮黄（同侧栏选中项） */
 .ik-model__item.is-active {
-  background: rgba(251, 254, 0, 0.08);
-  color: #fff;
+  background: #fbfe00;
+  color: #000;
 }
 
-.ik-model__item.is-active::before {
-  content: "";
-  position: absolute;
-  left: 3px;
-  top: 50%;
-  width: 2px;
-  height: 14px;
-  margin-top: -7px;
-  border-radius: 999px;
-  background: #fbfe00;
+.ik-model__item.is-active .ik-model__item-desc {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.ik-model__item.is-active .ik-model__item-badge {
+  background: #000;
+  color: #fbfe00;
+}
+
+.ik-model__item.is-active .ik-model__item-default {
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.6);
 }
 
 /* 「跟随角色默认」是回退项，用一条分隔线与模型列表分开 */
@@ -377,7 +366,7 @@ const pick = (key: string | null) => {
   margin-top: 5px;
   padding-top: 9px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0 0 10px 10px;
+  border-radius: 0 0 12px 12px;
   color: rgba(255, 255, 255, 0.5);
 }
 
@@ -389,80 +378,87 @@ const pick = (key: string | null) => {
 .ik-model__item-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   flex: 1;
 }
 
 .ik-model__item-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   min-width: 0;
 }
 
+/* 面板里模型名完整显示，太长就换行 */
 .ik-model__item-name {
+  min-width: 0;
   font-size: 13px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-all;
 }
 
 .ik-model__item-badge {
   flex-shrink: 0;
-  padding: 1.5px 5px;
-  border-radius: 5px;
+  padding: 2px 6px;
+  border-radius: 999px;
   background: rgba(251, 254, 0, 0.14);
   color: #fbfe00;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
+  font-style: italic;
   line-height: 1.2;
   letter-spacing: 0.3px;
 }
 
 .ik-model__item-default {
   flex-shrink: 0;
-  padding: 1.5px 5px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.45);
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 10px;
   line-height: 1.2;
 }
 
 .ik-model__item-desc {
-  color: rgba(255, 255, 255, 0.42);
-  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11.5px;
   line-height: 1.45;
 }
 
 .ik-model__item-check {
   flex-shrink: 0;
-  width: 15px;
-  height: 15px;
-  color: #fbfe00;
+  width: 16px;
+  height: 16px;
 }
 
 /* 窄屏标题栏里还挤着返回/搜索/删除，模型名再收紧一档，别把角色名压没 */
 @media (max-width: 768px) {
+  .ik-model__name {
+    max-width: 84px;
+  }
+
   .ik-model__btn {
-    max-width: 96px;
     font-size: 12px;
   }
 
-  .ik-model__menu {
-    min-width: 200px;
+  /* 有角标就只留角标，把位置让给角色名；完整名字点开面板看 */
+  .ik-model__btn.has-badge .ik-model__name {
+    display: none;
+  }
+
+  .ik-model__btn.has-badge {
+    padding-left: 8px;
   }
 }
 
-/* 无障碍：跟随系统的「减少动态效果」 */
 @media (prefers-reduced-motion: reduce) {
-  .ik-model__btn,
-  .ik-model__caret,
-  .ik-model__item,
-  .ik-model-pop-enter-active,
-  .ik-model-pop-leave-active {
+  .ik-model__island,
+  .ik-model__island.is-open,
+  .ik-flip-enter-active,
+  .ik-flip-leave-active {
     transition: none;
   }
 }

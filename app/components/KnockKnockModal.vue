@@ -364,23 +364,6 @@ const activeModelKey = computed<string | null>(
 );
 
 /**
- * 气泡上的模型标签：message.aiModelKey → displayName。
- * 消息列表里逐条查，所以先建一次 key → displayName 的映射，避免每条消息都
- * 线性 find。清单里查不到的 key（模型已删/停用）直接显示 key 本身，
- * 比什么都不显示更利于排查「这条是谁生成的」。
- */
-const modelNameByKey = computed(() => {
-  const map = new Map<string, string>();
-  for (const m of aiModels.value) map.set(m.key, m.displayName);
-  return map;
-});
-
-const modelLabelFor = (key?: string | null): string | null => {
-  if (!key) return null;
-  return modelNameByKey.value.get(key) ?? key;
-};
-
-/**
  * 切换模型：乐观更新由 updateConversation 完成，失败时回落到 sendError 提示
  * （下一条消息仍会用服务端权威值，不会静默用错模型）。
  */
@@ -1933,7 +1916,6 @@ const handleMobileBack = () => {
                           :show-regenerate="entry.aiRich && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
                           :regenerating="regeneratingAi"
                           :search-hit="entry.msg.documentId === currentSearchHitId"
-                          :model-label="modelLabelFor(entry.msg.aiModelKey)"
                           @contextmenu="showContextMenu"
                           @profile="goToProfile"
                           @open-post="openPostFromBubble"
@@ -2124,20 +2106,16 @@ const handleMobileBack = () => {
 }
 
 /* ── Header ────────────────────────────────────── */
-/* 照游戏内敲敲：顶栏是一条嵌在外框里的深色胶囊条，左端全圆 */
 .ik-dialog__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 6px 6px 0;
-  padding: 8px 14px 8px 18px;
+  padding: 12px 24px;
   flex-shrink: 0;
-  border: 2px solid #1e1e1e;
-  border-radius: 999px 28px 28px 999px;
+  border-radius: 18px 18px 0 0;
   background:
     url("/images/tab-bg-point.webp") repeat,
-    linear-gradient(180deg, #141414 0%, #070707 100%);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.04);
+    linear-gradient(180deg, #161616 0%, #080808 100%);
 }
 
 .ik-knock__brand {
@@ -2151,8 +2129,8 @@ const handleMobileBack = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 54px;
-  height: 54px;
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
 }
 
@@ -2194,8 +2172,8 @@ const handleMobileBack = () => {
 }
 
 .ik-knock__brand-text {
-  font-size: 30px;
-  font-weight: 900;
+  font-size: 26px;
+  font-weight: 800;
   font-style: normal;
   color: #fff;
   letter-spacing: -0.4px;
@@ -3042,10 +3020,7 @@ const handleMobileBack = () => {
 
   /* 顶部品牌栏（仅列表视图显示）：贴顶 + 顶部安全区 */
   .ik-dialog--knock .ik-dialog__header {
-    margin: 0;
-    border: 0;
     border-radius: 0;
-    box-shadow: none;
     padding: 12px 16px;
     padding-top: calc(12px + env(safe-area-inset-top));
   }

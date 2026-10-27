@@ -24,8 +24,6 @@ const props = defineProps<{
   regenerating: boolean;
   /** 会话内搜索：当前命中消息高亮 */
   searchHit?: boolean;
-  /** 生成这条回复的模型显示名（由父级用 message.aiModelKey 映射） */
-  modelLabel?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -309,12 +307,6 @@ const flowWaiting = computed(() => {
             aria-hidden="true"
           />
         </button>
-        <!-- 这条回复用的是哪个模型（message.aiModelKey → displayName） -->
-        <span
-          v-if="modelLabel"
-          class="ik-knock__msg-meta-model"
-          :title="`本条回复由 ${modelLabel} 生成`"
-        >{{ modelLabel }}</span>
       </div>
     </div>
   </div>
@@ -752,23 +744,6 @@ const flowWaiting = computed(() => {
 .ik-knock__msg-meta-action.is-done {
   color: #000;
   background: #52d273;
-}
-
-/* 模型标签：黄色描边小胶囊，信息位，不可点 */
-.ik-knock__msg-meta-model {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  margin-left: 2px;
-  padding: 0 9px;
-  border: 1.5px solid rgba(251, 254, 0, 0.35);
-  border-radius: 999px;
-  color: rgba(251, 254, 0, 0.8);
-  font-size: 11px;
-  font-weight: 700;
-  font-style: italic;
-  letter-spacing: 0.3px;
-  user-select: none;
 }
 
 .ik-knock__msg-meta-icon {
