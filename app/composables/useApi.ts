@@ -528,8 +528,6 @@ export interface CommentsOptions {
   sort?: CommentSort;
   /** 从这条评论所在的楼层开始。 */
   anchor?: string;
-  /** 从第几层开始（跳楼）。 */
-  floor?: number;
 }
 
 /** CommentView 或作者主页的评论 → Comment。 */
@@ -1169,18 +1167,17 @@ export function useApi() {
   // ── 评论 ──────────────────────────────────────────
 
   /**
-   * 帖子的评论，按 `sort` 排（默认楼层从旧到新）。`anchor`（评论 id）或 `floor` 时从那一层开始，
+   * 帖子的评论，按 `sort` 排（默认楼层从旧到新）。`anchor`（评论 id）时从那条评论所在的楼层开始，
    * 并给出往回翻的 prevCursor；锚点不在本帖或不可见时后端按第一页处理。翻页时 `sort` 要和第一页一致。
    */
   const getComments = async (
     postId: string,
     endCur = "",
     force = false,
-    { sort = "oldest", anchor = "", floor }: CommentsOptions = {},
+    { sort = "oldest", anchor = "" }: CommentsOptions = {},
   ): Promise<CommentsPage> => {
     const cursor = endCur && endCur !== "0" ? endCur : "";
-    const jump = !cursor && (!!anchor || floor != null);
-    const fetchPage = async (): Promise<CommentsPage> => {
+        const fetchPage = async (): Promise<CommentsPage> => {
       const res = await $api<
         CursorPage<Rec> & { pinned?: Rec | null; accepted?: Rec | null; prevCursor?: string | null }
       >(`/v1/posts/${encodeURIComponent(postId)}/comments`, {
@@ -1188,7 +1185,6 @@ export function useApi() {
           limit: String(DEFAULT_PAGE_SIZE),
           ...(cursor ? { cursor } : {}),
           ...(!cursor && anchor ? { anchor } : {}),
-          ...(!cursor && !anchor && floor != null ? { floor: String(floor) } : {}),
           ...(sort !== "oldest" ? { sort } : {}),
         },
       });
@@ -1200,8 +1196,8 @@ export function useApi() {
         prevCursor: res.prevCursor || "",
       };
     };
-    // 从某条评论 / 某一层开始的那一页是一次性的跳转，不进缓存。
-    if (jump) return fetchPage();
+    // 从某条评论开始的那一页是一次性的跳转，不进缓存。
+    if (anchor && !cursor) return fetchPage();
     // 弹窗/页面首次加载首屏评论时，强制让该帖子评论缓存失效，避免直接命中旧缓存
     if (force && !cursor) {
       const queryKey = qk.articles.comments(postId, cursor, DEFAULT_PAGE_SIZE, sort);

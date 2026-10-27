@@ -1,36 +1,19 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import { ArrowRightIcon } from "@heroicons/vue/20/solid";
 import type { CommentSort } from "~/composables/useApi";
-import SpotlightInput from "~/components/inspira/SpotlightInput.vue";
 
-/** 评论区顶部：最早 / 最新切换 + 跳到第几楼。帖子页与弹窗共用。 */
-defineProps<{ disabled?: boolean }>();
+/** 评论区顶部：评论数 + 最早 / 最新切换。帖子页与弹窗共用。 */
+defineProps<{ count: number; disabled?: boolean }>();
 const sort = defineModel<CommentSort>("sort", { required: true });
-const emit = defineEmits<{ jump: [floor: number] }>();
 
 const options: { value: CommentSort; label: string }[] = [
   { value: "oldest", label: "最早" },
   { value: "newest", label: "最新" },
 ];
-
-const floorInput = ref("");
-// 只留数字。
-watch(floorInput, (value) => {
-  const digits = value.replace(/\D/g, "");
-  if (digits !== value) floorInput.value = digits;
-});
-
-const submitJump = () => {
-  const floor = Number.parseInt(floorInput.value, 10);
-  if (!Number.isFinite(floor) || floor < 1) return;
-  emit("jump", floor);
-  floorInput.value = "";
-};
 </script>
 
 <template>
   <div class="ik-comments-toolbar">
+    <h2 class="ik-comments-toolbar__count">评论 <span>{{ count }}</span></h2>
     <!-- 滑块式切换（参考 Inspira UI Animated Tabs 的高亮块） -->
     <div class="ik-sort" role="radiogroup" :class="{ 'is-newest': sort === 'newest' }">
       <span class="ik-sort__pill" aria-hidden="true" />
@@ -48,24 +31,6 @@ const submitJump = () => {
         {{ opt.label }}
       </button>
     </div>
-
-    <form class="ik-jump" @submit.prevent="submitJump">
-      <SpotlightInput
-        v-model="floorInput"
-        inputmode="numeric"
-        maxlength="7"
-        placeholder="跳到楼层"
-        aria-label="跳到楼层"
-        :disabled="disabled"
-      >
-        <template #prefix><span class="ik-jump__hash">#</span></template>
-        <template #suffix>
-          <button type="submit" class="ik-jump__go" :disabled="disabled || !floorInput" aria-label="跳转">
-            <ArrowRightIcon />
-          </button>
-        </template>
-      </SpotlightInput>
-    </form>
   </div>
 </template>
 
@@ -76,6 +41,21 @@ const submitJump = () => {
   justify-content: space-between;
   gap: 12px;
   margin: 0 0 8px;
+}
+
+.ik-comments-toolbar__count {
+  margin: 0;
+  color: #ededed;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.ik-comments-toolbar__count span {
+  margin-left: 4px;
+  color: #9a9a9a;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .ik-sort {
@@ -128,41 +108,5 @@ const submitJump = () => {
 
 .ik-sort__option:disabled {
   cursor: default;
-}
-
-.ik-jump {
-  width: 132px;
-}
-
-.ik-jump__hash {
-  color: #666;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.ik-jump__go {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: var(--ik-primary);
-  color: #000;
-  cursor: var(--ik-cursor-pointer);
-  transition: opacity 160ms ease, transform 160ms ease;
-}
-
-.ik-jump__go svg {
-  width: 14px;
-  height: 14px;
-}
-
-.ik-jump__go:disabled {
-  opacity: 0;
-  transform: scale(0.6);
-  pointer-events: none;
 }
 </style>

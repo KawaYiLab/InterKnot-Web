@@ -89,7 +89,7 @@ const comments = ref<Comment[]>([]);
 const featuredComments = ref<Comment[]>([]);
 const commentsCursor = ref("");
 const commentsHasNext = ref(true);
-// 从中间某一层开始加载时，往回（列表上方）翻页的游标。
+// 从中间某条评论开始加载时，往回（列表上方）翻页的游标。
 const commentsPrevCursor = ref("");
 const commentsLoadingEarlier = ref(false);
 // 置顶 / 采纳的评论本来就是时间线第一条时，顶部不再重复显示一份。
@@ -584,13 +584,13 @@ const loadComments = async () => {
   }
 };
 
-/** 从某条评论（anchor）或某一层（floor）重新加载时间线（通知跳转、点引用跳到还没加载的楼层、跳楼）。 */
-const loadCommentsFrom = async (from: { anchor?: string; floor?: number }) => {
+/** 从某条评论所在的楼层重新加载时间线（通知跳转、点引用跳到还没加载的楼层）。 */
+const loadCommentsAround = async (commentId: string) => {
   if (isCommentLoadingCancelled) return;
   const loadId = ++currentCommentLoadId;
   commentsLoading.value = true;
   try {
-    const page = await api.getComments(props.postId, "", false, { ...from, sort: commentSort.value });
+    const page = await api.getComments(props.postId, "", false, { anchor: commentId, sort: commentSort.value });
     if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
     // 锚点不可见时后端按第一页处理，这时顶部的采纳 / 置顶照常给。
     if (!page.prevCursor) featuredComments.value = page.featured;
@@ -608,8 +608,6 @@ const loadCommentsFrom = async (from: { anchor?: string; floor?: number }) => {
     }
   }
 };
-
-const loadCommentsAround = (commentId: string) => loadCommentsFrom({ anchor: commentId });
 
 const loadEarlierComments = async () => {
   if (!commentsPrevCursor.value || commentsLoadingEarlier.value) return;
@@ -668,17 +666,6 @@ const changeCommentSort = async (sort: CommentSort) => {
   commentSort.value = sort;
   getActiveCommentsContainer()?.scrollTo({ top: 0 });
   await refreshComments();
-};
-
-/** 跳到第几楼：从那一层加载，滚到离它最近的一条（那一层删了或超出范围时后端给最近的）。 */
-const jumpToFloor = async (floor: number) => {
-  await loadCommentsFrom({ floor });
-  const dist = (c: Comment) => Math.abs((c.floor ?? 0) - floor);
-  const nearest = comments.value.reduce<Comment | null>(
-    (best, c) => (!best || dist(c) < dist(best) ? c : best),
-    null,
-  );
-  if (nearest) await seek(nearest.id);
 };
 
 const commentHistory = useCommentReadHistory();
@@ -1808,14 +1795,14 @@ onBeforeUnmount(() => {
                   <ScrollHintArrows v-if="!isCompact" :up="commentsHint.up.value" :down="commentsHint.down.value" />
                   <div class="ik-dialog__comments-scroll" ref="commentsScrollRef">
                     <div class="ik-dialog__comments-inner">
-                      <h2 class="ik-dialog__comments-heading">评论 <span>{{ postCommentCount }}</span></h2>
                       <CommentsToolbar
                         v-if="postCommentCount > 1"
+                        :count="postCommentCount"
                         :sort="commentSort"
                         :disabled="showCommentsSkeleton"
                         @update:sort="changeCommentSort"
-                        @jump="jumpToFloor"
                       />
+                      <h2 v-else class="ik-dialog__comments-heading">评论 <span>{{ postCommentCount }}</span></h2>
                       <div v-if="showCommentsSkeleton">
                         <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
                           <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
