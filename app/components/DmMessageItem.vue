@@ -86,6 +86,11 @@ const lastTextIndex = computed(() => {
   return -1;
 });
 
+/** AI 回复刚占位、什么数据都还没到 */
+const awaitingFirstData = computed(
+  () => props.entry.aiRich && props.entry.pendingStream && !props.entry.workflowEvents.length,
+);
+
 /**
  * 生成中、末尾还没有在写的气泡（思考 / 检索中，或工具刚结束、下一轮还没出字）：补一个「正在输入」。
  * 步骤跑着的时候也保留，不然它会在步骤开始时消失、结束后又冒出来，页面跟着上下跳；
@@ -99,208 +104,211 @@ const flowWaiting = computed(() => {
 </script>
 
 <template>
-  <!-- 时间分隔行：首条或与上条间隔 > 5min 时显示 -->
-  <div
-    v-if="entry.showTime"
-    class="ik-knock__time-divider"
-    :class="{ 'is-new': entry.isNew }"
-  >
-    {{ formatTime(entry.msg.createdAt) }}
-  </div>
-  <!-- system 分界（如「对话已重置」3.3.4）：居中提示，不渲染气泡 -->
-  <div
-    v-if="entry.msg.kind === 'system'"
-    class="ik-knock__sys-divider"
-    :data-mid="entry.msg.documentId"
-  >
-    <span>{{ systemLabel }}</span>
-  </div>
-  <div
-    v-else
-    class="ik-knock__msg"
-    :class="{
-      'is-new': entry.isNew,
-      'is-mine': entry.isMine,
-      'is-search-hit': !!searchHit,
-    }"
-    :data-mid="entry.msg.documentId"
-    @contextmenu="emit('contextmenu', $event, entry.msg)"
-  >
+  <!-- AI 回复已占位、但还没收到任何数据（工作流事件或正文）：先不渲染，收到第一份数据再出现 -->
+  <template v-if="!awaitingFirstData">
+    <!-- 时间分隔行：首条或与上条间隔 > 5min 时显示 -->
     <div
-      class="ik-knock__msg-avatar"
-      :class="{ 'is-clickable': entry.avatarClickable }"
-      :role="entry.avatarClickable ? 'button' : undefined"
-      :tabindex="entry.avatarClickable ? 0 : undefined"
-      :aria-hidden="entry.avatarClickable ? undefined : 'true'"
-      :aria-label="entry.avatarClickable ? `查看${entry.msg.sender?.name || '用户'}的主页` : undefined"
-      @click="emit('profile', entry.profileUrl)"
-      @keydown.enter="emit('profile', entry.profileUrl)"
+      v-if="entry.showTime"
+      class="ik-knock__time-divider"
+      :class="{ 'is-new': entry.isNew }"
     >
-      <img
-        v-if="entry.msg.sender?.avatar"
-        :src="entry.msg.sender.avatar"
-        :alt="entry.msg.sender?.name || ''"
-        class="ik-knock__msg-avatar-img"
-        draggable="false"
-      />
-      <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__msg-avatar-img" draggable="false" />
+      {{ formatTime(entry.msg.createdAt) }}
     </div>
-    <div class="ik-knock__msg-body">
-      <!-- 3.3 AI 回复：过程步骤与回答气泡按发生顺序穿插（思考原文、工具参数不下发，只展示骨架） -->
-      <template v-if="flowBlocks">
-        <template v-for="(block, blockIdx) in flowBlocks" :key="block.key">
-          <AiStepGroup
-            v-if="block.type === 'steps'"
-            :steps="block.steps"
-            :settled="!entry.aiStreaming"
-            :followed="blockIdx < flowBlocks.length - 1"
-            @open-post="emit('open-post', $event)"
-          />
-          <div
-            v-else
-            class="ik-knock__msg-bubble"
-            :title="fullTime || undefined"
-          >
-            <AiMessageBody
-              :text="block.text"
-              :streaming="block.live"
+    <!-- system 分界（如「对话已重置」3.3.4）：居中提示，不渲染气泡 -->
+    <div
+      v-if="entry.msg.kind === 'system'"
+      class="ik-knock__sys-divider"
+      :data-mid="entry.msg.documentId"
+    >
+      <span>{{ systemLabel }}</span>
+    </div>
+    <div
+      v-else
+      class="ik-knock__msg"
+      :class="{
+        'is-new': entry.isNew,
+        'is-mine': entry.isMine,
+        'is-search-hit': !!searchHit,
+      }"
+      :data-mid="entry.msg.documentId"
+      @contextmenu="emit('contextmenu', $event, entry.msg)"
+    >
+      <div
+        class="ik-knock__msg-avatar"
+        :class="{ 'is-clickable': entry.avatarClickable }"
+        :role="entry.avatarClickable ? 'button' : undefined"
+        :tabindex="entry.avatarClickable ? 0 : undefined"
+        :aria-hidden="entry.avatarClickable ? undefined : 'true'"
+        :aria-label="entry.avatarClickable ? `查看${entry.msg.sender?.name || '用户'}的主页` : undefined"
+        @click="emit('profile', entry.profileUrl)"
+        @keydown.enter="emit('profile', entry.profileUrl)"
+      >
+        <img
+          v-if="entry.msg.sender?.avatar"
+          :src="entry.msg.sender.avatar"
+          :alt="entry.msg.sender?.name || ''"
+          class="ik-knock__msg-avatar-img"
+          draggable="false"
+        />
+        <img v-else src="/images/default-avatar.webp" alt="" class="ik-knock__msg-avatar-img" draggable="false" />
+      </div>
+      <div class="ik-knock__msg-body">
+        <!-- 3.3 AI 回复：过程步骤与回答气泡按发生顺序穿插（思考原文、工具参数不下发，只展示骨架） -->
+        <template v-if="flowBlocks">
+          <template v-for="(block, blockIdx) in flowBlocks" :key="block.key">
+            <AiStepGroup
+              v-if="block.type === 'steps'"
+              :steps="block.steps"
+              :settled="!entry.aiStreaming"
+              :followed="blockIdx < flowBlocks.length - 1"
               @open-post="emit('open-post', $event)"
             />
-            <span v-if="blockIdx === lastTextIndex && entry.msg.editedAt" class="ik-knock__msg-edited">(已编辑)</span>
+            <div
+              v-else
+              class="ik-knock__msg-bubble"
+              :title="fullTime || undefined"
+            >
+              <AiMessageBody
+                :text="block.text"
+                :streaming="block.live"
+                @open-post="emit('open-post', $event)"
+              />
+              <span v-if="blockIdx === lastTextIndex && entry.msg.editedAt" class="ik-knock__msg-edited">(已编辑)</span>
+            </div>
+          </template>
+          <div v-if="flowWaiting" class="ik-knock__msg-bubble">
+            <span class="ik-knock__msg-typing" aria-label="正在输入">
+              <span class="ik-knock__typing-dot" />
+              <span class="ik-knock__typing-dot" />
+              <span class="ik-knock__typing-dot" />
+            </span>
           </div>
         </template>
-        <div v-if="flowWaiting" class="ik-knock__msg-bubble">
-          <span class="ik-knock__msg-typing" aria-label="正在输入">
+        <div v-if="images.length" ref="imagesRef" class="ik-knock__msg-images">
+          <button
+            v-for="(image, imageIndex) in images"
+            :key="`${entry.msg.documentId}-image-${imageIndex}`"
+            type="button"
+            class="ik-knock__msg-image"
+            @click="openImages(imageIndex)"
+          >
+            <img
+              :src="toThumbUrl(image.url)"
+              alt="图片"
+              class="ik-knock__msg-image-thumb"
+              decoding="async"
+              referrerpolicy="no-referrer"
+            />
+          </button>
+        </div>
+        <div
+          v-if="!flowBlocks && !imageOnly"
+          class="ik-knock__msg-bubble"
+          :class="{ 'is-deleted': !!entry.msg.deletedAt }"
+          :title="fullTime || undefined"
+        >
+          <template v-if="typeof entry.rendered === 'object'">
+            <CommentBody :content="entry.rendered.content" />
+          </template>
+          <span
+            v-else-if="entry.pendingStream"
+            class="ik-knock__msg-typing"
+            aria-label="正在输入"
+          >
             <span class="ik-knock__typing-dot" />
             <span class="ik-knock__typing-dot" />
             <span class="ik-knock__typing-dot" />
           </span>
-        </div>
-      </template>
-      <div v-if="images.length" ref="imagesRef" class="ik-knock__msg-images">
-        <button
-          v-for="(image, imageIndex) in images"
-          :key="`${entry.msg.documentId}-image-${imageIndex}`"
-          type="button"
-          class="ik-knock__msg-image"
-          @click="openImages(imageIndex)"
-        >
-          <img
-            :src="toThumbUrl(image.url)"
-            alt="图片"
-            class="ik-knock__msg-image-thumb"
-            decoding="async"
-            referrerpolicy="no-referrer"
+          <!-- AI 回复：markdown 富渲染（代码高亮 / 表格 / 复制），
+               流式与打字机期间由组件展示光标并跳过高亮 -->
+          <AiMessageBody
+            v-else-if="entry.aiRich && typeof entry.rendered === 'string'"
+            :text="entry.rendered"
+            :streaming="entry.aiStreaming"
+            @open-post="emit('open-post', $event)"
           />
-        </button>
-      </div>
-      <div
-        v-if="!flowBlocks && !imageOnly"
-        class="ik-knock__msg-bubble"
-        :class="{ 'is-deleted': !!entry.msg.deletedAt }"
-        :title="fullTime || undefined"
-      >
-        <template v-if="typeof entry.rendered === 'object'">
-          <CommentBody :content="entry.rendered.content" />
-        </template>
-        <span
-          v-else-if="entry.pendingStream"
-          class="ik-knock__msg-typing"
-          aria-label="正在输入"
+          <template v-else-if="typeof entry.rendered === 'string' && hasBubbleLinks(entry.rendered)">
+            <template v-for="(seg, si) in parseBubbleSegments(entry.rendered)" :key="si">
+              <span v-if="seg.type === 'text'">{{ seg.content }}</span>
+              <a
+                v-else
+                :href="seg.href"
+                class="ik-knock__msg-link"
+                @click="emit('bubble-link', seg.href, $event)"
+              >{{ seg.text }}</a>
+            </template>
+          </template>
+          <template v-else>{{ entry.rendered }}</template>
+          <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
+        </div>
+        <!-- 通知 quote 卡：点击跳到关联委托（postModal） -->
+        <button
+          v-if="entry.quote"
+          type="button"
+          class="ik-knock__msg-quote"
+          @click="emit('quote-click', entry.msg)"
         >
-          <span class="ik-knock__typing-dot" />
-          <span class="ik-knock__typing-dot" />
-          <span class="ik-knock__typing-dot" />
-        </span>
-        <!-- AI 回复：markdown 富渲染（代码高亮 / 表格 / 复制），
-             流式与打字机期间由组件展示光标并跳过高亮 -->
-        <AiMessageBody
-          v-else-if="entry.aiRich && typeof entry.rendered === 'string'"
-          :text="entry.rendered"
-          :streaming="entry.aiStreaming"
+          <DocumentTextIcon
+            class="ik-knock__msg-quote-icon"
+            aria-hidden="true"
+          />
+          <span class="ik-knock__msg-quote-text">
+            <span class="ik-knock__msg-quote-label">{{ entry.quote.label }}</span>
+            <span class="ik-knock__msg-quote-title">
+              {{ entry.quote.title }}
+            </span>
+          </span>
+        </button>
+        <!-- 3.5 引用帖子：回答里出现过的 /post/xxx，始终展示在气泡下方 -->
+        <AiCitationList
+          v-if="entry.aiRich && entry.citations.length > 0"
+          :citations="entry.citations"
           @open-post="emit('open-post', $event)"
         />
-        <template v-else-if="typeof entry.rendered === 'string' && hasBubbleLinks(entry.rendered)">
-          <template v-for="(seg, si) in parseBubbleSegments(entry.rendered)" :key="si">
-            <span v-if="seg.type === 'text'">{{ seg.content }}</span>
-            <a
-              v-else
-              :href="seg.href"
-              class="ik-knock__msg-link"
-              @click="emit('bubble-link', seg.href, $event)"
-            >{{ seg.text }}</a>
-          </template>
-        </template>
-        <template v-else>{{ entry.rendered }}</template>
-        <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
-      </div>
-      <!-- 通知 quote 卡：点击跳到关联委托（postModal） -->
-      <button
-        v-if="entry.quote"
-        type="button"
-        class="ik-knock__msg-quote"
-        @click="emit('quote-click', entry.msg)"
-      >
-        <DocumentTextIcon
-          class="ik-knock__msg-quote-icon"
-          aria-hidden="true"
-        />
-        <span class="ik-knock__msg-quote-text">
-          <span class="ik-knock__msg-quote-label">{{ entry.quote.label }}</span>
-          <span class="ik-knock__msg-quote-title">
-            {{ entry.quote.title }}
+        <!-- 1.4 气泡外左下角：时间 + 复制 + 重新生成，仅 AI 消息展示；始终放在消息块最下方 -->
+        <div v-if="entry.aiRich" class="ik-knock__msg-meta" :class="{ 'is-mine': entry.isMine }">
+          <span v-if="entry.msg.createdAt" class="ik-knock__msg-meta-time" :title="fullTime || undefined">
+            {{ formatTime(entry.msg.createdAt) }}
           </span>
-        </span>
-      </button>
-      <!-- 3.5 引用帖子：回答里出现过的 /post/xxx，始终展示在气泡下方 -->
-      <AiCitationList
-        v-if="entry.aiRich && entry.citations.length > 0"
-        :citations="entry.citations"
-        @open-post="emit('open-post', $event)"
-      />
-      <!-- 1.4 气泡外左下角：时间 + 复制 + 重新生成，仅 AI 消息展示；始终放在消息块最下方 -->
-      <div v-if="entry.aiRich" class="ik-knock__msg-meta" :class="{ 'is-mine': entry.isMine }">
-        <span v-if="entry.msg.createdAt" class="ik-knock__msg-meta-time" :title="fullTime || undefined">
-          {{ formatTime(entry.msg.createdAt) }}
-        </span>
-        <button
-          v-if="entry.copyable && !entry.aiStreaming"
-          type="button"
-          class="ik-knock__msg-meta-action"
-          :class="{ 'is-done': copiedId === entry.msg.documentId }"
-          :aria-label="copiedId === entry.msg.documentId ? '已复制' : '复制消息'"
-          :title="copiedId === entry.msg.documentId ? '已复制' : '复制'"
-          @click.stop="emit('copy', entry.msg)"
-        >
-          <CheckIcon
-            v-if="copiedId === entry.msg.documentId"
-            class="ik-knock__msg-meta-icon"
-            aria-hidden="true"
-          />
-          <ClipboardDocumentIcon
-            v-else
-            class="ik-knock__msg-meta-icon"
-            aria-hidden="true"
-          />
-        </button>
-        <button
-          v-if="showRegenerate"
-          type="button"
-          class="ik-knock__msg-meta-action"
-          :disabled="regenerating"
-          aria-label="重新生成"
-          title="重新生成"
-          @click.stop="emit('regenerate', entry.msg)"
-        >
-          <ArrowPathIcon
-            class="ik-knock__msg-meta-icon"
-            :class="{ 'is-spinning': regenerating }"
-            aria-hidden="true"
-          />
-        </button>
+          <button
+            v-if="entry.copyable && !entry.aiStreaming"
+            type="button"
+            class="ik-knock__msg-meta-action"
+            :class="{ 'is-done': copiedId === entry.msg.documentId }"
+            :aria-label="copiedId === entry.msg.documentId ? '已复制' : '复制消息'"
+            :title="copiedId === entry.msg.documentId ? '已复制' : '复制'"
+            @click.stop="emit('copy', entry.msg)"
+          >
+            <CheckIcon
+              v-if="copiedId === entry.msg.documentId"
+              class="ik-knock__msg-meta-icon"
+              aria-hidden="true"
+            />
+            <ClipboardDocumentIcon
+              v-else
+              class="ik-knock__msg-meta-icon"
+              aria-hidden="true"
+            />
+          </button>
+          <button
+            v-if="showRegenerate"
+            type="button"
+            class="ik-knock__msg-meta-action"
+            :disabled="regenerating"
+            aria-label="重新生成"
+            title="重新生成"
+            @click.stop="emit('regenerate', entry.msg)"
+          >
+            <ArrowPathIcon
+              class="ik-knock__msg-meta-icon"
+              :class="{ 'is-spinning': regenerating }"
+              aria-hidden="true"
+            />
+          </button>
+        </div>
       </div>
     </div>
-  </div>
+  </template>
 </template>
 
 <style scoped>
