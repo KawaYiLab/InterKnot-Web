@@ -14,13 +14,15 @@ import type { WorkflowStepView } from "~/utils/workflow";
 /**
  * AI 回复里一组连续的过程步骤（思考 / 检索 / 读帖 / 工具），穿插在回答气泡之间。
  * 每步一行：图标 + 动作 + 对象 + 耗时；检索可展开看命中帖子。
- * 生成中逐行展开；回复结束后，多步的组收成一行摘要，可再点开。
+ * 生成中逐行展开；这组步骤跑完、后面已经开始写回答（或整条回复结束）时，多步的组收成一行摘要，可再点开。
  * 思考原文与工具参数 / 结果后端不下发（WF-003），这里只展示骨架。
  */
 const props = defineProps<{
   steps: WorkflowStepView[];
   /** 整条回复已结束（正文定稿）：多步组自动收起 */
   settled: boolean;
+  /** 后面已经有回答气泡：这组步骤跑完就收起，不等整条回复结束 */
+  followed?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -28,13 +30,14 @@ const emit = defineEmits<{
 }>();
 
 const collapsible = computed(() => props.steps.length > 1);
-const collapsed = ref(props.settled && collapsible.value);
-watch(
-  () => props.settled,
-  (v) => {
-    if (v && collapsible.value) collapsed.value = true;
-  },
+/** 这组步骤已告一段落 */
+const done = computed(
+  () => props.settled || (!!props.followed && props.steps.every((s) => s.status !== "running")),
 );
+const collapsed = ref(done.value && collapsible.value);
+watch(done, (v) => {
+  if (v && collapsible.value) collapsed.value = true;
+});
 
 /** 展开了命中列表的检索步骤 */
 const openItems = ref(new Set<string>());
@@ -129,7 +132,7 @@ const summary = computed(() => {
 
     <template v-else>
       <button
-        v-if="collapsible && settled"
+        v-if="collapsible && done"
         type="button"
         class="ai-steps__row ai-steps__summary"
         :aria-expanded="true"
@@ -143,7 +146,7 @@ const summary = computed(() => {
           <ChevronRightIcon class="ai-steps__chevron is-open" />
       </button>
 
-      <ol class="ai-steps__list" :class="{ 'is-nested': collapsible && settled }">
+      <ol class="ai-steps__list" :class="{ 'is-nested': collapsible && done }">
         <li v-for="step in steps" :key="step.stepId" class="ai-steps__item">
           <component
             :is="step.items?.length ? 'button' : 'div'"

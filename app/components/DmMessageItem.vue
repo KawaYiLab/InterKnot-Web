@@ -152,6 +152,7 @@ const flowWaiting = computed(() => {
             v-if="block.type === 'steps'"
             :steps="block.steps"
             :settled="!entry.aiStreaming"
+            :followed="blockIdx < flowBlocks.length - 1"
             @open-post="emit('open-post', $event)"
           />
           <div
