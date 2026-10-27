@@ -22,7 +22,6 @@ import { extractCitations, isWorkflowSettled } from "~/utils/workflow";
 import type { BubbleRender, EnrichedMessage } from "~/utils/dm-view";
 import type DmComposer from "~/components/DmComposer.vue";
 import FairyMascotEye from "~/components/fairy/FairyMascotEye.vue";
-import InspiraBorderBeam from "~/components/inspira/BorderBeam.vue";
 import InspiraFlickeringGrid from "~/components/inspira/FlickeringGrid.vue";
 import InspiraHyperText from "~/components/inspira/HyperText.vue";
 import { useMediaQuery } from "@vueuse/core";
@@ -1634,13 +1633,6 @@ const handleMobileBack = () => {
                       :aria-selected="activeConversationId === item.documentId"
                       @click="handleConversationClick(item.documentId)"
                     >
-                      <InspiraBorderBeam
-                        v-if="activeConversationId === item.documentId"
-                        class="ik-knock__list-beam"
-                        :size="90"
-                        :duration="3"
-                        :border-width="3"
-                      />
                       <span class="ik-knock__avatar" aria-hidden="true">
                         <img
                           v-if="item.peer?.avatar || item.avatar"
@@ -1704,13 +1696,6 @@ const handleMobileBack = () => {
                       :aria-selected="activeAiSlug === card.slug"
                       @click="selectAiCharacter(card)"
                     >
-                      <InspiraBorderBeam
-                        v-if="activeAiSlug === card.slug"
-                        class="ik-knock__list-beam"
-                        :size="90"
-                        :duration="3"
-                        :border-width="3"
-                      />
                       <span class="ik-knock__avatar" aria-hidden="true">
                         <img
                           v-if="cardAvatarUrl(card)"
@@ -2320,9 +2305,6 @@ const handleMobileBack = () => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* 给选中会话外沿的光束留出位置，负 margin 抵消，列表视觉宽度不变 */
-  padding: 4px;
-  margin: -4px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2341,7 +2323,6 @@ const handleMobileBack = () => {
 }
 
 .ik-knock__list-item {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -2380,12 +2361,6 @@ const handleMobileBack = () => {
   cursor: pointer;
   transition: background-color 140ms ease, box-shadow 140ms ease,
     color 140ms ease;
-}
-
-/* 选中会话的光束绕在胶囊外沿 */
-.ik-knock__list-item .ik-knock__list-beam {
-  inset: -4px;
-  z-index: 0;
 }
 
 .ik-knock__list-item:hover {
