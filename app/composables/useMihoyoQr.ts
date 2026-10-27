@@ -154,7 +154,8 @@ export function useMihoyoQr<M extends MihoyoQrMode>(options: UseMihoyoQrOptions<
       const res = await api.createMihoyoQr(options.mode);
       if (gen !== generation || !options.isActive()) return;
 
-      const dataUrl = await QRCode.toDataURL(res.qrUrl, { width, margin: 1 });
+      // QR 标准要求四个码元宽的静区，确保扫描设备能准确识别边界。
+      const dataUrl = await QRCode.toDataURL(res.qrUrl, { width, margin: 4 });
       if (gen !== generation || !options.isActive()) return;
 
       qrDataUrl.value = dataUrl;

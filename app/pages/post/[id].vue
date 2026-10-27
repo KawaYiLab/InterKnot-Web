@@ -1086,7 +1086,11 @@ onBeforeUnmount(() => {
             </div>
             <div class="ik-page__right">
               <div style="flex:1;padding:16px;overflow:hidden">
-                <div class="ik-page__comments-toolbar-spacer" aria-hidden="true"></div>
+                <div
+                  class="ik-page__comments-toolbar-spacer"
+                  :class="{ 'ik-page__comments-toolbar-spacer--single': !!post && postCommentCount <= 1 }"
+                  aria-hidden="true"
+                ></div>
                 <div v-for="n in 4" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
                   <div style="flex-shrink:0">
                     <div class="ik-skel" style="width:36px;height:36px;border-radius:999px"></div>
@@ -2157,6 +2161,11 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.ik-page__comments-toolbar-spacer--single {
+  height: 0;
+  margin-bottom: 0;
+}
+
 .ik-page__comments-heading {
   /* 桌面端照游戏不显示标题，移动端再打开 */
   display: none;
@@ -2814,6 +2823,11 @@ onBeforeUnmount(() => {
     overflow: visible;
     will-change: auto;
     transform: none;
+  }
+
+  .ik-page__comments-toolbar-spacer--single {
+    height: 22px;
+    margin-bottom: 12px;
   }
 
   .ik-page__comments-heading {
