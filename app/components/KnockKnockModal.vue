@@ -332,28 +332,13 @@ const fairyMascotState = computed<"normal" | "thinking">(() => {
   return "normal";
 });
 
-/** AI 示例问题刷新偏移：点击「换一批」循环切片 */
-const suggestionsOffset = ref(0);
-
+/** AI 示例问题：角色卡没配就用默认那一组；在输入框里轮播，也能从输入框的灵感菜单里点 */
 const activeAiSuggestions = computed<string[]>(() => {
   const card = activeAiCard.value;
-  const all: string[] = card?.suggestedQuestions?.length
+  return card?.suggestedQuestions?.length
     ? (card.suggestedQuestions as string[])
     : DEFAULT_AI_SUGGESTIONS;
-  if (all.length === 0) return [];
-  const count = Math.min(3, all.length);
-  const start = suggestionsOffset.value % all.length;
-  return Array.from({ length: count }, (_, i) => all[(start + i) % all.length] as string);
 });
-
-const onRefreshSuggestions = () => {
-  const card = activeAiCard.value;
-  const len = card?.suggestedQuestions?.length || DEFAULT_AI_SUGGESTIONS.length;
-  suggestionsOffset.value = (suggestionsOffset.value + 3) % Math.max(len, 1);
-};
-
-// 切换 AI 角色时重置示例问题偏移
-watch(() => activeAiCard.value?.slug, () => { suggestionsOffset.value = 0; });
 
 /* ─────────────── 模型切换（会话级） ─────────────── */
 
@@ -638,11 +623,6 @@ const activeMessageState = computed(() => {
  */
 const activeMessages = computed<DmMessage[]>(
   () => activeMessageState.value?.items ?? [],
-);
-
-/** 当前会话是否已有消息（空会话才显示示例问题） */
-const hasActiveConversationMessages = computed(
-  () => !!activeConversation.value?.lastMessage || activeMessages.value.length > 0,
 );
 
 /** 右栏 loading 占位用：当前会话首次加载消息中且本地尚无缓存 */
@@ -1574,45 +1554,24 @@ const handleMobileBack = () => {
               <div class="ik-dialog__header ik-knock__header">
                 <div class="ik-knock__brand">
                   <span class="ik-knock__brand-icon" aria-hidden="true">
-                    <!-- 自绘 phone + signal wave，匹配截图中的黄色 logo -->
-                    <svg viewBox="0 0 32 32" width="28" height="28" fill="none">
-                      <!-- 手机外壳 -->
-                      <rect
-                        x="9"
-                        y="9"
-                        width="14"
-                        height="22"
-                        rx="3"
-                        fill="#fbfe00"
-                        stroke="#000"
-                        stroke-width="1.5"
-                      />
-                      <!-- 屏幕高光 -->
-                      <rect
-                        x="11"
-                        y="11.5"
-                        width="10"
-                        height="14"
-                        rx="1"
-                        fill="#000"
-                      />
-                      <!-- Home 指示点 -->
-                      <circle cx="16" cy="28.5" r="0.9" fill="#000" />
-                      <!-- 信号弧线 -->
-                      <path
-                        d="M22 8 q3 -1 5 1"
-                        stroke="#fbfe00"
-                        stroke-width="1.8"
-                        stroke-linecap="round"
-                        fill="none"
-                      />
-                      <path
-                        d="M22 5 q5 -1.5 8 1.5"
-                        stroke="#fbfe00"
-                        stroke-width="1.8"
-                        stroke-linecap="round"
-                        fill="none"
-                      />
+                    <!-- 自绘：歪着的黄色手机 + 屏幕上的爱心 + 信号波，照游戏内敲敲的 logo -->
+                    <svg viewBox="0 0 48 48" width="48" height="48" fill="none">
+                      <g class="ik-knock__brand-phone">
+                        <rect x="8" y="10" width="27" height="35" rx="6.5" fill="#fbfe00" stroke="#000" stroke-width="3.5" />
+                        <rect x="12" y="14.5" width="19" height="22" rx="3" fill="#000" />
+                        <path
+                          d="M21.5 32.5 15.2 26.4a3.9 3.9 0 0 1 6.3-4.6 3.9 3.9 0 0 1 6.3 4.6z"
+                          fill="#fbfe00"
+                        />
+                        <rect x="18" y="39.5" width="7" height="2.2" rx="1.1" fill="#000" />
+                      </g>
+                      <!-- 信号波：先描一圈黑边再叠黄线，和游戏里一样带粗黑描边 -->
+                      <g stroke-linecap="round">
+                        <path d="M34 8.5a7 7 0 0 1 5.5 5.5" stroke="#000" stroke-width="6.5" />
+                        <path d="M35.5 2a13.5 13.5 0 0 1 10.5 10.5" stroke="#000" stroke-width="6.5" />
+                        <path d="M34 8.5a7 7 0 0 1 5.5 5.5" stroke="#fbfe00" stroke-width="3" />
+                        <path d="M35.5 2a13.5 13.5 0 0 1 10.5 10.5" stroke="#fbfe00" stroke-width="3" />
+                      </g>
                     </svg>
                   </span>
                   <InspiraHyperText class="ik-knock__brand-text" text="knock knock" />
@@ -2024,7 +1983,7 @@ const handleMobileBack = () => {
                       :error="sendError"
                       :streaming="!!activeStreamingMessageId"
                       :stopping="stoppingAi"
-                      :suggestions="isActiveAiConversation && !hasActiveConversationMessages ? activeAiSuggestions : undefined"
+                      :suggestions="isActiveAiConversation ? activeAiSuggestions : undefined"
                       can-attach
                       :attachments="dmImages.tasks.value"
                       @send="doSend"
@@ -2035,7 +1994,6 @@ const handleMobileBack = () => {
                       @stop="handleStopAi"
                       @cancel-edit="cancelEdit"
                       @typing="handleComposerTyping"
-                      @refresh-suggestions="onRefreshSuggestions"
                     />
                   </div>
                 </section>
@@ -2166,16 +2124,20 @@ const handleMobileBack = () => {
 }
 
 /* ── Header ────────────────────────────────────── */
+/* 照游戏内敲敲：顶栏是一条嵌在外框里的深色胶囊条，左端全圆 */
 .ik-dialog__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
+  margin: 6px 6px 0;
+  padding: 8px 14px 8px 18px;
   flex-shrink: 0;
-  border-radius: 18px 18px 0 0;
+  border: 2px solid #1e1e1e;
+  border-radius: 999px 28px 28px 999px;
   background:
     url("/images/tab-bg-point.webp") repeat,
-    linear-gradient(180deg, #161616 0%, #080808 100%);
+    linear-gradient(180deg, #141414 0%, #070707 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.04);
 }
 
 .ik-knock__brand {
@@ -2189,19 +2151,51 @@ const handleMobileBack = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 54px;
+  height: 54px;
   flex-shrink: 0;
 }
 
 .ik-knock__brand-icon > svg {
   width: 100%;
   height: 100%;
+  overflow: visible;
+}
+
+/* 手机歪着放；弹窗打开时像来电一样晃两下 */
+.ik-knock__brand-phone {
+  transform-box: view-box;
+  transform-origin: 21px 28px;
+  transform: rotate(-14deg);
+  animation: ik-knock-ring 900ms ease-in-out 200ms 1 both;
+}
+
+@keyframes ik-knock-ring {
+  0%,
+  100% {
+    transform: rotate(-14deg);
+  }
+  15%,
+  45%,
+  75% {
+    transform: rotate(-24deg);
+  }
+  30%,
+  60%,
+  90% {
+    transform: rotate(-4deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-knock__brand-phone {
+    animation: none;
+  }
 }
 
 .ik-knock__brand-text {
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 30px;
+  font-weight: 900;
   font-style: normal;
   color: #fff;
   letter-spacing: -0.4px;
@@ -3048,7 +3042,10 @@ const handleMobileBack = () => {
 
   /* 顶部品牌栏（仅列表视图显示）：贴顶 + 顶部安全区 */
   .ik-dialog--knock .ik-dialog__header {
+    margin: 0;
+    border: 0;
     border-radius: 0;
+    box-shadow: none;
     padding: 12px 16px;
     padding-top: calc(12px + env(safe-area-inset-top));
   }

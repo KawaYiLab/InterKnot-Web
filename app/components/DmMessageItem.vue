@@ -280,6 +280,7 @@ const flowWaiting = computed(() => {
           class="ik-knock__msg-meta-action"
           :class="{ 'is-done': copiedId === entry.msg.documentId }"
           :aria-label="copiedId === entry.msg.documentId ? '已复制' : '复制消息'"
+          :title="copiedId === entry.msg.documentId ? '已复制' : '复制'"
           @click.stop="emit('copy', entry.msg)"
         >
           <CheckIcon
@@ -299,6 +300,7 @@ const flowWaiting = computed(() => {
           class="ik-knock__msg-meta-action"
           :disabled="regenerating"
           aria-label="重新生成"
+          title="重新生成"
           @click.stop="emit('regenerate', entry.msg)"
         >
           <ArrowPathIcon
@@ -306,7 +308,6 @@ const flowWaiting = computed(() => {
             :class="{ 'is-spinning': regenerating }"
             aria-hidden="true"
           />
-          重新生成
         </button>
         <!-- 这条回复用的是哪个模型（message.aiModelKey → displayName） -->
         <span
@@ -696,70 +697,78 @@ const flowWaiting = computed(() => {
 }
 
 /* ── 1.4 气泡外左下角：时间 + 复制 + 重新生成 ── */
+/* 气泡下的功能栏：顶栏 tab 条同款的黑底点阵小胶囊，时间 + 圆形图标钮 + 模型标签 */
 .ik-knock__msg-meta {
-  display: flex;
+  align-self: flex-start;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  min-height: 22px;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px;
+  border: 2px solid #2a2a2a;
+  border-radius: 999px;
+  background: #050505 url("/images/tab-bg-point.webp") repeat;
   color: rgba(255, 255, 255, 0.45);
   font-size: 12px;
   line-height: 1;
+  transition: border-color 140ms ease;
+}
+
+.ik-knock__msg:hover .ik-knock__msg-meta {
+  border-color: #3a3a3a;
 }
 
 .ik-knock__msg-meta-time {
+  padding: 0 6px 0 8px;
+  font-weight: 600;
   user-select: none;
 }
 
 .ik-knock__msg-meta-action {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
+  border-radius: 999px;
+  background: #1c1c1c;
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   transition: color 120ms ease, background-color 120ms ease;
 }
 
 .ik-knock__msg-meta-action:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  color: #000;
+  background: #fbfe00;
+}
+
+.ik-knock__msg-meta-action:focus-visible {
+  outline: 2px solid #fbfe00;
+  outline-offset: 1px;
 }
 
 .ik-knock__msg-meta-action.is-done {
-  color: #52d273;
+  color: #000;
+  background: #52d273;
 }
 
-/* 模型标签：弱化的信息位，不抢正文；前面加个小圆点与操作按钮划清界限 */
+/* 模型标签：黄色描边小胶囊，信息位，不可点 */
 .ik-knock__msg-meta-model {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  color: rgba(255, 255, 255, 0.32);
-  font-size: 11px;
-  line-height: 1;
-  letter-spacing: 0.2px;
-  user-select: none;
-  transition: color 120ms ease;
-}
-
-.ik-knock__msg-meta-model::before {
-  content: "";
-  width: 3px;
-  height: 3px;
+  height: 22px;
+  margin-left: 2px;
+  padding: 0 9px;
+  border: 1.5px solid rgba(251, 254, 0, 0.35);
   border-radius: 999px;
-  background: currentColor;
-  opacity: 0.7;
-}
-
-.ik-knock__msg:hover .ik-knock__msg-meta-model {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(251, 254, 0, 0.8);
+  font-size: 11px;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: 0.3px;
+  user-select: none;
 }
 
 .ik-knock__msg-meta-icon {
@@ -768,7 +777,7 @@ const flowWaiting = computed(() => {
 }
 
 .ik-knock__msg.is-mine .ik-knock__msg-meta {
-  justify-content: flex-end;
+  align-self: flex-end;
 }
 
 /* 重新生成：请求进行中禁点 + 图标旋转 */

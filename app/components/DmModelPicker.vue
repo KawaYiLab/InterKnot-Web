@@ -4,7 +4,7 @@ import { ChevronDownIcon, CheckIcon } from "@heroicons/vue/24/outline";
 import type { AiModel } from "~/types/entities";
 
 /**
- * 模型切换（会话级）：标题栏里角色名右侧的无边框下拉。
+ * 模型切换（会话级）：标题栏里角色名右侧。模型不多时平铺成分段切换，多了收进下拉。
  * 只负责展示与交互，选择结果 emit 给容器（数据仍由 useDmConversations 单源）。
  * 原先挂在 DmComposer 输入行上，移到标题栏后与「这条回复用了哪个模型」的气泡标签分工更清楚。
  */
@@ -25,6 +25,9 @@ const emit = defineEmits<{
 }>();
 
 const visible = computed(() => (props.models?.length ?? 0) > 0);
+/** 模型不多时直接平铺成分段切换（和侧栏 tab 同款），一次点击就换；多了才收进下拉 */
+const SEGMENT_MAX = 3;
+const segmented = computed(() => (props.models?.length ?? 0) <= SEGMENT_MAX);
 
 const open = ref(false);
 const rootRef = ref<HTMLElement | null>(null);
@@ -92,7 +95,30 @@ const pick = (key: string | null) => {
 </script>
 
 <template>
-  <div v-if="visible" ref="rootRef" class="ik-model">
+  <div
+    v-if="visible && segmented"
+    class="ik-model-seg"
+    :class="{ 'is-disabled': streaming }"
+    role="radiogroup"
+    aria-label="切换模型"
+  >
+    <button
+      v-for="m in models"
+      :key="m.key"
+      type="button"
+      role="radio"
+      class="ik-model-seg__item"
+      :class="{ 'is-active': activeKey === m.key }"
+      :aria-checked="activeKey === m.key"
+      :disabled="streaming"
+      :title="m.description ? `${m.displayName}：${m.description}` : m.displayName"
+      @click="pick(m.key)"
+    >
+      {{ m.displayName }}
+      <span v-if="m.key === defaultModelKey && modelKey && activeKey !== m.key" class="ik-model-seg__dot" aria-label="角色默认" />
+    </button>
+  </div>
+  <div v-else-if="visible" ref="rootRef" class="ik-model">
     <button
       type="button"
       class="ik-model__btn"
@@ -145,23 +171,91 @@ const pick = (key: string | null) => {
 </template>
 
 <style scoped>
+/* 分段切换：深灰粗描边 + 黑底点阵的小胶囊，选中段亮黄（同侧栏 tab） */
+.ik-model-seg {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 2px solid #313131;
+  border-radius: 999px;
+  background: #050505 url("/images/tab-bg-point.webp") repeat;
+}
+
+.ik-model-seg.is-disabled {
+  opacity: 0.55;
+}
+
+.ik-model-seg__item {
+  position: relative;
+  height: 24px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #bdbdbd;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.ik-model-seg__item:hover:not(:disabled):not(.is-active) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-model-seg__item.is-active {
+  background: #fbfe00;
+  color: #000;
+}
+
+.ik-model-seg__item:disabled {
+  cursor: not-allowed;
+}
+
+.ik-model-seg__item:focus-visible {
+  outline: 2px solid #fbfe00;
+  outline-offset: 1px;
+}
+
+/* 已经手动换过模型时，在角色默认的那一段上点个小点 */
+.ik-model-seg__dot {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
 .ik-model {
   position: relative;
   flex-shrink: 0;
 }
 
-/* 无边框触发器：只有模型名 + 一个向下的箭头 */
+/* 模型多时的下拉触发器：与分段切换同款外框 */
 .ik-model__btn {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  max-width: 160px;
-  padding: 2px 4px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 13px;
+  gap: 4px;
+  max-width: 180px;
+  height: 30px;
+  padding: 0 10px 0 12px;
+  border: 2px solid #313131;
+  border-radius: 999px;
+  background: #050505 url("/images/tab-bg-point.webp") repeat;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-style: italic;
   line-height: 1.2;
   cursor: pointer;
   transition: color 140ms ease;

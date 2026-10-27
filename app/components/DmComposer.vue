@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { ArrowPathIcon, PhotoIcon, XMarkIcon } from "@heroicons/vue/24/outline";
+import { PhotoIcon, SparklesIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import type { UploadTask } from "~/types/entities";
 import InspiraShineBorder from "~/components/inspira/ShineBorder.vue";
 import InspiraVanishCanvas from "~/components/inspira/VanishCanvas.vue";
@@ -24,7 +24,7 @@ const props = defineProps<{
   /** AI 流式生成中（且非编辑态）：发送按钮切换为「停止」 */
   streaming: boolean;
   stopping: boolean;
-  /** AI 会话示例问题（空时不显示） */
+  /** AI 会话示例问题：轮播在占位里（Tab 填入），也能从输入行的灵感菜单点选发送；空时不显示 */
   suggestions?: string[];
   /** 可以附图：显示附图按钮，支持粘贴图片 */
   canAttach?: boolean;
@@ -38,8 +38,6 @@ const emit = defineEmits<{
   (e: "cancel-edit"): void;
   /** 用户敲键盘：父级节流发送 typing 状态 */
   (e: "typing"): void;
-  /** 点击示例问题区的刷新按钮 */
-  (e: "refresh-suggestions"): void;
   /** 点附图按钮：打开图片弹窗（上传 / 我的图库） */
   (e: "open-picker"): void;
   /** 粘贴了图片 */
@@ -124,6 +122,9 @@ watch(() => props.rotatingPlaceholders, () => {
 });
 onBeforeUnmount(() => {
   if (placeholderTimer) clearInterval(placeholderTimer);
+  if (!import.meta.client) return;
+  document.removeEventListener("pointerdown", onSuggestPointerDown, true);
+  document.removeEventListener("keydown", onSuggestKeyDown);
 });
 
 /** 发送：新消息的字先碎成粒子散掉（编辑保存不播） */
@@ -141,18 +142,55 @@ const onComposerPaste = (e: ClipboardEvent) => {
   emit("attach", files);
 };
 
-const showSuggestions = computed(
-  () =>
-    props.suggestions &&
-    props.suggestions.length > 0 &&
-    !props.editing &&
-    !props.streaming &&
-    !draft.value.trim(),
-);
+const hasSuggestions = computed(() => (props.suggestions?.length ?? 0) > 0 && !props.editing);
+
+/** 灵感菜单：输入行左侧的按钮弹出示例问题，点一下直接发送 */
+const suggestOpen = ref(false);
+const suggestRef = ref<HTMLElement | null>(null);
+
+const closeSuggest = () => {
+  suggestOpen.value = false;
+};
+
+const onSuggestPointerDown = (e: PointerEvent) => {
+  const root = suggestRef.value;
+  if (root && e.target instanceof Node && !root.contains(e.target)) closeSuggest();
+};
+
+const onSuggestKeyDown = (e: KeyboardEvent) => {
+  if (e.key === "Escape") closeSuggest();
+};
+
+watch(suggestOpen, (open) => {
+  if (!import.meta.client) return;
+  if (open) {
+    document.addEventListener("pointerdown", onSuggestPointerDown, true);
+    document.addEventListener("keydown", onSuggestKeyDown);
+  } else {
+    document.removeEventListener("pointerdown", onSuggestPointerDown, true);
+    document.removeEventListener("keydown", onSuggestKeyDown);
+  }
+});
+
+watch(hasSuggestions, (has) => {
+  if (!has) closeSuggest();
+});
 
 const applySuggestion = (text: string) => {
+  closeSuggest();
   draft.value = text;
   emit("send");
+};
+
+/** 占位里正在轮播的是一条示例问题：点它或按 Tab 把它填进输入框 */
+const placeholderIsSuggestion = computed(
+  () => rotating.value && !!props.suggestions?.includes(rotatingText.value ?? ""),
+);
+
+const fillSuggestion = () => {
+  if (!placeholderIsSuggestion.value || !rotatingText.value) return;
+  draft.value = rotatingText.value;
+  composerRef.value?.focus();
 };
 
 const onComposerInput = () => {
@@ -162,6 +200,11 @@ const onComposerInput = () => {
 
 /** Enter 发送，Shift+Enter 换行（与主流 IM 一致） */
 const onComposerKeyDown = (e: KeyboardEvent) => {
+  if (e.key === "Tab" && !e.shiftKey && placeholderIsSuggestion.value) {
+    e.preventDefault();
+    fillSuggestion();
+    return;
+  }
   if (e.key !== "Enter") return;
   if (e.shiftKey || e.ctrlKey || e.metaKey) return; // 组合键允许换行
   e.preventDefault();
@@ -204,33 +247,6 @@ defineExpose({
       aria-live="polite"
     >
       {{ activeDraftLength }}/4000
-    </div>
-    <!-- AI 示例问题：空输入时展示，点击直接发送 -->
-    <div
-      v-if="showSuggestions"
-      class="ik-knock__composer-suggestions"
-    >
-      <span class="ik-knock__composer-suggestions-label">大家都在问</span>
-      <button
-        type="button"
-        class="ik-knock__composer-suggestions-refresh"
-        aria-label="换一批"
-        title="换一批"
-        @click="emit('refresh-suggestions')"
-      >
-        <ArrowPathIcon class="ik-knock__composer-suggestions-refresh-icon" aria-hidden="true" />
-      </button>
-      <div class="ik-knock__composer-suggestions-chips">
-        <button
-          v-for="(q, idx) in suggestions"
-          :key="idx"
-          type="button"
-          class="ik-knock__composer-suggestions-chip"
-          @click="applySuggestion(q)"
-        >
-          {{ q }}
-        </button>
-      </div>
     </div>
     <!-- 附图预览：上传中显示进度，失败可点重试 -->
     <div
@@ -283,6 +299,36 @@ defineExpose({
       >
         <PhotoIcon class="ik-knock__composer-send-icon" aria-hidden="true" />
       </button>
+      <div v-if="hasSuggestions" ref="suggestRef" class="ik-knock__composer-suggest">
+        <button
+          type="button"
+          class="ik-knock__composer-attach"
+          :class="{ 'is-open': suggestOpen }"
+          :disabled="disabled || streaming"
+          aria-label="大家都在问"
+          title="大家都在问"
+          :aria-expanded="suggestOpen"
+          aria-haspopup="menu"
+          @click="suggestOpen = !suggestOpen"
+        >
+          <SparklesIcon class="ik-knock__composer-send-icon" aria-hidden="true" />
+        </button>
+        <Transition name="ik-suggest-pop">
+          <div v-if="suggestOpen" class="ik-knock__composer-suggest-menu" role="menu">
+            <div class="ik-knock__composer-suggest-title">大家都在问</div>
+            <button
+              v-for="(q, idx) in suggestions"
+              :key="idx"
+              type="button"
+              role="menuitem"
+              class="ik-knock__composer-suggest-item"
+              @click="applySuggestion(q)"
+            >
+              {{ q }}
+            </button>
+          </div>
+        </Transition>
+      </div>
       <div class="ik-knock__composer-field">
         <textarea
           v-if="editing"
@@ -315,8 +361,13 @@ defineExpose({
             v-if="rotating"
             :key="placeholderIndex"
             class="ik-knock__composer-placeholder"
+            :class="{ 'is-suggestion': placeholderIsSuggestion }"
             aria-hidden="true"
-          >{{ rotatingText }}</span>
+            @click="fillSuggestion"
+          >
+            <span class="ik-knock__composer-placeholder-text">{{ rotatingText }}</span>
+            <kbd v-if="placeholderIsSuggestion" class="ik-knock__composer-placeholder-key">Tab</kbd>
+          </span>
         </Transition>
         <InspiraVanishCanvas ref="vanishRef" />
       </div>
@@ -483,14 +534,47 @@ defineExpose({
   top: 9px;
   left: 12px;
   right: 12px;
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: rgba(255, 255, 255, 0.32);
   font-size: 15px;
   font-weight: 500;
   line-height: 1.45;
   white-space: nowrap;
-  text-overflow: ellipsis;
   pointer-events: none;
+}
+
+.ik-knock__composer-placeholder-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 轮播到示例问题：可点击填入，后面跟一个 Tab 键帽 */
+.ik-knock__composer-placeholder.is-suggestion {
+  right: auto;
+  max-width: calc(100% - 24px);
+  pointer-events: auto;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.ik-knock__composer-placeholder.is-suggestion:hover {
+  color: #fbfe00;
+}
+
+.ik-knock__composer-placeholder-key {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .ik-ph-enter-active,
@@ -613,76 +697,88 @@ button.ik-knock__composer-attachment-state {
   height: 14px;
 }
 
-/* AI 示例问题：仿 Akasha 大家都在问 */
-.ik-knock__composer-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 0 4px 4px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.ik-knock__composer-suggestions-label {
-  font-weight: 500;
-}
-
-.ik-knock__composer-suggestions-refresh {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.45);
-  cursor: pointer;
-  padding: 0;
-  transition: color 140ms ease, background 140ms ease;
-}
-
-.ik-knock__composer-suggestions-refresh:hover {
-  color: #fbfe00;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.ik-knock__composer-suggestions-refresh-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.ik-knock__composer-suggestions-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  width: 100%;
-}
-
-.ik-knock__composer-suggestions-chip {
+/* 灵感菜单：从输入行左侧向上弹出 */
+.ik-knock__composer-suggest {
+  position: relative;
   flex-shrink: 0;
-  padding: 5px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 12.5px;
-  line-height: 1.4;
-  cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
-.ik-knock__composer-suggestions-chip:hover {
-  background: rgba(251, 254, 0, 0.1);
-  border-color: rgba(251, 254, 0, 0.35);
-  color: #fbfe00;
+.ik-knock__composer-attach.is-open,
+.ik-knock__composer-attach.is-open:hover:not(:disabled) {
+  color: #000;
+  background: #fbfe00;
+}
+
+.ik-knock__composer-suggest-menu {
+  position: absolute;
+  left: -4px;
+  bottom: calc(100% + 12px);
+  z-index: 10;
+  width: max-content;
+  max-width: min(420px, 70vw);
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 3px solid #313131;
+  border-radius: 18px;
+  background: #050505 url("/images/tab-bg-point.webp") repeat;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+.ik-knock__composer-suggest-title {
+  padding: 6px 12px 4px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ik-knock__composer-suggest-item {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.ik-knock__composer-suggest-item:hover,
+.ik-knock__composer-suggest-item:focus-visible {
+  outline: none;
+  background: #fbfe00;
+  color: #000;
+}
+
+.ik-suggest-pop-enter-active,
+.ik-suggest-pop-leave-active {
+  transition: opacity 140ms ease, transform 160ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  transform-origin: bottom left;
+}
+
+.ik-suggest-pop-enter-from,
+.ik-suggest-pop-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ik-ph-enter-active,
   .ik-ph-leave-active {
     transition: none;
+  }
+}
+
+/* 触屏没有 Tab 键：键帽不显示，点占位照样能填入 */
+@media (hover: none) {
+  .ik-knock__composer-placeholder-key {
+    display: none;
   }
 }
 
