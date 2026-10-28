@@ -26,6 +26,8 @@ const props = defineProps<{
   stopping: boolean;
   /** AI 会话示例问题：轮播在占位里（Tab 填入），也能从输入行的灵感菜单点选发送；空时不显示 */
   suggestions?: string[];
+  /** 灵感菜单标题：真实热门问题叫「大家都在问」，示例问题叫「试试这样问」 */
+  suggestionsTitle?: string;
   /** 可以附图：显示附图按钮，支持粘贴图片 */
   canAttach?: boolean;
   /** 已选的附图（上传中 / 已上传 / 失败） */
@@ -146,6 +148,7 @@ const hasSuggestions = computed(() => (props.suggestions?.length ?? 0) > 0 && !p
 
 /** 灵感菜单：输入行左侧的按钮弹出示例问题，点一下直接发送 */
 const suggestOpen = ref(false);
+const suggestTitle = computed(() => props.suggestionsTitle || "大家都在问");
 const suggestRef = ref<HTMLElement | null>(null);
 
 const closeSuggest = () => {
@@ -305,8 +308,8 @@ defineExpose({
           class="ik-knock__composer-attach"
           :class="{ 'is-open': suggestOpen }"
           :disabled="disabled || streaming"
-          aria-label="大家都在问"
-          title="大家都在问"
+          :aria-label="suggestTitle"
+          :title="suggestTitle"
           :aria-expanded="suggestOpen"
           aria-haspopup="menu"
           @click="suggestOpen = !suggestOpen"
@@ -315,7 +318,7 @@ defineExpose({
         </button>
         <Transition name="ik-suggest-pop">
           <div v-if="suggestOpen" class="ik-knock__composer-suggest-menu" role="menu">
-            <div class="ik-knock__composer-suggest-title">大家都在问</div>
+            <div class="ik-knock__composer-suggest-title">{{ suggestTitle }}</div>
             <button
               v-for="(q, idx) in suggestions"
               :key="idx"

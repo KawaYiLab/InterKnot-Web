@@ -148,6 +148,8 @@ export interface AiRoleCard {
   avatar?: string | null;
   sortOrder?: number;
   suggestedQuestions?: string[] | null;
+  /** 「大家都在问」：最近真有多人拿来开场的问题（后端已做去重、过滤），没有数据时为空 */
+  popularQuestions?: string[] | null;
   boundUser?: {
     id: string;
     login?: string;

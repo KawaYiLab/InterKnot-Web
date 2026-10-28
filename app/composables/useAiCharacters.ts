@@ -7,6 +7,7 @@ interface CharacterDto {
   avatarUrl?: string | null;
   sortOrder: number;
   suggestedQuestions: string[];
+  popularQuestions?: string[];
   defaultModelKey?: string | null;
   allowedModelKeys?: string[] | null;
   user: { id: string; username: string; avatarUrl?: string | null };
@@ -20,6 +21,7 @@ function toRoleCard(c: CharacterDto): AiRoleCard {
     avatar: c.avatarUrl ?? c.user?.avatarUrl ?? null,
     sortOrder: c.sortOrder,
     suggestedQuestions: c.suggestedQuestions ?? null,
+    popularQuestions: c.popularQuestions?.length ? c.popularQuestions : null,
     boundUser: c.user
       ? {
           id: c.user.id,

@@ -331,9 +331,16 @@ const fairyMascotState = computed<"normal" | "thinking">(() => {
   return "normal";
 });
 
-/** AI 示例问题：角色卡没配就用默认那一组；在输入框里轮播，也能从输入框的灵感菜单里点 */
+/** 当前角色有没有真实的热门问题（有就只展示它们，菜单标题才叫「大家都在问」） */
+const activeAiHasPopular = computed(() => (activeAiCard.value?.popularQuestions?.length ?? 0) > 0);
+
+/**
+ * AI 示例问题：优先用大家真实问过的热门问题；还没有数据时退回角色卡示例问题，角色卡也没配就用默认那一组。
+ * 在输入框里轮播，也能从输入框的灵感菜单里点。
+ */
 const activeAiSuggestions = computed<string[]>(() => {
   const card = activeAiCard.value;
+  if (card?.popularQuestions?.length) return card.popularQuestions;
   return card?.suggestedQuestions?.length
     ? (card.suggestedQuestions as string[])
     : DEFAULT_AI_SUGGESTIONS;
@@ -1944,6 +1951,7 @@ const handleMobileBack = () => {
                       :streaming="!!activeStreamingMessageId"
                       :stopping="stoppingAi"
                       :suggestions="isActiveAiConversation ? activeAiSuggestions : undefined"
+                      :suggestions-title="activeAiHasPopular ? '大家都在问' : '试试这样问'"
                       can-attach
                       :attachments="dmImages.tasks.value"
                       @send="doSend"
