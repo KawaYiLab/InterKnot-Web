@@ -1571,11 +1571,7 @@ onBeforeUnmount(() => {
               <!-- 骨架屏：右栏（与评论自身骨架保持一致） -->
               <div class="ik-dialog__right">
                 <div style="flex:1;padding:16px;overflow:hidden">
-                  <div
-                    class="ik-dialog__comments-toolbar-spacer"
-                    :class="{ 'ik-dialog__comments-toolbar-spacer--single': !!post && postCommentCount <= 1 }"
-                    aria-hidden="true"
-                  ></div>
+                  <div class="ik-dialog__comments-toolbar-spacer" aria-hidden="true"></div>
                   <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
                     <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
                     <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
@@ -2957,11 +2953,6 @@ html.no-gpu .ik-dialog {
   flex-shrink: 0;
 }
 
-.ik-dialog__comments-toolbar-spacer--single {
-  height: 0;
-  margin-bottom: 0;
-}
-
 .ik-dialog__comments-heading {
   /* 桌面端照游戏不显示标题，移动端再打开 */
   display: none;
@@ -3646,11 +3637,6 @@ html.no-gpu .ik-dialog {
     overflow: visible;
     will-change: auto;
     transform: none;
-  }
-
-  .ik-dialog__comments-toolbar-spacer--single {
-    height: 22px;
-    margin-bottom: 12px;
   }
 
   .ik-dialog__comments-heading {
