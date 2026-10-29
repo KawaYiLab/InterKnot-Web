@@ -1062,13 +1062,8 @@ const onMessagesScroll = () => {
 };
 
 /**
- * 消息流 / 工作流 / 打字机任意视觉变化时，逐帧平滑追到底部。
- * 用 enrichedMessages 做聚合信号：它比 activeMessages 还多覆盖
- * workflowEvents / aiRevealTick，避免 reasoning preview / tool 时间线
- * 展开时高度变化但不触发 activeMessages 的问题。
- *
- * 打字机换行时内容一次长高一行，直接 scrollTop=scrollHeight 会一行一跳；
- * 这里每帧走剩余距离的一部分（指数缓动），换行也是平滑滑上去。
+ * 新消息出现时（且用户在底部），逐帧平滑滚到底部。
+ * AI 吐字时不跟随，见下方 enrichedMessages watcher。
  */
 const FOLLOW_EASE_PER_FRAME = 0.25;
 let autoScrollRaf: number | null = null;
@@ -1126,7 +1121,17 @@ watch(
   (next, prev) => {
     const prevLen = prev?.length ?? 0;
     const nextLen = next.length;
-    if (nextLen > prevLen && !wasNearBottom.value) {
+    if (nextLen <= prevLen) {
+      // 只是已有消息长高（AI 吐字、工作流展开）：不跟随滚动，
+      // 只刷新是否在底部，内容溢出视口后「回到底部」按钮会亮起
+      const el = messagesRef.value;
+      if (el && wasNearBottom.value && !isNearBottom(el)) {
+        wasNearBottom.value = false;
+        hasUnseenBelow.value = true;
+      }
+      return;
+    }
+    if (!wasNearBottom.value) {
       // 用户在读历史 → 不打断，仅亮起「回到底部」（1.6）
       hasUnseenBelow.value = true;
       return;
