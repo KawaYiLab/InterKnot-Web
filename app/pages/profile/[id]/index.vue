@@ -1250,16 +1250,55 @@ onBeforeUnmount(() => {
      desktop values so the tab bar's visible top corners (which are
      clipped by these parents' overflow:hidden + border-radius) match the
      tablet/desktop look. */
-  .ik-tab-bar { padding: 8px 14px; min-height: 44px; }
-  .ik-banner { min-height: 240px; padding: 22px 18px; }
-  .ik-banner__avatar { width: 68px; height: 68px; border-width: 3px; }
-  .ik-banner__level { min-width: 28px; height: 28px; font-size: 12px; line-height: 24px; }
-  .ik-banner__name { font-size: 22px; }
+  /* 窄屏把外圈留白让给内容：页面边距收窄，名片与委托区共用 12px 内边距，
+     左右边线对齐成一条。 */
+  .ik-profile { padding: 12px 10px 24px; gap: 12px; }
+  .ik-tab-bar { padding: 8px 12px; min-height: 48px; }
+  .ik-tab-bar__left { font-size: 13px; padding: 6px 12px; }
+  .ik-banner-card { margin: 12px 12px 0; }
+  .ik-banner { min-height: 0; padding: 20px 16px 16px; gap: 20px; }
+  .ik-banner__user { align-items: center; gap: 14px; }
+  .ik-banner__avatar { width: 72px; height: 72px; border-width: 3px; }
+  .ik-banner__level { min-width: 26px; height: 26px; font-size: 12px; line-height: 22px; }
+  .ik-banner__info { min-width: 0; gap: 8px; padding-top: 0; }
+  .ik-banner__name {
+    font-size: 22px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ik-banner__zzz-badge { margin-top: 0; font-size: 12px; padding: 3px 12px; }
   .ik-banner__title-tag { font-size: 13px; padding: 4px 12px; }
-  .ik-banner__stats { font-size: 13px; gap: 8px; }
-  .ik-aframe__content { padding: 10px; gap: 10px; }
-  /* Keep the same top gap between tab bar and banner card as desktop;
-     just trim horizontal margin a bit on tiny screens. */
-  .ik-banner-card { margin: 12px 10px 0; }
+  .ik-banner__hidden-badge { font-size: 12px; }
+  /* 五项数据排成等宽五栏，数字在上、标签在下，垫一层半透明底保证在任意名片图上可读 */
+  .ik-banner__stats {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    padding: 10px 4px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    text-shadow: none;
+  }
+  .ik-stat {
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+  }
+  .ik-stat__num { font-size: 16px; line-height: 1.2; }
+  .ik-stat__label {
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+    white-space: nowrap;
+  }
+  .ik-stat__sep { display: none; }
+  .ik-banner-footer { padding: 10px 16px; }
+  .ik-banner-footer__sig { font-size: 13px; line-height: 1.6; }
+  .ik-aframe__content { padding: 16px 12px 12px; gap: 12px; }
+  .ik-article-grid { gap: 10px; }
 }
 </style>
