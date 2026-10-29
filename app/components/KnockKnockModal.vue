@@ -941,13 +941,25 @@ const isNearBottom = (el: HTMLElement): boolean => {
 };
 
 /**
+ * 程序自己写 scrollTop 也会触发 scroll 事件。记下写入后的值，
+ * onMessagesScroll 据此认出"自己滚的"，不当成用户滚动去暂停跟随。
+ */
+let programmaticScrollTop: number | null = null;
+
+const writeScrollTop = (el: HTMLElement, top: number) => {
+  el.scrollTop = top;
+  // 读回浏览器实际落下的值（会被取整/夹到可滚范围）
+  programmaticScrollTop = el.scrollTop;
+};
+
+/**
  * 滚到底部。先**同步**落一次 scrollTop，避免浏览器 paint 出 scrollTop=0
  * 的初始帧（用户会看到最早消息一闪）；再用 rAF + 200ms 兜底校正图片
  * 懒加载等异步资源完成布局后的 scrollHeight 增量。
  */
 const scrollToBottom = (el: HTMLElement) => {
   const doScroll = () => {
-    el.scrollTop = el.scrollHeight;
+    writeScrollTop(el, el.scrollHeight);
   };
   // 同步：nextTick 后 DOM 已 patch，此时 scrollHeight 即便不完全准确，
   // 也比"什么都不做让浏览器 paint 顶部"好
@@ -1024,6 +1036,15 @@ watch(activeConversationId, async (id, oldId) => {
 const onMessagesScroll = () => {
   const el = messagesRef.value;
   if (!el) return;
+  if (
+    programmaticScrollTop != null &&
+    Math.abs(el.scrollTop - programmaticScrollTop) < 2
+  ) {
+    // 自动跟随写的 scrollTop：不算用户滚动，也不重算 wasNearBottom
+    // （平滑追底途中距底可能暂时超过阈值）
+    return;
+  }
+  programmaticScrollTop = null;
   wasNearBottom.value = isNearBottom(el);
   // 自己滚回底部 → 新消息提示解除
   if (wasNearBottom.value) hasUnseenBelow.value = false;
@@ -1041,37 +1062,61 @@ const onMessagesScroll = () => {
 };
 
 /**
- * 消息流 / 工作流 / 打字机任意视觉变化时，rAF 合并后滚到底。
+ * 消息流 / 工作流 / 打字机任意视觉变化时，逐帧平滑追到底部。
  * 用 enrichedMessages 做聚合信号：它比 activeMessages 还多覆盖
  * workflowEvents / aiRevealTick，避免 reasoning preview / tool 时间线
  * 展开时高度变化但不触发 activeMessages 的问题。
+ *
+ * 打字机换行时内容一次长高一行，直接 scrollTop=scrollHeight 会一行一跳；
+ * 这里每帧走剩余距离的一部分（指数缓动），换行也是平滑滑上去。
  */
+const FOLLOW_EASE_PER_FRAME = 0.25;
 let autoScrollRaf: number | null = null;
 let autoScrollTimer: ReturnType<typeof setTimeout> | null = null;
+let followLastAt = 0;
 
-const doAutoScroll = () => {
-  if (autoScrollRaf != null) {
-    cancelAnimationFrame(autoScrollRaf);
-    autoScrollRaf = null;
-  }
-  if (!wasNearBottom.value || isUserScrolling.value || !messagesRef.value) return;
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+
+const canAutoFollow = () =>
+  wasNearBottom.value && !isUserScrolling.value && !!messagesRef.value;
+
+const followStep = (now: number) => {
+  autoScrollRaf = null;
   const el = messagesRef.value;
-  if (el) el.scrollTop = el.scrollHeight;
+  if (!el || !canAutoFollow()) return;
+  const target = el.scrollHeight - el.clientHeight;
+  const gap = target - el.scrollTop;
+  if (gap <= 1 || prefersReducedMotion()) {
+    if (gap !== 0) writeScrollTop(el, target);
+    return;
+  }
+  // 按实际帧间隔折算，高刷屏和 60Hz 追底速度一致
+  const frames = Math.min(Math.max((now - followLastAt) / 16.7, 0.5), 4);
+  followLastAt = now;
+  const ratio = 1 - Math.pow(1 - FOLLOW_EASE_PER_FRAME, frames);
+  // 至少走 1px，避免小数被取整后原地不动
+  const before = el.scrollTop;
+  writeScrollTop(el, before + Math.max(1, gap * ratio));
+  if (el.scrollTop === before) return;
+  autoScrollRaf = requestAnimationFrame(followStep);
 };
 
 const scheduleAutoScroll = () => {
-  if (!wasNearBottom.value || isUserScrolling.value || !messagesRef.value) return;
+  if (!canAutoFollow()) return;
   if (autoScrollRaf == null) {
-    autoScrollRaf = requestAnimationFrame(() => {
-      autoScrollRaf = null;
-      doAutoScroll();
-    });
+    followLastAt = performance.now();
+    autoScrollRaf = requestAnimationFrame(followStep);
   }
   if (autoScrollTimer == null) {
     // 工作流展开/折叠有 220ms CSS transition，等过渡结束后再兜底一次
     autoScrollTimer = setTimeout(() => {
       autoScrollTimer = null;
-      doAutoScroll();
+      if (autoScrollRaf == null && canAutoFollow()) {
+        followLastAt = performance.now();
+        autoScrollRaf = requestAnimationFrame(followStep);
+      }
     }, 260);
   }
 };
