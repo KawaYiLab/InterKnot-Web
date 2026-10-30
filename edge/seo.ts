@@ -76,8 +76,10 @@ export function markdownToParagraphs(md: string): string[] {
     .replace(/:(ik-[a-z0-9-]{1,32}):/g, "")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/<[^>]*>/g, "")
-    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, "")
+    .replace(/<[^>\n]*>/g, "")
+    // 残缺或嵌套的标签去不干净，剩下的尖括号直接删掉（输出时还会再转义一次）。
+    .replace(/[<>]/g, "")
+    .replace(/^[ \t]{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, "")
     .replace(/[*_~`]{1,3}/g, "");
   return text
     .split(/\n\s*\n/)
@@ -101,7 +103,10 @@ function jsonForScript(v: unknown): string {
 }
 
 class SetContent {
-  constructor(private readonly value: string) {}
+  private readonly value: string;
+  constructor(value: string) {
+    this.value = value;
+  }
   element(el: Element) {
     el.setAttribute("content", this.value);
   }
