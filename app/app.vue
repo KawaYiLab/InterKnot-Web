@@ -128,6 +128,11 @@ const showMobileBottomNav = computed(
   () => !route.path.startsWith("/create") && !route.path.startsWith("/post/"),
 );
 
+// canonical / og:url 只取路径，去掉查询参数与 hash，避免同一页面被当成多个地址收录。
+const canonicalUrl = computed(() => absoluteSiteUrl(route.path));
+useHead({ link: [{ rel: "canonical", href: canonicalUrl }] });
+useSeoMeta({ ogUrl: canonicalUrl });
+
 // 全屏弹窗（委托 / 敲敲）打开时，全局背景跑马灯被完全遮住但仍在动，且处于
 // 弹窗 backdrop-filter 模糊之后 → 迫使模糊每帧重算。此时暂停它（弹窗自带的
 // 那份跑马灯照常显示），缓解「点开弹窗卡顿」。

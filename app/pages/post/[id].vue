@@ -951,7 +951,7 @@ useSeoMeta({
   description: pageDescription,
   ogTitle: pageTitle,
   ogDescription: pageDescription,
-  ogImage: pageCover,
+  ogImage: () => absoluteSiteUrl(pageCover.value),
   ogType: "article",
 });
 

@@ -14,6 +14,12 @@ export default defineNuxtConfig({
   ssr: false,
   nitro: {
     preset: "static",
+    prerender: {
+      // 不生成顶层 404.html：Cloudflare Pages 见到它就不再做 SPA 回退，
+      // /post/:id 等动态路由会以 HTTP 404 返回，搜索引擎直接不收录。
+      // 去掉后未命中静态文件的路径都回落到 index.html（200），由前端路由处理。
+      ignore: ["/404.html"],
+    },
     // 本地开发：/v1 转发到 ik-server，保持同源，会话 Cookie 与 CSRF 校验和线上
     //（nginx 同源反代）一致。Host 原样转发（不改 origin）。
     // 开发服务器不转发 WebSocket 升级，实时通道见 runtimeConfig.public.realtimeUrl。
@@ -35,6 +41,8 @@ export default defineNuxtConfig({
       realtimeUrl: process.env.NUXT_PUBLIC_REALTIME_URL
         || (process.env.NODE_ENV === "development" ? `${devApiOrigin.replace(/^http/, "ws")}/v1/realtime` : ""),
       appName: "绳网",
+      // 站点对外地址，拼 canonical、og:url、og:image 等绝对链接用。
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || "https://interk.net",
     },
   },
   app: {
@@ -71,7 +79,7 @@ export default defineNuxtConfig({
         { property: "og:site_name", content: "绳网" },
         { property: "og:title", content: "绳网" },
         { property: "og:description", content: "新艾利都最大的匿名委托中枢。" },
-        { property: "og:image", content: "/icon/globe-512x512.png" },
+        { property: "og:image", content: "https://interk.net/icon/globe-512x512.png" },
         { name: "twitter:card", content: "summary_large_image" },
       ],
       script: [

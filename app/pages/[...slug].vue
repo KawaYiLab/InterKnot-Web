@@ -1,7 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: false });
 
-useSeoMeta({ title: "页面未找到 - 绳网" });
+useSeoMeta({ title: "页面未找到 - 绳网", robots: "noindex" });
 </script>
 
 <template>

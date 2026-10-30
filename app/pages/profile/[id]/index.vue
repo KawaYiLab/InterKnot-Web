@@ -389,7 +389,7 @@ useSeoMeta({
   description: profileDescription,
   ogTitle: profileTitle,
   ogDescription: profileDescription,
-  ogImage: () => profile.value?.avatar || "/images/zzzicon_200x200.png",
+  ogImage: () => absoluteSiteUrl(profile.value?.avatar || "/images/zzzicon_200x200.png"),
 });
 
 const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
