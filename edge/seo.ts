@@ -66,19 +66,30 @@ export function escapeHtml(s: string): string {
 }
 
 /**
+ * 去掉 HTML 标签：由内向外反复删到不再变化，嵌套的 `<scr<script>ipt>` 也删得干净；
+ * 剩下的孤立尖括号在 markdownToParagraphs 里换成空格。输出时还会再转义一次。
+ */
+function stripTags(s: string): string {
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(/<[^<>\n]*>/g, "");
+  } while (s !== prev);
+  return s;
+}
+
+/**
  * 帖子正文 Markdown 转纯文本，保留段落。规则与前端 utils/card-excerpt.ts 一致：
  * 去掉 @提及语法、表情、图片、链接地址和 HTML 标签。
  */
 export function markdownToParagraphs(md: string): string[] {
-  const text = md
+  const text = stripTags(md)
     .replace(/```[\s\S]*?```/g, "")
     .replace(/@\[([^\[\]\n]{1,40})\]\([A-Za-z0-9]{1,32}\)/g, "@$1")
     .replace(/:(ik-[a-z0-9-]{1,32}):/g, "")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/<[^>\n]*>/g, "")
-    // 残缺或嵌套的标签去不干净，剩下的尖括号直接删掉（输出时还会再转义一次）。
-    .replace(/[<>]/g, "")
+    .replace(/[<>]/g, " ")
     .replace(/^[ \t]{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, "")
     .replace(/[*_~`]{1,3}/g, "");
   return text
