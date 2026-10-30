@@ -1,4 +1,5 @@
 User-Agent: *
 Allow: /
-Disallow: /profile
 Disallow: /create
+
+Sitemap: https://interk.net/sitemap.xml
