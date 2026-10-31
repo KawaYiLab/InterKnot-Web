@@ -20,17 +20,21 @@ const slug = computed(() => String(route.params.slug ?? ""));
 const displayName = ref("");
 const heading = computed(() => displayName.value || slug.value);
 
-useSeoMeta({
-  title: () => `标签：${slug.value} - 绝区零绳网`,
-  robots: "noindex, nofollow",
-});
-
 const list = shallowRef<Post[]>([]);
 const endCursor = ref("");
 const hasNextPage = ref(true);
 const loading = ref(true);
 const loadingMore = ref(false);
 const loadError = ref(false);
+
+useSeoMeta({
+  title: () => `${heading.value}相关帖子 - 绝区零绳网`,
+  description: () => `绳网上关于「${heading.value}」的讨论`,
+  ogTitle: () => `${heading.value}相关帖子 - 绝区零绳网`,
+  // 空标签是空页面，不收录。
+  robots: () => (!loading.value && !loadError.value && list.value.length === 0 ? "noindex" : "index, follow"),
+});
+
 const seenIds = new Set<string>();
 let requestVersion = 0;
 let disposed = false;
