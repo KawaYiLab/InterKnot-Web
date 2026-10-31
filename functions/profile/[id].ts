@@ -17,7 +17,8 @@ interface ProfileView {
   joinedAt?: string;
   isHidden?: boolean;
   avatar?: { url: string };
-  equippedAvatar?: { image?: string };
+  /** 系统头像；image 是 MediaView 对象。 */
+  equippedAvatar?: { image?: { url?: string } };
   followerCount?: number;
   stats?: { postCount?: number };
 }
@@ -32,7 +33,7 @@ async function load(env: Env, id: string): Promise<LoadResult> {
   const title = `${name}的主页 - 绝区零绳网`;
   const bio = (p.bio || "").replace(/\s+/g, " ").trim();
   const description = truncate(bio || `查看 ${name} 在绳网上的委托和评论`, 160);
-  const image = p.avatar?.url || p.equippedAvatar?.image || DEFAULT_IMAGE;
+  const image = p.avatar?.url || p.equippedAvatar?.image?.url || DEFAULT_IMAGE;
   const url = `${siteOrigin(env)}/profile/${encodeURIComponent(p.id)}`;
 
   return {
