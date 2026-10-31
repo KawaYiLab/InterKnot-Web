@@ -25,6 +25,7 @@ import FairyMascotEye from "~/components/fairy/FairyMascotEye.vue";
 import InspiraFlickeringGrid from "~/components/inspira/FlickeringGrid.vue";
 import InspiraHyperText from "~/components/inspira/HyperText.vue";
 import { useMediaQuery } from "@vueuse/core";
+import { useChatScroll } from "~/composables/useChatScroll";
 
 const {
   visible,
@@ -770,8 +771,15 @@ const conversationPreview = (conv: DmConversationSummary): string => {
   return last.content || "";
 };
 
-/** 消息流容器，用于切换会话时自动滚到底部 */
 const messagesRef = ref<HTMLElement | null>(null);
+const messagesContentRef = ref<HTMLElement | null>(null);
+const {
+  isFollowing,
+  showBackToBottom,
+  scrollToBottom,
+  stopFollowing,
+  reset: resetScroll,
+} = useChatScroll(messagesRef, messagesContentRef);
 
 /**
  * 切换会话时的"沉降态"：在 DOM 渲染完成 → scrollTop 校正到底部之间，
@@ -891,17 +899,17 @@ const hasHiddenAbove = computed(
   () => enrichedMessages.value.length > renderWindow.value,
 );
 
-/**
- * 扩窗并保持视口位置：渲染更早消息会增加 scrollHeight，
- * patch 后把增量补回 scrollTop，用户视野内的消息不跳动。
- */
+/** 扩窗保留原消息的位置；底部同时吐字不应影响这个补偿量。 */
 const expandRenderWindow = () => {
   const el = messagesRef.value;
   if (!el) return;
-  const prevHeight = el.scrollHeight;
+  stopFollowing();
+  const anchor = el.querySelector<HTMLElement>("[data-mid]");
+  const anchorTop = anchor?.getBoundingClientRect().top;
   renderWindow.value += RENDER_WINDOW_STEP;
   nextTick(() => {
-    el.scrollTop += el.scrollHeight - prevHeight;
+    if (messagesRef.value !== el || !anchor?.isConnected || anchorTop == null) return;
+    el.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
   });
 };
 
@@ -919,59 +927,11 @@ const canModifyMessage = (msg: DmMessage): boolean => {
 const canCopyMessage = (msg: DmMessage): boolean =>
   msg.kind === "text" && !msg.deletedAt && !!(msg.content ?? "").trim();
 
-/**
- * 用户在切换/打开会话前是否处于"接近底部"。
- * SSE 触发的新消息只有在 wasNearBottom 时才自动滚动，
- * 否则保持用户当前的滚动位置（避免打断用户读历史）。
- * 切换会话时重置为 true（新会话默认看最新）。
- */
-const NEAR_BOTTOM_THRESHOLD_PX = 80;
-const wasNearBottom = ref(true);
-
-/** 1.6 用户远离底部期间到达的新消息 → 亮起「回到底部」按钮 */
-const hasUnseenBelow = ref(false);
-
-/** 用户手动滚动后的短暂静默期：避免 AI 流式/新消息把用户强制拉回 */
-const USER_SCROLL_PAUSE_MS = 600;
-const isUserScrolling = ref(false);
-let scrollPauseTimer: ReturnType<typeof setTimeout> | null = null;
-
-const isNearBottom = (el: HTMLElement): boolean => {
-  return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_THRESHOLD_PX;
-};
-
-/**
- * 程序自己写 scrollTop 也会触发 scroll 事件。记下写入后的值，
- * onMessagesScroll 据此认出"自己滚的"，不当成用户滚动去暂停跟随。
- */
-let programmaticScrollTop: number | null = null;
-
-const writeScrollTop = (el: HTMLElement, top: number) => {
-  el.scrollTop = top;
-  // 读回浏览器实际落下的值（会被取整/夹到可滚范围）
-  programmaticScrollTop = el.scrollTop;
-};
-
-/**
- * 滚到底部。先**同步**落一次 scrollTop，避免浏览器 paint 出 scrollTop=0
- * 的初始帧（用户会看到最早消息一闪）；再用 rAF + 200ms 兜底校正图片
- * 懒加载等异步资源完成布局后的 scrollHeight 增量。
- */
-const scrollToBottom = (el: HTMLElement) => {
-  const doScroll = () => {
-    writeScrollTop(el, el.scrollHeight);
-  };
-  // 同步：nextTick 后 DOM 已 patch，此时 scrollHeight 即便不完全准确，
-  // 也比"什么都不做让浏览器 paint 顶部"好
-  doScroll();
-  // 第一帧布局完成后校正（处理 paddings/margins/字体加载引起的 scrollHeight 微调）
-  requestAnimationFrame(doScroll);
-  // 兜底：等待图片等异步资源完成布局后再校正一次
-  setTimeout(doScroll, 200);
-};
-
 /** 选中会话时：懒加载消息 → 批量 mark-read → 滚到最新消息 */
-watch(activeConversationId, async (id, oldId) => {
+watch(activeConversationId, async (id, oldId, onCleanup) => {
+  let cancelled = false;
+  onCleanup(() => { cancelled = true; });
+  resetScroll();
   // 附图跟着会话走：切会话就丢弃
   if (id !== oldId) dmImages.clear();
   if (oldId) {
@@ -986,23 +946,15 @@ watch(activeConversationId, async (id, oldId) => {
   // 渲染窗口与会话内搜索都是会话级状态 → 一并复位
   renderWindow.value = RENDER_WINDOW_STEP;
   closeDmSearch();
+  messagesSettling.value = !!id;
   if (!id) return;
-  // 新会话默认看最新消息
-  wasNearBottom.value = true;
-  hasUnseenBelow.value = false;
-  // 进入沉降态：隐藏容器直到完成首次滚到底（避免顶部 flash）
-  messagesSettling.value = true;
   try {
     await ensureMessages(id);
   } catch (err) {
-    sendError.value = resolveErrorMessage(err, "加载消息失败");
-  }
-  // 切换途中用户又点了别的会话 → 放弃后续操作，避免竞态
-  if (activeConversationId.value !== id) {
-    messagesSettling.value = false;
-    return;
+    if (!cancelled) sendError.value = resolveErrorMessage(err, "加载消息失败");
   }
   await nextTick();
+  if (cancelled) return;
   const historyIds = activeMessages.value
     .map((m) => m.documentId)
     .filter((docId): docId is string => typeof docId === "string" && docId.length > 0);
@@ -1012,134 +964,19 @@ watch(activeConversationId, async (id, oldId) => {
     primeAiRevealCompleted(historyIds);
   }
   await nextTick();
+  if (cancelled) return;
   aiRevealSessionReady.value = true;
   void markConversationAsRead(id, { force: true });
-  nextTick(() => {
-    const el = messagesRef.value;
-    if (!el) {
-      messagesSettling.value = false;
-      return;
-    }
-    scrollToBottom(el);
-    // 第一帧滚动校正完成后再 reveal——doScroll 同步先调一次足够把
-    // scrollTop 设到当前 scrollHeight，后续 rAF / setTimeout 兜底进一步精修
-    requestAnimationFrame(() => {
-      messagesSettling.value = false;
-    });
-  });
+  scrollToBottom("instant");
+  messagesSettling.value = false;
 });
 
-/**
- * 用户滚动时持续更新 wasNearBottom；
- * 这是 SSE/合并刷新后决定「是否自动跟随到底」的依据。
- */
 const onMessagesScroll = () => {
   const el = messagesRef.value;
-  if (!el) return;
-  if (
-    programmaticScrollTop != null &&
-    Math.abs(el.scrollTop - programmaticScrollTop) < 2
-  ) {
-    // 自动跟随写的 scrollTop：不算用户滚动，也不重算 wasNearBottom
-    // （平滑追底途中距底可能暂时超过阈值）
-    return;
-  }
-  programmaticScrollTop = null;
-  wasNearBottom.value = isNearBottom(el);
-  // 自己滚回底部 → 新消息提示解除
-  if (wasNearBottom.value) hasUnseenBelow.value = false;
-  // 用户手动滚动时短暂静默，避免流式输出强制拉回
-  isUserScrolling.value = true;
-  if (scrollPauseTimer) clearTimeout(scrollPauseTimer);
-  scrollPauseTimer = setTimeout(() => {
-    isUserScrolling.value = false;
-    scrollPauseTimer = null;
-  }, USER_SCROLL_PAUSE_MS);
-  // 逼近顶部且窗口外还有更早消息 → 扩窗（120px 提前量，滚动不断流）
-  if (el.scrollTop < 120 && hasHiddenAbove.value) {
+  if (el && el.scrollTop < 120 && hasHiddenAbove.value) {
     expandRenderWindow();
   }
 };
-
-/**
- * 新消息出现时（且用户在底部），逐帧平滑滚到底部。
- * AI 吐字时不跟随，见下方 enrichedMessages watcher。
- */
-const FOLLOW_EASE_PER_FRAME = 0.25;
-let autoScrollRaf: number | null = null;
-let autoScrollTimer: ReturnType<typeof setTimeout> | null = null;
-let followLastAt = 0;
-
-const prefersReducedMotion = () =>
-  typeof window !== "undefined" &&
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
-
-const canAutoFollow = () =>
-  wasNearBottom.value && !isUserScrolling.value && !!messagesRef.value;
-
-const followStep = (now: number) => {
-  autoScrollRaf = null;
-  const el = messagesRef.value;
-  if (!el || !canAutoFollow()) return;
-  const target = el.scrollHeight - el.clientHeight;
-  const gap = target - el.scrollTop;
-  if (gap <= 1 || prefersReducedMotion()) {
-    if (gap !== 0) writeScrollTop(el, target);
-    return;
-  }
-  // 按实际帧间隔折算，高刷屏和 60Hz 追底速度一致
-  const frames = Math.min(Math.max((now - followLastAt) / 16.7, 0.5), 4);
-  followLastAt = now;
-  const ratio = 1 - Math.pow(1 - FOLLOW_EASE_PER_FRAME, frames);
-  // 至少走 1px，避免小数被取整后原地不动
-  const before = el.scrollTop;
-  writeScrollTop(el, before + Math.max(1, gap * ratio));
-  if (el.scrollTop === before) return;
-  autoScrollRaf = requestAnimationFrame(followStep);
-};
-
-const scheduleAutoScroll = () => {
-  if (!canAutoFollow()) return;
-  if (autoScrollRaf == null) {
-    followLastAt = performance.now();
-    autoScrollRaf = requestAnimationFrame(followStep);
-  }
-  if (autoScrollTimer == null) {
-    // 工作流展开/折叠有 220ms CSS transition，等过渡结束后再兜底一次
-    autoScrollTimer = setTimeout(() => {
-      autoScrollTimer = null;
-      if (autoScrollRaf == null && canAutoFollow()) {
-        followLastAt = performance.now();
-        autoScrollRaf = requestAnimationFrame(followStep);
-      }
-    }, 260);
-  }
-};
-
-watch(
-  enrichedMessages,
-  (next, prev) => {
-    const prevLen = prev?.length ?? 0;
-    const nextLen = next.length;
-    if (nextLen <= prevLen) {
-      // 只是已有消息长高（AI 吐字、工作流展开）：不跟随滚动，
-      // 只刷新是否在底部，内容溢出视口后「回到底部」按钮会亮起
-      const el = messagesRef.value;
-      if (el && wasNearBottom.value && !isNearBottom(el)) {
-        wasNearBottom.value = false;
-        hasUnseenBelow.value = true;
-      }
-      return;
-    }
-    if (!wasNearBottom.value) {
-      // 用户在读历史 → 不打断，仅亮起「回到底部」（1.6）
-      hasUnseenBelow.value = true;
-      return;
-    }
-    scheduleAutoScroll();
-  },
-  { flush: 'post' },
-);
 
 /** 补建历史基线：会话 watch 结束时若消息尚未写入缓存，会导致 baseline 为空 + 全员白框 */
 const ensureHistoryBaselineIfNeeded = () => {
@@ -1184,25 +1021,7 @@ watch(
   },
 );
 
-/** enrichedMessages 已经覆盖 aiRevealTick，无需单独 watcher。 */
-
-/** 当前会话是否有 AI 消息正在流式/打字机输出（1.6 显示回底按钮的条件之一） */
-const activeHasStreaming = computed(() =>
-  enrichedMessages.value.some((e) => e.aiStreaming),
-);
-
-/** 1.6 「回到底部」悬浮按钮：远离底部 且（有新消息 或 AI 正在输出）时显示 */
-const showBackToBottom = computed(
-  () => !wasNearBottom.value && (hasUnseenBelow.value || activeHasStreaming.value),
-);
-
-const handleBackToBottom = () => {
-  const el = messagesRef.value;
-  if (!el) return;
-  scrollToBottom(el);
-  wasNearBottom.value = true;
-  hasUnseenBelow.value = false;
-};
+const handleBackToBottom = () => scrollToBottom();
 
 // ── 2.1 停止生成 ───────────────────────────────────────
 /**
@@ -1258,6 +1077,7 @@ const regeneratingAi = ref(false);
 
 const handleRegenerate = async (msg: DmMessage) => {
   if (regeneratingAi.value) return;
+  scrollToBottom();
   regeneratingAi.value = true;
   try {
     await regenerateAiReply(msg.documentId);
@@ -1385,6 +1205,7 @@ const doSend = async () => {
   if (!editingId && dmImages.uploading.value) return;
   if (!newContent && !imageIds.length) return;
 
+  if (!editingId) scrollToBottom();
   sending.value = true;
   sendError.value = null;
   try {
@@ -1398,10 +1219,6 @@ const doSend = async () => {
       if (activeConversationId.value === cid) {
         draft.value = "";
         dmImages.clear();
-        nextTick(() => {
-          const el = messagesRef.value;
-          if (el) scrollToBottom(el);
-        });
       }
     }
   } catch (err) {
@@ -1473,6 +1290,7 @@ const ensureMessageRendered = (documentId: string) => {
 
 /** 滚动到当前命中的消息（黄圈高亮由 DmMessageItem 按 searchHit prop 渲染） */
 const scrollToSearchHit = (documentId: string) => {
+  stopFollowing();
   ensureMessageRendered(documentId);
   nextTick(() => {
     const target = messagesRef.value?.querySelector(`[data-mid="${documentId}"]`);
@@ -1520,9 +1338,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown);
   teardownContactsObserver();
-  if (autoScrollRaf != null) cancelAnimationFrame(autoScrollRaf);
-  if (autoScrollTimer) clearTimeout(autoScrollTimer);
-  if (scrollPauseTimer) clearTimeout(scrollPauseTimer);
   if (copiedFlashTimer) clearTimeout(copiedFlashTimer);
 });
 
@@ -1931,36 +1746,40 @@ const handleMobileBack = () => {
                       <div
                         ref="messagesRef"
                         class="ik-knock__messages"
-                        :class="{ 'is-settling': messagesSettling }"
+                        :class="{ 'is-settling': messagesSettling, 'is-following': isFollowing }"
+                        tabindex="0"
+                        aria-label="消息记录"
                         @scroll.passive="onMessagesScroll"
                       >
-                        <!-- Phase 4 渲染窗口化：更早消息滚顶自动加载（也可点击） -->
-                        <button
-                          v-if="hasHiddenAbove"
-                          type="button"
-                          class="ik-knock__load-earlier"
-                          @click="expandRenderWindow"
-                        >
-                          加载更早的消息
-                        </button>
-                        <DmMessageItem
-                          v-for="entry in visibleMessages"
-                          :key="entry.msg.documentId"
-                          :entry="entry"
-                          :copied-id="copiedMessageId"
-                          :show-regenerate="entry.aiRich && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
-                          :regenerating="regeneratingAi"
-                          :search-hit="entry.msg.documentId === currentSearchHitId"
-                          @contextmenu="showContextMenu"
-                          @profile="goToProfile"
-                          @open-post="openPostFromBubble"
-                          @bubble-link="handleBubbleLink"
-                          @copy="copyMessageText"
-                          @regenerate="handleRegenerate"
-                          @quote-click="goPost"
-                        />
+                        <div ref="messagesContentRef" class="ik-knock__messages-content">
+                          <!-- Phase 4 渲染窗口化：更早消息滚顶自动加载（也可点击） -->
+                          <button
+                            v-if="hasHiddenAbove"
+                            type="button"
+                            class="ik-knock__load-earlier"
+                            @click="expandRenderWindow"
+                          >
+                            加载更早的消息
+                          </button>
+                          <DmMessageItem
+                            v-for="entry in visibleMessages"
+                            :key="entry.msg.documentId"
+                            :entry="entry"
+                            :copied-id="copiedMessageId"
+                            :show-regenerate="entry.aiRich && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
+                            :regenerating="regeneratingAi"
+                            :search-hit="entry.msg.documentId === currentSearchHitId"
+                            @contextmenu="showContextMenu"
+                            @profile="goToProfile"
+                            @open-post="openPostFromBubble"
+                            @bubble-link="handleBubbleLink"
+                            @copy="copyMessageText"
+                            @regenerate="handleRegenerate"
+                            @quote-click="goPost"
+                          />
+                        </div>
                       </div>
-                      <!-- 1.6 回到底部：远离底部且（有新消息 / AI 输出中）时浮现 -->
+                      <!-- 回到底部 -->
                       <Transition name="ik-b2b">
                         <button
                           v-if="showBackToBottom"
@@ -2965,19 +2784,25 @@ const handleMobileBack = () => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* 消息间距适中，不太拥挤 */
-  gap: 14px;
   overflow-y: auto;
   padding-right: 6px;
-  /* 底部留呼吸空间，避免最后一条消息贴着 composer 输入框 */
-  padding-bottom: 10px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
-  /* 滚到底后阻断滚动事件向父级冒泡，避免外层弹窗/页面跟随回弹抖动 */
   overscroll-behavior: contain;
-  /* 关闭浏览器自动 scroll anchoring，避免拉到底时被悄悄回拉一小段，
-     "永远到不了最底"——我们已在 watch 里手动 scrollTop=scrollHeight */
+  scroll-behavior: auto;
+}
+
+.ik-knock__messages.is-following {
   overflow-anchor: none;
+}
+
+.ik-knock__messages-content {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 20px;
 }
 
 /* 切会话沉降态：消息已渲染但 scrollTop 还没校正到底前先隐藏，
