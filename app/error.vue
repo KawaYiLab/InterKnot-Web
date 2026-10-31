@@ -10,6 +10,8 @@ const sub = computed(() =>
     : (props.error.message || `Error ${props.error.statusCode}`),
 );
 
+useSeoMeta({ robots: "noindex" });
+
 const handleClear = () => clearError({ redirect: "/" });
 </script>
 

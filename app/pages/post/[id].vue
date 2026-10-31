@@ -7,6 +7,7 @@ import { isNotFoundError, isUserBlockedError, resolveErrorMessage } from "~/util
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
 import { toCanonicalUrl, toThumbUrl } from "~/utils/image";
+import { toCardExcerpt } from "~/utils/card-excerpt";
 import { StarIcon, AtSymbolIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { HeartIcon, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
@@ -941,7 +942,8 @@ const pageTitle = computed(() =>
   post.value?.title ? `${post.value.title} - 绳网` : "绳网",
 );
 const pageDescription = computed(() => {
-  const text = post.value?.bodyText || post.value?.rawBodyText || "";
+  // bodyText 是 Markdown 原文，去掉图片、链接、标题符号等再截取。
+  const text = toCardExcerpt(post.value?.bodyText || post.value?.rawBodyText || "");
   return text.length > 160 ? text.slice(0, 157) + "..." : text || "绳网是一个游戏、技术交流平台";
 });
 const pageCover = computed(() => post.value?.cover || "/images/zzzicon_200x200.png");
@@ -951,7 +953,7 @@ useSeoMeta({
   description: pageDescription,
   ogTitle: pageTitle,
   ogDescription: pageDescription,
-  ogImage: pageCover,
+  ogImage: () => absoluteSiteUrl(pageCover.value),
   ogType: "article",
 });
 

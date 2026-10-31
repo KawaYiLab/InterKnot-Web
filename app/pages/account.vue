@@ -616,7 +616,7 @@ onMounted(async () => {
   }
 });
 
-useHead({ title: "账号中心" });
+useSeoMeta({ title: "账号中心", robots: "noindex, nofollow" });
 </script>
 
 <template>

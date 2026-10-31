@@ -1,6 +1,5 @@
 User-Agent: *
 Allow: /
-Disallow: /profile
 Disallow: /create
 
-Sitemap: https://interknot.tiwat.cn/sitemap.xml
+Sitemap: https://interk.net/sitemap.xml
