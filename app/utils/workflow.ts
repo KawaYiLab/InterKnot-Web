@@ -40,33 +40,19 @@ export interface WorkflowStepView {
   postId?: string;
 }
 
-/** 工具原始名 -> 时间线文案（动词短语，进行中与完成共用） */
+/** 论坛工具名 -> 时间线文案（动词短语，进行中与完成共用）。其他工具的文案由后端随事件下发。 */
 const TOOL_TITLES: Record<string, string> = {
-  // akasha 虚空终端
-  akasha_search: "检索虚空终端",
-  akasha_read: "读取虚空终端档案",
-  akasha_catalog: "浏览虚空终端目录",
-  akasha_skill: "调用虚空终端技能",
-  // 长期记忆
-  recall_long_term_memory: "回忆过往记忆",
-  memorize_long_term_memory: "记录重要信息",
-  // 绳网论坛 MCP
   search_posts: "检索绳网",
   get_hot_posts: "查看绳网热门",
   get_user_info: "查询绳网用户",
   get_post_content: "读取绳网帖子",
   get_post_comments: "读取绳网评论",
-  get_posts_by_author: "检索绳网作者帖子",
-  search_posts_by_category: "按分类检索绳网",
-  get_user_stats: "查询绳网用户统计",
-  get_related_posts: "检索相关绳网帖子",
   get_category_list: "浏览绳网分区",
-  get_post_engagement: "查询绳网帖子互动",
   get_user_activity: "查询绳网用户动态",
 };
 
 /**
- * 时间线文案：优先用后端随事件下发的 `title`（剧情库与站外 MCP 工具，管理后台可改），
+ * 时间线文案：优先用后端随事件下发的 `title`（记忆、剧情库与站外 MCP 工具，管理后台可改），
  * 其次查本地文案表，最后回落到工具名。
  */
 function toolTitle(tool: string, title?: unknown): string {
