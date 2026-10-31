@@ -49,10 +49,10 @@ const presenceOverflow = computed(() =>
 );
 
 useSeoMeta({
-  title: "绳网",
-  description: "新艾利都最大的匿名委托中枢。",
-  ogTitle: "绳网",
-  ogDescription: "新艾利都最大的匿名委托中枢。",
+  title: "绳网 - 绝区零玩家论坛",
+  description: "绳网（Inter-Knot）是绝区零玩家论坛：攻略、角色讨论、剧情考据和同人创作，新艾利都最大的匿名委托中枢。",
+  ogTitle: "绳网 - 绝区零玩家论坛",
+  ogDescription: "绳网（Inter-Knot）是绝区零玩家论坛：攻略、角色讨论、剧情考据和同人创作，新艾利都最大的匿名委托中枢。",
 });
 
 const scrollTarget = ref<HTMLElement>();
