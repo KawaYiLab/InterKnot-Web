@@ -26,7 +26,7 @@ const DEFAULT_IMAGE = "/images/zzzicon_200x200.png";
 
 async function load(env: Env, id: string): Promise<LoadResult> {
   const p = await fetchApi<ProfileView>(env, `/v1/users/${encodeURIComponent(id)}`);
-  if (p === null || p === "not_found") return p;
+  if (p === "not_found" || "failed" in p) return p;
 
   const name = p.username || "用户";
   const title = `${name}的主页 - 绳网`;

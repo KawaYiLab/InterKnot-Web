@@ -33,7 +33,7 @@ const BODY_MAX = 5000;
 
 async function load(env: Env, id: string): Promise<LoadResult> {
   const post = await fetchApi<PostDetail>(env, `/v1/posts/${encodeURIComponent(id)}`);
-  if (post === null || post === "not_found") return post;
+  if (post === "not_found" || "failed" in post) return post;
 
   const paragraphs = markdownToParagraphs(post.body || "");
   const plain = paragraphs.join(" ");

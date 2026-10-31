@@ -6,6 +6,7 @@
  * 再用 HTMLRewriter 改写 index.html：title、描述、OG、canonical、JSON-LD，
  * 并在 #__nuxt 里放一份正文纯文本（Vue 挂载时会整块替换掉）。
  * 接口超时或出错时原样返回外壳，用户侧行为和没有这个函数时一样。
+ * 响应头 `x-ik-seo` 写明结果：ok / not-found / api-timeout / api-<状态码> 等。
  */
 
 export interface Env {
@@ -29,30 +30,44 @@ export interface PageSeo {
   noindex?: boolean;
 }
 
-export type LoadResult = PageSeo | "not_found" | null;
+/** 接口没拿到数据的原因，写进响应头 `x-ik-seo` 方便排查。 */
+export interface ApiFailure {
+  failed: string;
+}
+
+export type LoadResult = PageSeo | "not_found" | ApiFailure;
+
+const isFailure = (v: unknown): v is ApiFailure =>
+  typeof v === "object" && v !== null && "failed" in v;
 
 const DEFAULT_API = "https://ik.tiwat.cn";
 const DEFAULT_SITE = "https://interk.net";
-const API_TIMEOUT_MS = 1500;
+// Cloudflare 边缘到 ik.tiwat.cn（EdgeOne）跨境，冷请求 1.5 秒不够。
+const API_TIMEOUT_MS = 4000;
 /** 边缘缓存接口响应的秒数，同一帖子 5 分钟内只回源一次。 */
 const API_CACHE_TTL = 300;
 
 export const apiOrigin = (env: Env) => (env.IK_API_ORIGIN || DEFAULT_API).replace(/\/+$/, "");
 export const siteOrigin = (env: Env) => (env.SITE_URL || DEFAULT_SITE).replace(/\/+$/, "");
 
-/** 匿名请求 ik-server。404 返回 "not_found"，其它失败返回 null。 */
-export async function fetchApi<T>(env: Env, path: string): Promise<T | "not_found" | null> {
+/** 匿名请求 ik-server。404 返回 "not_found"，其它失败返回原因。 */
+export async function fetchApi<T>(env: Env, path: string): Promise<T | "not_found" | ApiFailure> {
+  let res: Response;
   try {
-    const res = await fetch(`${apiOrigin(env)}${path}`, {
-      headers: { accept: "application/json" },
+    res = await fetch(`${apiOrigin(env)}${path}`, {
+      headers: { accept: "application/json", "user-agent": "interknot-pages-seo/1.0" },
       signal: AbortSignal.timeout(API_TIMEOUT_MS),
       cf: { cacheTtl: API_CACHE_TTL, cacheEverything: true },
     } as RequestInit);
-    if (res.status === 404) return "not_found";
-    if (!res.ok) return null;
+  } catch (err) {
+    return { failed: err instanceof Error && err.name === "TimeoutError" ? "api-timeout" : "api-network" };
+  }
+  if (res.status === 404) return "not_found";
+  if (!res.ok) return { failed: `api-${res.status}` };
+  try {
     return (await res.json()) as T;
   } catch {
-    return null;
+    return { failed: "api-not-json" };
   }
 }
 
@@ -124,7 +139,7 @@ class SetContent {
 }
 
 /**
- * 取 SPA 外壳并写入 SEO 信息。load 返回 null（接口不可用）时原样返回外壳；
+ * 取 SPA 外壳并写入 SEO 信息。load 返回失败原因（接口不可用）时原样返回外壳；
  * 返回 "not_found" 时以 404 状态返回外壳，页面仍由前端显示「找不到」。
  */
 export async function renderShell(
@@ -134,12 +149,17 @@ export async function renderShell(
 ): Promise<Response> {
   const [shell, seo] = await Promise.all([
     env.ASSETS.fetch(new URL("/", request.url)),
-    load().catch(() => null),
+    load().catch((): ApiFailure => ({ failed: "load-error" })),
   ]);
-  if (!shell.ok || seo === null) return shell;
+  if (!shell.ok) return shell;
 
   const headers = new Headers(shell.headers);
   headers.set("content-type", "text/html; charset=utf-8");
+  if (isFailure(seo)) {
+    headers.set("x-ik-seo", seo.failed);
+    return new Response(shell.body, { status: shell.status, headers });
+  }
+  headers.set("x-ik-seo", seo === "not_found" ? "not-found" : "ok");
 
   if (seo === "not_found") {
     const res = new HTMLRewriter()
