@@ -142,7 +142,7 @@ class SetContent {
  * 取 SPA 外壳并写入 SEO 信息。load 返回失败原因（接口不可用）时原样返回外壳；
  * 返回 "not_found" 时以 404 状态返回外壳，页面仍由前端显示「找不到」。
  */
-export async function renderShell(
+async function render(
   request: Request,
   env: Env,
   load: () => Promise<LoadResult>,
@@ -209,4 +209,23 @@ export async function renderShell(
 
   const res = rewriter.transform(shell);
   return new Response(res.body, { status: 200, headers });
+}
+
+/**
+ * 取 SPA 外壳并写入 SEO 信息（见 render）。改写过程中任何异常都回落为原外壳，
+ * 不能让一条数据的格式问题把整个页面变成 500。
+ */
+export async function renderShell(
+  request: Request,
+  env: Env,
+  load: () => Promise<LoadResult>,
+): Promise<Response> {
+  try {
+    return await render(request, env, load);
+  } catch {
+    const shell = await env.ASSETS.fetch(new URL("/", request.url));
+    const headers = new Headers(shell.headers);
+    headers.set("x-ik-seo", "render-error");
+    return new Response(shell.body, { status: shell.status, headers });
+  }
 }
