@@ -37,8 +37,8 @@ async function load(env: Env, id: string): Promise<LoadResult> {
 
   const paragraphs = markdownToParagraphs(post.body || "");
   const plain = paragraphs.join(" ");
-  const description = truncate(plain, 160) || "绳网是一个游戏、技术交流平台";
-  const title = `${post.title || "无标题"} - 绳网`;
+  const description = truncate(plain, 160) || "绳网是绝区零玩家论坛，聊攻略、角色、剧情和同人创作。";
+  const title = `${post.title || "无标题"} - 绝区零绳网`;
   const image = post.covers?.[0]?.url || post.externalVideos?.[0]?.coverUrl || DEFAULT_IMAGE;
   const url = `${siteOrigin(env)}/post/${encodeURIComponent(post.id)}`;
   const authorUrl = !post.author.anonymous && post.author.id

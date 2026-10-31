@@ -939,12 +939,12 @@ const handleUnacceptComment = async (comment: Comment) => {
 };
 
 const pageTitle = computed(() =>
-  post.value?.title ? `${post.value.title} - 绳网` : "绳网",
+  post.value?.title ? `${post.value.title} - 绝区零绳网` : "绳网",
 );
 const pageDescription = computed(() => {
   // bodyText 是 Markdown 原文，去掉图片、链接、标题符号等再截取。
   const text = toCardExcerpt(post.value?.bodyText || post.value?.rawBodyText || "");
-  return text.length > 160 ? text.slice(0, 157) + "..." : text || "绳网是一个游戏、技术交流平台";
+  return text.length > 160 ? text.slice(0, 157) + "..." : text || "绳网是绝区零玩家论坛，聊攻略、角色、剧情和同人创作。";
 });
 const pageCover = computed(() => post.value?.cover || "/images/zzzicon_200x200.png");
 

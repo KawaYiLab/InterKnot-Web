@@ -47,7 +47,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: "绳网",
+      title: "绳网 - 绝区零玩家论坛",
       link: [
         // 浏览器标签页与搜索引擎使用标准 16/32/48 像素图标；高分屏和移动端使用更大尺寸。
         { rel: "icon", type: "image/png", sizes: "16x16", href: "/icon/favicon-16x16.png" },
@@ -74,11 +74,11 @@ export default defineNuxtConfig({
         { name: "color-scheme", content: "dark" },
         { name: "theme-color", content: "#000000" },
         { name: "application-name", content: "绳网" },
-        { name: "description", content: "新艾利都最大的匿名委托中枢。" },
+        { name: "description", content: "绳网（Inter-Knot）是绝区零玩家论坛：攻略、角色讨论、剧情考据和同人创作，新艾利都最大的匿名委托中枢。" },
         { property: "og:type", content: "website" },
         { property: "og:site_name", content: "绳网" },
-        { property: "og:title", content: "绳网" },
-        { property: "og:description", content: "新艾利都最大的匿名委托中枢。" },
+        { property: "og:title", content: "绳网 - 绝区零玩家论坛" },
+        { property: "og:description", content: "绳网（Inter-Knot）是绝区零玩家论坛：攻略、角色讨论、剧情考据和同人创作，新艾利都最大的匿名委托中枢。" },
         { property: "og:image", content: "https://interk.net/icon/globe-512x512.png" },
         { name: "twitter:card", content: "summary_large_image" },
       ],
@@ -90,8 +90,10 @@ export default defineNuxtConfig({
             "@type": "WebSite",
             name: "绳网",
             alternateName: "INTER-KNOT",
-            description: "新艾利都最大的匿名委托中枢。",
+            description: "绳网（Inter-Knot）是绝区零玩家论坛：攻略、角色讨论、剧情考据和同人创作，新艾利都最大的匿名委托中枢。",
             url: "https://interk.net/",
+            inLanguage: "zh-CN",
+            about: { "@type": "VideoGame", name: "绝区零", alternateName: "Zenless Zone Zero" },
           }),
         },
       ],

@@ -378,7 +378,7 @@ const copyUid = async () => {
 };
 
 const profileTitle = computed(() =>
-  profile.value?.name ? `${profile.value.name}的主页 - 绳网` : "用户主页 - 绳网",
+  profile.value?.name ? `${profile.value.name}的主页 - 绝区零绳网` : "用户主页 - 绳网",
 );
 const profileDescription = computed(() =>
   profile.value?.bio || `查看 ${profile.value?.name || "用户"} 在绳网上的委托和评论`,

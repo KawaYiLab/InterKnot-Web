@@ -29,7 +29,7 @@ async function load(env: Env, id: string): Promise<LoadResult> {
   if (p === "not_found" || "failed" in p) return p;
 
   const name = p.username || "用户";
-  const title = `${name}的主页 - 绳网`;
+  const title = `${name}的主页 - 绝区零绳网`;
   const bio = (p.bio || "").replace(/\s+/g, " ").trim();
   const description = truncate(bio || `查看 ${name} 在绳网上的委托和评论`, 160);
   const image = p.avatar?.url || p.equippedAvatar?.image || DEFAULT_IMAGE;

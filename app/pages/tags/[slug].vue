@@ -21,7 +21,7 @@ const displayName = ref("");
 const heading = computed(() => displayName.value || slug.value);
 
 useSeoMeta({
-  title: () => `标签：${slug.value} - 绳网`,
+  title: () => `标签：${slug.value} - 绝区零绳网`,
   robots: "noindex, nofollow",
 });
 
