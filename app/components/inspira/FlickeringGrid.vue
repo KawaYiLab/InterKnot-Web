@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 /**
  * 移植自 Inspira UI「Flickering Grid」：一层随机明灭的方点阵（canvas 绘制）。
@@ -69,16 +69,36 @@ const draw = () => {
   }
 };
 
+watch(() => props.color, draw);
+
+const FRAME_INTERVAL_MS = 50;
+
 const tick = (time: number) => {
   frame = null;
   if (!visible) return;
-  const delta = Math.min((time - lastTime) / 1000, 0.1);
-  lastTime = time;
-  const chance = props.flickerChance * delta;
-  for (let i = 0; i < squares.length; i++) {
-    if (Math.random() < chance) squares[i] = Math.random() * props.maxOpacity;
+  if (time - lastTime >= FRAME_INTERVAL_MS) {
+    const delta = Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+    const chance = props.flickerChance * delta;
+    const ctx = canvasRef.value?.getContext("2d");
+    if (ctx) {
+      const cell = (props.squareSize + props.gridGap) * dpr;
+      const size = props.squareSize * dpr;
+      for (let i = 0; i < squares.length; i++) {
+        if (Math.random() >= chance) continue;
+        squares[i] = Math.random() * props.maxOpacity;
+        const x = (i % cols) * cell;
+        const y = Math.floor(i / cols) * cell;
+        // 擦除完整像素范围，避免非整数 DPR 下留下半透明边缘。
+        ctx.clearRect(
+          Math.floor(x), Math.floor(y),
+          Math.ceil(x + size) - Math.floor(x), Math.ceil(y + size) - Math.floor(y),
+        );
+        ctx.fillStyle = `rgba(${props.color}, ${squares[i]})`;
+        ctx.fillRect(x, y, size, size);
+      }
+    }
   }
-  draw();
   frame = requestAnimationFrame(tick);
 };
 

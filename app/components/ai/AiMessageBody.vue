@@ -52,36 +52,60 @@ const html = computed(() => {
 
 const rootRef = ref<HTMLElement | null>(null);
 
-// 流式阶段：把高频的字节级更新合并到 requestAnimationFrame，
-// 避免 AGENT_STREAM_MIN_CHARS=1 时 markdown 每字都重排导致气泡抽搐。
+// 流式正文最多每 50ms 提交一次，并把 DOM 更新对齐到动画帧。
+// 高频输入只覆盖 pendingText，避免每帧全量解析 markdown。
+const STREAM_TEXT_INTERVAL_MS = 50;
 const displayText = ref(props.text);
 let pendingText = props.text;
 let rafHandle: number | null = null;
+let timerHandle: ReturnType<typeof setTimeout> | null = null;
+let lastCommitAt: number | null = null;
+
+const cancelTextUpdate = () => {
+  if (timerHandle != null) {
+    clearTimeout(timerHandle);
+    timerHandle = null;
+  }
+  if (rafHandle != null) {
+    cancelAnimationFrame(rafHandle);
+    rafHandle = null;
+  }
+};
+
 const flushText = () => {
   if (rafHandle == null) return;
   rafHandle = null;
   displayText.value = pendingText;
+  lastCommitAt = performance.now();
 };
+
 const scheduleTextUpdate = (value: string) => {
   pendingText = value;
-  if (rafHandle != null) return;
-  if (typeof requestAnimationFrame === 'undefined') {
+  if (typeof requestAnimationFrame === "undefined") {
     displayText.value = value;
     return;
   }
-  rafHandle = requestAnimationFrame(flushText);
+  if (value === displayText.value || rafHandle != null || timerHandle != null) return;
+
+  const queueFrame = () => {
+    timerHandle = null;
+    rafHandle = requestAnimationFrame(flushText);
+  };
+  const delay = lastCommitAt == null
+    ? 0
+    : Math.max(0, STREAM_TEXT_INTERVAL_MS - (performance.now() - lastCommitAt));
+  if (delay > 0) timerHandle = setTimeout(queueFrame, delay);
+  else queueFrame();
 };
 
 watch(
-  () => props.text,
-  (value) => {
-    if (!props.streaming) {
+  () => [props.text, props.streaming] as const,
+  ([value, streaming]) => {
+    if (!streaming) {
+      cancelTextUpdate();
       displayText.value = value;
       pendingText = value;
-      if (rafHandle != null) {
-        cancelAnimationFrame(rafHandle);
-        rafHandle = null;
-      }
+      lastCommitAt = null;
       return;
     }
     scheduleTextUpdate(value);
@@ -89,12 +113,7 @@ watch(
   { immediate: true },
 );
 
-onBeforeUnmount(() => {
-  if (rafHandle != null) {
-    cancelAnimationFrame(rafHandle);
-    rafHandle = null;
-  }
-});
+onBeforeUnmount(cancelTextUpdate);
 
 /** 代码块复制成功的临时反馈（按钮文案 2s 内变「已复制」） */
 const flashCopied = (btn: HTMLButtonElement) => {

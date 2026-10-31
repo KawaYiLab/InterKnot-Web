@@ -2,7 +2,7 @@ import { computed, onScopeDispose, ref, watch, type Ref } from "vue";
 import { useEventListener, usePreferredReducedMotion, useResizeObserver } from "@vueuse/core";
 
 const BOTTOM_THRESHOLD = 16;
-const FOLLOW_TIME_CONSTANT_MS = 70;
+const FOLLOW_TIME_CONSTANT_MS = 50;
 
 export function useChatScroll(
   viewport: Ref<HTMLElement | null>,
@@ -14,6 +14,9 @@ export function useChatScroll(
   const ownerDocument = computed(() => viewport.value?.ownerDocument);
   let frame: number | null = null;
   let lastFrameAt = 0;
+  // 保留小数位置，不能把浏览器取整后的 scrollTop 当作每一帧的起点。
+  let animatedTop = 0;
+  let velocity = 0;
   let lastScrollTop = 0;
   let lastMaxScrollTop = 0;
   let pointerHeld = false;
@@ -23,13 +26,13 @@ export function useChatScroll(
   const maxScrollTop = (el: HTMLElement) => Math.max(0, el.scrollHeight - el.clientHeight);
 
   const updatePosition = () => {
-    const el = viewport.value;
-    isAtBottom.value = !el || maxScrollTop(el) - Math.max(0, el.scrollTop) <= BOTTOM_THRESHOLD;
+    isAtBottom.value = !viewport.value || lastMaxScrollTop - Math.max(0, lastScrollTop) <= BOTTOM_THRESHOLD;
   };
 
   const cancelAnimation = () => {
     if (frame != null) cancelAnimationFrame(frame);
     frame = null;
+    velocity = 0;
   };
 
   const stopFollowing = () => {
@@ -39,11 +42,11 @@ export function useChatScroll(
     updatePosition();
   };
 
-  const writeScrollTop = (el: HTMLElement, top: number) => {
+  const writeScrollTop = (el: HTMLElement, top: number, max: number) => {
     el.scrollTop = top;
     // 程序滚动也会触发 scroll；以浏览器实际落下的位置为基线。
     lastScrollTop = el.scrollTop;
-    lastMaxScrollTop = maxScrollTop(el);
+    lastMaxScrollTop = max;
     updatePosition();
   };
 
@@ -52,15 +55,23 @@ export function useChatScroll(
     const el = viewport.value;
     if (!el || !isFollowing.value || pointerHeld || touchY != null) return;
     const target = maxScrollTop(el);
-    const gap = target - el.scrollTop;
-    if (gap <= 1 || reducedMotion.value === "reduce") {
-      writeScrollTop(el, target);
+    const gap = target - animatedTop;
+    if (gap <= 0.5 || reducedMotion.value === "reduce") {
+      animatedTop = target;
+      velocity = 0;
+      writeScrollTop(el, target, target);
       return;
     }
     const elapsed = Math.min(Math.max(now - lastFrameAt, 1), 64);
     lastFrameAt = now;
-    const movement = Math.min(gap, Math.max(1, gap * (1 - Math.exp(-elapsed / FOLLOW_TIME_CONSTANT_MS))));
-    writeScrollTop(el, el.scrollTop + movement);
+    // 临界阻尼：换行只更新目标，沿用当前位置和速度，不重新加速起步。
+    const displacement = animatedTop - target;
+    const coefficient = velocity + displacement / FOLLOW_TIME_CONSTANT_MS;
+    const decay = Math.exp(-elapsed / FOLLOW_TIME_CONSTANT_MS);
+    const nextTop = target + (displacement + coefficient * elapsed) * decay;
+    velocity = (velocity - coefficient * elapsed / FOLLOW_TIME_CONSTANT_MS) * decay;
+    animatedTop = Math.min(target, Math.max(animatedTop, nextTop));
+    writeScrollTop(el, animatedTop, target);
     frame = requestAnimationFrame(followFrame);
   };
 
@@ -69,8 +80,11 @@ export function useChatScroll(
     if (!el || !isFollowing.value || pointerHeld || touchY != null) return;
     if (reducedMotion.value === "reduce") {
       cancelAnimation();
-      writeScrollTop(el, maxScrollTop(el));
+      const target = maxScrollTop(el);
+      writeScrollTop(el, target, target);
     } else if (frame == null) {
+      animatedTop = el.scrollTop;
+      velocity = 0;
       lastFrameAt = performance.now();
       frame = requestAnimationFrame(followFrame);
     }
@@ -83,8 +97,10 @@ export function useChatScroll(
     touchY = null;
     cancelAnimation();
     const el = viewport.value;
-    if (el && behavior === "instant") writeScrollTop(el, maxScrollTop(el));
-    else scheduleFollow();
+    if (el && behavior === "instant") {
+      const target = maxScrollTop(el);
+      writeScrollTop(el, target, target);
+    } else scheduleFollow();
   };
 
   const reset = () => {
@@ -98,21 +114,38 @@ export function useChatScroll(
     lastMaxScrollTop = 0;
   };
 
+  const syncLayoutPosition = (el: HTMLElement, top: number, max: number) => {
+    const previousTop = Math.max(0, Math.min(lastScrollTop, max));
+    const ownsPosition = isFollowing.value && reducedMotion.value !== "reduce" && !pointerHeld && touchY == null;
+    if (ownsPosition && Math.abs(top - previousTop) > 0.5) {
+      // 布局可能先于 ResizeObserver 调整 scrollTop，不能把这段跳跃当成动画已经走过。
+      writeScrollTop(el, previousTop, max);
+    } else {
+      lastScrollTop = top;
+      lastMaxScrollTop = max;
+      updatePosition();
+    }
+    scheduleFollow();
+  };
+
   const onScroll = () => {
     const el = viewport.value;
     if (!el) return;
     const top = Math.max(0, el.scrollTop);
     const max = maxScrollTop(el);
+    // 内容收缩、浏览器滚动锚定引起的位移不代表用户上翻。
+    if (Math.abs(max - lastMaxScrollTop) > 1) {
+      syncLayoutPosition(el, top, max);
+      return;
+    }
     const movedUp = top < lastScrollTop - 1;
     const movedDown = top > lastScrollTop + 1;
-    const resized = Math.abs(max - lastMaxScrollTop) > 1;
     lastScrollTop = top;
     lastMaxScrollTop = max;
     updatePosition();
 
-    // 内容收缩、浏览器滚动锚定引起的位移不代表用户上翻。
-    if (movedUp && !resized) stopFollowing();
-    else if (movedDown && !resized && isAtBottom.value && (scrollingDown || pointerHeld)) {
+    if (movedUp) stopFollowing();
+    else if (movedDown && isAtBottom.value && (scrollingDown || pointerHeld)) {
       isFollowing.value = true;
       scheduleFollow();
     }
@@ -122,7 +155,7 @@ export function useChatScroll(
     const el = viewport.value;
     let node = target instanceof Element ? target : null;
     while (node && node !== el) {
-      if (node instanceof HTMLElement && node.scrollHeight > node.clientHeight) {
+      if (node instanceof HTMLElement) {
         const overflow = node.ownerDocument.defaultView?.getComputedStyle(node).overflowY;
         if (overflow && /auto|scroll|overlay/.test(overflow)) {
           if (delta < 0 ? node.scrollTop > 0 : maxScrollTop(node) - node.scrollTop > 1) return true;
@@ -158,7 +191,7 @@ export function useChatScroll(
     const delta = ["ArrowUp", "PageUp", "Home"].includes(event.key) || (event.key === " " && event.shiftKey)
       ? -1
       : ["ArrowDown", "PageDown", "End", " "].includes(event.key) ? 1 : 0;
-    if (!nestedScrollerCanConsume(event.target, delta)) scrollIntent(delta);
+    if (delta && !nestedScrollerCanConsume(event.target, delta)) scrollIntent(delta);
   };
 
   const onPointerDown = (event: PointerEvent) => {
@@ -214,13 +247,21 @@ export function useChatScroll(
   useEventListener(ownerDocument, ["touchend", "touchcancel"], onTouchEnd, { passive: true });
   useEventListener(ownerDocument, "selectionchange", onSelectionChange);
 
+  watch([viewport, isFollowing], ([el, following], _previous, onCleanup) => {
+    if (!el || !following) return;
+    const anchor = el.style.getPropertyValue("overflow-anchor");
+    const priority = el.style.getPropertyPriority("overflow-anchor");
+    el.style.setProperty("overflow-anchor", "none", priority);
+    onCleanup(() => {
+      if (anchor) el.style.setProperty("overflow-anchor", anchor, priority);
+      else el.style.removeProperty("overflow-anchor");
+    });
+  }, { flush: "sync", immediate: true });
+
   useResizeObserver([viewport, content], () => {
     const el = viewport.value;
     if (!el) return;
-    lastScrollTop = el.scrollTop;
-    lastMaxScrollTop = maxScrollTop(el);
-    updatePosition();
-    scheduleFollow();
+    syncLayoutPosition(el, Math.max(0, el.scrollTop), maxScrollTop(el));
   });
 
   watch([viewport, content], ([el, inner]) => {

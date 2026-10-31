@@ -26,6 +26,7 @@ import InspiraFlickeringGrid from "~/components/inspira/FlickeringGrid.vue";
 import InspiraHyperText from "~/components/inspira/HyperText.vue";
 import { useMediaQuery } from "@vueuse/core";
 import { useChatScroll } from "~/composables/useChatScroll";
+import { useDmMessageEntries } from "~/composables/useDmMessageEntries";
 
 const {
   visible,
@@ -47,7 +48,6 @@ const {
   startReveal: startAiReveal,
   primeCompleted: primeAiRevealCompleted,
   resetSession: resetAiRevealSession,
-  revealTick: aiRevealTick,
   isComplete: isAiRevealComplete,
   isRevealing: isAiRevealing,
 } = useAiDmTypewriter();
@@ -774,7 +774,6 @@ const conversationPreview = (conv: DmConversationSummary): string => {
 const messagesRef = ref<HTMLElement | null>(null);
 const messagesContentRef = ref<HTMLElement | null>(null);
 const {
-  isFollowing,
   showBackToBottom,
   scrollToBottom,
   stopFollowing,
@@ -794,15 +793,10 @@ const knownMessageIds = ref(new Set<string>());
 
 /** 时间戳显隐：只在“首条”或与前一条间隔 > 5 分钟时展示，避免逐条时间戳过于嘈杂 */
 const TIME_GAP_MS = 5 * 60 * 1000;
-const shouldShowTime = (index: number): boolean => {
-  const list = activeMessages.value;
-  const curr = list[index];
-  if (!curr) return false;
-  if (index === 0) return true;
-  const prev = list[index - 1];
-  if (!prev) return true;
-  const dCurr = new Date(curr.createdAt).getTime();
-  const dPrev = new Date(prev.createdAt).getTime();
+const shouldShowTime = (msg: DmMessage, previousCreatedAt: string | undefined): boolean => {
+  if (previousCreatedAt == null) return true;
+  const dCurr = new Date(msg.createdAt).getTime();
+  const dPrev = new Date(previousCreatedAt).getTime();
   if (Number.isNaN(dCurr) || Number.isNaN(dPrev)) return false;
   return dCurr - dPrev > TIME_GAP_MS;
 };
@@ -819,64 +813,51 @@ const canClickAvatar = (msg: DmMessage): boolean => {
   return true;
 };
 
-/**
- * 一次性把每条消息的派生信息算好——避免 template v-for 内重复调用
- * isMine / bubbleText / shouldShowQuote / quoteLabel / quoteTitle 等
- * 函数。100 条消息每次 re-render 节省 ~1000 次函数调用。
- *
- * 注：依赖 activeMessages + knownMessageIds + selfUserId；任一变更 → re-eval。
- * EnrichedMessage 接口随 Phase 4 拆分定义在 ~/utils/dm-view.ts（DmMessageItem 消费）。
- */
-const enrichedMessages = computed<EnrichedMessage[]>(() => {
-  const list = activeMessages.value;
-  const known = knownMessageIds.value;
-  void aiRevealTick.value;
-  return list.map((msg, idx) => {
-    const avatarClickable = canClickAvatar(msg);
-    const mine = isMine(msg);
-    const rendered = bubbleTextForDisplay(msg);
-    const aiRich =
-      isAiPeerConversation.value &&
-      !mine &&
-      msg.kind === "text" &&
-      !msg.deletedAt &&
-      typeof rendered === "string";
-    // 工作流事件：定稿后消息自带落库版本（权威）；流式期间读实时推送缓存
-    const workflowEvents = aiRich
-      ? (msg.workflow?.length ? msg.workflow : workflowEventsOf(msg.documentId))
-      : [];
-    return {
-      msg,
-      isMine: mine,
-      isNew: !known.has(msg.documentId),
-      showTime: shouldShowTime(idx),
-      rendered,
-      aiRich,
-      aiStreaming:
-        aiRich &&
-        (isStreamingMessage(msg.documentId) ||
-          (shouldAnimateAiMessage(msg) && isAiRevealing(msg.documentId))),
-      pendingStream: isPendingStreamBubble(msg),
-      workflowEvents,
-      citations:
-        workflowEvents.length > 0 && isWorkflowSettled(workflowEvents)
-          ? extractCitations(workflowEvents)
-          : [],
-      copyable: canCopyMessage(msg),
-      quote: shouldShowQuote(msg) && msg.article
-        ? {
-            label: quoteLabel(msg),
-            title: quoteTitle(msg),
-            article: msg.article,
-          }
-        : null,
-      avatarClickable,
-      // avatarClickable 为 true 时 canClickAvatar 已保证 authorDocumentId 存在
-      profileUrl: avatarClickable
-        ? `/profile/${msg.sender!.authorDocumentId}`
-        : null,
-    };
-  });
+const enrichedMessages = useDmMessageEntries(activeMessages, (msg, previousCreatedAt) => {
+  const avatarClickable = canClickAvatar(msg);
+  const mine = isMine(msg);
+  const rendered = bubbleTextForDisplay(msg);
+  const aiRich =
+    isAiPeerConversation.value &&
+    !mine &&
+    msg.kind === "text" &&
+    !msg.deletedAt &&
+    typeof rendered === "string";
+  // 工作流事件：定稿后消息自带落库版本（权威）；流式期间读实时推送缓存
+  const workflowEvents = aiRich
+    ? (msg.workflow?.length ? msg.workflow : workflowEventsOf(msg.documentId))
+    : [];
+  return {
+    msg,
+    isMine: mine,
+    isNew: !knownMessageIds.value.has(msg.documentId),
+    showTime: shouldShowTime(msg, previousCreatedAt),
+    rendered,
+    aiRich,
+    aiStreaming:
+      aiRich &&
+      (isStreamingMessage(msg.documentId) ||
+        (shouldAnimateAiMessage(msg) && isAiRevealing(msg.documentId))),
+    pendingStream: isPendingStreamBubble(msg),
+    workflowEvents,
+    citations:
+      workflowEvents.length > 0 && isWorkflowSettled(workflowEvents)
+        ? extractCitations(workflowEvents)
+        : [],
+    copyable: canCopyMessage(msg),
+    quote: shouldShowQuote(msg) && msg.article
+      ? {
+          label: quoteLabel(msg),
+          title: quoteTitle(msg),
+          article: msg.article,
+        }
+      : null,
+    avatarClickable,
+    // avatarClickable 为 true 时 canClickAvatar 已保证 authorDocumentId 存在
+    profileUrl: avatarClickable
+      ? `/profile/${msg.sender!.authorDocumentId}`
+      : null,
+  };
 });
 
 /**
@@ -1746,7 +1727,7 @@ const handleMobileBack = () => {
                       <div
                         ref="messagesRef"
                         class="ik-knock__messages"
-                        :class="{ 'is-settling': messagesSettling, 'is-following': isFollowing }"
+                        :class="{ 'is-settling': messagesSettling }"
                         tabindex="0"
                         aria-label="消息记录"
                         @scroll.passive="onMessagesScroll"
@@ -2790,10 +2771,6 @@ const handleMobileBack = () => {
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
   overscroll-behavior: contain;
   scroll-behavior: auto;
-}
-
-.ik-knock__messages.is-following {
-  overflow-anchor: none;
 }
 
 .ik-knock__messages-content {
