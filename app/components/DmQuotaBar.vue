@@ -68,12 +68,14 @@ const level = computed(() => {
 <style scoped>
 .ik-quota {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  min-height: var(--ik-header-control-size, 36px);
   padding: 0 4px;
   user-select: none;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1;
   color: rgba(255, 255, 255, 0.38);
   /* 有 title 才有明细，用 help 光标提示可以 hover */
@@ -136,10 +138,6 @@ const level = computed(() => {
 
 /* 窄屏标题栏还挤着返回/搜索/删除：去掉迷你条，只留百分比 */
 @media (max-width: 768px) {
-  .ik-quota {
-    font-size: 11px;
-  }
-
   .ik-quota__cells {
     display: none;
   }

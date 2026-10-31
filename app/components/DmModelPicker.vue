@@ -180,7 +180,8 @@ const pick = (key: string | null) => {
 <style scoped>
 .ik-model {
   position: relative;
-  flex-shrink: 0;
+  display: flex;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -189,13 +190,16 @@ const pick = (key: string | null) => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 8px 0 12px;
+  min-width: 0;
+  max-width: 100%;
+  height: var(--ik-header-control-size, 36px);
+  padding: 0 12px;
   border: 2px solid #313131;
   border-radius: 999px;
   background: #050505 url("/images/tab-bg-point.webp") repeat;
   color: rgba(255, 255, 255, 0.82);
-  font-size: 12.5px;
+  font-family: inherit;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
   cursor: pointer;
@@ -219,6 +223,8 @@ const pick = (key: string | null) => {
 
 .ik-model__name {
   display: inline-block;
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -265,8 +271,8 @@ const pick = (key: string | null) => {
   left: 0;
   z-index: 40;
   width: max-content;
-  min-width: max(260px, var(--ik-trigger-w));
-  max-width: min(360px, 80vw);
+  min-width: min(max(260px, var(--ik-trigger-w)), calc(100cqi - 36px));
+  max-width: min(360px, calc(100cqi - 36px), calc(100vw - 24px));
   max-height: min(60vh, 380px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -275,7 +281,7 @@ const pick = (key: string | null) => {
   border-radius: 18px;
   background: #050505 url("/images/tab-bg-point.webp") repeat;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
-  clip-path: inset(0 calc(100% - var(--ik-trigger-w)) calc(100% - var(--ik-trigger-h)) 0 round 15px);
+  clip-path: inset(0 calc(100% - var(--ik-trigger-w)) calc(100% - var(--ik-trigger-h)) 0 round calc(var(--ik-trigger-h) / 2));
   opacity: 0;
   visibility: hidden;
   transition:
@@ -299,7 +305,7 @@ const pick = (key: string | null) => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  height: 26px;
+  height: calc(var(--ik-header-control-size, 36px) - 4px);
   padding: 0 6px 0 6px;
   margin-bottom: 4px;
   border: 0;
@@ -431,26 +437,6 @@ const pick = (key: string | null) => {
   flex-shrink: 0;
   width: 16px;
   height: 16px;
-}
-
-/* 窄屏标题栏里还挤着返回/搜索/删除，模型名再收紧一档，别把角色名压没 */
-@media (max-width: 768px) {
-  .ik-model__name {
-    max-width: 84px;
-  }
-
-  .ik-model__btn {
-    font-size: 12px;
-  }
-
-  /* 有角标就只留角标，把位置让给角色名；完整名字点开面板看 */
-  .ik-model__btn.has-badge .ik-model__name {
-    display: none;
-  }
-
-  .ik-model__btn.has-badge {
-    padding-left: 8px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

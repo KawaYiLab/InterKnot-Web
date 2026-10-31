@@ -542,6 +542,13 @@ const composerDisabled = computed<boolean>(() => {
   return conv.pseudoKind === "anonymous" || conv.pseudoKind === "system" || isAiNotificationBucket(conv);
 });
 
+const headerQuota = computed(() =>
+  activeConversation.value && !composerDisabled.value && isActiveAiConversation.value
+    ? agentQuota.value
+    : null,
+);
+const hasHeaderTools = computed(() => !!activeModelOptions.value?.length || !!headerQuota.value);
+
 /** 对端是否正在输入：当前会话的 typing 用户列表非空且不含自己 */
 const peerIsTyping = computed<boolean>(() => {
   const cid = activeConversationId.value;
@@ -1591,83 +1598,77 @@ const handleMobileBack = () => {
 
                 <!-- 右栏：会话标题 + 内容 -->
                 <section class="ik-knock__main">
-                  <header class="ik-knock__main-header">
-                    <!-- 移动端返回箭头：回到会话列表（仅手机端显示） -->
-                    <button
-                      type="button"
-                      class="ik-knock__back"
-                      aria-label="返回"
-                      @click="handleMobileBack"
-                    >
-                      <ChevronLeftIcon
-                        class="ik-knock__back-icon"
-                        aria-hidden="true"
-                      />
-                    </button>
-                    <ChatBubbleLeftIcon
-                      class="ik-knock__main-icon"
-                      aria-hidden="true"
-                    />
-                    <div
-                      class="ik-knock__main-title-wrap"
-                      :class="{ 'is-clickable': canClickPeerProfile }"
-                      :role="canClickPeerProfile ? 'button' : undefined"
-                      :tabindex="canClickPeerProfile ? 0 : undefined"
-                      :aria-label="canClickPeerProfile ? `查看${activeConversation?.peer?.name || '用户'}的主页` : undefined"
-                      @click="goToProfile(peerProfileUrl)"
-                      @keydown.enter="goToProfile(peerProfileUrl)"
-                    >
-                      <span class="ik-knock__main-title">
-                        {{ activeConversation?.title || activeConversation?.peer?.name || "NoData" }}
-                      </span>
-                      <Transition name="ik-typing">
-                        <span v-if="peerIsTyping" class="ik-knock__typing-indicator" aria-live="polite">
-                          <span class="ik-knock__typing-dot" />
-                          <span class="ik-knock__typing-dot" />
-                          <span class="ik-knock__typing-dot" />
-                          <span class="ik-knock__typing-label">正在输入</span>
+                  <header class="ik-knock__main-header" :class="{ 'has-ai-tools': hasHeaderTools }">
+                    <div class="ik-knock__header-identity">
+                      <button
+                        type="button"
+                        class="ik-knock__header-button ik-knock__back"
+                        aria-label="返回"
+                        @click="handleMobileBack"
+                      >
+                        <ChevronLeftIcon class="ik-knock__back-icon" aria-hidden="true" />
+                      </button>
+                      <ChatBubbleLeftIcon class="ik-knock__main-icon" aria-hidden="true" />
+                      <div
+                        class="ik-knock__main-title-wrap"
+                        :class="{ 'is-clickable': canClickPeerProfile }"
+                        :role="canClickPeerProfile ? 'button' : undefined"
+                        :tabindex="canClickPeerProfile ? 0 : undefined"
+                        :aria-label="canClickPeerProfile ? `查看${activeConversation?.peer?.name || '用户'}的主页` : undefined"
+                        @click="goToProfile(peerProfileUrl)"
+                        @keydown.enter="goToProfile(peerProfileUrl)"
+                      >
+                        <span class="ik-knock__main-title">
+                          {{ activeConversation?.title || activeConversation?.peer?.name || "NoData" }}
                         </span>
-                      </Transition>
+                        <Transition name="ik-typing">
+                          <span v-if="peerIsTyping" class="ik-knock__typing-indicator" aria-live="polite">
+                            <span class="ik-knock__typing-dot" />
+                            <span class="ik-knock__typing-dot" />
+                            <span class="ik-knock__typing-dot" />
+                            <span class="ik-knock__typing-label">正在输入</span>
+                          </span>
+                        </Transition>
+                      </div>
                     </div>
-                    <!-- 模型切换（会话级）：紧贴角色名右侧，无边框，只有模型名 + 下拉箭头 -->
-                    <DmModelPicker
-                      :models="activeModelOptions"
-                      :model-key="activeModelKey"
-                      :default-model-key="activeAiCard?.defaultModelKey ?? null"
-                      :streaming="!!activeStreamingMessageId"
-                      @select="onSelectModel"
-                    />
-                    <!-- 当日额度：紧跟模型选择器，仅 AI 会话且后台配了上限时显示 -->
-                    <DmQuotaBar
-                      v-if="activeConversation && !composerDisabled && isActiveAiConversation && agentQuota"
-                      :percent="agentQuota.percent"
-                      :exhausted="agentQuota.exhausted"
-                      :reset-at="agentQuota.resetAt"
-                    />
-                    <!-- Phase 4 会话内搜索：仅选中会话时显示 -->
-                    <button
-                      v-if="activeConversation"
-                      type="button"
-                      class="ik-knock__search-toggle"
-                      :class="{ 'is-active': dmSearchOpen }"
-                      aria-label="搜索聊天记录"
-                      title="搜索聊天记录"
-                      @click="toggleDmSearch"
-                    >
-                      <MagnifyingGlassIcon class="ik-knock__search-toggle-icon" aria-hidden="true" />
-                    </button>
-                    <!-- AI 会话管理：删除当前会话 -->
-                    <button
-                      v-if="isActiveAiConversation && activeConversationId"
-                      type="button"
-                      class="ik-knock__session-action"
-                      :disabled="deletingSessionId === activeConversationId"
-                      aria-label="删除当前会话"
-                      title="删除当前会话"
-                      @click="deleteAiSession(activeConversationId)"
-                    >
-                      <TrashIcon class="ik-knock__session-action-icon" aria-hidden="true" />
-                    </button>
+                    <div v-if="hasHeaderTools" class="ik-knock__header-tools">
+                      <DmModelPicker
+                        :models="activeModelOptions"
+                        :model-key="activeModelKey"
+                        :default-model-key="activeAiCard?.defaultModelKey ?? null"
+                        :streaming="!!activeStreamingMessageId"
+                        @select="onSelectModel"
+                      />
+                      <DmQuotaBar
+                        v-if="headerQuota"
+                        :percent="headerQuota.percent"
+                        :exhausted="headerQuota.exhausted"
+                        :reset-at="headerQuota.resetAt"
+                      />
+                    </div>
+                    <div v-if="activeConversation" class="ik-knock__header-actions" role="group" aria-label="会话操作">
+                      <button
+                        type="button"
+                        class="ik-knock__header-button ik-knock__search-toggle"
+                        :class="{ 'is-active': dmSearchOpen }"
+                        aria-label="搜索聊天记录"
+                        title="搜索聊天记录"
+                        @click="toggleDmSearch"
+                      >
+                        <MagnifyingGlassIcon class="ik-knock__search-toggle-icon" aria-hidden="true" />
+                      </button>
+                      <button
+                        v-if="isActiveAiConversation && activeConversationId"
+                        type="button"
+                        class="ik-knock__header-button ik-knock__session-action"
+                        :disabled="deletingSessionId === activeConversationId"
+                        aria-label="删除当前会话"
+                        title="删除当前会话"
+                        @click="deleteAiSession(activeConversationId)"
+                      >
+                        <TrashIcon class="ik-knock__session-action-icon" aria-hidden="true" />
+                      </button>
+                    </div>
                   </header>
                   <!-- Phase 4 会话内搜索条：命中计数 + 上下跳转 -->
                   <div v-if="dmSearchOpen" class="ik-knock__search-bar">
@@ -2339,59 +2340,106 @@ const handleMobileBack = () => {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .ik-knock__main-header {
+  --ik-header-control-size: 36px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 58px;
-  padding: 0 18px;
+  gap: 16px;
+  min-height: 72px;
+  padding: 12px 18px;
   border-bottom: 3px solid #202020;
 }
 
+.ik-knock__header-identity {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 40px;
+}
+
+.ik-knock__main-header.has-ai-tools .ik-knock__header-identity {
+  flex: 0 1 auto;
+  max-width: 220px;
+}
+
+.ik-knock__header-tools {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ik-knock__header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ik-knock__header-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--ik-header-control-size);
+  height: var(--ik-header-control-size);
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ik-knock__header-button:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ik-knock__header-button:focus-visible {
+  outline: 2px solid #fbfe00;
+  outline-offset: 2px;
+}
+
+.ik-knock__header-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .ik-knock__main-icon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   color: #454545;
   flex-shrink: 0;
 }
 
-/* 移动端返回箭头：桌面端为双栏布局，无需返回，故默认隐藏 */
 .ik-knock__back {
   display: none;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  margin-left: -8px;
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: #fff;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
 .ik-knock__back-icon {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
 }
 
 .ik-knock__main-title-wrap {
   display: flex;
+  flex: 1;
   flex-direction: column;
   justify-content: center;
   gap: 2px;
   min-width: 0;
-}
-
-/* 额度条自带一条与模型选择器之间的分隔线；后台没配模型清单（选择器整体不渲染）
-   时它会紧贴标题，那条线就没有意义了。子组件根节点带父级 scope id，可以这样选中。 */
-.ik-knock__main-title-wrap + .ik-quota::before {
-  display: none;
 }
 
 /* 会话标题栏：对端可跳转个人主页时的可点击态 */
@@ -2410,112 +2458,16 @@ const handleMobileBack = () => {
   outline-offset: 2px;
 }
 
-/* 重置对话按钮（3.3.4）：靠右对齐 */
-.ik-knock__reset {
-  margin-left: auto;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #777;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.ik-knock__reset:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ik-knock__reset:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.ik-knock__reset-icon {
-  width: 18px;
-  height: 18px;
-}
-
-/* AI 会话管理按钮（删除）：与 reset 同款 */
-.ik-knock__session-action {
-  margin-left: 4px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #777;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.ik-knock__session-action:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ik-knock__session-action:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.ik-knock__session-action-icon {
-  width: 18px;
-  height: 18px;
-}
-
-/* ── Phase 4 会话内搜索 ───────────────────── */
-/* header 搜索开关：与 reset 同款按钮语言；靠右（reset 存在时紧挨其左） */
-.ik-knock__search-toggle {
-  margin-left: auto;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #777;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* reset 按钮同时存在时由搜索按钮承担 margin-left:auto，reset 紧随其后 */
-.ik-knock__search-toggle + .ik-knock__reset {
-  margin-left: 0;
-}
-
-.ik-knock__search-toggle:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ik-knock__search-toggle.is-active {
+.ik-knock__search-toggle.is-active,
+.ik-knock__search-toggle.is-active:hover {
   color: #000;
   background: #fbfe00;
 }
 
+.ik-knock__session-action-icon,
 .ik-knock__search-toggle-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 /* 搜索条：header 下方整行；输入 + 命中计数 + 上下跳转 + 关闭 */
@@ -2605,6 +2557,7 @@ const handleMobileBack = () => {
 .ik-knock__main-title {
   font-size: 17px;
   font-weight: 900;
+  line-height: 24px;
   color: #fff;
   /* 标题右侧现在挂着模型选择器与额度条：长标题省略，不把它们挤出去 */
   overflow: hidden;
@@ -2822,6 +2775,32 @@ const handleMobileBack = () => {
 
 /* 入场/出场动画统一在 theme.css 的 .ik-overlay-* 全局规则里维护 */
 
+@container (max-width: 640px) {
+  .ik-knock__main-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 12px;
+  }
+
+  .ik-knock__header-identity {
+    grid-area: 1 / 1;
+  }
+
+  .ik-knock__main-header.has-ai-tools .ik-knock__header-identity {
+    max-width: none;
+  }
+
+  .ik-knock__header-actions {
+    grid-area: 1 / 2;
+    margin-left: 0;
+  }
+
+  .ik-knock__header-tools {
+    grid-area: 2 / 1 / auto / -1;
+    justify-content: space-between;
+  }
+}
+
 /* ── Mobile：QQ / TG 风格全屏单栏（会话列表 ↔ 聊天，二选一） ──
    桌面端是左右双栏；手机端屏幕窄，双栏会挤成「列表 + 空聊天框」割裂体验。
    这里改成原生 IM 模式：默认全屏会话列表，点开某会话后整页切到聊天，
@@ -2959,13 +2938,34 @@ const handleMobileBack = () => {
   }
 
   .ik-knock__main-header {
-    height: auto;
-    min-height: 54px;
+    --ik-header-control-size: 40px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 60px;
     padding: 10px 12px;
     padding-top: calc(10px + env(safe-area-inset-top));
-    gap: 6px;
+    gap: 8px 12px;
     background: linear-gradient(180deg, #161616 0%, #0c0c0c 100%);
     border-bottom: 2px solid #202020;
+  }
+
+  .ik-knock__header-identity {
+    grid-area: 1 / 1;
+    gap: 8px;
+  }
+
+  .ik-knock__main-header.has-ai-tools .ik-knock__header-identity {
+    max-width: none;
+  }
+
+  .ik-knock__header-actions {
+    grid-area: 1 / 2;
+    margin-left: 0;
+  }
+
+  .ik-knock__header-tools {
+    grid-area: 2 / 1 / auto / -1;
+    justify-content: space-between;
   }
 
   .ik-knock__main-title {
