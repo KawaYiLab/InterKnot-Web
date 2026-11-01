@@ -1572,7 +1572,14 @@ onBeforeUnmount(() => {
               <div class="ik-dialog__right">
                 <div style="flex:1;padding:16px;overflow:hidden">
                   <div class="ik-dialog__comments-toolbar-spacer" aria-hidden="true"></div>
-                  <CommentSkeleton :count="5" />
+                  <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
+                    <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+                      <div class="ik-skel" style="width:80px;height:14px;border-radius:3px"></div>
+                      <div class="ik-skel" style="width:95%;height:14px;border-radius:3px"></div>
+                      <div class="ik-skel" style="width:60%;height:14px;border-radius:3px"></div>
+                    </div>
+                  </div>
                 </div>
                 <div class="ik-dialog__actions">
                   <div class="ik-skel ik-skel--actions-bar"></div>
@@ -1803,7 +1810,14 @@ onBeforeUnmount(() => {
                       />
                       <h2 v-else class="ik-dialog__comments-heading">评论 <span>{{ postCommentCount }}</span></h2>
                       <div v-if="showCommentsSkeleton">
-                        <CommentSkeleton :count="5" />
+                        <div v-for="n in 5" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
+                          <div class="ik-skel" style="width:36px;height:36px;border-radius:999px;flex-shrink:0"></div>
+                          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+                            <div class="ik-skel" style="width:80px;height:14px;border-radius:3px"></div>
+                            <div class="ik-skel" style="width:95%;height:14px;border-radius:3px"></div>
+                            <div class="ik-skel" style="width:60%;height:14px;border-radius:3px"></div>
+                          </div>
+                        </div>
                       </div>
                       <div v-else-if="showCommentsEmpty" class="ik-empty" style="padding: 40px 0">啥都木有¯\(°_o)/¯</div>
                       <template v-if="commentsVisible">
