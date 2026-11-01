@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { Profile } from "~/types/entities";
+import Skeleton from "boneyard-js/vue";
+import { SAMPLE_PROFILE, claimBoneyardCapture, releaseBoneyardCapture } from "~/utils/boneyard";
 import type { ComponentPublicInstance } from "vue";
 import { useHoverCapable } from "~/composables/useHoverCapable";
 
@@ -146,8 +148,19 @@ const formatNumber = (n: number) => {
   return String(n);
 };
 
+// 生成骨架（npm run bones）时：页面上第一张悬浮卡片直接用示例资料打开，供 boneyard 截取。
+let captureClaimed = false;
+onMounted(() => {
+  if (!props.authorId || !claimBoneyardCapture("user-hovercard")) return;
+  captureClaimed = true;
+  profile.value = SAMPLE_PROFILE;
+  visible.value = true;
+  nextTick(() => updatePosition());
+});
+
 onBeforeUnmount(() => {
   clearTimers();
+  if (captureClaimed) releaseBoneyardCapture("user-hovercard");
 });
 </script>
 
@@ -193,30 +206,14 @@ onBeforeUnmount(() => {
       >
        <div class="ik-hovercard__outer">
         <div class="ik-hovercard__inner">
-        <!-- Loading placeholder (mirrors profile layout to prevent size jump) -->
-        <div v-if="loading && !profile" class="ik-hovercard__loading">
-          <div class="ik-hovercard__banner">
-            <div class="ik-hovercard__skel" style="width:100%;height:100%;border-radius:0" />
-          </div>
-          <div class="ik-hovercard__avatar-row">
-            <div class="ik-hovercard__avatar-wrap">
-              <div class="ik-hovercard__skel" style="width:52px;height:52px;border-radius:999px" />
-            </div>
-          </div>
-          <div class="ik-hovercard__body">
-            <div class="ik-hovercard__skel" style="width:100px;height:16px" />
-            <div class="ik-hovercard__skel" style="width:160px;height:12px;margin-top:6px" />
-          </div>
-          <div class="ik-hovercard__stats">
-            <div v-for="i in 3" :key="i" class="ik-hovercard__stat">
-              <div class="ik-hovercard__skel" style="width:32px;height:15px" />
-              <div class="ik-hovercard__skel" style="width:24px;height:11px" />
-            </div>
-          </div>
+        <!-- 加载失败 -->
+        <div v-if="fetchError && !profile" class="ik-hovercard__error">
+          加载失败
         </div>
 
-        <!-- Profile content -->
-        <template v-else-if="profile">
+        <!-- 资料：加载中由 boneyard 按截取的布局画骨架（app/bones/user-hovercard.bones.json） -->
+        <Skeleton v-else name="user-hovercard" :loading="loading && !profile" class="ik-hovercard__slot">
+        <template v-if="profile">
           <!-- Top banner (business card) -->
           <div
             class="ik-hovercard__banner"
@@ -267,13 +264,8 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-
         </template>
-
-        <!-- Error state -->
-        <div v-else-if="fetchError" class="ik-hovercard__error">
-          加载失败
-        </div>
+        </Skeleton>
         </div>
        </div>
       </div>
@@ -432,22 +424,13 @@ onBeforeUnmount(() => {
 }
 
 /* ── Loading skeleton ─────────────────────────── */
-.ik-hovercard__loading {
+/* boneyard 骨架容器：保持原来的纵向排列 */
+.ik-hovercard__slot,
+.ik-hovercard__slot > :deep(div:not([data-boneyard-overlay])) {
   display: flex;
   flex-direction: column;
 }
 
-.ik-hovercard__skel {
-  background: #222;
-  border-radius: 6px;
-  animation: ik-hovercard-pulse 1.2s ease-in-out infinite;
-}
-
-
-@keyframes ik-hovercard-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
-}
 
 /* ── Stats ─────────────────────────────────────── */
 .ik-hovercard__stats {

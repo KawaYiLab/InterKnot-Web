@@ -4,6 +4,11 @@
   "wait": 1500,
   "skeletons": {
     "profile-tab-bar": { "route": "/profile/0" },
-    "profile-banner": { "route": "/profile/0" }
+    "profile-banner": { "route": "/profile/0" },
+    "card-preview": { "route": "/profile/0?modal=banner" },
+    "avatar-preview": { "route": "/profile/0?modal=avatar" },
+    "post-author": { "route": "/post/0" },
+    "comment": { "route": "/post/0" },
+    "user-hovercard": { "route": "/post/0" }
   }
 }
