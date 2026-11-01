@@ -1,6 +1,7 @@
 /**
  * 仿 Inspira UI「Text Generate Effect」：给 HTML 末尾最后几个可见字各包一层
- * `<span class="ik-tg ik-tg-N">`（N 从 1 数起，越靠后越大），由样式做成越往后越淡越模糊。
+ * `<span class="ik-tg ik-tg-N">`（N=1 是末字），由样式做成越往后越淡越模糊。
+ * 末字另有外层锚点，供不受文字淡化与模糊影响的装饰定位。
  * 打字机 / 流式每推进一次就重算一遍，看起来就是字从模糊里浮现出来。
  *
  * 只对已经 DOMPurify 清洗过的 HTML 调用：标签整体跳过，`&amp;` 这类实体算一个字，
@@ -9,6 +10,7 @@
 export const TEXT_GENERATE_TAIL = 8;
 
 const ENTITY_RE = /^&(?:#\d+|#x[\da-f]+|[a-z][a-z\d]*);/i;
+const TAG_RE = /<!--[\s\S]*?(?:-->|$)|<(?:[^"'<>]|"[^"]*"|'[^']*')*>/y;
 
 type Token = { text: string; visible: boolean };
 
@@ -18,8 +20,8 @@ const tokenize = (html: string): Token[] => {
   while (i < html.length) {
     const ch = html[i]!;
     if (ch === "<") {
-      const end = html.indexOf(">", i);
-      const stop = end === -1 ? html.length : end + 1;
+      TAG_RE.lastIndex = i;
+      const stop = TAG_RE.exec(html) ? TAG_RE.lastIndex : html.length;
       tokens.push({ text: html.slice(i, stop), visible: false });
       i = stop;
       continue;
@@ -48,7 +50,8 @@ export function wrapGeneratingTail(html: string, count = TEXT_GENERATE_TAIL): st
     const token = tokens[i]!;
     if (!token.visible) continue;
     rank++;
-    token.text = `<span class="ik-tg ik-tg-${rank}">${token.text}</span>`;
+    const generated = `<span class="ik-tg ik-tg-${rank}">${token.text}</span>`;
+    token.text = rank === 1 ? `<span class="ik-tg-end">${generated}</span>` : generated;
   }
   return tokens.map((t) => t.text).join("");
 }

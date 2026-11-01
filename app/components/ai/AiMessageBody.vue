@@ -43,11 +43,9 @@ const decorateCodeBlocks = (html: string): string =>
   });
 
 const html = computed(() => {
-  const rendered = decorateCodeBlocks(
-    formatChatMarkdown(displayText.value, { highlight: !props.streaming }),
-  );
-  // 生成中：末尾几个字从模糊里浮现（Inspira「Text Generate Effect」）
-  return props.streaming ? wrapGeneratingTail(rendered) : rendered;
+  const rendered = formatChatMarkdown(displayText.value, { highlight: !props.streaming });
+  // 工具条不属于正文，不能成为生成效果或光标的落点。
+  return decorateCodeBlocks(props.streaming ? wrapGeneratingTail(rendered) : rendered);
 });
 
 const rootRef = ref<HTMLElement | null>(null);
@@ -456,19 +454,20 @@ const onClick = async (e: MouseEvent) => {
 .ik-ai-md :deep(.ik-tg-7) { opacity: 0.85; filter: blur(0.7px); }
 .ik-ai-md :deep(.ik-tg-8) { opacity: 0.93; filter: blur(0.3px); }
 
-@media (prefers-reduced-motion: reduce) {
-  .ik-ai-md :deep(.ik-tg) {
-    opacity: 1;
-    filter: none;
-  }
+/* ── 光标只绘制在末字内部，不扩展行盒或代码块的滚动范围 ── */
+.ik-ai-md :deep(.ik-tg-end) {
+  position: relative;
 }
 
-/* ── 流式光标：最后一个块级元素尾部闪烁 ▍ ── */
-.ik-ai-md.is-streaming .ik-ai-md__content > :deep(*:last-child)::after {
-  content: "▍";
-  display: inline-block;
-  margin-left: 1px;
-  color: rgba(0, 0, 0, 0.65);
+.ik-ai-md.is-streaming :deep(.ik-tg-end)::after {
+  content: "";
+  position: absolute;
+  inset-block: 0.1em;
+  inset-inline-end: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  pointer-events: none;
   animation: ik-ai-cursor-blink 0.9s steps(2, start) infinite;
 }
 
@@ -479,6 +478,17 @@ const onClick = async (e: MouseEvent) => {
   }
   50% {
     opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ik-ai-md :deep(.ik-tg) {
+    opacity: 1;
+    filter: none;
+  }
+
+  .ik-ai-md.is-streaming :deep(.ik-tg-end)::after {
+    animation: none;
   }
 }
 </style>
