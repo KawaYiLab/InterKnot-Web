@@ -3,8 +3,6 @@ import { useMessage } from "zenless-ui";
 import type { BusinessCard, BusinessCardType, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
-import Skeleton from "boneyard-js/vue";
-import { isBoneyardCapture } from "~/utils/boneyard";
 
 const props = defineProps<{
   profile: Profile;
@@ -250,11 +248,6 @@ const SCROLL_LOCK_TOKEN = Symbol("business-card-modal");
 onMounted(async () => {
   window.addEventListener("keydown", handleKeydown);
   acquire(SCROLL_LOCK_TOKEN);
-  // 生成骨架（npm run bones）时不请求名片列表，直接显示预览供 boneyard 截取。
-  if (isBoneyardCapture()) {
-    bootstrapping.value = false;
-    return;
-  }
   await loadNextPage(activeTab.value);
 });
 
@@ -315,9 +308,10 @@ onBeforeUnmount(() => {
 
               <!-- Banner preview (top) -->
               <div class="ik-bc-preview">
-                <!-- 加载中由 boneyard 按截取的布局画骨架（app/bones/card-preview.bones.json） -->
-                <Skeleton name="card-preview" :loading="bootstrapping" class="ik-bc-preview__slot">
-                <div v-if="!bootstrapping" class="ik-bc-preview__banner-card">
+                <div v-if="bootstrapping" class="ik-bc-preview__banner-card">
+                  <div class="ik-skel ik-bc-preview__banner-skel"></div>
+                </div>
+                <div v-else class="ik-bc-preview__banner-card">
                   <div
                     class="ik-bc-preview__banner"
                     :style="previewBannerStyle"
@@ -341,7 +335,6 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                 </div>
-                </Skeleton>
               </div>
 
               <!-- Bottom: card list (left) + card detail (right) -->
@@ -924,10 +917,10 @@ onBeforeUnmount(() => {
   background: #222;
   animation: ik-skel-pulse 1.5s ease-in-out infinite;
 }
-/* boneyard 只画内容块，加载中补上名片底色 */
-.ik-bc-preview__slot[aria-busy="true"] {
+.ik-bc-preview__banner-skel {
+  width: 100%;
+  min-height: 140px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #111 0%, #161616 50%, #111 100%);
 }
 
 /* ── Fade transition ── */

@@ -5,8 +5,6 @@ import "vue-advanced-cropper/dist/style.css";
 import type { Avatar, AvatarType, Profile } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { toThumbUrl } from "~/utils/image";
-import Skeleton from "boneyard-js/vue";
-import { isBoneyardCapture } from "~/utils/boneyard";
 import { MAX_IMAGE_SIZE } from "~/utils/upload";
 
 const props = defineProps<{
@@ -179,11 +177,6 @@ const SCROLL_LOCK_TOKEN = Symbol("avatar-modal");
 onMounted(async () => {
   window.addEventListener("keydown", handleKeydown);
   acquire(SCROLL_LOCK_TOKEN);
-  // 生成骨架（npm run bones）时不请求头像列表，直接显示预览供 boneyard 截取。
-  if (isBoneyardCapture()) {
-    loading.value = false;
-    return;
-  }
   loading.value = true;
   try {
     const result = await api.getMyAvatars();
@@ -252,9 +245,10 @@ onBeforeUnmount(() => {
 
               <!-- Banner preview (top) -->
               <div class="ik-av-preview">
-                <!-- 加载中由 boneyard 按截取的布局画骨架（app/bones/avatar-preview.bones.json） -->
-                <Skeleton name="avatar-preview" :loading="loading" class="ik-av-preview__slot">
-                <div v-if="!loading" class="ik-av-preview__banner-card">
+                <div v-if="loading" class="ik-av-preview__banner-card">
+                  <div class="ik-skel ik-av-preview__banner-skel"></div>
+                </div>
+                <div v-else class="ik-av-preview__banner-card">
                   <div
                     class="ik-av-preview__banner"
                     :style="profile.equippedCard?.image ? { backgroundImage: `url('${profile.equippedCard.image}')` } : undefined"
@@ -278,7 +272,6 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                 </div>
-                </Skeleton>
               </div>
 
               <!-- Avatar list (8 cols, ~3.5 rows visible) -->
@@ -762,15 +755,26 @@ onBeforeUnmount(() => {
 }
 
 /* ── Skeleton ── */
-/* boneyard 只画内容块，加载中补上名片底色 */
-.ik-av-preview__slot[aria-busy="true"] {
+@keyframes ik-skel-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.ik-skel {
+  background: #222;
+  animation: ik-skel-pulse 1.5s ease-in-out infinite;
+}
+.ik-av-preview__banner-skel {
+  width: 100%;
+  min-height: 120px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #111 0%, #161616 50%, #111 100%);
 }
 
 /* ── Fade transition ── */
 .ik-fade-enter-active { transition: opacity 0.35s ease; }
 .ik-fade-enter-from { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .ik-skel { animation: none; opacity: 0.6; }
+}
 
 /* ── Spin ── */
 @keyframes ik-spin {
