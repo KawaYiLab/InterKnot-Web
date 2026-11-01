@@ -1,24 +1,36 @@
 /**
- * usePostModal – 路由级弹窗 composable
- *
- * 从首页点击委托时，通过 history.pushState 改变 URL（不走 Vue Router），
- * 委托内容以全屏弹窗渲染，首页保持 mounted。
- * URL 使用 /post/:id；直接访问 /post/:id 时走正常的页面路由（post/[id].vue）。
- *
- * 敲敲弹窗使用 query（ik_knock），与本 composable 分离。
+ * 帖子浮层使用 RouterHistory 更新地址，但不替换当前 NuxtPage。
+ * 只有本次页面会话创建的历史项可以恢复浮层；直接访问 /post/:id 仍是独立页。
  */
 import type { Author } from "~/types/entities";
+import type { HistoryState } from "vue-router";
 import { overlayHistoryState } from "~/utils/overlay-history";
 
-// 模块级单例，确保所有 usePostModal() 实例共享同一份标记
 let _historyPushed = false;
+let _closing = false;
+let _queuedOpen: (() => void) | null = null;
 let _savedTitle = "";
-// 入场动画是否已结束。PostOverlay 把详情数据的渲染推迟到这之后：预取命中时
-// getPost 会在首帧之前就 resolve，若立即渲染整块正文，会把入场动画的起点整体推后。
+let _activeKey: string | null = null;
+let _restoreFocus: ModalBackground | null = null;
+
+// 不写入 history.state：DOM 引用不能序列化，也不能在刷新后恢复成浮层。
+interface ModalBackground {
+  key: string;
+  url: string;
+  route: string;
+  position: unknown;
+  title: string;
+  focus: HTMLElement | null;
+  options?: OpenOptions;
+}
+const backgrounds = new Map<string, ModalBackground>();
+
 let _entered = true;
 let _enteredWaiters: Array<() => void> = [];
-/** after-enter 未触发（如过渡被打断）时的兜底，略大于 200ms 入场时长 */
 const ENTER_FALLBACK_MS = 400;
+const DEFAULT_TITLE = "绳网";
+const SCROLL_LOCK_TOKEN = Symbol("post-modal");
+const ROUTER_STATE_KEYS = ["back", "current", "forward", "position", "replaced", "scroll"];
 
 function flushEnteredWaiters() {
   _entered = true;
@@ -26,10 +38,6 @@ function flushEnteredWaiters() {
   _enteredWaiters = [];
   for (const resolve of waiters) resolve();
 }
-
-const DEFAULT_TITLE = "绳网";
-/** 唯一 token：所有 usePostModal 实例共享，确保 open/close 配对 */
-const SCROLL_LOCK_TOKEN = Symbol("post-modal");
 
 export interface PostPreview {
   title?: string;
@@ -41,99 +49,115 @@ export interface PostPreview {
   cover?: string;
 }
 
+interface OpenOptions {
+  coverAspectRatio?: number;
+  preview?: PostPreview;
+  commentId?: string;
+}
+
 export function usePostModal() {
   const api = useApi();
+  const router = useRouter();
   const isOpen = useState("pm:open", () => false);
   const postId = useState<string | null>("pm:id", () => null);
   const coverHint = useState<number | null>("pm:coverHint", () => null);
   const preview = useState<PostPreview | null>("pm:preview", () => null);
   const targetCommentId = useState<string | null>("pm:targetCommentId", () => null);
   const { acquire, release } = useBodyScrollLock();
+  let resumeRouter: (() => void) | null = null;
 
-  function open(
-    id: string,
-    opts?: {
-      coverAspectRatio?: number;
-      preview?: PostPreview;
-      commentId?: string;
-    },
-  ) {
-    if (!import.meta.client) return;
-    const replacingOpenPost = isOpen.value;
+  const locationUrl = () => window.location.pathname + window.location.search + window.location.hash;
 
-    // 首次打开才保存标题、锁滚动；浮层内点相关委托是在已开的浮层里换内容，
-    // 复用同一把滚动锁与原始标题。
-    if (!replacingOpenPost) {
-      _savedTitle = document.title;
+  function show(id: string, background: ModalBackground, opts?: OpenOptions) {
+    if (!isOpen.value) {
+      _savedTitle = background.title;
       acquire(SCROLL_LOCK_TOKEN);
       _entered = false;
     }
-
+    _activeKey = background.key;
+    _restoreFocus = null;
+    _historyPushed = true;
     postId.value = id;
     coverHint.value = opts?.coverAspectRatio ?? null;
     preview.value = opts?.preview ?? null;
     targetCommentId.value = opts?.commentId ?? null;
     isOpen.value = true;
-    _historyPushed = true;
-
-    const url = opts?.commentId
-      ? `/post/${id}?comment=${encodeURIComponent(opts.commentId)}`
-      : `/post/${id}`;
-    const state = overlayHistoryState({ __postModal: true, postId: id, commentId: opts?.commentId ?? null });
-    // 浮层只占用一条历史记录：首次打开压入 /post/:id；浮层内点相关委托切换内容时
-    // 用 replaceState 原地替换 URL，不新增历史条目。
-    // 若每层都 pushState 留一条 /post/:id，history.back 会触发 popstate，Vue Router
-    // 随之把背景页（NuxtPage）导航成独立帖子页 post/[id].vue —— 多层叠加退出时背景
-    // 就会「转进帖子页」。单条历史下返回 / 关闭统一一步回到最初进入的页面。
-    if (replacingOpenPost) {
-      window.history.replaceState(state, "", url);
-    } else {
-      window.history.pushState(state, "", url);
-    }
-
-    // 预热委托详情，减少 PostOverlay 挂载后的等待与布局抖动
-    // 首屏评论由 PostOverlay 挂载时强制拉取最新，避免命中旧缓存
     void api.getPost(id).catch(() => {});
   }
 
-  /**
-   * 关闭弹窗并回退浏览器历史（用户点击关闭按钮 / ESC）
-   */
-  function close() {
-    if (!isOpen.value) return;
-    // 回退首次打开时压入的那条 /post/:id 记录：history.back → popstate →
-    // handlePopState 收起浮层。这样地址栏与浏览器历史保持一致。
-    if (_historyPushed) window.history.back();
-    else teardown();
+  function open(id: string, opts?: OpenOptions) {
+    if (!import.meta.client || !id) return;
+    // back 是异步的。先等它落到背景项，再处理最新的打开意图，不能替换正在退出的项。
+    if (_closing) {
+      _queuedOpen = () => open(id, opts);
+      return;
+    }
+    const history = router.options.history;
+    let background = _activeKey ? backgrounds.get(_activeKey) : undefined;
+    const replacing = isOpen.value && !!background;
+    if (!replacing) {
+      const url = locationUrl();
+      // 敲敲等旧入口仍可能直接 pushState；先同步 RouterHistory 的当前位置。
+      if (history.location !== url) {
+        history.replace(url, { ...window.history.state, current: url });
+      }
+      const activeElement = document.activeElement;
+      background = {
+        key: crypto.randomUUID(),
+        url,
+        route: router.currentRoute.value.fullPath,
+        position: window.history.state?.position,
+        title: document.title,
+        focus: _restoreFocus?.route === router.currentRoute.value.fullPath
+          ? _restoreFocus.focus
+          : activeElement instanceof HTMLElement ? activeElement : null,
+      };
+      backgrounds.set(background.key, background);
+    }
+    background!.options = opts;
+    const url = `/post/${encodeURIComponent(id)}` + (opts?.commentId ? `?comment=${encodeURIComponent(opts.commentId)}` : "");
+    const state = overlayHistoryState({
+      __postModal: true,
+      postModalKey: background!.key,
+      postId: id,
+      commentId: opts?.commentId ?? null,
+    });
+    // RouterHistory 自己维护 current / position / scroll，不能复制背景项的这些值。
+    for (const key of ROUTER_STATE_KEYS) delete state[key];
+    if (replacing) history.replace(url, state as HistoryState);
+    else history.push(url, state as HistoryState);
+    show(id, background!, opts);
   }
 
-  /**
-   * 仅清理状态，不操作 history（由 popstate / 路由守卫调用）
-   */
-  function teardown() {
+  function close() {
+    if (!isOpen.value || _closing) return;
+    _closing = true;
+    if (_historyPushed && window.history.state?.postModalKey === _activeKey) {
+      window.history.back();
+    } else {
+      teardown(true);
+    }
+  }
+
+  /** 路由导航只清理浮层；返回背景时才恢复触发点焦点。 */
+  function teardown(restoreFocus = false) {
+    _closing = false;
     if (!isOpen.value) return;
+    _restoreFocus = restoreFocus && _activeKey ? backgrounds.get(_activeKey) ?? null : null;
+    _activeKey = null;
     isOpen.value = false;
     _historyPushed = false;
     flushEnteredWaiters();
-    // postId 保留到离场动画结束后再清理
     if (import.meta.client) {
-      // 只 release 自己的锁；如果还有别的 overlay（如 KnockKnockModal）持有，
-      // body.overflow 保持 hidden，避免下方页面意外可滚。
       release(SCROLL_LOCK_TOKEN);
       document.title = _savedTitle || DEFAULT_TITLE;
     }
   }
 
-  /**
-   * 入场动画结束（由 Transition @after-enter 调用）
-   */
   function markEntered() {
     flushEnteredWaiters();
   }
 
-  /**
-   * 等待入场动画结束；浮层已打开（如浮层内切换委托）时立即 resolve
-   */
   function whenEntered(): Promise<void> {
     if (_entered || !import.meta.client) return Promise.resolve();
     return new Promise<void>((resolve) => {
@@ -145,44 +169,68 @@ export function usePostModal() {
     });
   }
 
-  /**
-   * 离场动画结束后清理 postId（由 Transition @after-leave 调用）
-   */
   function clearAfterLeave() {
+    // Vue 会在新节点入场时结算旧 leave，旧回调不能清掉刚打开的帖子。
+    if (isOpen.value) return;
     postId.value = null;
+    coverHint.value = null;
     preview.value = null;
     targetCommentId.value = null;
+    const background = _restoreFocus;
+    _restoreFocus = null;
+    if (background && router.currentRoute.value.fullPath === background.route) {
+      const target = background.focus?.isConnected ? background.focus : document.querySelector<HTMLElement>("main");
+      target?.focus({ preventScroll: true });
+    }
   }
 
-  /**
-   * popstate 事件处理器 —— 在 app.vue 中注册
-   */
+  function keepBackgroundRoute() {
+    // 前置 listener 暂停路由导航一轮，但让 RouterHistory 的 popstate listener 照常
+    // 同步 location / position。stopImmediatePropagation 会把这两份状态再次拆散。
+    if (resumeRouter) return;
+    const listening = router.listening;
+    router.listening = false;
+    const resume = () => {
+      if (resumeRouter !== resume) return;
+      router.listening = listening;
+      resumeRouter = null;
+    };
+    resumeRouter = resume;
+    // 原生事件的 listener 之间也可能清空微任务，必须等整个 popstate 派发完。
+    setTimeout(resume, 0);
+  }
+
+  /** 由前置插件先于 RouterHistory 派发。 */
   function handlePopState() {
-    if (!isOpen.value) return;
-    const state = window.history.state as { __postModal?: boolean; postId?: string; commentId?: string | null } | null;
-    // 回退 / 前进到仍属于委托浮层的历史条目：保持浮层开启。
-    // - postId 没变（如从敲敲弹窗返回委托弹窗）：什么都不做；
-    // - postId 变了：原地切换浮层内容。单条历史下正常不会出现，保留作防御
-    //   （例如未来叠加其他 overlay 后再返回）。
-    if (state?.__postModal) {
-      if (typeof state.postId === "string" && state.postId !== postId.value) {
-        postId.value = state.postId;
-        coverHint.value = null;
-        preview.value = null;
-        targetCommentId.value = state.commentId ?? null;
-        // 预热切回的委托详情，减少 PostOverlay 重载等待
-        void api.getPost(state.postId).catch(() => {});
-      }
+    resumeRouter?.();
+    const state = window.history.state;
+    const active = _activeKey ? backgrounds.get(_activeKey) : undefined;
+    // 先认当前浮层的背景项：它本身也可能是以前访问过的独立帖子历史项。
+    if (active && locationUrl() === active.url && state?.position === active.position &&
+        router.currentRoute.value.fullPath === active.route) {
+      keepBackgroundRoute();
+      const reopen = _queuedOpen;
+      _queuedOpen = null;
+      teardown(true);
+      if (reopen) setTimeout(reopen, 0);
       return;
     }
-    // 回退到背景页（首页 / 标签页 / 独立文章页等）：彻底关闭浮层
+    const background = state?.__postModal && typeof state.postModalKey === "string"
+      ? backgrounds.get(state.postModalKey)
+      : undefined;
+    if (background && typeof state.postId === "string" &&
+        router.currentRoute.value.fullPath === background.route) {
+      keepBackgroundRoute();
+      _closing = false;
+      show(state.postId, background, { ...background.options, commentId: state.commentId ?? undefined });
+      return;
+    }
+    _queuedOpen = null;
     teardown();
   }
 
   function setTitle(title: string) {
-    if (import.meta.client && isOpen.value && title) {
-      document.title = `${title} - ${DEFAULT_TITLE}`;
-    }
+    if (import.meta.client && isOpen.value && title) document.title = `${title} - ${DEFAULT_TITLE}`;
   }
 
   return {
@@ -195,13 +243,9 @@ export function usePostModal() {
     close,
     setTitle,
     whenEntered,
-    /** @internal 入场动画结束（由 Transition @after-enter 调用） */
     markEntered,
-    /** @internal 供 app 级别 popstate listener 使用 */
     handlePopState,
-    /** @internal 供路由守卫关闭弹窗（不回退 history） */
     teardown,
-    /** @internal 离场动画结束后清理（由 Transition @after-leave 调用） */
     clearAfterLeave,
   };
 }

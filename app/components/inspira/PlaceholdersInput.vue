@@ -9,6 +9,7 @@ import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 const props = withDefaults(
   defineProps<{
     placeholders?: string[];
+    ariaLabel?: string;
     interval?: number;
   }>(),
   {
@@ -80,7 +81,7 @@ defineExpose({
       type="search"
       enterkeyhint="search"
       autocomplete="off"
-      :aria-label="placeholders[0]"
+      :aria-label="ariaLabel || placeholders[0]"
       @focus="emit('focus')"
       @blur="emit('blur')"
     />

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { useDebounceFn, useMediaQuery } from "@vueuse/core";
+import { FocusScope } from "reka-ui";
 import { useMessage } from "zenless-ui";
 import EmblaCarousel from "embla-carousel";
 import type { EmblaCarouselType } from "embla-carousel";
@@ -270,6 +271,7 @@ const onEmojiSelect = async (emoji: string) => {
 const commentImages = useCommentImages();
 
 const scrollRef = ref<HTMLElement | null>(null);
+const commentsScrollRef = ref<HTMLElement | null>(null);
 /** 桌面端正文单独一列滚动（封面固定在左侧）；移动端跟着整页滚，不用它。 */
 const detailScrollRef = ref<HTMLElement | null>(null);
 const detailHint = useScrollHint(detailScrollRef);
@@ -557,27 +559,32 @@ const waitForLoadedPreview = async (request: PostRequest) => {
   return isCurrentPostRequest(request);
 };
 
-const loadComments = async () => {
-  if (isCommentLoadingCancelled || commentsLoading.value || !commentsHasNext.value) return;
+const isCurrentCommentRequest = (request: PostRequest) =>
+  !isCommentLoadingCancelled && request.loadId === currentCommentLoadId &&
+  request.postId === props.postId && request.generation === auth.generation &&
+  postModal.isOpen.value && postModal.postId.value === request.postId;
+
+const loadComments = async (isSeekCurrent = () => true) => {
+  if (isCommentLoadingCancelled || !postModal.isOpen.value || commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
-  const loadId = ++currentCommentLoadId;
+  const request = { loadId: ++currentCommentLoadId, postId: props.postId, generation: auth.generation };
   try {
     const page = await api.getComments(
-      props.postId,
+      request.postId,
       commentsCursor.value,
       commentsCursor.value === "",
       { sort: commentSort.value },
     );
-    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
+    if (!isCurrentCommentRequest(request) || !isSeekCurrent()) return;
     if (!commentsCursor.value) featuredComments.value = page.featured;
     comments.value.push(...page.nodes);
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
   } catch (err) {
-    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
+    if (!isCurrentCommentRequest(request) || !isSeekCurrent()) return;
     message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
-    if (loadId === currentCommentLoadId) {
+    if (isCurrentCommentRequest(request)) {
       commentsLoading.value = false;
       commentsLoaded.value = true;
     }
@@ -585,13 +592,13 @@ const loadComments = async () => {
 };
 
 /** 从某条评论所在的楼层重新加载时间线（通知跳转、点引用跳到还没加载的楼层）。 */
-const loadCommentsAround = async (commentId: string) => {
-  if (isCommentLoadingCancelled) return;
-  const loadId = ++currentCommentLoadId;
+const loadCommentsAround = async (commentId: string, isSeekCurrent = () => true) => {
+  if (isCommentLoadingCancelled || !postModal.isOpen.value) return;
+  const request = { loadId: ++currentCommentLoadId, postId: props.postId, generation: auth.generation };
   commentsLoading.value = true;
   try {
-    const page = await api.getComments(props.postId, "", false, { anchor: commentId, sort: commentSort.value });
-    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
+    const page = await api.getComments(request.postId, "", false, { anchor: commentId, sort: commentSort.value });
+    if (!isCurrentCommentRequest(request) || !isSeekCurrent()) return;
     // 锚点不可见时后端按第一页处理，这时顶部的采纳 / 置顶照常给。
     if (!page.prevCursor) featuredComments.value = page.featured;
     comments.value = page.nodes;
@@ -599,10 +606,10 @@ const loadCommentsAround = async (commentId: string) => {
     commentsHasNext.value = page.hasNextPage;
     commentsPrevCursor.value = page.prevCursor;
   } catch (err) {
-    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
+    if (!isCurrentCommentRequest(request) || !isSeekCurrent()) return;
     message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
-    if (loadId === currentCommentLoadId) {
+    if (isCurrentCommentRequest(request)) {
       commentsLoading.value = false;
       commentsLoaded.value = true;
     }
@@ -612,10 +619,10 @@ const loadCommentsAround = async (commentId: string) => {
 const loadEarlierComments = async () => {
   if (!commentsPrevCursor.value || commentsLoadingEarlier.value) return;
   commentsLoadingEarlier.value = true;
-  const loadId = currentCommentLoadId;
+  const request = { loadId: currentCommentLoadId, postId: props.postId, generation: auth.generation };
   try {
-    const page = await api.getComments(props.postId, commentsPrevCursor.value, false, { sort: commentSort.value });
-    if (isCommentLoadingCancelled || loadId !== currentCommentLoadId) return;
+    const page = await api.getComments(request.postId, commentsPrevCursor.value, false, { sort: commentSort.value });
+    if (!isCurrentCommentRequest(request)) return;
     await prependKeepingPosition(
       comments.value[0]?.id,
       () => {
@@ -625,9 +632,9 @@ const loadEarlierComments = async () => {
       getActiveCommentsContainer(),
     );
   } catch (err) {
-    message.error(resolveErrorMessage(err, "获取评论失败"));
+    if (isCurrentCommentRequest(request)) message.error(resolveErrorMessage(err, "获取评论失败"));
   } finally {
-    commentsLoadingEarlier.value = false;
+    if (isCurrentCommentRequest(request)) commentsLoadingEarlier.value = false;
   }
 };
 
@@ -649,14 +656,26 @@ const refreshComments = async () => {
 
 const targetCommentId = computed(() => props.targetCommentId ?? null);
 
-const { seek, highlightedCommentId, targetFound, seeking } = useCommentSeek({
+const { seek, cancel: cancelSeek, highlightedCommentId } = useCommentSeek({
   targetCommentId,
   comments,
   commentsHasNext,
   loadComments,
   commentsVisible,
   loadAround: loadCommentsAround,
+  root: commentsScrollRef,
 });
+
+watch(
+  [() => props.postId, () => auth.generation, () => postModal.isOpen.value],
+  () => {
+    cancelSeek();
+    currentCommentLoadId++;
+    commentsLoading.value = false;
+    commentsLoadingEarlier.value = false;
+  },
+  { flush: "sync" },
+);
 
 const jumpToComment = (commentId: string) => {
   void seek(commentId);
@@ -674,7 +693,6 @@ const changeCommentSort = async (sort: CommentSort) => {
 };
 
 const commentHistory = useCommentReadHistory();
-const commentsScrollRef = ref<HTMLElement | null>(null);
 const commentsInnerRef = ref<HTMLElement | null>(null);
 const commentsHint = useScrollHint(commentsScrollRef);
 const dialogBodyRef = ref<HTMLElement | null>(null);
@@ -779,7 +797,7 @@ watch(commentsVisible, (visible) => {
 
 // 同委托切换 commentId（如从通知再打开同一篇委托的另一条评论）时重新定位
 watch(targetCommentId, () => {
-  if (targetCommentId.value && post.value) {
+  if (targetCommentId.value && post.value?.id === props.postId && postModal.isOpen.value) {
     void seek();
   }
 });
@@ -1266,16 +1284,16 @@ const onBackdropClick = (e: MouseEvent) => {
   }
 };
 
+const focusTrapActive = computed(() => postModal.isOpen.value &&
+  !loginDialog.visible.value && !confirmDialog.state.visible && !reportDialog.state.visible &&
+  !isAnyGalleryOpen.value && !commentImages.showImagePickerModal.value && !emotePickerVisible.value);
+
 const onKeyDown = (e: KeyboardEvent) => {
-  // 图片选择弹窗打开时，ESC 由弹窗自己处理（仅关闭弹窗），
-  // 不能在这里 cancelComment——否则会连带清空用户已写的正文与已选图片。
-  if (e.key === "Escape" && !isAnyGalleryOpen.value && !commentImages.showImagePickerModal.value) {
-    if (isCommentEditorActive.value) {
-      cancelComment();
-    } else {
-      handleClose();
-    }
-  }
+  // 上层窗口 / 菜单拥有 Escape，不能同时关闭帖子或丢弃正在编辑的评论。
+  if (e.key !== "Escape" || e.defaultPrevented || e.repeat || !focusTrapActive.value) return;
+  e.preventDefault();
+  if (isCommentEditorActive.value) cancelComment();
+  else handleClose();
 };
 
 /* ── 浮层内切换委托时重放进场动画 ─────────────
@@ -1284,6 +1302,12 @@ const onKeyDown = (e: KeyboardEvent) => {
    这里给弹窗主体 .ik-dialog 重放一次与瀑布流点开一致的滑入+淡入，
    背景遮罩保持不动，让新委托像「新帖子进场」而非替换。 */
 const dialogRef = ref<HTMLElement | null>(null);
+const focusOnOpen = (event: Event) => {
+  event.preventDefault();
+  if (!focusTrapActive.value) return;
+  const target = dialogRef.value?.querySelector<HTMLElement>(".ik-dialog__close") ?? dialogRef.value;
+  target?.focus({ preventScroll: true });
+};
 let switchResetTimer: ReturnType<typeof setTimeout> | null = null;
 let switchAnimationEndsAt = 0;
 
@@ -1309,6 +1333,10 @@ const replaySwitchAnimation = () => {
 /* ── 当 postId 变化时重新加载 ─────────────── */
 const resetAndLoad = async () => {
   teardownCommentsObserver();
+  cancelScheduledRevealWork();
+  commentsVisible.value = false;
+  isScrollable.value = false;
+  marqueeReady.value = false;
   post.value = null;
   commentSort.value = "oldest";
   resetCommentTimeline();
@@ -1481,7 +1509,14 @@ onBeforeUnmount(() => {
       <div class="ik-overlay__stripe" aria-hidden="true"></div>
 
       <!-- ── 弹窗主体 ────────────────────────────── -->
-      <div ref="dialogRef" class="ik-dialog" :class="{ 'ik-dialog--emote-open': emotePickerVisible }">
+      <FocusScope
+        as-child
+        :loop="focusTrapActive"
+        :trapped="focusTrapActive"
+        @mount-auto-focus="focusOnOpen"
+        @unmount-auto-focus="$event.preventDefault()"
+      >
+      <div ref="dialogRef" class="ik-dialog" role="dialog" aria-modal="true" :aria-label="headerTitle || '帖子详情'" :class="{ 'ik-dialog--emote-open': emotePickerVisible }">
         <!-- 外边框（半透明白色，三圆角） -->
         <div class="ik-dialog__outer">
           <!-- 内边框（纯黑，三圆角） -->
@@ -2109,6 +2144,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
+      </FocusScope>
 
       <!-- @ 提及候选下拉：组件内部 Teleport 到 body，避免父级 overflow 截断；
            放在 .ik-overlay 内只是为了保持单根模板，不影响渲染位置。 -->
