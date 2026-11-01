@@ -76,6 +76,17 @@ npm run generate
 npm run preview
 ```
 
+### 7. 更新骨架屏
+
+部分骨架屏由 [boneyard](https://github.com/0xGF/boneyard) 从真实布局截取，结果存放在 `app/bones/*.bones.json`。
+修改了 `<Skeleton name="...">` 包裹区域的布局后，在 `npm run dev` 运行期间执行：
+
+```bash
+npm run bones
+```
+
+截取页面与骨架名称在 `boneyard.config.json` 中配置；截取时页面检测 `window.__BONEYARD_BUILD`，使用 `app/utils/boneyard.ts` 中的示例数据渲染，不请求后端。
+
 
 ## ❤️ 致谢
 

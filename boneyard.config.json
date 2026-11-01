@@ -1,0 +1,9 @@
+{
+  "out": "./app/bones",
+  "breakpoints": [375, 768, 1280],
+  "wait": 1500,
+  "skeletons": {
+    "profile-tab-bar": { "route": "/profile/0" },
+    "profile-banner": { "route": "/profile/0" }
+  }
+}
