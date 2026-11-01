@@ -3,16 +3,14 @@ import { useElementVisibility, useWindowSize } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { AcceptableValue } from "reka-ui";
 import { TabsContent, TabsIndicator, TabsList, TabsRoot, TabsTrigger } from "reka-ui";
-import { ArrowUpRightIcon, ChatBubbleLeftRightIcon, EyeIcon, HeartIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/vue/24/outline";
+import { EyeIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/vue/24/outline";
 import type { Category, Post, Tag } from "~/types/entities";
-import type { PostSearchSort, SearchComment, SearchUser } from "~/composables/useApi";
+import type { PostSearchSort, SearchUser } from "~/composables/useApi";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 import { estimatePostCardHeight } from "~/utils/post-card-height";
 import { calculateSkeletonCount, estimateSkeletonHeight, generateSkeletons, type SkeletonItem } from "~/utils/skeleton";
-import { toCardExcerpt } from "~/utils/card-excerpt";
-import { excerptAround, splitHighlight } from "~/utils/highlight";
-import { formatTime } from "~/utils/time";
+import { splitHighlight } from "~/utils/highlight";
 import { pickFirstQuery } from "~/utils/query";
 import VirtualMasonry from "~/components/VirtualMasonry.vue";
 import PostCard from "~/components/PostCard.vue";
@@ -26,7 +24,7 @@ import SelectValue from "~/components/ui/select/SelectValue.vue";
 import PlaceholdersInput from "~/components/inspira/PlaceholdersInput.vue";
 import CardSpotlight from "~/components/inspira/CardSpotlight.vue";
 
-type SearchType = "post" | "user" | "comment";
+type SearchType = "post" | "user";
 
 const route = useRoute();
 const router = useRouter();
@@ -38,9 +36,8 @@ const message = useMessage();
 const { history, add: addHistory, remove: removeHistory, clear: clearHistory } = useSearchHistory();
 
 const TYPES: { key: SearchType; label: string }[] = [
-  { key: "post", label: "帖子" },
+  { key: "post", label: "委托" },
   { key: "user", label: "用户" },
-  { key: "comment", label: "评论" },
 ];
 const SORTS: { key: PostSearchSort; label: string }[] = [
   { key: "relevance", label: "综合" },
@@ -55,7 +52,7 @@ const USER_LIMIT = 20;
 const keyword = computed(() => pickFirstQuery(route.query.q as string | string[] | undefined).trim());
 const activeType = computed<SearchType>(() => {
   const t = pickFirstQuery(route.query.type as string | string[] | undefined);
-  return t === "user" || t === "comment" ? t : "post";
+  return t === "user" ? t : "post";
 });
 const sort = computed<PostSearchSort>(() => {
   const s = pickFirstQuery(route.query.sort as string | string[] | undefined);
@@ -93,7 +90,7 @@ const searchFor = (q: string) => {
 };
 
 // ── 页面自己的大搜索框：边输边搜（防抖），回车立即生效 ──
-const PLACEHOLDERS = ["搜帖子标题和正文", "搜用户名", "搜评论里说过的话", "搜标签，比如 邦布"];
+const PLACEHOLDERS = ["搜委托标题和正文", "搜用户名", "搜标签，比如 邦布"];
 const LIVE_DEBOUNCE_MS = 300;
 const inputRef = ref<InstanceType<typeof PlaceholdersInput> | null>(null);
 const input = ref(keyword.value);
@@ -140,7 +137,7 @@ onBeforeUnmount(() => {
 const categories = ref<Category[]>([]);
 const categoryName = computed(() => categories.value.find((c) => c.slug === category.value)?.name ?? "分区");
 
-// ── 帖子 ──
+// ── 委托（帖子） ──
 const posts = shallowRef<Post[]>([]);
 const postsCursor = ref("");
 const postsHasMore = ref(false);
@@ -217,54 +214,7 @@ const loadUsers = async () => {
   }
 };
 
-// ── 评论 ──
-const comments = shallowRef<SearchComment[]>([]);
-const commentsCursor = ref("");
-const commentsHasMore = ref(false);
-const commentsTotal = ref<number | null>(null);
-const commentsLoading = ref(false);
-const commentsLoadingMore = ref(false);
-const commentsError = ref("");
-const commentsMoreFailed = ref(false);
-let commentsVersion = 0;
-
-const loadComments = async (reset: boolean) => {
-  const q = keyword.value;
-  if (!q) return;
-  if (!reset && (commentsLoading.value || commentsLoadingMore.value || !commentsHasMore.value)) return;
-  commentsMoreFailed.value = false;
-  const version = reset ? ++commentsVersion : commentsVersion;
-  if (reset) {
-    commentsLoading.value = true;
-    commentsError.value = "";
-  } else {
-    commentsLoadingMore.value = true;
-  }
-  try {
-    const page = await api.searchComments(q, reset ? "" : commentsCursor.value);
-    if (version !== commentsVersion) return;
-    if (reset) {
-      comments.value = page.nodes;
-      commentsTotal.value = page.total;
-    } else {
-      const seen = new Set(comments.value.map((c) => c.id));
-      comments.value = [...comments.value, ...page.nodes.filter((c) => !seen.has(c.id))];
-    }
-    commentsCursor.value = page.endCursor;
-    commentsHasMore.value = page.hasNextPage;
-  } catch (err) {
-    if (version !== commentsVersion) return;
-    if (reset) commentsError.value = resolveErrorMessage(err, "搜索失败了");
-    else commentsMoreFailed.value = true;
-  } finally {
-    if (version === commentsVersion) {
-      commentsLoading.value = false;
-      commentsLoadingMore.value = false;
-    }
-  }
-};
-
-// ── 标签：命中的标签放在帖子结果上方，点了去标签页 ──
+// ── 标签：命中的标签放在委托结果上方，点了去标签页 ──
 const tags = shallowRef<Tag[]>([]);
 let tagsVersion = 0;
 const loadTags = async () => {
@@ -297,7 +247,6 @@ const loadHot = async () => {
 const resetResults = () => {
   postsVersion++;
   usersVersion++;
-  commentsVersion++;
   tagsVersion++;
   posts.value = [];
   postsTotal.value = null;
@@ -307,11 +256,6 @@ const resetResults = () => {
   users.value = [];
   usersLoaded.value = false;
   usersError.value = "";
-  comments.value = [];
-  commentsTotal.value = null;
-  commentsHasMore.value = false;
-  commentsError.value = "";
-  commentsMoreFailed.value = false;
   tags.value = [];
 };
 
@@ -327,7 +271,6 @@ watch(
     // 三类结果一起拉：切 Tab 不用再等，Tab 上也能直接显示数量
     void loadPosts(true);
     void loadUsers();
-    void loadComments(true);
     void loadTags();
   },
   { immediate: true },
@@ -351,11 +294,10 @@ onMounted(() => {
 const sentinelRef = ref<HTMLElement | null>(null);
 const sentinelVisible = useElementVisibility(sentinelRef, { rootMargin: "0px 0px 600px 0px" });
 watch(
-  [sentinelVisible, activeType, postsLoading, postsLoadingMore, commentsLoading, commentsLoadingMore],
+  [sentinelVisible, activeType, postsLoading, postsLoadingMore],
   () => {
     if (!sentinelVisible.value) return;
     if (activeType.value === "post" && !postsMoreFailed.value) void loadPosts(false);
-    else if (activeType.value === "comment" && !commentsMoreFailed.value) void loadComments(false);
   },
 );
 
@@ -368,12 +310,10 @@ const formatCount = (n: number | null, cap = 999) => {
 const typeCounts = computed<Record<SearchType, string>>(() => ({
   post: formatCount(postsTotal.value),
   user: !usersLoaded.value ? "" : users.value.length >= USER_LIMIT ? `${USER_LIMIT}+` : String(users.value.length),
-  comment: formatCount(commentsTotal.value),
 }));
 const typeCountsStale = computed<Record<SearchType, boolean>>(() => ({
   post: postsLoading.value,
   user: usersLoading.value,
-  comment: commentsLoading.value,
 }));
 
 // ── 瀑布流（与首页同款） ──
@@ -417,16 +357,6 @@ const openPost = (post: Post, event?: MouseEvent) => {
   if (!post.isRead) api.markAsReadBatch([post.id]).catch(() => undefined);
 };
 
-const commentLink = (c: SearchComment) => `/post/${encodeURIComponent(c.postId)}?comment=${encodeURIComponent(c.id)}`;
-const openComment = (c: SearchComment, event: MouseEvent) => {
-  if (!prepareResultOpen(event)) return;
-  postModal.open(c.postId, { commentId: c.id, preview: { title: c.postTitle, cover: c.postCover || undefined } });
-};
-const openCommentPost = (c: SearchComment, event: MouseEvent) => {
-  if (!prepareResultOpen(event)) return;
-  postModal.open(c.postId, { preview: { title: c.postTitle, cover: c.postCover || undefined } });
-};
-
 // 弹窗关掉后把已读状态合并回列表（标题变灰），不在弹窗打开时重排瀑布流
 watch(
   () => postModal.isOpen.value,
@@ -466,21 +396,13 @@ const toggleFollow = async (u: SearchUser) => {
   }
 };
 
-const commentText = (c: SearchComment) => excerptAround(toCardExcerpt(c.body), keyword.value, 140);
-
 const onAvatarError = (e: Event) => {
   const img = e.target as HTMLImageElement;
   if (!img.src.endsWith("/images/default-avatar.webp")) img.src = "/images/default-avatar.webp";
 };
-const onCoverError = (e: Event) => {
-  const img = e.target as HTMLImageElement;
-  if (!img.src.endsWith("/images/default-cover.webp")) img.src = "/images/default-cover.webp";
-};
-
 const retry = () => {
   if (activeType.value === "post") void loadPosts(true);
-  else if (activeType.value === "user") void loadUsers();
-  else void loadComments(true);
+  else void loadUsers();
 };
 </script>
 
@@ -501,7 +423,7 @@ const retry = () => {
           v-model="input"
           class="ik-search-hero__input"
           :placeholders="PLACEHOLDERS"
-          :aria-label="activeType === 'user' ? '搜索用户' : activeType === 'comment' ? '搜索评论' : '搜索帖子'"
+          :aria-label="activeType === 'user' ? '搜索用户' : '搜索委托'"
           @submit="onInputSubmit"
           @focus="inputFocused = true"
           @blur="inputFocused = false"
@@ -564,7 +486,7 @@ const retry = () => {
       </div>
 
       <TabsContent v-else :value="activeType" class="ik-search-panel">
-        <!-- 帖子 -->
+        <!-- 委托 -->
         <template v-if="activeType === 'post'">
           <div class="ik-search-bar">
             <TabsRoot
@@ -662,12 +584,11 @@ const retry = () => {
 
             <div v-else-if="!posts.length" class="ik-search-empty">
               <img src="/images/Bangboo.gif" alt="" class="ik-search-empty__art" />
-              <p class="ik-search-empty__title">没有找到相关帖子</p>
+              <p class="ik-search-empty__title">没有找到相关委托</p>
               <p class="ik-search-empty__hint">换个关键词试试</p>
               <div class="ik-search-empty__actions">
                 <z-button v-if="category" @click="setCategory(ALL_CATEGORIES)">在全部分区里搜</z-button>
                 <z-button v-if="users.length" @click="setType('user')">看看用户 {{ typeCounts.user }}</z-button>
-                <z-button v-if="comments.length" @click="setType('comment')">看看评论 {{ typeCounts.comment }}</z-button>
               </div>
             </div>
 
@@ -706,14 +627,17 @@ const retry = () => {
         <!-- 用户 -->
         <div v-else-if="activeType === 'user'" class="ik-search-results">
           <div v-if="usersLoading && !users.length" class="ik-search-grid" aria-busy="true" aria-label="正在搜索用户">
-            <div v-for="i in 6" :key="i" class="ik-user is-skel">
-              <span class="ik-skel ik-skel--avatar" />
-              <div class="ik-user__main">
-                <span class="ik-skel ik-skel--line" style="width: 46%" />
-                <span class="ik-skel ik-skel--line ik-skel--thin" style="width: 30%" />
-                <span class="ik-skel ik-skel--line ik-skel--thin" style="width: 72%" />
+            <div v-for="i in 8" :key="i" class="ik-user is-skel">
+              <span class="ik-user__banner ik-skel" />
+              <div class="ik-user__body">
+                <span class="ik-user__avatar-wrap"><span class="ik-skel ik-skel--avatar" /></span>
+                <span class="ik-skel ik-skel--button" />
+                <div class="ik-user__main">
+                  <span class="ik-skel ik-skel--line" style="width: 46%" />
+                  <span class="ik-skel ik-skel--line ik-skel--thin" style="width: 28%" />
+                  <span class="ik-skel ik-skel--line ik-skel--thin" style="width: 72%" />
+                </div>
               </div>
-              <span class="ik-skel ik-skel--button" />
             </div>
           </div>
 
@@ -730,102 +654,42 @@ const retry = () => {
 
           <ul v-else class="ik-search-grid">
             <li v-for="(u, i) in users" :key="u.id" class="ik-user ik-reveal" :style="{ '--i': i }">
-              <NuxtLink :to="profileLink(u.id)" class="ik-user__avatar-wrap" tabindex="-1" aria-hidden="true" @click="rememberKeyword">
-                <img :src="u.avatar || '/images/default-avatar.webp'" alt="" class="ik-user__avatar" loading="lazy" @error="onAvatarError" />
-                <span class="ik-user__level">{{ u.level || 1 }}</span>
-              </NuxtLink>
-              <NuxtLink :to="profileLink(u.id)" class="ik-user__main" @click="rememberKeyword">
-                <h2 class="ik-user__name" :title="u.name">
-                  <template v-for="(part, j) in splitHighlight(u.name, keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
-                </h2>
-                <span class="ik-user__meta">{{ u.followerCount.toLocaleString('zh-CN') }} 粉丝</span>
-                <span v-if="u.bio" class="ik-user__bio">{{ u.bio }}</span>
-              </NuxtLink>
-              <z-button
-                v-if="!isSelf(u)"
-                size="small"
-                class="ik-user__follow"
-                :class="{ 'is-following': u.isFollowing }"
-                :loading="followPending.has(u.id)"
-                :aria-pressed="u.isFollowing"
-                :aria-label="`${u.isFollowing ? '取消关注' : '关注'}${u.name}`"
-                @click="toggleFollow(u)"
-              >{{ u.isFollowing ? '已关注' : '关注' }}</z-button>
+              <!-- 顶部是装备的名片，没装备时用默认横幅（与个人主页一致） -->
+              <NuxtLink
+                :to="profileLink(u.id)"
+                class="ik-user__banner"
+                :class="{ 'is-default': !u.card?.image }"
+                :style="u.card?.image ? { backgroundImage: `url('${u.card.image}')` } : undefined"
+                :title="u.card?.name"
+                tabindex="-1"
+                aria-hidden="true"
+                @click="rememberKeyword"
+              />
+              <div class="ik-user__body">
+                <NuxtLink :to="profileLink(u.id)" class="ik-user__avatar-wrap" tabindex="-1" aria-hidden="true" @click="rememberKeyword">
+                  <img :src="u.avatar || '/images/default-avatar.webp'" alt="" class="ik-user__avatar" loading="lazy" @error="onAvatarError" />
+                  <span class="ik-user__level">{{ u.level || 1 }}</span>
+                </NuxtLink>
+                <z-button
+                  v-if="!isSelf(u)"
+                  size="small"
+                  class="ik-user__follow"
+                  :class="{ 'is-following': u.isFollowing }"
+                  :loading="followPending.has(u.id)"
+                  :aria-pressed="u.isFollowing"
+                  :aria-label="`${u.isFollowing ? '取消关注' : '关注'}${u.name}`"
+                  @click="toggleFollow(u)"
+                >{{ u.isFollowing ? '已关注' : '关注' }}</z-button>
+                <NuxtLink :to="profileLink(u.id)" class="ik-user__main" @click="rememberKeyword">
+                  <h2 class="ik-user__name" :title="u.name">
+                    <template v-for="(part, j) in splitHighlight(u.name, keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
+                  </h2>
+                  <span class="ik-user__meta">{{ u.followerCount.toLocaleString('zh-CN') }} 粉丝</span>
+                  <span v-if="u.bio" class="ik-user__bio">{{ u.bio }}</span>
+                </NuxtLink>
+              </div>
             </li>
           </ul>
-        </div>
-
-        <!-- 评论 -->
-        <div v-else class="ik-search-results">
-          <div v-if="commentsLoading && !comments.length" class="ik-search-grid ik-search-grid--comments" aria-busy="true" aria-label="正在搜索评论">
-            <div v-for="i in 4" :key="i" class="ik-comment-card is-skel">
-              <div class="ik-comment__head">
-                <span class="ik-skel ik-skel--avatar-sm" />
-                <span class="ik-skel ik-skel--line" style="width: 120px" />
-              </div>
-              <div class="ik-comment__content">
-                <span class="ik-skel ik-skel--line" style="width: 94%" />
-                <span class="ik-skel ik-skel--line" style="width: 62%" />
-              </div>
-              <span class="ik-skel ik-skel--source" />
-            </div>
-          </div>
-
-          <div v-else-if="commentsError" class="ik-search-empty">
-            <p class="ik-search-empty__title">{{ commentsError }}</p>
-            <z-button @click="retry">重试</z-button>
-          </div>
-
-          <div v-else-if="!comments.length" class="ik-search-empty">
-            <img src="/images/Bangboo.gif" alt="" class="ik-search-empty__art" />
-            <p class="ik-search-empty__title">没有找到相关评论</p>
-            <p class="ik-search-empty__hint">换个关键词试试</p>
-          </div>
-
-          <template v-else>
-            <ul class="ik-search-grid ik-search-grid--comments">
-              <li v-for="(c, i) in comments" :key="c.id" class="ik-comment-card ik-reveal" :style="{ '--i': i % 12 }">
-                <div class="ik-comment__head">
-                  <NuxtLink
-                    v-if="!c.isAnonymous && c.author.documentId"
-                    :to="profileLink(c.author.documentId)"
-                    class="ik-comment__identity"
-                    @click="rememberKeyword"
-                  >
-                    <img :src="c.author.avatar || '/images/default-avatar.webp'" alt="" class="ik-comment__avatar" loading="lazy" @error="onAvatarError" />
-                    <span class="ik-comment__author">{{ c.author.name || '匿名用户' }}</span>
-                  </NuxtLink>
-                  <span v-else class="ik-comment__identity">
-                    <img :src="!c.isAnonymous && c.author.avatar || '/images/default-avatar.webp'" alt="" class="ik-comment__avatar" loading="lazy" @error="onAvatarError" />
-                    <span class="ik-comment__author">{{ c.isAnonymous ? '匿名用户' : c.author.name || '匿名用户' }}</span>
-                  </span>
-                  <time class="ik-comment__time" :datetime="c.createdAt">{{ formatTime(c.createdAt) }}</time>
-                  <span v-if="c.likeCount" class="ik-comment__likes" :aria-label="`${c.likeCount} 个赞`"><HeartIcon aria-hidden="true" />{{ c.likeCount }}</span>
-                </div>
-                <a :href="commentLink(c)" class="ik-comment__content" @click="openComment(c, $event)">
-                  <p class="ik-comment__body">
-                    <template v-for="(part, j) in splitHighlight(commentText(c), keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
-                  </p>
-                </a>
-                <a
-                  :href="`/post/${encodeURIComponent(c.postId)}`"
-                  class="ik-comment__post"
-                  :aria-label="`查看原帖：${c.postTitle}`"
-                  @click="openCommentPost(c, $event)"
-                >
-                  <img v-if="c.postCover" :src="c.postCover" alt="" class="ik-comment__cover" loading="lazy" @error="onCoverError" />
-                  <span v-else class="ik-comment__cover-placeholder" aria-hidden="true"><ChatBubbleLeftRightIcon /></span>
-                  <span class="ik-comment__post-title">{{ c.postTitle }}</span>
-                  <ArrowUpRightIcon class="ik-comment__post-arrow" aria-hidden="true" />
-                </a>
-              </li>
-            </ul>
-            <div class="ik-search-footer">
-              <img v-if="commentsLoadingMore" class="ik-search-footer__gif" src="/images/Bangboo.gif" alt="加载中" />
-              <z-button v-else-if="commentsMoreFailed" @click="loadComments(false)">加载失败，重试</z-button>
-              <span v-else-if="!commentsHasMore">已经到底啦</span>
-            </div>
-          </template>
         </div>
 
         <div ref="sentinelRef" class="ik-search-sentinel" aria-hidden="true" />
@@ -1317,11 +1181,15 @@ a.ik-search-hot__item:hover {
   transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 
-/* 悬停只换描边和底色，不位移 */
+/* 悬停：黄底黑字（全站按钮的悬停样式），不位移 */
 .ik-related:hover {
-  border-color: rgba(191, 255, 9, 0.55);
-  background: #1a1d12;
-  color: #fff;
+  border-color: #fbfe00;
+  background: #fbfe00;
+  color: #000;
+}
+
+.ik-related:hover mark {
+  color: inherit;
 }
 
 .ik-related:focus-visible {
@@ -1352,11 +1220,6 @@ a.ik-search-hot__item:hover {
   color: rgba(255, 255, 255, 0.5);
 }
 
-.ik-related--more:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: #1c1c1c;
-}
-
 .ik-related--tag {
   padding: 0 16px;
   color: var(--ik-primary, #bfff09);
@@ -1368,7 +1231,7 @@ a.ik-search-hot__item:hover {
   transition: opacity 0.15s ease;
 }
 
-/* ── 用户 / 评论：同一套卡片网格 ── */
+/* ── 用户：名片卡网格 ── */
 .ik-search-results {
   width: 100%;
   margin: 0 auto;
@@ -1376,52 +1239,70 @@ a.ik-search-hot__item:hover {
 
 .ik-search-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 24px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.ik-search-grid--comments {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
-}
-
-.ik-user,
-.ik-comment-card {
+.ik-user {
+  --ik-user-bg: #0e0e0e;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 16px;
-  background: #0e0e0e;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  background: var(--ik-user-bg);
+  transition: border-color 0.15s ease;
 }
 
-.ik-user:not(.is-skel):hover,
-.ik-comment-card:not(.is-skel):hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: #121212;
+.ik-user:not(.is-skel):hover {
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-/* 用户卡：头像（左上角等级徽章，与个人主页一致）| 名字·粉丝·简介 | 关注 */
-.ik-user {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  min-height: 124px;
-  padding: 24px;
-}
-
-.ik-user__avatar-wrap {
-  position: relative;
-  flex: 0 0 auto;
+/* 名片按原图比例裁成横幅 */
+.ik-user__banner {
   display: block;
+  height: 112px;
+  background: #1a1a1a center / cover no-repeat;
+}
+
+.ik-user__banner.is-default {
+  background-image: url("/images/banner.png");
+  background-position: 26% center;
+}
+
+.ik-user__banner.ik-skel {
+  border-radius: 0;
+}
+
+.ik-user__body {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "avatar . follow"
+    "main main main";
+  align-items: start;
+  row-gap: 12px;
+  padding: 0 20px 22px;
+}
+
+/* 头像压在名片下沿，左上角等级徽章（与个人主页一致） */
+.ik-user__avatar-wrap {
+  grid-area: avatar;
+  position: relative;
+  display: block;
+  margin-top: -36px;
 }
 
 .ik-user__avatar,
 .ik-user .ik-skel--avatar {
   display: block;
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
+  border: 4px solid var(--ik-user-bg);
   border-radius: 50%;
   object-fit: cover;
   background: #252525;
@@ -1429,30 +1310,39 @@ a.ik-search-hot__item:hover {
 
 .ik-user__level {
   position: absolute;
-  top: -3px;
-  left: -3px;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 5px;
-  border: 2px solid #0e0e0e;
+  top: -1px;
+  left: -1px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 2px solid var(--ik-user-bg);
   border-radius: 999px;
   background: #000;
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
-  line-height: 20px;
+  line-height: 22px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  transition: border-color 0.15s ease;
 }
 
-.ik-user:hover .ik-user__level {
-  border-color: #121212;
+.ik-user__follow,
+.ik-user .ik-skel--button {
+  grid-area: follow;
+  margin-top: 14px;
+}
+
+.ik-user__follow {
+  min-width: 3.5em;
+}
+
+.ik-user__follow.is-following {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .ik-user__main {
+  grid-area: main;
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
@@ -1470,18 +1360,12 @@ a.ik-search-hot__item:hover {
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color 0.15s ease;
-}
-
-a.ik-user__main:hover .ik-user__name {
-  color: #fff;
 }
 
 .ik-user__meta,
 .ik-user__bio {
   min-width: 0;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.45);
   font-size: 13px;
   line-height: 1.5;
   text-overflow: ellipsis;
@@ -1489,186 +1373,12 @@ a.ik-user__main:hover .ik-user__name {
 }
 
 .ik-user__meta {
+  color: rgba(255, 255, 255, 0.45);
   font-variant-numeric: tabular-nums;
 }
 
 .ik-user__bio {
   color: rgba(255, 255, 255, 0.62);
-}
-
-.ik-user__follow {
-  flex: 0 0 auto;
-  min-width: 3.5em;
-}
-
-.ik-user__follow.is-following {
-  color: rgba(255, 255, 255, 0.55);
-}
-
-/* 评论卡：作者 · 时间 · 赞 / 正文 / 原帖 */
-.ik-comment-card {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px;
-}
-
-.ik-comment__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 13px;
-}
-
-.ik-comment__identity {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  color: inherit;
-  text-decoration: none;
-}
-
-.ik-comment__avatar {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: #2a2a2a;
-}
-
-.ik-comment__author {
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 14px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: color 0.15s ease;
-}
-
-a.ik-comment__identity:hover .ik-comment__author {
-  color: var(--ik-primary);
-}
-
-.ik-comment__time {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
-.ik-comment__time::before {
-  content: "·";
-  margin-right: 10px;
-}
-
-.ik-comment__likes {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 5px;
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
-
-.ik-comment__likes svg {
-  width: 15px;
-  height: 15px;
-}
-
-.ik-comment__content {
-  display: block;
-  flex: 1 1 auto;
-  min-width: 0;
-  color: inherit;
-  text-decoration: none;
-}
-
-.ik-comment__body {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 16px;
-  line-height: 1.75;
-  overflow-wrap: anywhere;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  transition: color 0.15s ease;
-}
-
-.ik-comment__content:hover .ik-comment__body {
-  color: #fff;
-}
-
-.ik-comment__post {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  padding: 8px 14px 8px 8px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  color: inherit;
-  text-decoration: none;
-  transition: background-color 0.15s ease;
-}
-
-.ik-comment__post:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ik-comment__cover,
-.ik-comment__cover-placeholder {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  object-fit: cover;
-  background: #2a2a2a;
-}
-
-.ik-comment__cover-placeholder {
-  display: grid;
-  place-items: center;
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.ik-comment__cover-placeholder svg {
-  width: 20px;
-  height: 20px;
-}
-
-.ik-comment__post-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 13px;
-  line-height: 1.5;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: color 0.15s ease;
-}
-
-.ik-comment__post:hover .ik-comment__post-title {
-  color: #fff;
-}
-
-.ik-comment__post-arrow {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  color: rgba(255, 255, 255, 0.35);
-  transition: color 0.15s ease;
-}
-
-.ik-comment__post:hover .ik-comment__post-arrow {
-  color: var(--ik-primary);
 }
 
 .ik-search :is(a, button, [role="tabpanel"]):focus-visible {
@@ -1781,13 +1491,6 @@ a.ik-comment__identity:hover .ik-comment__author {
   height: 12px;
 }
 
-.ik-skel--avatar-sm {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  border-radius: 50%;
-}
-
 .ik-skel--button {
   flex: 0 0 auto;
   width: 72px;
@@ -1795,19 +1498,9 @@ a.ik-comment__identity:hover .ik-comment__author {
   border-radius: 6px;
 }
 
-.ik-skel--source {
-  height: 56px;
-  border-radius: 12px;
-}
-
 .ik-user.is-skel .ik-user__main {
   gap: 10px;
-}
-
-.ik-comment-card.is-skel .ik-comment__content {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  padding-top: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1817,8 +1510,7 @@ a.ik-comment__identity:hover .ik-comment__author {
   }
 
   .ik-user,
-  .ik-comment-card,
-  .ik-comment__post {
+  .ik-related {
     transition: none;
   }
 }
@@ -1901,33 +1593,15 @@ a.ik-comment__identity:hover .ik-comment__author {
   }
 
   .ik-search-grid {
-    gap: 12px;
+    gap: 16px;
   }
 
-  .ik-user {
-    gap: 14px;
-    min-height: 0;
-    padding: 16px;
+  .ik-user__banner {
+    height: 96px;
   }
 
-  .ik-user__avatar,
-  .ik-user .ik-skel--avatar {
-    width: 52px;
-    height: 52px;
-  }
-
-  .ik-user__name {
-    font-size: 16px;
-  }
-
-  .ik-comment-card {
-    gap: 12px;
-    padding: 16px;
-  }
-
-  .ik-comment__body {
-    font-size: 15px;
-    line-height: 1.7;
+  .ik-user__body {
+    padding: 0 16px 18px;
   }
 
   .ik-search-empty {

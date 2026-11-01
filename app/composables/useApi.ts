@@ -165,19 +165,8 @@ export interface SearchUser {
   bio: string;
   followerCount: number;
   isFollowing: boolean;
-}
-
-/** 评论搜索结果（GET /v1/search/comments） */
-export interface SearchComment {
-  id: string;
-  postId: string;
-  postTitle: string;
-  postCover: string;
-  body: string;
-  author: Author;
-  isAnonymous: boolean;
-  likeCount: number;
-  createdAt: string;
+  /** 装备的论坛名片 */
+  card?: BusinessCard;
 }
 
 export interface AuthResult {
@@ -1157,32 +1146,8 @@ export function useApi() {
         bio: String(u.bio || ""),
         followerCount: num(u.followerCount) ?? 0,
         isFollowing: u.isFollowing === true,
+        card: toBusinessCard(u.equippedCard),
       }));
-  };
-
-  /** 搜索评论（GET /v1/search/comments）。 */
-  const searchComments = async (
-    query: string,
-    cursor = "",
-  ): Promise<SearchResultPage<SearchComment>> => {
-    const q = query.trim();
-    if (!q) return { ...toPage<SearchComment>([], null), total: 0 };
-    if (import.meta.client) await useAuthStore().ensureCredentials();
-    const params: Record<string, string> = { q, limit: String(DEFAULT_PAGE_SIZE) };
-    if (cursor) params.cursor = cursor;
-    const res = await $api<CursorPage<Rec> & { total?: number }>("/v1/search/comments", { query: params });
-    const items = res.items.map((c) => ({
-      id: String(c.id || ""),
-      postId: String(c.postId || ""),
-      postTitle: String(c.postTitle || ""),
-      postCover: toMediaMeta(c.postCover as MediaDto | undefined)?.url || "",
-      body: String(c.body || ""),
-      author: toAuthor(c.author as AuthorDto | undefined),
-      isAnonymous: c.isAnonymous === true,
-      likeCount: num(c.likeCount) ?? 0,
-      createdAt: String(c.createdAt || ""),
-    }));
-    return { ...toPage(items, res.nextCursor), total: Number(res.total ?? items.length) };
   };
 
   /** 频道列表（GET /v1/categories）：启用中的分区，按排序。 */
@@ -2574,7 +2539,6 @@ export function useApi() {
     suggestArticles,
     searchPosts,
     searchUsers,
-    searchComments,
     peekArticles,
     getCategories,
     suggestTags,
