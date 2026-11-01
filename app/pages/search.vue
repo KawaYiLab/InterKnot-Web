@@ -23,6 +23,8 @@ import SelectItem from "~/components/ui/select/SelectItem.vue";
 import SelectSeparator from "~/components/ui/select/SelectSeparator.vue";
 import SelectTrigger from "~/components/ui/select/SelectTrigger.vue";
 import SelectValue from "~/components/ui/select/SelectValue.vue";
+import PlaceholdersInput from "~/components/inspira/PlaceholdersInput.vue";
+import CardSpotlight from "~/components/inspira/CardSpotlight.vue";
 
 type SearchType = "post" | "user" | "comment";
 
@@ -86,8 +88,50 @@ const setCategory = (value: AcceptableValue) => {
 };
 const searchFor = (q: string) => {
   addHistory(q);
+  input.value = q;
   updateQuery({ q });
 };
+
+// ── 页面自己的大搜索框：边输边搜（防抖），回车立即生效 ──
+const PLACEHOLDERS = ["搜帖子标题和正文", "搜用户名", "搜评论里说过的话", "搜标签，比如 邦布"];
+const LIVE_DEBOUNCE_MS = 300;
+const inputRef = ref<InstanceType<typeof PlaceholdersInput> | null>(null);
+const input = ref(keyword.value);
+const inputFocused = ref(false);
+let liveTimer: ReturnType<typeof setTimeout> | null = null;
+
+const commitInput = () => {
+  if (liveTimer) {
+    clearTimeout(liveTimer);
+    liveTimer = null;
+  }
+  const q = input.value.trim();
+  if (q === keyword.value) return;
+  // 清空时连同 Tab / 排序一起清掉，回到初始状态
+  if (!q) void router.replace({ path: "/search", query: {} });
+  else updateQuery({ q });
+};
+
+watch(input, () => {
+  if (liveTimer) clearTimeout(liveTimer);
+  liveTimer = setTimeout(commitInput, LIVE_DEBOUNCE_MS);
+});
+
+const onInputSubmit = () => {
+  commitInput();
+  addHistory(input.value);
+  // 收起手机键盘
+  inputRef.value?.blur();
+};
+
+// 路由变了（后退、点历史）就回填输入框；用户正在输入时以输入框为准
+watch(keyword, (q) => {
+  if (!inputFocused.value && input.value.trim() !== q) input.value = q;
+});
+
+onBeforeUnmount(() => {
+  if (liveTimer) clearTimeout(liveTimer);
+});
 
 const categories = ref<Category[]>([]);
 const categoryName = computed(() => categories.value.find((c) => c.slug === category.value)?.name ?? "分区");
@@ -295,12 +339,8 @@ onMounted(() => {
   api.getCategories().then((list) => {
     categories.value = list;
   }).catch(() => undefined);
-  // 空搜索页：直接把光标放进顶部搜索框
-  if (!keyword.value) {
-    nextTick(() => {
-      document.querySelector<HTMLInputElement>(".ik-search-input input")?.focus();
-    });
-  }
+  // 空搜索页：直接把光标放进搜索框
+  if (!keyword.value) nextTick(() => inputRef.value?.focus());
 });
 
 // ── 触底加载 ──
@@ -420,137 +460,156 @@ const retry = () => {
 </script>
 
 <template>
-  <section class="ik-search">
-    <!-- 还没输入：最近搜索 + 大家在看 -->
-    <div v-if="!keyword" class="ik-search-home">
-      <section v-if="history.length" class="ik-search-block">
-        <header class="ik-search-block__head">
-          <h2 class="ik-search-block__title">最近搜索</h2>
-          <button type="button" class="ik-search-block__action" @click="clearHistory">清空</button>
-        </header>
-        <div class="ik-search-history">
-          <span v-for="item in history" :key="item" class="ik-search-chip">
-            <button type="button" class="ik-search-chip__text" @click="searchFor(item)">{{ item }}</button>
-            <button type="button" class="ik-search-chip__remove" :aria-label="`删除“${item}”`" @click="removeHistory(item)">
-              <XMarkIcon aria-hidden="true" />
-            </button>
-          </span>
-        </div>
-      </section>
-
-      <section class="ik-search-block">
-        <header class="ik-search-block__head">
-          <h2 class="ik-search-block__title">大家在看</h2>
-        </header>
-        <ol v-if="hotPosts.length" class="ik-search-hot">
-          <li v-for="(p, i) in hotPosts" :key="p.id">
-            <NuxtLink :to="`/post/${p.id}`" class="ik-search-hot__item" no-prefetch @click.prevent="openHot(p)">
-              <span class="ik-search-hot__rank" :class="{ 'is-top': i < 3 }">{{ i + 1 }}</span>
-              <span class="ik-search-hot__title">{{ p.title }}</span>
-              <span class="ik-search-hot__views"><EyeIcon aria-hidden="true" />{{ p.views }}</span>
-            </NuxtLink>
-          </li>
-        </ol>
-        <div v-else-if="hotLoading" class="ik-search-hot" aria-busy="true">
-          <div v-for="i in 10" :key="i" class="ik-search-hot__item ik-search-hot__item--skel">
-            <span class="ik-skel ik-skel--rank" />
-            <span class="ik-skel ik-skel--line" :style="{ width: `${40 + ((i * 37) % 45)}%` }" />
-          </div>
-        </div>
-      </section>
-    </div>
-
+  <section class="ik-search" :class="{ 'is-idle': !keyword }">
     <TabsRoot
-      v-else
       :model-value="activeType"
       activation-mode="manual"
-      class="ik-search-results"
+      class="ik-search-root"
       @update:model-value="setType"
     >
-      <div class="ik-search-toolbar">
-        <TabsList class="ik-stream-tabs" aria-label="搜索类型">
-          <TabsIndicator class="ik-tabs-indicator" />
+      <!-- 搜索框 + 类型切换 -->
+      <header class="ik-search-hero">
+        <PlaceholdersInput
+          ref="inputRef"
+          v-model="input"
+          class="ik-search-hero__input"
+          :placeholders="PLACEHOLDERS"
+          @submit="onInputSubmit"
+          @focus="inputFocused = true"
+          @blur="inputFocused = false"
+        />
+        <TabsList v-if="keyword" class="ik-seg ik-seg--lg" aria-label="搜索类型">
+          <TabsIndicator class="ik-seg__indicator" />
           <TabsTrigger v-for="t in TYPES" :key="t.key" :value="t.key" as-child>
-            <button type="button" class="ik-stream-tab">
+            <button type="button" class="ik-seg__item">
               {{ t.label }}
-              <span v-if="typeCounts[t.key]" class="ik-stream-tab__count">{{ typeCounts[t.key] }}</span>
+              <span v-if="typeCounts[t.key]" class="ik-seg__count">{{ typeCounts[t.key] }}</span>
             </button>
           </TabsTrigger>
         </TabsList>
+      </header>
 
-        <div v-if="activeType === 'post'" class="ik-search-filters">
-          <div class="ik-search-sort" role="radiogroup" aria-label="排序">
-            <button
-              v-for="s in SORTS"
-              :key="s.key"
-              type="button"
-              role="radio"
-              class="ik-search-sort__item"
-              :class="{ 'is-active': sort === s.key }"
-              :aria-checked="sort === s.key"
-              @click="setSort(s.key)"
-            >{{ s.label }}</button>
+      <!-- 还没输入：最近搜索 + 大家在看 -->
+      <div v-if="!keyword" class="ik-search-idle">
+        <section v-if="history.length" class="ik-search-section">
+          <header class="ik-search-section__head">
+            <h2 class="ik-search-section__title">最近搜索</h2>
+            <button type="button" class="ik-search-section__action" @click="clearHistory">清空</button>
+          </header>
+          <div class="ik-search-history">
+            <span
+              v-for="(item, i) in history"
+              :key="item"
+              class="ik-search-chip ik-reveal"
+              :style="{ '--i': i }"
+            >
+              <button type="button" class="ik-search-chip__text" @click="searchFor(item)">{{ item }}</button>
+              <button type="button" class="ik-search-chip__remove" :aria-label="`删除“${item}”`" @click="removeHistory(item)">
+                <XMarkIcon aria-hidden="true" />
+              </button>
+            </span>
           </div>
+        </section>
 
-          <Select :model-value="category || ALL_CATEGORIES" @update:model-value="setCategory">
-            <div class="ik-category-track" :class="{ 'ik-category-track--active': !!category }">
-              <SelectTrigger class="ik-category-trigger" aria-label="分区">
-                <Squares2X2Icon class="ik-category-trigger__icon" aria-hidden="true" />
-                <SelectValue class="ik-category-trigger__value">
-                  <template v-if="category">{{ categoryName }}</template>
-                  <template v-else>全部</template>
-                </SelectValue>
-              </SelectTrigger>
+        <section class="ik-search-section">
+          <header class="ik-search-section__head">
+            <h2 class="ik-search-section__title">大家在看</h2>
+          </header>
+          <CardSpotlight class="ik-search-hot">
+            <ol v-if="hotPosts.length" class="ik-search-hot__list">
+              <li v-for="(p, i) in hotPosts" :key="p.id" class="ik-reveal" :style="{ '--i': i }">
+                <NuxtLink :to="`/post/${p.id}`" class="ik-search-hot__item" no-prefetch @click.prevent="openHot(p)">
+                  <span class="ik-search-hot__rank" :class="{ 'is-top': i < 3 }">{{ i + 1 }}</span>
+                  <span class="ik-search-hot__title">{{ p.title }}</span>
+                  <span class="ik-search-hot__views"><EyeIcon aria-hidden="true" />{{ p.views }}</span>
+                </NuxtLink>
+              </li>
+            </ol>
+            <div v-else-if="hotLoading" class="ik-search-hot__list" aria-busy="true">
+              <div v-for="i in 10" :key="i" class="ik-search-hot__item is-skel">
+                <span class="ik-skel ik-skel--rank" />
+                <span class="ik-skel ik-skel--line" :style="{ width: `${40 + ((i * 37) % 45)}%` }" />
+              </div>
             </div>
-            <SelectContent class="ik-category-menu" align="end" :side-offset="8" :collision-padding="12">
-              <SelectItem :value="ALL_CATEGORIES" class="ik-category-menu__item">全部</SelectItem>
-              <template v-if="categories.length">
-                <SelectSeparator class="ik-category-menu__separator" />
-                <SelectItem
-                  v-for="cat in categories"
-                  :key="cat.slug"
-                  :value="cat.slug"
-                  class="ik-category-menu__item"
-                >{{ cat.name }}</SelectItem>
-              </template>
-            </SelectContent>
-          </Select>
-        </div>
+          </CardSpotlight>
+        </section>
       </div>
 
-      <div role="tabpanel" class="ik-search-panel">
+      <div v-else role="tabpanel" class="ik-search-panel">
         <!-- 帖子 -->
         <template v-if="activeType === 'post'">
+          <div class="ik-search-bar">
+            <TabsRoot
+              :model-value="sort"
+              activation-mode="manual"
+              @update:model-value="(v) => setSort(v as PostSearchSort)"
+            >
+              <TabsList class="ik-seg ik-seg--sm" aria-label="排序">
+                <TabsIndicator class="ik-seg__indicator ik-seg__indicator--muted" />
+                <TabsTrigger v-for="s in SORTS" :key="s.key" :value="s.key" as-child>
+                  <button type="button" class="ik-seg__item">{{ s.label }}</button>
+                </TabsTrigger>
+              </TabsList>
+            </TabsRoot>
+
+            <Select :model-value="category || ALL_CATEGORIES" @update:model-value="setCategory">
+              <div class="ik-category-track" :class="{ 'ik-category-track--active': !!category }">
+                <SelectTrigger class="ik-category-trigger" aria-label="分区">
+                  <Squares2X2Icon class="ik-category-trigger__icon" aria-hidden="true" />
+                  <SelectValue class="ik-category-trigger__value">
+                    <template v-if="category">{{ categoryName }}</template>
+                    <template v-else>全部分区</template>
+                  </SelectValue>
+                </SelectTrigger>
+              </div>
+              <SelectContent class="ik-category-menu" align="end" :side-offset="8" :collision-padding="12">
+                <SelectItem :value="ALL_CATEGORIES" class="ik-category-menu__item">全部分区</SelectItem>
+                <template v-if="categories.length">
+                  <SelectSeparator class="ik-category-menu__separator" />
+                  <SelectItem
+                    v-for="cat in categories"
+                    :key="cat.slug"
+                    :value="cat.slug"
+                    class="ik-category-menu__item"
+                  >{{ cat.name }}</SelectItem>
+                </template>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div v-if="hasRelated" class="ik-search-related">
             <NuxtLink
-              v-for="u in relatedUsers"
+              v-for="(u, i) in relatedUsers"
               :key="u.id"
               :to="profileLink(u.id)"
-              class="ik-related-user"
+              class="ik-related ik-related--user ik-reveal"
+              :style="{ '--i': i }"
               @click="rememberKeyword"
             >
-              <img :src="u.avatar || '/images/default-avatar.webp'" alt="" class="ik-related-user__avatar" loading="lazy" @error="onAvatarError" />
-              <span class="ik-related-user__name">
-                <template v-for="(part, i) in splitHighlight(u.name, keyword)" :key="i"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
+              <img :src="u.avatar || '/images/default-avatar.webp'" alt="" class="ik-related__avatar" loading="lazy" @error="onAvatarError" />
+              <span class="ik-related__name">
+                <template v-for="(part, j) in splitHighlight(u.name, keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
               </span>
             </NuxtLink>
             <button
               v-if="users.length > RELATED_USER_MAX"
               type="button"
-              class="ik-related-more"
+              class="ik-related ik-related--more"
               @click="setType('user')"
             >全部用户</button>
+            <span v-if="relatedUsers.length && tags.length" class="ik-search-related__gap" aria-hidden="true" />
             <NuxtLink
-              v-for="t in tags"
+              v-for="(t, i) in tags"
               :key="t.slug"
               :to="`/tags/${encodeURIComponent(t.slug)}`"
-              class="ik-related-tag"
+              class="ik-related ik-related--tag ik-reveal"
+              :style="{ '--i': relatedUsers.length + i }"
               @click="rememberKeyword"
             >#{{ t.name }}</NuxtLink>
           </div>
 
           <ClientOnly>
-            <div v-if="postsLoading && !posts.length" class="ik-search-skeleton" aria-busy="true">
+            <div v-if="postsLoading && !posts.length" aria-busy="true">
               <VirtualMasonry
                 class="ik-masonry"
                 :items="skeletonItems"
@@ -617,11 +676,11 @@ const retry = () => {
         </template>
 
         <!-- 用户 -->
-        <template v-else-if="activeType === 'user'">
-          <div v-if="usersLoading && !users.length" class="ik-search-users" aria-busy="true">
-            <div v-for="i in 6" :key="i" class="ik-user-card ik-user-card--skel">
+        <div v-else-if="activeType === 'user'" class="ik-search-narrow">
+          <div v-if="usersLoading && !users.length" class="ik-search-grid ik-search-grid--users" aria-busy="true">
+            <div v-for="i in 6" :key="i" class="ik-user is-skel">
               <span class="ik-skel ik-skel--avatar" />
-              <div class="ik-user-card__main">
+              <div class="ik-user__main">
                 <span class="ik-skel ik-skel--line" style="width: 40%" />
                 <span class="ik-skel ik-skel--line" style="width: 75%" />
               </div>
@@ -639,38 +698,44 @@ const retry = () => {
             <p class="ik-search-empty__hint">用户名要包含这几个字才能搜到</p>
           </div>
 
-          <div v-else class="ik-search-users">
-            <article v-for="u in users" :key="u.id" class="ik-user-card">
-              <NuxtLink :to="profileLink(u.id)" class="ik-user-card__link" @click="rememberKeyword">
-                <img :src="u.avatar || '/images/default-avatar.webp'" alt="" class="ik-user-card__avatar" loading="lazy" @error="onAvatarError" />
-                <div class="ik-user-card__main">
-                  <div class="ik-user-card__name-row">
-                    <span class="ik-user-card__name">
-                      <template v-for="(part, i) in splitHighlight(u.name, keyword)" :key="i"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
+          <div v-else class="ik-search-grid ik-search-grid--users">
+            <CardSpotlight
+              v-for="(u, i) in users"
+              :key="u.id"
+              as="article"
+              class="ik-user ik-reveal"
+              :style="{ '--i': i }"
+            >
+              <NuxtLink :to="profileLink(u.id)" class="ik-user__link" @click="rememberKeyword">
+                <img :src="u.avatar || '/images/default-avatar.webp'" alt="" class="ik-user__avatar" loading="lazy" @error="onAvatarError" />
+                <div class="ik-user__main">
+                  <div class="ik-user__name-row">
+                    <span class="ik-user__name">
+                      <template v-for="(part, j) in splitHighlight(u.name, keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
                     </span>
-                    <span class="ik-user-card__level">Lv.{{ u.level }}</span>
+                    <span class="ik-user__level">Lv.{{ u.level }}</span>
                   </div>
-                  <p v-if="u.bio" class="ik-user-card__bio">{{ u.bio }}</p>
-                  <span class="ik-user-card__meta">{{ u.followerCount }} 粉丝</span>
+                  <p v-if="u.bio" class="ik-user__bio">{{ u.bio }}</p>
+                  <span class="ik-user__meta">{{ u.followerCount }} 粉丝</span>
                 </div>
               </NuxtLink>
               <z-button
                 v-if="!isSelf(u)"
                 size="small"
-                class="ik-user-card__follow"
+                class="ik-user__follow"
                 :class="{ 'is-following': u.isFollowing }"
                 :loading="followPending.has(u.id)"
                 @click="toggleFollow(u)"
               >{{ u.isFollowing ? "已关注" : "关注" }}</z-button>
-            </article>
+            </CardSpotlight>
           </div>
-        </template>
+        </div>
 
         <!-- 评论 -->
-        <template v-else>
-          <div v-if="commentsLoading && !comments.length" class="ik-search-comments" aria-busy="true">
-            <div v-for="i in 6" :key="i" class="ik-comment-hit ik-comment-hit--skel">
-              <div class="ik-comment-hit__head">
+        <div v-else class="ik-search-narrow">
+          <div v-if="commentsLoading && !comments.length" class="ik-search-grid ik-search-grid--comments" aria-busy="true">
+            <div v-for="i in 6" :key="i" class="ik-comment is-skel">
+              <div class="ik-comment__head">
                 <span class="ik-skel ik-skel--avatar-sm" />
                 <span class="ik-skel ik-skel--line" style="width: 30%" />
               </div>
@@ -691,29 +756,35 @@ const retry = () => {
           </div>
 
           <template v-else>
-            <ul class="ik-search-comments">
-              <li v-for="c in comments" :key="c.id">
+            <ul class="ik-search-grid ik-search-grid--comments">
+              <CardSpotlight
+                v-for="(c, i) in comments"
+                :key="c.id"
+                as="li"
+                class="ik-comment-card ik-reveal"
+                :style="{ '--i': i }"
+              >
                 <NuxtLink
                   :to="`/post/${c.postId}`"
-                  class="ik-comment-hit"
+                  class="ik-comment"
                   no-prefetch
                   @click.prevent="openComment(c)"
                 >
-                  <div class="ik-comment-hit__head">
-                    <img :src="c.author.avatar || '/images/default-avatar.webp'" alt="" class="ik-comment-hit__avatar" loading="lazy" @error="onAvatarError" />
-                    <span class="ik-comment-hit__author">{{ c.author.name }}</span>
-                    <span class="ik-comment-hit__time">{{ formatTime(c.createdAt) }}</span>
-                    <span v-if="c.likeCount" class="ik-comment-hit__likes"><HeartIcon aria-hidden="true" />{{ c.likeCount }}</span>
+                  <div class="ik-comment__head">
+                    <img :src="c.author.avatar || '/images/default-avatar.webp'" alt="" class="ik-comment__avatar" loading="lazy" @error="onAvatarError" />
+                    <span class="ik-comment__author">{{ c.author.name }}</span>
+                    <span class="ik-comment__time">{{ formatTime(c.createdAt) }}</span>
+                    <span v-if="c.likeCount" class="ik-comment__likes"><HeartIcon aria-hidden="true" />{{ c.likeCount }}</span>
                   </div>
-                  <p class="ik-comment-hit__body">
-                    <template v-for="(part, i) in splitHighlight(commentText(c), keyword)" :key="i"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
+                  <p class="ik-comment__body">
+                    <template v-for="(part, j) in splitHighlight(commentText(c), keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
                   </p>
-                  <div class="ik-comment-hit__post">
-                    <img v-if="c.postCover" :src="c.postCover" alt="" class="ik-comment-hit__cover" loading="lazy" />
-                    <span class="ik-comment-hit__post-title">{{ c.postTitle }}</span>
+                  <div class="ik-comment__post">
+                    <img v-if="c.postCover" :src="c.postCover" alt="" class="ik-comment__cover" loading="lazy" />
+                    <span class="ik-comment__post-title">{{ c.postTitle }}</span>
                   </div>
                 </NuxtLink>
-              </li>
+              </CardSpotlight>
             </ul>
             <div class="ik-search-footer">
               <img v-if="commentsLoadingMore" class="ik-search-footer__gif" src="/images/Bangboo.gif" alt="加载中" />
@@ -721,7 +792,7 @@ const retry = () => {
               <span v-else-if="!commentsHasMore">已经到底啦</span>
             </div>
           </template>
-        </template>
+        </div>
 
         <div ref="sentinelRef" class="ik-search-sentinel" aria-hidden="true" />
       </div>
@@ -730,13 +801,18 @@ const retry = () => {
 </template>
 
 <style scoped>
+/* 间距节奏：4 / 8 / 12 / 16 / 24 / 32 / 48 */
 .ik-search {
   position: relative;
   z-index: 1;
   width: min(1600px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 24px 0 48px;
-  min-height: 60vh;
+  padding: 40px 0 64px;
+  min-height: 70vh;
+}
+
+.ik-search.is-idle {
+  padding-top: 72px;
 }
 
 mark {
@@ -744,67 +820,189 @@ mark {
   color: var(--ik-primary, #bfff09);
 }
 
-/* ── 空搜索 ── */
-.ik-search-home {
+/* ── 搜索框 + 类型切换 ── */
+.ik-search-hero {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+.ik-search.is-idle .ik-search-hero {
+  margin-bottom: 48px;
+}
+
+.ik-search-hero__input {
+  max-width: 680px;
+}
+
+/* 分段切换（reka Tabs + 滑块），大号用于类型，小号用于排序 */
+.ik-seg {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: #121212;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  user-select: none;
+}
+
+.ik-seg__indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  z-index: 1;
+  width: var(--reka-tabs-indicator-size);
+  transform: translateX(var(--reka-tabs-indicator-position));
+  border-radius: 999px;
+  background: var(--ik-primary, #bfff09);
+  box-shadow: 0 0 16px rgba(191, 255, 9, 0.3);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.ik-seg__indicator--muted {
+  background: #2c2c2c;
+  box-shadow: none;
+}
+
+.ik-seg__item {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+
+.ik-seg__item:hover {
+  color: #fff;
+}
+
+.ik-seg__item:active {
+  transform: scale(0.97);
+}
+
+.ik-seg--lg .ik-seg__item {
+  min-width: 104px;
+  height: 38px;
+  padding: 0 22px;
+  font-size: 15px;
+}
+
+.ik-seg--lg .ik-seg__item[data-state="active"] {
+  color: #000;
+  font-weight: 700;
+}
+
+.ik-seg--sm {
+  padding: 3px;
+}
+
+.ik-seg--sm .ik-seg__indicator {
+  top: 3px;
+  bottom: 3px;
+}
+
+.ik-seg--sm .ik-seg__item {
+  height: 30px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.ik-seg--sm .ik-seg__item[data-state="active"] {
+  color: #fff;
+  font-weight: 600;
+}
+
+.ik-seg__count {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.55;
+  font-feature-settings: "tnum";
+}
+
+/* ── 空搜索 ── */
+.ik-search-idle {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
   max-width: 880px;
   margin: 0 auto;
 }
 
-.ik-search-block__head {
+.ik-search-section__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  padding: 0 4px;
 }
 
-.ik-search-block__title {
+.ik-search-section__title {
   margin: 0;
-  color: #fff;
-  font-size: 16px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.ik-search-block__action {
+.ik-search-section__action {
   padding: 4px 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.45);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+  transition: color 0.15s ease;
 }
 
-.ik-search-block__action:hover {
+.ik-search-section__action:hover {
   color: var(--ik-primary, #bfff09);
 }
 
 .ik-search-history {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .ik-search-chip {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  background: #161616;
-  transition: border-color 0.15s ease;
+  background: #151515;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .ik-search-chip:hover {
-  border-color: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: #1b1b1b;
 }
 
 .ik-search-chip__text {
   min-width: 0;
-  padding: 7px 4px 7px 14px;
+  height: 100%;
+  padding: 0 6px 0 16px;
   border: 0;
   background: transparent;
   color: rgba(255, 255, 255, 0.85);
@@ -818,11 +1016,14 @@ mark {
 
 .ik-search-chip__remove {
   display: inline-flex;
-  padding: 6px 10px 6px 4px;
+  align-items: center;
+  height: 100%;
+  padding: 0 12px 0 4px;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.3);
   cursor: pointer;
+  transition: color 0.15s ease;
 }
 
 .ik-search-chip__remove:hover {
@@ -835,9 +1036,13 @@ mark {
 }
 
 .ik-search-hot {
+  padding: 12px;
+}
+
+.ik-search-hot__list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 24px;
+  gap: 4px 16px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -846,23 +1051,23 @@ mark {
 .ik-search-hot__item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 46px;
-  padding: 8px 10px;
-  border-radius: 10px;
+  gap: 14px;
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: 12px;
   color: rgba(255, 255, 255, 0.88);
   text-decoration: none;
-  transition: background-color 0.12s ease;
+  transition: background-color 0.15s ease;
 }
 
-.ik-search-hot__item:hover {
-  background: rgba(255, 255, 255, 0.06);
+a.ik-search-hot__item:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .ik-search-hot__rank {
-  flex: 0 0 22px;
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 16px;
+  flex: 0 0 24px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 17px;
   font-weight: 800;
   font-style: italic;
   text-align: center;
@@ -877,9 +1082,9 @@ mark {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
+  font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
 }
 
 .ik-search-hot__views {
@@ -887,7 +1092,7 @@ mark {
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.35);
   font-size: 12px;
   font-feature-settings: "tnum";
 }
@@ -897,136 +1102,13 @@ mark {
   height: 14px;
 }
 
-/* ── 工具栏 ── */
-.ik-search-results {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.ik-search-toolbar {
+/* ── 帖子：排序 / 分区 / 相关 ── */
+.ik-search-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.ik-stream-tabs {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  padding: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9999px;
-  background: #141414;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
-  user-select: none;
-}
-
-.ik-tabs-indicator {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  left: 0;
-  width: var(--reka-tabs-indicator-size);
-  transform: translateX(var(--reka-tabs-indicator-position));
-  border-radius: 9999px;
-  background: var(--ik-primary, #bfff09);
-  box-shadow: 0 0 14px rgba(191, 255, 9, 0.35);
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.ik-stream-tab {
-  position: relative;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 18px;
-  border: none;
-  border-radius: 9999px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.65);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: color 0.15s ease, transform 0.1s ease;
-}
-
-.ik-stream-tab:hover {
-  color: #fff;
-}
-
-.ik-stream-tab:active {
-  transform: scale(0.96);
-}
-
-.ik-stream-tab[data-state="active"] {
-  color: #000;
-  font-weight: 700;
-}
-
-.ik-stream-tab__count {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.55;
-  font-feature-settings: "tnum";
-}
-
-.ik-search-filters {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.ik-search-sort {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.ik-search-sort__item {
-  position: relative;
-  height: 32px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.5);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-  transition: color 0.15s ease;
-}
-
-.ik-search-sort__item:hover {
-  color: #fff;
-}
-
-.ik-search-sort__item.is-active {
-  color: #fff;
-  font-weight: 700;
-}
-
-.ik-search-sort__item.is-active::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: 2px;
-  width: 14px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--ik-primary, #bfff09);
-  transform: translateX(-50%);
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .ik-category-track {
@@ -1035,8 +1117,8 @@ mark {
   min-width: 0;
   padding: 3px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9999px;
-  background: #141414;
+  border-radius: 999px;
+  background: #121212;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
   user-select: none;
 }
@@ -1046,14 +1128,14 @@ mark {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  height: 32px;
+  height: 30px;
   padding: 0 12px 0 14px;
   border: none;
-  border-radius: 9999px;
+  border-radius: 999px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(255, 255, 255, 0.6);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -1068,14 +1150,13 @@ mark {
 
 .ik-category-track--active .ik-category-trigger {
   background: var(--ik-primary, #bfff09);
-  box-shadow: 0 0 14px rgba(191, 255, 9, 0.35);
   color: #000;
   font-weight: 700;
 }
 
 .ik-category-trigger__icon {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
   stroke-width: 2.2;
 }
@@ -1101,12 +1182,11 @@ mark {
   transform: rotate(180deg);
 }
 
-/* ── 相关用户 / 标签 ── */
 .ik-search-related {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 28px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1115,77 +1195,305 @@ mark {
   display: none;
 }
 
-.ik-related-user,
-.ik-related-more,
-.ik-related-tag {
+.ik-search-related__gap {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 8px 6px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ik-related {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  background: #161616;
+  background: #151515;
   color: rgba(255, 255, 255, 0.88);
   font: inherit;
   font-size: 14px;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
 }
 
-.ik-related-user:hover,
-.ik-related-more:hover,
-.ik-related-tag:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-  background: #1d1d1d;
+.ik-related:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: #1c1c1c;
+  transform: translateY(-1px);
 }
 
-.ik-related-user {
-  gap: 8px;
-  padding: 0 14px 0 4px;
+.ik-related--user {
+  gap: 10px;
+  padding: 0 16px 0 5px;
 }
 
-.ik-related-user__avatar {
-  width: 30px;
-  height: 30px;
+.ik-related__avatar {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   object-fit: cover;
   background: #2a2a2a;
 }
 
-.ik-related-user__name {
+.ik-related__name {
   max-width: 10em;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.ik-related-more {
-  padding: 0 14px;
-  color: rgba(255, 255, 255, 0.55);
+.ik-related--more {
+  padding: 0 16px;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-.ik-related-tag {
-  padding: 0 14px;
+.ik-related--tag {
+  padding: 0 16px;
   color: var(--ik-primary, #bfff09);
 }
 
-.ik-related-more + .ik-related-tag,
-.ik-related-user + .ik-related-tag {
-  margin-left: 8px;
-}
-
-/* ── 帖子 ── */
+/* ── 帖子瀑布流 ── */
 .ik-masonry.is-stale {
   opacity: 0.5;
   transition: opacity 0.15s ease;
 }
 
+/* ── 用户 / 评论：收窄居中，网格留白 ── */
+.ik-search-narrow {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.ik-search-grid {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ik-search-grid--users {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+
+.ik-search-grid--comments {
+  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+}
+
+.ik-user {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.ik-user.is-skel {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  background: #151515;
+}
+
+.ik-user__link {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ik-user__avatar {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #2a2a2a;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+
+.ik-user__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ik-user.is-skel .ik-user__main {
+  gap: 12px;
+}
+
+.ik-user__name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ik-user__name {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ik-user__level {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.ik-user__bio {
+  margin: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ik-user__meta {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+  font-feature-settings: "tnum";
+}
+
+.ik-user__follow {
+  flex: 0 0 auto;
+}
+
+.ik-user__follow.is-following {
+  opacity: 0.55;
+}
+
+.ik-comment-card {
+  display: flex;
+}
+
+.ik-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  padding: 20px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ik-comment.is-skel {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  background: #151515;
+}
+
+.ik-comment__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.ik-comment__avatar {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #2a2a2a;
+}
+
+.ik-comment__author {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ik-comment__time {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+}
+
+.ik-comment__likes {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 12px;
+  font-feature-settings: "tnum";
+}
+
+.ik-comment__likes svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ik-comment__body {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  margin: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+  line-height: 1.7;
+  word-break: break-word;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.ik-comment__post {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.ik-comment__cover {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #2a2a2a;
+}
+
+.ik-comment__post-title {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 底部 / 空 / 出错 ── */
 .ik-search-footer {
   display: flex;
   justify-content: center;
-  padding: 24px 0 8px;
-  color: rgba(255, 255, 255, 0.35);
+  padding: 32px 0 8px;
+  color: rgba(255, 255, 255, 0.3);
   font-size: 13px;
 }
 
@@ -1197,262 +1505,58 @@ mark {
   height: 1px;
 }
 
-/* ── 空 / 出错 ── */
 .ik-search-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 72px 16px;
+  gap: 12px;
+  padding: 64px 16px 80px;
   text-align: center;
 }
 
 .ik-search-empty__art {
   width: 88px;
+  margin-bottom: 4px;
   opacity: 0.85;
 }
 
 .ik-search-empty__title {
   margin: 0;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 16px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 17px;
   font-weight: 600;
+}
+
+.ik-search-empty__hint {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 13px;
 }
 
 .ik-search-empty__actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .ik-search-empty__actions:empty {
   display: none;
 }
 
-.ik-search-empty__hint {
-  margin: 0 0 6px;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 13px;
+/* ── 入场：移植 Inspira「Blur Reveal」的模糊上浮，按序错开 ── */
+@keyframes ik-reveal {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(10px);
+  }
 }
 
-/* ── 用户 ── */
-.ik-search-users {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 12px;
-}
-
-.ik-user-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 14px;
-  background: #161616;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.ik-user-card:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: #1a1a1a;
-}
-
-.ik-user-card__link {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex: 1 1 auto;
-  min-width: 0;
-  color: inherit;
-  text-decoration: none;
-}
-
-.ik-user-card__avatar {
-  width: 52px;
-  height: 52px;
-  flex: 0 0 52px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: #2a2a2a;
-}
-
-.ik-user-card__main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.ik-user-card__name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.ik-user-card__name {
-  min-width: 0;
-  overflow: hidden;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ik-user-card__level {
-  flex: 0 0 auto;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 11px;
-  font-weight: 700;
-  font-style: italic;
-}
-
-.ik-user-card__bio {
-  margin: 0;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ik-user-card__meta {
-  color: rgba(255, 255, 255, 0.38);
-  font-size: 12px;
-  font-feature-settings: "tnum";
-}
-
-.ik-user-card__follow {
-  flex: 0 0 auto;
-}
-
-.ik-user-card__follow.is-following {
-  opacity: 0.6;
-}
-
-/* ── 评论 ── */
-.ik-search-comments {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.ik-comment-hit {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  height: 100%;
-  padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 14px;
-  background: #161616;
-  color: inherit;
-  text-decoration: none;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-a.ik-comment-hit:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: #1a1a1a;
-}
-
-.ik-comment-hit__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-size: 13px;
-}
-
-.ik-comment-hit__avatar {
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: #2a2a2a;
-}
-
-.ik-comment-hit__author {
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.85);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ik-comment-hit__time {
-  flex: 0 0 auto;
-  color: rgba(255, 255, 255, 0.38);
-  font-size: 12px;
-}
-
-.ik-comment-hit__likes {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  margin-left: auto;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 12px;
-  font-feature-settings: "tnum";
-}
-
-.ik-comment-hit__likes svg {
-  width: 14px;
-  height: 14px;
-}
-
-.ik-comment-hit__body {
-  display: -webkit-box;
-  flex: 1 1 auto;
-  margin: 0;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 15px;
-  line-height: 1.6;
-  word-break: break-word;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-
-.ik-comment-hit__post {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 6px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.ik-comment-hit__cover {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  border-radius: 6px;
-  object-fit: cover;
-  background: #2a2a2a;
-}
-
-.ik-comment-hit__post-title {
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ik-reveal {
+  animation: ik-reveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 35ms);
 }
 
 /* ── 骨架 ── */
@@ -1473,102 +1577,125 @@ a.ik-comment-hit:hover {
 }
 
 .ik-skel--rank {
-  width: 22px;
+  width: 24px;
   height: 18px;
-  flex: 0 0 22px;
+  flex: 0 0 24px;
 }
 
 .ik-skel--avatar {
-  width: 52px;
-  height: 52px;
-  flex: 0 0 52px;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
   border-radius: 50%;
 }
 
 .ik-skel--avatar-sm {
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   border-radius: 50%;
 }
 
-.ik-user-card--skel .ik-user-card__main {
-  gap: 10px;
-}
-
-.ik-search-hot__item--skel:hover {
-  background: transparent;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .ik-skel {
+  .ik-skel,
+  .ik-reveal {
     animation: none;
   }
 }
 
 @media (max-width: 768px) {
   .ik-search {
-    width: calc(100% - 28px);
-    padding-top: 14px;
+    width: calc(100% - 32px);
+    padding: 16px 0 40px;
   }
 
-  .ik-search-home {
-    gap: 22px;
+  .ik-search.is-idle {
+    padding-top: 20px;
+  }
+
+  .ik-search-hero {
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .ik-search.is-idle .ik-search-hero {
+    margin-bottom: 32px;
+  }
+
+  .ik-seg--lg {
+    width: 100%;
+  }
+
+  .ik-seg--lg .ik-seg__item {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 34px;
+    padding: 0 8px;
+    font-size: 14px;
+  }
+
+  .ik-seg--sm .ik-seg__item {
+    padding: 0 12px;
+  }
+
+  .ik-search-idle {
+    gap: 32px;
   }
 
   .ik-search-hot {
+    padding: 6px;
+  }
+
+  .ik-search-hot__list {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ik-search-results {
-    gap: 12px;
-  }
-
-  .ik-search-toolbar {
-    gap: 10px;
-  }
-
-  .ik-stream-tabs {
-    flex: 1 1 100%;
-  }
-
-  .ik-stream-tab {
-    flex: 1 1 0;
-    height: 32px;
+  .ik-search-hot__item {
+    min-height: 48px;
     padding: 0 10px;
   }
 
-  .ik-search-filters {
-    flex: 1 1 100%;
-    justify-content: space-between;
-  }
-
-  .ik-search-sort__item {
-    padding: 0 8px;
-  }
-
-  .ik-category-trigger {
-    height: 28px;
-    padding: 0 10px 0 12px;
-    font-size: 13px;
+  .ik-search-bar {
+    margin-bottom: 16px;
   }
 
   .ik-search-related {
-    margin: 0 -14px 12px;
-    padding: 0 14px;
+    margin: 0 -16px 20px;
+    padding: 0 16px;
   }
 
-  .ik-search-users,
-  .ik-search-comments {
+  .ik-search-grid {
+    gap: 12px;
+  }
+
+  .ik-search-grid--users,
+  .ik-search-grid--comments {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ik-user-card {
-    padding: 12px 14px;
+  .ik-user {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .ik-user__link {
+    gap: 12px;
+  }
+
+  .ik-user__avatar,
+  .ik-skel--avatar {
+    width: 48px;
+    height: 48px;
+    flex-basis: 48px;
+  }
+
+  .ik-comment {
+    gap: 12px;
+    padding: 16px;
   }
 
   .ik-search-empty {
-    padding: 56px 16px;
+    padding: 48px 16px 64px;
   }
 }
 </style>
