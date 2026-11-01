@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
+import Skeleton from "boneyard-js/vue";
+import { SAMPLE_POST, isBoneyardCapture } from "~/utils/boneyard";
 import { useDebounceFn, useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Comment, Post } from "~/types/entities";
@@ -1006,6 +1008,12 @@ const attachMentionToTextarea = () => {
 };
 
 onMounted(async () => {
+  // 生成骨架（npm run bones）时不请求接口：用示例帖子渲染作者栏，评论保持加载中，供 boneyard 截取。
+  if (isBoneyardCapture()) {
+    post.value = SAMPLE_POST;
+    loading.value = false;
+    return;
+  }
   // 大图画廊（PhotoSwipe）完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
   // 让只看文字、不点图的用户不必下载这套资源。
   pageDataLoading.claim();
@@ -1059,13 +1067,7 @@ onBeforeUnmount(() => {
       <div class="ik-page__outer">
         <div class="ik-page__inner">
           <div class="ik-page__header">
-            <div class="ik-page__header-left">
-              <div class="ik-skel" style="width:40px;height:40px;border-radius:999px"></div>
-              <div style="display:flex;flex-direction:column;gap:4px">
-                <div class="ik-skel" style="width:100px;height:18px;border-radius:3px"></div>
-                <div class="ik-skel" style="width:60px;height:14px;border-radius:3px"></div>
-              </div>
-            </div>
+            <Skeleton name="post-author" :loading="true" class="ik-page__author-slot" />
           </div>
           <div class="ik-page__main">
             <IkZzzMarquee />
@@ -1089,21 +1091,7 @@ onBeforeUnmount(() => {
             <div class="ik-page__right">
               <div style="flex:1;padding:16px;overflow:hidden">
                 <div class="ik-page__comments-toolbar-spacer" aria-hidden="true"></div>
-                <div v-for="n in 4" :key="n" style="display:flex;gap:12px;padding:14px 0" :style="n > 1 ? 'border-top:1px solid #1e1e1e' : ''">
-                  <div style="flex-shrink:0">
-                    <div class="ik-skel" style="width:36px;height:36px;border-radius:999px"></div>
-                  </div>
-                  <div style="flex:1;min-width:0">
-                    <div style="display:flex;align-items:center;gap:6px">
-                      <div class="ik-skel" style="width:80px;height:14px;border-radius:3px"></div>
-                      <div class="ik-skel" style="width:32px;height:12px;border-radius:3px"></div>
-                    </div>
-                    <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
-                      <div class="ik-skel" style="width:95%;height:14px;border-radius:3px"></div>
-                      <div class="ik-skel" style="width:60%;height:14px;border-radius:3px"></div>
-                    </div>
-                  </div>
-                </div>
+                <CommentSkeleton />
               </div>
               <div class="ik-page__actions">
                 <div class="ik-skel ik-skel--actions-bar"></div>
@@ -1150,6 +1138,7 @@ onBeforeUnmount(() => {
           <div class="ik-page__inner">
         <!-- ── Header Bar ────────────────────── -->
         <div class="ik-page__header">
+          <Skeleton name="post-author" :loading="false" class="ik-page__author-slot">
           <div class="ik-page__header-left">
             <UserHoverCard :author-id="post.author?.documentId" :clickable="!!post.author?.documentId">
               <div class="ik-page__avatar-wrap">
@@ -1177,6 +1166,7 @@ onBeforeUnmount(() => {
               </span>
             </div>
           </div>
+          </Skeleton>
         </div>
 
         <div class="ik-page__main">
@@ -1281,22 +1271,7 @@ onBeforeUnmount(() => {
                 <h2 v-else class="ik-page__comments-heading">评论 <span>{{ postCommentCount }}</span></h2>
 
                 <!-- 评论骨架屏 -->
-                <template v-if="commentsInitialLoading">
-                  <div v-for="n in 4" :key="'cskel-'+n" class="ik-comment-skel">
-                    <div class="ik-comment-skel__avatar">
-                      <div class="ik-skel" style="width:36px;height:36px;border-radius:999px"></div>
-                    </div>
-                    <div class="ik-comment-skel__body">
-                      <div style="display:flex;align-items:center;gap:6px">
-                        <div class="ik-skel" style="width:80px;height:14px;border-radius:3px"></div>
-                      </div>
-                      <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
-                        <div class="ik-skel" :style="{ width: (95 - n * 10) + '%', height: '14px', borderRadius: '3px' }"></div>
-                        <div class="ik-skel" :style="{ width: (60 - n * 5) + '%', height: '14px', borderRadius: '3px' }"></div>
-                      </div>
-                    </div>
-                  </div>
-                </template>
+                <CommentSkeleton v-if="commentsInitialLoading" />
                 <div v-else-if="!comments.length" class="ik-empty" style="padding: 40px 0">啥都木有¯\(°_o)/¯</div>
                 <CommentItem
                   v-for="comment in featuredOnTop"
@@ -2694,22 +2669,8 @@ onBeforeUnmount(() => {
   border-radius: 18px;
 }
 
-/* ── Comment Skeleton ──────────────────── */
-.ik-comment-skel {
-  display: flex;
-  gap: 12px;
-  padding: 14px 0;
-}
-
-.ik-comment-skel + .ik-comment-skel {
-  border-top: 1px solid #1e1e1e;
-}
-
-.ik-comment-skel__avatar {
-  flex-shrink: 0;
-}
-
-.ik-comment-skel__body {
+/* boneyard 作者栏骨架容器：占满头部剩余宽度，加载中和加载完成宽度一致 */
+.ik-page__author-slot {
   flex: 1;
   min-width: 0;
 }

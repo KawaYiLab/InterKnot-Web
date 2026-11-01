@@ -12,13 +12,15 @@
     "type-check": "vue-tsc --noEmit",
     "test": "npm run test:unit",
     "test:unit": "nuxt prepare && vitest run",
-    "test:watch": "nuxt prepare && vitest"
+    "test:watch": "nuxt prepare && vitest",
+    "bones": "boneyard-js build"
   },
   "dependencies": {
     "@heroicons/vue": "^2.2.0",
     "@pinia/nuxt": "^0.11.2",
     "@tanstack/vue-query": "^5.90.7",
     "@vueuse/core": "^13.9.0",
+    "boneyard-js": "1.10.0",
     "embla-carousel-vue": "^8.6.0",
     "highlight.js": "^11.11.1",
     "isomorphic-dompurify": "^3.12.0",

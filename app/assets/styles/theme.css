@@ -625,3 +625,15 @@ html.no-gpu .ik-mobile-sheet-leave-active .ik-mobile-sheet__panel {
   transition: none !important;
   animation: none !important;
 }
+
+/* ── boneyard 骨架块（boneClass，见 plugins/boneyard.client.ts） ── */
+@keyframes ik-bone-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.ik-bone {
+  animation: ik-bone-pulse 1.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ik-bone { animation: none; opacity: 0.6; }
+}

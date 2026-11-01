@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useMessage } from "zenless-ui";
+import Skeleton from "boneyard-js/vue";
 import type { Avatar, BusinessCard, DailyExpStatus, Post, Profile } from "~/types/entities";
+import { SAMPLE_PROFILE, isBoneyardCapture } from "~/utils/boneyard";
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 
@@ -395,6 +397,11 @@ useSeoMeta({
 const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
 
 onMounted(async () => {
+  // 生成骨架（npm run bones）时不请求接口，直接用示例资料渲染，供 boneyard 截取布局。
+  if (isBoneyardCapture()) {
+    profile.value = SAMPLE_PROFILE;
+    return;
+  }
   loading.value = true;
   loadError.value = false;
   pageDataLoading.claim();
@@ -429,69 +436,12 @@ onBeforeUnmount(() => {
 <template>
   <div>
   <section class="ik-profile">
-    <!-- ══════════ Skeleton ══════════ -->
-    <template v-if="loading">
-      <div class="ik-frame">
-        <div class="ik-frame__inner">
-          <div class="ik-frame__body">
-
-      <!-- Tab bar skeleton -->
-      <div class="ik-tab-bar">
-        <div class="ik-skel" style="width:120px;height:34px;border-radius:999px"></div>
-        <div class="ik-skel" style="width:90px;height:36px;border-radius:999px"></div>
-      </div>
-
-      <!-- A-frame skeleton -->
-      <div class="ik-aframe">
-        <!-- Banner card skeleton -->
-        <div class="ik-banner-card">
-          <div class="ik-banner ik-banner--skeleton">
-            <!-- User row: avatar + info -->
-            <div class="ik-banner__user">
-              <div class="ik-banner__avatar-wrap">
-                <div class="ik-skel ik-skel--circle" style="width:90px;height:90px"></div>
-              </div>
-              <div class="ik-banner__info">
-                <div class="ik-skel" style="width:160px;height:30px;border-radius:6px"></div>
-                <div class="ik-skel" style="width:90px;height:28px;border-radius:999px"></div>
-              </div>
-            </div>
-            <!-- Stats row -->
-            <div class="ik-banner__stats">
-              <div class="ik-skel" style="width:200px;height:16px;border-radius:4px"></div>
-            </div>
-          </div>
-          <!-- Footer signature -->
-          <div class="ik-banner-footer" style="padding:8px 34px">
-            <div class="ik-skel" style="width:220px;height:14px;border-radius:4px"></div>
-          </div>
-        </div>
-
-        <!-- Article grid skeleton -->
-        <div class="ik-aframe__content">
-          <div class="ik-article-grid">
-            <div v-for="n in 6" :key="n" class="ik-article-grid__item">
-              <div class="ik-skel" style="width:100%;aspect-ratio:3/4;border-radius:12px"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-          </div>
-        </div>
-      </div>
-
-      <!-- Bottom actions skeleton -->
-      <div class="ik-bottom-actions">
-        <div class="ik-skel" style="width:90px;height:40px;border-radius:999px" v-for="n in 4" :key="n"></div>
-      </div>
-    </template>
-
     <!-- ══════════ Error ══════════ -->
-    <div v-else-if="loadError && !profile" class="ik-empty">加载失败，请刷新重试</div>
+    <div v-if="loadError && !profile" class="ik-empty">加载失败，请刷新重试</div>
 
     <!-- ══════════ Main Content ══════════ -->
-    <template v-else-if="profile">
+    <!-- 加载中也渲染外框；UID 栏与名片由 boneyard 按截取的真实布局画骨架（app/bones，npm run bones 生成）。 -->
+    <template v-else-if="loading || profile">
 
       <!-- ── 大框 (Double-border frame) ────────── -->
       <div class="ik-frame">
@@ -499,7 +449,8 @@ onBeforeUnmount(() => {
           <div class="ik-frame__body">
 
       <!-- ── Tab Bar (UID + 更多操作) ──────────── -->
-      <div class="ik-tab-bar">
+      <Skeleton name="profile-tab-bar" :loading="loading" class="ik-tab-bar-slot">
+      <div v-if="profile" class="ik-tab-bar">
         <div class="ik-tab-bar__left">
           <span class="ik-tab-bar__label">UID:</span>
           <span class="ik-tab-bar__value">{{ displayUid }}</span>
@@ -510,12 +461,14 @@ onBeforeUnmount(() => {
         <z-button v-if="profile.isSelf" @click="openModal('settings')">更多操作</z-button>
         <z-button v-else-if="hasOtherActions" @click="openModal('actions')">更多操作</z-button>
       </div>
+      </Skeleton>
 
       <!-- ── A-Frame (包含名片 + 委托) ────────── -->
       <div class="ik-aframe">
 
       <!-- ── Profile Banner Card (flush 贴合 A-frame 上边) ─── -->
-      <div class="ik-banner-card">
+      <Skeleton name="profile-banner" :loading="loading" class="ik-banner-slot">
+      <div v-if="profile" class="ik-banner-card">
         <div
           class="ik-banner"
           :style="profile.equippedCard?.image ? { backgroundImage: `url('${profile.equippedCard.image}')` } : undefined"
@@ -587,23 +540,24 @@ onBeforeUnmount(() => {
           <p v-else class="ik-banner-footer__sig ik-banner-footer__sig--empty">这个人很神秘，什么都没有留下。</p>
         </z-pattern>
       </div>
+      </Skeleton>
 
       <!-- ── 下半 (委托区域) ───────────────── -->
       <div class="ik-aframe__content">
 
       <!-- ── Article Grid ────────────────────────── -->
-      <div v-if="profile.isHidden" class="ik-article-grid">
+      <div v-if="profile?.isHidden" class="ik-article-grid">
         <div class="ik-article-grid__empty">
           该用户已隐藏个人资料
         </div>
       </div>
       <div v-else-if="isBlockedRelationship" class="ik-article-grid">
         <div class="ik-article-grid__empty">
-          {{ profile.isBlockedByMe ? "你已拉黑该用户，内容不可见" : "你已被该用户拉黑，内容不可见" }}
+          {{ profile?.isBlockedByMe ? "你已拉黑该用户，内容不可见" : "你已被该用户拉黑，内容不可见" }}
         </div>
       </div>
       <div v-else class="ik-article-grid">
-        <template v-if="articleLoading && !articles.length">
+        <template v-if="loading || (articleLoading && !articles.length)">
           <div v-for="n in 6" :key="n" class="ik-article-grid__item">
             <div class="ik-skel" style="width:100%;aspect-ratio:3/4;border-radius:12px"></div>
           </div>
@@ -634,7 +588,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- ── Bottom Actions ──────────────────────── -->
-      <div v-if="profile.isSelf" class="ik-bottom-actions">
+      <div v-if="profile?.isSelf" class="ik-bottom-actions">
         <div class="ik-checkin-group">
           <button
             type="button"
@@ -704,7 +658,7 @@ onBeforeUnmount(() => {
         <Teleport to="body">
           <Transition name="ik-overlay" appear>
             <LazyAvatarModal
-              v-if="showAvatarModal"
+              v-if="showAvatarModal && profile"
               :profile="profile"
               @close="closeModal"
               @equipped="onAvatarEquipped"
@@ -720,7 +674,7 @@ onBeforeUnmount(() => {
         <Teleport to="body">
           <Transition name="ik-overlay" appear>
             <BusinessCardModal
-              v-if="showCardModal"
+              v-if="showCardModal && profile"
               :profile="profile"
               @close="closeModal"
               @equipped="onCardEquipped"
@@ -893,9 +847,32 @@ onBeforeUnmount(() => {
 @media (min-width: 1024px) and (orientation: landscape) {
   .ik-banner { background-position: 26% center; }
 }
-.ik-banner--skeleton {
-  background: linear-gradient(135deg, #1a1a1a 0%, #222 50%, #1a1a1a 100%);
-  border-color: #2a2a2a;
+/* boneyard 骨架容器：在 flex 列里保持自身高度，不被压缩 */
+.ik-tab-bar-slot,
+.ik-banner-slot {
+  flex-shrink: 0;
+}
+/* 名片的上外边距留在骨架容器内：截取的骨架包含这段间距，加载完成时不跳动 */
+.ik-banner-slot,
+.ik-banner-slot > :deep(div) {
+  display: flow-root;
+}
+/* boneyard 只画内容块、不画容器背景，加载中补上 UID 栏和名片的底色 */
+.ik-tab-bar-slot[aria-busy="true"] {
+  border-radius: 0 0 16px 16px;
+  background:
+    url("/images/tab-bg-point.webp") repeat,
+    linear-gradient(180deg, #161616 0%, #080808 100%);
+}
+.ik-banner-slot[aria-busy="true"]::before {
+  content: "";
+  position: absolute;
+  inset: 12px 16px 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #111 0%, #161616 50%, #111 100%);
+}
+@media (max-width: 639px) {
+  .ik-banner-slot[aria-busy="true"]::before { inset: 12px 12px 0; }
 }
 
 /* User info inside banner */
