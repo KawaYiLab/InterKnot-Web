@@ -55,6 +55,8 @@ const emptyMessageState = (): ConversationMessageState => ({
 
 /** 会话列表每页条数 */
 const CONVERSATION_PAGE_SIZE = 20;
+/** 某个 AI 角色的会话列表每页条数（GET /v1/ai/sessions） */
+const AI_SESSION_PAGE_SIZE = 30;
 /** 时间线每页条数（后端上限 50） */
 const MESSAGE_PAGE_SIZE = 50;
 
@@ -100,6 +102,11 @@ interface ConversationDto {
   lastReadAt?: string | null;
   lastMessage?: { id: string; createdAt: string; preview: string; senderId: string } | null;
   unreadCount: number;
+}
+
+interface ConversationPageDto {
+  items: ConversationDto[];
+  nextCursor?: string | null;
 }
 
 interface MessageDto {
@@ -165,6 +172,15 @@ interface UseDmConversations {
   ) => Promise<DmConversationSummary>;
   /** 删除/离开当前会话 */
   deleteConversation: (id: string) => Promise<void>;
+  /**
+   * 拉取某个 AI 角色的会话列表（GET /v1/ai/sessions）并合并进会话列表。
+   * more=true 时接着上次的游标往后翻。
+   */
+  loadAiSessions: (characterSlug: string, opts?: { more?: boolean }) => Promise<void>;
+  /** 某个 AI 角色的会话是否还有下一页 */
+  aiSessionsHasMore: (characterSlug: string) => boolean;
+  /** 某个 AI 角色的会话列表是否正在加载 */
+  aiSessionsLoading: (characterSlug: string) => boolean;
 
   /**
    * 取某会话的消息状态。返回 plain object 而非 ComputedRef——调用方在
@@ -297,6 +313,13 @@ export function useDmConversations(): UseDmConversations {
    * 用户滚了几页的列表会被反复截回 20 条，哨兵又立刻进入视口重新翻页。
    */
   const convPagesLoaded = useState<number>("dm:convPagesLoaded", () => 0);
+  /**
+   * AI 会话列表的分页状态（按角色 slug）。AI 会话也在收件箱里，但收件箱按页加载，
+   * 较早的会话可能还没翻到，所以「通话」Tab 单独按角色拉一份。
+   * cursor：undefined = 还没加载过；null = 没有下一页。
+   */
+  const aiSessionCursor = useState<Record<string, string | null>>("dm:aiSessionCursor", () => ({}));
+  const aiSessionLoadingSlugs = useState<string[]>("dm:aiSessionLoading", () => []);
   /**
    * 未读总数。分页后不能再对 conversations 求和——列表只有已加载的那几页。
    * 第一页响应的 totalUnread 是权威值，之后由实时事件 / 本地已读操作增量修正。
@@ -683,7 +706,12 @@ export function useDmConversations(): UseDmConversations {
           conversations.value = sortConversations([...byId.values()]);
           // cursor / hasMore 不动：后续页仍接在已加载列表之后
         } else {
-          conversations.value = incoming;
+          // 按角色单独拉到的 AI 会话不一定在收件箱第一页，整体替换时留下来
+          const incomingIds = new Set(incoming.map((c) => c.documentId));
+          const keptAi = conversations.value.filter(
+            (c) => !c.pseudoKind && c.peer?.isAiAgent === true && !incomingIds.has(c.documentId),
+          );
+          conversations.value = keptAi.length ? sortConversations([...incoming, ...keptAi]) : incoming;
           convPagesLoaded.value = 1;
           convNextCursor.value = resp?.nextCursor ?? null;
           convHasMore.value = !!resp?.nextCursor;
@@ -769,6 +797,36 @@ export function useDmConversations(): UseDmConversations {
     const summary = summaryFromConversation(cv);
     upsertConversation(summary);
     return summary;
+  }
+
+  async function loadAiSessions(characterSlug: string, opts?: { more?: boolean }): Promise<void> {
+    if (!auth.isLogin || !characterSlug) return;
+    if (aiSessionLoadingSlugs.value.includes(characterSlug)) return;
+    const cursor = opts?.more ? aiSessionCursor.value[characterSlug] : undefined;
+    if (opts?.more && !cursor) return;
+    const generation = auth.generation;
+    aiSessionLoadingSlugs.value = [...aiSessionLoadingSlugs.value, characterSlug];
+    try {
+      const resp = await $api<ConversationPageDto>("/v1/ai/sessions", {
+        query: { character: characterSlug, limit: AI_SESSION_PAGE_SIZE, ...(cursor ? { cursor } : {}) },
+      });
+      if (auth.generation !== generation || !auth.isLogin) return;
+      const incoming = (resp?.items ?? []).filter((cv) => cv?.id).map(summaryFromConversation);
+      if (incoming.length) {
+        const byId = new Map(conversations.value.map((c) => [c.documentId, c]));
+        for (const c of incoming) {
+          const existing = byId.get(c.documentId);
+          // 已有项可能被实时事件更新过，只补标题；新项直接放进来
+          byId.set(c.documentId, existing ? { ...existing, title: existing.title ?? c.title } : c);
+        }
+        conversations.value = sortConversations([...byId.values()]);
+      }
+      aiSessionCursor.value = { ...aiSessionCursor.value, [characterSlug]: resp?.nextCursor ?? null };
+    } catch {
+      // 静默失败：收件箱里已有的会话照常显示，下次展开角色时重试
+    } finally {
+      aiSessionLoadingSlugs.value = aiSessionLoadingSlugs.value.filter((s) => s !== characterSlug);
+    }
   }
 
   async function deleteConversation(id: string): Promise<void> {
@@ -1556,6 +1614,8 @@ export function useDmConversations(): UseDmConversations {
     convHasMore.value = false;
     convLoadingMore.value = false;
     convPagesLoaded.value = 0;
+    aiSessionCursor.value = {};
+    aiSessionLoadingSlugs.value = [];
     unreadTotal.value = null;
     typingTimers = new Map();
     finalizedAtByConv = new Map();
@@ -1595,6 +1655,9 @@ export function useDmConversations(): UseDmConversations {
     openDirectConversation,
     createAiSession,
     deleteConversation,
+    loadAiSessions,
+    aiSessionsHasMore: (characterSlug: string) => !!aiSessionCursor.value[characterSlug],
+    aiSessionsLoading: (characterSlug: string) => aiSessionLoadingSlugs.value.includes(characterSlug),
     messageStateOf: (id: string) =>
       messagesById.value[id] ?? emptyMessageState(),
     ensureMessages,
