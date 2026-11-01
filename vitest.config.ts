@@ -28,6 +28,7 @@ export default defineConfig({
     alias: {
       "~": appDir,
       "@": appDir,
+      "/images": fileURLToPath(new URL("./public/images", import.meta.url)),
       "zenless-ui": fileURLToPath(new URL("./zzzui/packages/", import.meta.url)),
     },
   },

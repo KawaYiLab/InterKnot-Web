@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { usePreferredReducedMotion } from "@vueuse/core";
 import {
   ChevronRightIcon,
   DocumentTextIcon,
@@ -37,6 +38,53 @@ const done = computed(
 const collapsed = ref(done.value && collapsible.value);
 watch(done, (v) => {
   if (v && collapsible.value) collapsed.value = true;
+});
+
+const groupRef = ref<HTMLElement | null>(null);
+const contentRef = ref<HTMLElement | null>(null);
+const reducedMotion = usePreferredReducedMotion();
+let heightAnimation: Animation | null = null;
+let layoutVersion = 0;
+
+const cancelHeightAnimation = () => {
+  const animation = heightAnimation;
+  heightAnimation = null;
+  animation?.cancel();
+  const el = groupRef.value;
+  if (el) {
+    el.style.height = "";
+    el.style.overflow = "";
+  }
+};
+
+watch([collapsed, reducedMotion], async () => {
+  const el = groupRef.value;
+  const version = ++layoutVersion;
+  if (!el) return;
+  // CSS 高度不包含外层消息入场动画的缩放。
+  const from = parseFloat(getComputedStyle(el).height) || 0;
+  cancelHeightAnimation();
+  if (reducedMotion.value === "reduce" || typeof el.animate !== "function") return;
+
+  // DOM 换成摘要时先保留旧高度，避免浏览器在过渡开始前压缩滚动范围。
+  el.style.height = `${from}px`;
+  el.style.overflow = "hidden";
+  await nextTick();
+  if (version !== layoutVersion || !contentRef.value) return;
+  const to = parseFloat(getComputedStyle(contentRef.value).height) || 0;
+  if (Math.abs(from - to) < 0.5) {
+    cancelHeightAnimation();
+    return;
+  }
+  const animation = el.animate(
+    [{ height: `${from}px` }, { height: `${to}px` }],
+    { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)", fill: "both" },
+  );
+  heightAnimation = animation;
+  el.style.height = "";
+  animation.onfinish = () => {
+    if (heightAnimation === animation) cancelHeightAnimation();
+  };
 });
 
 /** 展开了命中列表的检索步骤 */
@@ -78,6 +126,8 @@ watch(
   { immediate: true },
 );
 onBeforeUnmount(() => {
+  layoutVersion++;
+  cancelHeightAnimation();
   if (ticker) clearInterval(ticker);
 });
 
@@ -118,81 +168,83 @@ const summary = computed(() => {
 </script>
 
 <template>
-  <div class="ai-steps" :class="{ 'is-collapsed': collapsed }">
-    <button
-      v-if="collapsible && collapsed"
-      type="button"
-      class="ai-steps__row ai-steps__summary"
-      :aria-expanded="false"
-      @click="collapsed = false"
-    >
-      <span class="ai-steps__icon" :class="{ 'is-error': failed }">
-        <ExclamationTriangleIcon v-if="failed" />
-        <WrenchScrewdriverIcon v-else />
-      </span>
-      <span class="ai-steps__title">{{ summary }}</span>
-      <ChevronRightIcon class="ai-steps__chevron" />
-    </button>
-
-    <template v-else>
+  <div ref="groupRef" class="ai-steps" :class="{ 'is-collapsed': collapsed }">
+    <div ref="contentRef" class="ai-steps__content">
       <button
-        v-if="collapsible && done"
+        v-if="collapsible && collapsed"
         type="button"
         class="ai-steps__row ai-steps__summary"
-        :aria-expanded="true"
-        @click="collapsed = true"
+        :aria-expanded="false"
+        @click="collapsed = false"
       >
         <span class="ai-steps__icon" :class="{ 'is-error': failed }">
           <ExclamationTriangleIcon v-if="failed" />
           <WrenchScrewdriverIcon v-else />
         </span>
         <span class="ai-steps__title">{{ summary }}</span>
-          <ChevronRightIcon class="ai-steps__chevron is-open" />
+        <ChevronRightIcon class="ai-steps__chevron" />
       </button>
 
-      <ol class="ai-steps__list" :class="{ 'is-nested': collapsible && done }">
-        <li v-for="step in steps" :key="step.stepId" class="ai-steps__item">
-          <component
-            :is="step.items?.length ? 'button' : 'div'"
-            :type="step.items?.length ? 'button' : undefined"
-            class="ai-steps__row"
-            :class="[`is-${step.status}`, `kind-${step.kind}`, { 'is-clickable': !!step.items?.length }]"
-            :aria-expanded="step.items?.length ? openItems.has(step.stepId) : undefined"
-            @click="step.items?.length ? toggleItems(step.stepId) : undefined"
-          >
-            <span class="ai-steps__icon" :class="{ 'is-error': step.kind === 'error' }">
-              <span v-if="step.status === 'running'" class="ai-steps__spinner" />
-              <component :is="iconOf(step)" v-else />
-            </span>
-            <span class="ai-steps__title" :class="{ 'is-shimmer': step.status === 'running' }">
-              {{ titleOf(step) }}
-            </span>
-            <a
-              v-if="step.postId && step.subtitle"
-              :href="`/post/${step.postId}`"
-              class="ai-steps__subtitle is-link"
-              @click.prevent.stop="emit('open-post', step.postId)"
-            >{{ step.subtitle }}</a>
-            <span v-else-if="step.subtitle" class="ai-steps__subtitle">{{ step.subtitle }}</span>
-            <span v-if="metaOf(step)" class="ai-steps__meta">{{ metaOf(step) }}</span>
-            <ChevronRightIcon
-              v-if="step.items?.length"
-              class="ai-steps__chevron"
-              :class="{ 'is-open': openItems.has(step.stepId) }"
-            />
-          </component>
-          <ul v-if="step.items?.length && openItems.has(step.stepId)" class="ai-steps__hits">
-            <li v-for="item in step.items" :key="item.documentId">
+      <template v-else>
+        <button
+          v-if="collapsible && done"
+          type="button"
+          class="ai-steps__row ai-steps__summary"
+          :aria-expanded="true"
+          @click="collapsed = true"
+        >
+          <span class="ai-steps__icon" :class="{ 'is-error': failed }">
+            <ExclamationTriangleIcon v-if="failed" />
+            <WrenchScrewdriverIcon v-else />
+          </span>
+          <span class="ai-steps__title">{{ summary }}</span>
+          <ChevronRightIcon class="ai-steps__chevron is-open" />
+        </button>
+
+        <ol class="ai-steps__list" :class="{ 'is-nested': collapsible && done }">
+          <li v-for="step in steps" :key="step.stepId" class="ai-steps__item">
+            <component
+              :is="step.items?.length ? 'button' : 'div'"
+              :type="step.items?.length ? 'button' : undefined"
+              class="ai-steps__row"
+              :class="[`is-${step.status}`, `kind-${step.kind}`, { 'is-clickable': !!step.items?.length }]"
+              :aria-expanded="step.items?.length ? openItems.has(step.stepId) : undefined"
+              @click="step.items?.length ? toggleItems(step.stepId) : undefined"
+            >
+              <span class="ai-steps__icon" :class="{ 'is-error': step.kind === 'error' }">
+                <span v-if="step.status === 'running'" class="ai-steps__spinner" />
+                <component :is="iconOf(step)" v-else />
+              </span>
+              <span class="ai-steps__title" :class="{ 'is-shimmer': step.status === 'running' }">
+                {{ titleOf(step) }}
+              </span>
               <a
-                :href="`/post/${item.documentId}`"
-                class="ai-steps__hit"
-                @click.prevent="emit('open-post', item.documentId)"
-              >{{ item.title || "无标题" }}</a>
-            </li>
-          </ul>
-        </li>
-      </ol>
-    </template>
+                v-if="step.postId && step.subtitle"
+                :href="`/post/${step.postId}`"
+                class="ai-steps__subtitle is-link"
+                @click.prevent.stop="emit('open-post', step.postId)"
+              >{{ step.subtitle }}</a>
+              <span v-else-if="step.subtitle" class="ai-steps__subtitle">{{ step.subtitle }}</span>
+              <span v-if="metaOf(step)" class="ai-steps__meta">{{ metaOf(step) }}</span>
+              <ChevronRightIcon
+                v-if="step.items?.length"
+                class="ai-steps__chevron"
+                :class="{ 'is-open': openItems.has(step.stepId) }"
+              />
+            </component>
+            <ul v-if="step.items?.length && openItems.has(step.stepId)" class="ai-steps__hits">
+              <li v-for="item in step.items" :key="item.documentId">
+                <a
+                  :href="`/post/${item.documentId}`"
+                  class="ai-steps__hit"
+                  @click.prevent="emit('open-post', item.documentId)"
+                >{{ item.title || "无标题" }}</a>
+              </li>
+            </ul>
+          </li>
+        </ol>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -204,6 +256,13 @@ const summary = computed(() => {
   color: #8f8f8f;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.ai-steps__content {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .ai-steps__list {

@@ -69,20 +69,20 @@ const systemLabel = computed(
   () => SYSTEM_LABELS[props.entry.msg.content?.trim() ?? ''] ?? props.entry.msg.content,
 );
 
-/**
- * AI 回复按真实发生顺序展开：过程步骤（思考 / 工具）与回答分段穿插，
- * 而不是把整个过程塞进气泡上方的一个框里。没有工作流事件时走下面的单气泡渲染。
- */
+/** AI 回复按真实发生顺序展开；正文可能先于首个工作流事件到达。 */
 const flowBlocks = computed((): WorkflowFlowBlock[] | null => {
   const { entry } = props;
-  if (!entry.aiRich || !entry.workflowEvents.length || typeof entry.rendered !== "string") return null;
+  if (!entry.aiRich || typeof entry.rendered !== "string") return null;
   return buildWorkflowFlow(entry.workflowEvents, entry.rendered, { settled: !entry.aiStreaming });
 });
 
-/** 最后一个文字块的下标：「(已编辑)」挂在它上面 */
+/** 最后一个非空文字块的下标：「(已编辑)」挂在它上面，等待气泡不触发步骤收起。 */
 const lastTextIndex = computed(() => {
   const blocks = flowBlocks.value ?? [];
-  for (let i = blocks.length - 1; i >= 0; i--) if (blocks[i]!.type === "text") return i;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i]!;
+    if (block.type === "text" && block.text) return i;
+  }
   return -1;
 });
 
@@ -90,17 +90,6 @@ const lastTextIndex = computed(() => {
 const awaitingFirstData = computed(
   () => props.entry.aiRich && props.entry.pendingStream && !props.entry.workflowEvents.length,
 );
-
-/**
- * 生成中、末尾还没有在写的气泡（思考 / 检索中，或工具刚结束、下一轮还没出字）：补一个「正在输入」。
- * 步骤跑着的时候也保留，不然它会在步骤开始时消失、结束后又冒出来，页面跟着上下跳；
- * 开始出字时由回答气泡原地接替。
- */
-const flowWaiting = computed(() => {
-  const blocks = flowBlocks.value;
-  if (!blocks || !props.entry.aiStreaming) return false;
-  return blocks[blocks.length - 1]?.type !== "text";
-});
 </script>
 
 <template>
@@ -160,7 +149,7 @@ const flowWaiting = computed(() => {
               v-if="block.type === 'steps'"
               :steps="block.steps"
               :settled="!entry.aiStreaming"
-              :followed="blockIdx < flowBlocks.length - 1"
+              :followed="blockIdx < lastTextIndex"
               @open-post="emit('open-post', $event)"
             />
             <div
@@ -169,20 +158,19 @@ const flowWaiting = computed(() => {
               :title="fullTime || undefined"
             >
               <AiMessageBody
+                v-if="block.text"
                 :text="block.text"
                 :streaming="block.live"
                 @open-post="emit('open-post', $event)"
               />
+              <span v-else class="ik-knock__msg-typing" aria-label="正在输入">
+                <span class="ik-knock__typing-dot" />
+                <span class="ik-knock__typing-dot" />
+                <span class="ik-knock__typing-dot" />
+              </span>
               <span v-if="blockIdx === lastTextIndex && entry.msg.editedAt" class="ik-knock__msg-edited">(已编辑)</span>
             </div>
           </template>
-          <div v-if="flowWaiting" class="ik-knock__msg-bubble">
-            <span class="ik-knock__msg-typing" aria-label="正在输入">
-              <span class="ik-knock__typing-dot" />
-              <span class="ik-knock__typing-dot" />
-              <span class="ik-knock__typing-dot" />
-            </span>
-          </div>
         </template>
         <div v-if="images.length" ref="imagesRef" class="ik-knock__msg-images">
           <button
@@ -219,14 +207,6 @@ const flowWaiting = computed(() => {
             <span class="ik-knock__typing-dot" />
             <span class="ik-knock__typing-dot" />
           </span>
-          <!-- AI 回复：markdown 富渲染（代码高亮 / 表格 / 复制），
-               流式与打字机期间由组件展示光标并跳过高亮 -->
-          <AiMessageBody
-            v-else-if="entry.aiRich && typeof entry.rendered === 'string'"
-            :text="entry.rendered"
-            :streaming="entry.aiStreaming"
-            @open-post="emit('open-post', $event)"
-          />
           <template v-else-if="typeof entry.rendered === 'string' && hasBubbleLinks(entry.rendered)">
             <template v-for="(seg, si) in parseBubbleSegments(entry.rendered)" :key="si">
               <span v-if="seg.type === 'text'">{{ seg.content }}</span>

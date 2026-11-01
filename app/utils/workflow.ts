@@ -319,8 +319,9 @@ function alignParts(
     }
     if (!settled) {
       // 后面的段还没轮到
-      if (rest.trim()) texts.push(rest.trimEnd());
-      return { texts, rest: "", partial: true };
+      const hasPartial = !!rest.trim();
+      if (hasPartial) texts.push(rest.trimEnd());
+      return { texts, rest: "", partial: hasPartial };
     }
     if (settled && i === parts.length - 1) {
       // 末段可能经过整体清洗 / 链接解析与原段不完全一致，用剩余正文
@@ -343,6 +344,12 @@ export function buildWorkflowFlow(
   rendered: string,
   opts: { settled: boolean },
 ): WorkflowFlowBlock[] {
+  // 没有分段信息的旧消息保留原始 Markdown，包括代码块缩进。
+  if (!events.length) {
+    return rendered.trim() || !opts.settled
+      ? [{ type: "text", key: "p-0", text: rendered, live: !opts.settled }]
+      : [];
+  }
   const sorted = [...events].sort((a, b) => a.seq - b.seq);
   const steps = buildWorkflowSteps(sorted);
   // 回复已结束（含用户中途停止）：没收到 finish 的步骤不再转圈
@@ -379,18 +386,20 @@ export function buildWorkflowFlow(
     if (last?.type === "steps") last.steps.push(step);
     else blocks.push({ type: "steps", key: `g-${step.stepId}`, steps: [step] });
   };
-  const pushText = (key: string, text: string, live: boolean) => {
+  const pushText = (key: string, text: string, live: boolean, pending = false) => {
     const trimmed = stripEdgeRules(text);
-    if (trimmed) blocks.push({ type: "text", key, text: trimmed, live });
+    if (trimmed || pending) blocks.push({ type: "text", key, text: trimmed, live });
   };
 
   if (!aligned) {
     for (const slot of slots) if (slot.type === "step") pushStep(slot.step);
-    pushText("t-all", rendered.trim(), !opts.settled);
+    pushText("p-0", rendered.trim(), !opts.settled);
     return blocks;
   }
 
   let partCursor = 0;
+  // partIndex 从 0 递增；未封口的尾段和等待气泡先占用下一段的编号。
+  let nextPartIndex = 0;
   for (const slot of slots) {
     if (slot.type === "step") {
       pushStep(slot.step);
@@ -399,11 +408,18 @@ export function buildWorkflowFlow(
     const text = aligned.texts[partCursor];
     const isLast = partCursor === aligned.texts.length - 1;
     partCursor++;
+    nextPartIndex = slot.partIndex;
     // 正文还没写到 / 播到这里：后面的步骤也先不出现，保持「写到哪、展示到哪」
     if (text == null) break;
     pushText(`p-${slot.partIndex}`, text, aligned.partial && isLast);
     if (aligned.partial && isLast) break;
+    nextPartIndex = slot.partIndex + 1;
   }
-  pushText("t-tail", aligned.rest, !opts.settled);
+  pushText(
+    `p-${nextPartIndex}`,
+    aligned.rest,
+    !opts.settled,
+    !opts.settled && blocks[blocks.length - 1]?.type !== "text",
+  );
   return blocks;
 }
