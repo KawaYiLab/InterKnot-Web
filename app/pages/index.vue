@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useDebounceFn, useWindowSize, useMediaQuery } from "@vueuse/core";
+import { useWindowSize, useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { ArticleFeed, ArticleSort, Category, Post } from "~/types/entities";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -13,7 +13,6 @@ import {
   EyeIcon,
   BookmarkIcon,
   UserGroupIcon,
-  MagnifyingGlassIcon,
 } from "@heroicons/vue/24/outline";
 import {
   TabsRoot,
@@ -48,6 +47,14 @@ const presenceOverflow = computed(() =>
   Math.max(0, presenceOnline.value - presenceShownAvatars.value.length),
 );
 
+// 搜索搬到了 /search，旧的 /?q= 链接转过去
+definePageMeta({
+  middleware: (to) => {
+    const q = Array.isArray(to.query.q) ? to.query.q[0] : to.query.q;
+    if (q) return navigateTo({ path: "/search", query: { q } }, { replace: true });
+  },
+});
+
 useSeoMeta({
   title: "绳网 - 绝区零玩家论坛",
   description: "绳网（Inter-Knot）是绝区零玩家论坛：攻略、角色讨论、剧情考据和同人创作，新艾利都最大的匿名委托中枢。",
@@ -73,7 +80,6 @@ onMounted(() => {
 });
 
 const LOAD_MORE_ROOT_MARGIN = "360px 0px";
-const query = ref(pickFirstQuery(route.query.q as string | string[] | undefined));
 // 频道筛选：空串 = 全部频道（此时由排序 Tab「最新 / 热门」决定看哪条流）。
 const categories = ref<Category[]>([]);
 const selectedCategory = ref<string>("");
@@ -128,26 +134,13 @@ interface NavTab {
   icon: any;
 }
 
-/** 当前生效的搜索词：仅主信息流支持文本搜索，关注/收藏强制走列表流。 */
-const activeQuery = () => (feedMode.value === "all" ? query.value.trim() : "");
-
-/** 搜索态：搜索结果按相关性排，排序 Tab 不参与（「热门」Tab 此时不渲染）。 */
-const isSearching = computed(() => !!query.value.trim());
-
 const activeSort = computed<ArticleSort>(() =>
-  feedMode.value === "all" && !isSearching.value ? sortMode.value : "latest",
+  feedMode.value === "all" ? sortMode.value : "latest",
 );
 
 const isUnreadFeed = computed(() => activeSort.value === "unread");
 
 const mainNavTabs = computed<NavTab[]>(() => {
-  if (isSearching.value) {
-    return [
-      { key: "search", label: "搜索结果", icon: MagnifyingGlassIcon },
-      { key: "following", label: "关注", icon: UserGroupIcon },
-      { key: "favorites", label: "收藏", icon: BookmarkIcon },
-    ];
-  }
   return [
     { key: "latest", label: "最新", icon: ClockIcon },
     { key: "hot", label: "热门", icon: FireIcon },
@@ -158,9 +151,6 @@ const mainNavTabs = computed<NavTab[]>(() => {
 });
 
 const currentTab = computed(() => {
-  if (isSearching.value) {
-    return feedMode.value === "all" ? "search" : feedMode.value;
-  }
   if (feedMode.value !== "all") {
     return feedMode.value;
   }
@@ -170,7 +160,7 @@ const currentTab = computed(() => {
 const activeTabTriggerId = computed(() => `ik-tab-${currentTab.value}`);
 
 const isCategoryFilterVisible = computed(
-  () => !isSearching.value && currentTab.value !== "hot" && feedMode.value === "all",
+  () => currentTab.value !== "hot" && feedMode.value === "all",
 );
 
 let lastLoginOpenTime = 0;
@@ -214,12 +204,6 @@ const handleTabChange = (val: string | number) => {
     }
     selectedCategory.value = "";
     feedMode.value = tabKey as ArticleFeed;
-    return;
-  }
-
-  if (tabKey === "search") {
-    feedMode.value = "all";
-    selectedCategory.value = "";
     return;
   }
 
@@ -281,17 +265,15 @@ const cachedMeasuredHeights = shallowRef<Map<string | number, number> | undefine
 const loadMoreSentinelRef = ref<HTMLElement | null>(null);
 const loadMoreObserverRef = shallowRef<IntersectionObserver | null>(null);
 
-// ── 后台轮询：检测有无新委托（仅在无搜索关键词时启用） ─────────
+// ── 后台轮询：检测有无新委托 ─────────
 const NEW_ARTICLES_POLL_MS = 60_000;
 // 最新、热门、未看都接收 SSE；查看更新时仅把事件批次置顶，其余列表顺序与分页保持不变。
-const feedStreamEnabled = computed(
-  () => feedMode.value === "all" && !query.value.trim(),
-);
+const feedStreamEnabled = computed(() => feedMode.value === "all");
 const feedUpdates = useArticleFeedUpdates({
   posts: list,
   enabled: feedStreamEnabled,
   scope: computed(() => JSON.stringify([
-    feedMode.value, selectedCategory.value, activeSort.value, query.value, auth.generation,
+    feedMode.value, selectedCategory.value, activeSort.value, auth.generation,
   ])),
   canApply: () => !listRequestPending && !refreshing.value && !loading.value,
   load: async (ids) => {
@@ -445,11 +427,11 @@ const fetchList = async (reset = false) => {
   // 缓存命中预填：避免从其他页面切回首页时 skeleton → fade → list 双重过渡 440ms。
   // 同步把缓存数据填进 list，模板首帧就走 "list" 分支，跳过 <Transition> 切换。
   // 之后仍然 await searchArticles：fresh 时返回同引用无副作用；stale 时后台刷新替换。
-  // 仅对 reset=true（首屏 / 切回 / 切搜索词）启用；refreshing 是用户明确下拉，不走捷径。
+  // 仅对 reset=true（首屏 / 切回）启用；refreshing 是用户明确下拉，不走捷径。
   let cacheHit = false;
   if (reset && !refreshing.value) {
     const cached = api.peekArticles(
-      activeQuery(),
+      "",
       "",
       selectedCategory.value,
       feedMode.value,
@@ -485,7 +467,7 @@ const fetchList = async (reset = false) => {
   const currentVersion = ++requestVersion.value;
   try {
     const page = await api.searchArticles(
-      activeQuery(),
+      "",
       reset ? "" : endCursor.value,
       selectedCategory.value,
       feedMode.value,
@@ -631,9 +613,8 @@ const handleRefresh = async () => {
 
 // ── 后台静默轮询：按活动时间跨页对账，补齐断线期间的新帖/顶帖 ────
 const pollLatestArticles = async () => {
-  // 仅在主信息流（无搜索词、非关注/收藏）下做轮询
+  // 仅在主信息流（非关注/收藏）下做轮询
   if (feedMode.value !== "all") return;
-  if (query.value.trim()) return;
   // 活动时间边界只适用于最新流；热门榜和未看流不按 bumpedAt 对账，仅接收 SSE。
   if (activeSort.value !== "latest") return;
   // 不与正在进行的请求/刷新冲突
@@ -726,37 +707,6 @@ const observeLoadMoreSentinel = () => {
   loadMoreObserverRef.value = observer;
 };
 
-const debouncedSearch = useDebounceFn(() => fetchList(true), 300);
-
-watch(
-  () => query.value,
-  (q) => {
-    // 输入搜索词时回到主信息流（关注/收藏不支持文本搜索）。
-    // feedMode 变化会触发其 watcher 重拉，避免与 debouncedSearch 重复，这里提前 return。
-    if (q.trim() && feedMode.value !== "all") {
-      feedMode.value = "all";
-      stopPolling();
-      return;
-    }
-    debouncedSearch();
-    // q 非空 ⇒ 进入搜索；空 ⇒ 回到主信息流（轮询照常运行）
-    if (q.trim()) {
-      stopPolling();
-    } else {
-      startPolling();
-    }
-  },
-);
-
-watch(
-  () => route.query.q,
-  (nextQuery) => {
-    const normalized = pickFirstQuery(nextQuery as string | string[] | undefined);
-    if (normalized === query.value) return;
-    query.value = normalized;
-  },
-);
-
 const selectCategory = (slug: string) => {
   // 选分类即回到主信息流（关注/收藏是独立筛选，不与分类叠加）。
   if (feedMode.value !== "all") feedMode.value = "all";
@@ -844,13 +794,12 @@ let initialFetchPromise: Promise<unknown>;
 
 // 乐观插入：消费 /create 发布后塞入的 pending 队列，把刚发布的委托
 // unshift 到 list 头部并加入 seenIds，避免后续 fetch 返回相同 id 时被去重逻辑过滤掉。
-// 搜索流 / 关注 / 收藏 feed / 热门排序下不插入，避免污染这些列表（新委托既未被收藏、
+// 关注 / 收藏 feed / 热门排序下不插入，避免污染这些列表（新委托既未被收藏、
 // 未必来自关注作者，也不会一发布就进热度榜）。
 // drain 仅在真正会写入 list 时调用，不能在冷启动 fetchList 之前就 drain——fetchList 会重置 seenIds 和 list。
 const consumePendingPosts = () => {
   if (disposed) return;
   if (feedMode.value !== "all") return;
-  if (query.value.trim()) return;
   if (activeSort.value === "hot") return;
   if (!pendingPost.peek().length) return;
   const pending = pendingPost.drain();
@@ -866,7 +815,7 @@ const consumePendingPosts = () => {
   list.value = [...fresh, ...list.value];
 };
 
-if (cached && cached.query === query.value && cached.category === selectedCategory.value) {
+if (cached && cached.category === selectedCategory.value) {
   // 从缓存恢复：跳过网络请求，直接填充列表状态
   const restoredFeed = cached.feed ?? "all";
   if (restoredFeed !== feedMode.value) {
@@ -1034,8 +983,7 @@ onMounted(async () => {
   // 滚动恢复由 app/router.options.ts 的 scrollBehavior 统一处理，
   // 此处无需手动 scrollTo——scrollBehavior 在导航到 / 时自动读取缓存的 scrollY。
 
-  // 仅在主信息流下启动轮询；搜索状态由 watch(query) 控制
-  if (!query.value.trim()) startPolling();
+  startPolling();
 });
 
 // ── 路由离开前：保存首页状态快照 ──────────────────────
@@ -1054,7 +1002,6 @@ onBeforeRouteLeave(() => {
     )),
     endCursor: endCursor.value,
     hasNextPage: hasNextPage.value,
-    query: query.value,
     category: selectedCategory.value,
     feed: feedMode.value,
     sort: sortMode.value,
@@ -1115,7 +1062,6 @@ onBeforeUnmount(() => {
       :model-value="currentTab"
       :category="selectedCategory"
       :categories="categories"
-      :searching="isSearching"
       @update:model-value="handleTabChange"
       @update:category="(val: string) => (val === '' ? selectAllCategories() : selectCategory(val))"
     >

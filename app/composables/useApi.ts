@@ -151,6 +151,35 @@ export interface SearchSuggestion {
   isAnonymous: boolean;
 }
 
+/** 搜索页：帖子 / 评论结果页，total 是后端估计的命中数 */
+export type SearchResultPage<T> = Pagination<T> & { total: number };
+
+export type PostSearchSort = "relevance" | "latest" | "hot";
+
+/** 用户搜索结果（GET /v1/users/search） */
+export interface SearchUser {
+  id: string;
+  name: string;
+  level: number;
+  avatar: string;
+  bio: string;
+  followerCount: number;
+  isFollowing: boolean;
+}
+
+/** 评论搜索结果（GET /v1/search/comments） */
+export interface SearchComment {
+  id: string;
+  postId: string;
+  postTitle: string;
+  postCover: string;
+  body: string;
+  author: Author;
+  isAnonymous: boolean;
+  likeCount: number;
+  createdAt: string;
+}
+
 export interface AuthResult {
   /** 登录成功的账号（会话 Cookie 已由服务端种下） */
   user: Author;
@@ -1093,6 +1122,67 @@ export function useApi() {
         };
       })
       .filter((s): s is SearchSuggestion => s !== null);
+  };
+
+  /** 搜索页的帖子结果（GET /v1/search/posts）。不走缓存：调用方自行丢弃过期响应。 */
+  const searchPosts = async (
+    query: string,
+    opts: { sort?: PostSearchSort; category?: string; cursor?: string } = {},
+  ): Promise<SearchResultPage<Post>> => {
+    const q = query.trim();
+    if (!q) return { ...toPage<Post>([], null), total: 0 };
+    if (import.meta.client) await useAuthStore().ensureCredentials();
+    const params: Record<string, string> = { q, limit: String(DEFAULT_PAGE_SIZE) };
+    if (opts.sort && opts.sort !== "relevance") params.sort = opts.sort;
+    if (opts.category) params.category = opts.category;
+    if (opts.cursor) params.cursor = opts.cursor;
+    const res = await $api<CursorPage<Rec> & { total?: number }>("/v1/search/posts", { query: params });
+    const page = mergeReadPage(toPage(res.items.map(toPost), res.nextCursor));
+    return { ...page, total: Number(res.total ?? page.nodes.length) };
+  };
+
+  /** 搜索用户（GET /v1/users/search）：按用户名匹配，最多 20 个，不分页。 */
+  const searchUsers = async (query: string): Promise<SearchUser[]> => {
+    const q = query.trim();
+    if (!q) return [];
+    if (import.meta.client) await useAuthStore().ensureCredentials();
+    const data = await $api<Rec[]>("/v1/users/search", { query: { q, limit: "20" } });
+    return (Array.isArray(data) ? data : [])
+      .filter((u) => str(u.id) && str(u.username))
+      .map((u) => ({
+        id: String(u.id),
+        name: String(u.username),
+        level: num(u.level) ?? 1,
+        avatar: normalizeMediaUrl(u.avatarUrl),
+        bio: String(u.bio || ""),
+        followerCount: num(u.followerCount) ?? 0,
+        isFollowing: u.isFollowing === true,
+      }));
+  };
+
+  /** 搜索评论（GET /v1/search/comments）。 */
+  const searchComments = async (
+    query: string,
+    cursor = "",
+  ): Promise<SearchResultPage<SearchComment>> => {
+    const q = query.trim();
+    if (!q) return { ...toPage<SearchComment>([], null), total: 0 };
+    if (import.meta.client) await useAuthStore().ensureCredentials();
+    const params: Record<string, string> = { q, limit: String(DEFAULT_PAGE_SIZE) };
+    if (cursor) params.cursor = cursor;
+    const res = await $api<CursorPage<Rec> & { total?: number }>("/v1/search/comments", { query: params });
+    const items = res.items.map((c) => ({
+      id: String(c.id || ""),
+      postId: String(c.postId || ""),
+      postTitle: String(c.postTitle || ""),
+      postCover: toMediaMeta(c.postCover as MediaDto | undefined)?.url || "",
+      body: String(c.body || ""),
+      author: toAuthor(c.author as AuthorDto | undefined),
+      isAnonymous: c.isAnonymous === true,
+      likeCount: num(c.likeCount) ?? 0,
+      createdAt: String(c.createdAt || ""),
+    }));
+    return { ...toPage(items, res.nextCursor), total: Number(res.total ?? items.length) };
   };
 
   /** 频道列表（GET /v1/categories）：启用中的分区，按排序。 */
@@ -2482,6 +2572,9 @@ export function useApi() {
     getSuggestedArticles,
     getArticleUpdates,
     suggestArticles,
+    searchPosts,
+    searchUsers,
+    searchComments,
     peekArticles,
     getCategories,
     suggestTags,

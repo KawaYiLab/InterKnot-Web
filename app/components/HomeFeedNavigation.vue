@@ -9,7 +9,6 @@ import {
   EyeIcon,
   BookmarkIcon,
   UserGroupIcon,
-  MagnifyingGlassIcon,
   Squares2X2Icon,
 } from "@heroicons/vue/24/outline";
 import {
@@ -33,13 +32,11 @@ interface Props {
   modelValue: string;
   category?: string;
   categories?: Category[];
-  searching?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   category: "",
   categories: () => [],
-  searching: false,
 });
 
 const emit = defineEmits<{
@@ -66,13 +63,6 @@ interface NavTab {
 }
 
 const mainNavTabs = computed<NavTab[]>(() => {
-  if (props.searching) {
-    return [
-      { key: "search", label: "搜索结果", icon: MagnifyingGlassIcon },
-      { key: "following", label: "关注", icon: UserGroupIcon },
-      { key: "favorites", label: "收藏", icon: BookmarkIcon },
-    ];
-  }
   return [
     { key: "latest", label: "最新", icon: ClockIcon },
     { key: "hot", label: "热门", icon: FireIcon },

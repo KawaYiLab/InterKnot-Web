@@ -152,8 +152,27 @@ let suggestTimer: ReturnType<typeof setTimeout> | null = null;
 let blurTimer: ReturnType<typeof setTimeout> | null = null;
 let suggestSeq = 0;
 
+// 搜索页上顶部搜索框就是页面的输入框：边输边出结果，不再弹联想和历史下拉（页面里有）
+const onSearchPage = computed(() => route.path === "/search");
+const LIVE_SEARCH_DEBOUNCE_MS = 300;
+let liveSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+const routeKeyword = () => pickFirstQuery(route.query.q as string | string[] | undefined).trim();
+
+const syncLiveSearch = () => {
+  if (liveSearchTimer) {
+    clearTimeout(liveSearchTimer);
+    liveSearchTimer = null;
+  }
+  if (!onSearchPage.value) return;
+  const keyword = searchKeyword.value.trim();
+  if (keyword === routeKeyword()) return;
+  // 清空关键词时连同 Tab / 排序一起清掉，回到搜索页初始状态
+  void router.replace({ path: "/search", query: keyword ? { ...route.query, q: keyword } : {} });
+};
+
 const suggestOpen = computed(
-  () => suggestVisible.value && suggestions.value.length > 0 && !!searchKeyword.value.trim(),
+  () => !onSearchPage.value && suggestVisible.value && suggestions.value.length > 0 && !!searchKeyword.value.trim(),
 );
 
 // ── 本地搜索历史：聚焦且无输入时展示，与联想下拉互斥 ──────────
@@ -166,7 +185,7 @@ const {
 const activeHistoryIndex = ref(-1);
 
 const historyOpen = computed(
-  () => searchFocused.value && !searchKeyword.value.trim() && searchHistory.value.length > 0,
+  () => !onSearchPage.value && searchFocused.value && !searchKeyword.value.trim() && searchHistory.value.length > 0,
 );
 
 watch(historyOpen, () => {
@@ -199,6 +218,11 @@ const fetchSuggestions = async (keyword: string) => {
 watch(searchKeyword, (next) => {
   const keyword = next.trim();
   if (suggestTimer) clearTimeout(suggestTimer);
+  if (onSearchPage.value) {
+    if (liveSearchTimer) clearTimeout(liveSearchTimer);
+    liveSearchTimer = setTimeout(syncLiveSearch, LIVE_SEARCH_DEBOUNCE_MS);
+    return;
+  }
   if (!keyword) {
     suggestSeq += 1;
     suggestions.value = [];
@@ -326,28 +350,20 @@ const applySearch = async () => {
   if (applyingSearch.value) return;
 
   const keyword = searchKeyword.value.trim();
-  const currentKeyword = pickFirstQuery(route.query.q as string | string[] | undefined).trim();
-  const query = keyword ? { q: keyword } : {};
-
   // 仅记录用户主动发起的非空搜索（applySearch 只由用户交互触发）
   if (keyword) addSearchHistory(keyword);
 
-  if (route.path === "/" && keyword === currentKeyword) {
+  // 收起手机键盘
+  blurSearchInput();
+  if (onSearchPage.value) {
+    // 回车立即生效，不等防抖
+    syncLiveSearch();
     return;
   }
 
   applyingSearch.value = true;
-  if (route.path === "/") {
-    try {
-      await router.replace({ path: "/", query });
-      return;
-    } finally {
-      applyingSearch.value = false;
-    }
-  }
-
   try {
-    await router.push({ path: "/", query });
+    await router.push({ path: "/search", query: keyword ? { q: keyword } : {} });
   } finally {
     applyingSearch.value = false;
   }
@@ -422,7 +438,11 @@ watch(
   () => route.fullPath,
   () => {
     activeTab.value = resolveActiveTab(route.path);
-    searchKeyword.value = pickFirstQuery(route.query.q as string | string[] | undefined);
+    // 只在搜索词真的变了时回填：搜索页边输边同步路由，回填会吃掉用户刚敲的空格
+    const q = pickFirstQuery(route.query.q as string | string[] | undefined);
+    // 搜索页上用户正在输入时不回填，以输入框为准
+    const typing = onSearchPage.value && searchFocused.value;
+    if (!typing && searchKeyword.value.trim() !== q.trim()) searchKeyword.value = q;
     // Reset auto-hide state on navigation so the header is visible on the
     // new page until the user scrolls down again.
     isHeaderHidden.value = false;
