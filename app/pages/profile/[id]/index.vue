@@ -852,6 +852,11 @@ onBeforeUnmount(() => {
 .ik-banner-slot {
   flex-shrink: 0;
 }
+/* 名片的上外边距留在骨架容器内：截取的骨架包含这段间距，加载完成时不跳动 */
+.ik-banner-slot,
+.ik-banner-slot > :deep(div) {
+  display: flow-root;
+}
 /* boneyard 只画内容块、不画容器背景，加载中补上 UID 栏和名片的底色 */
 .ik-tab-bar-slot[aria-busy="true"] {
   border-radius: 0 0 16px 16px;
@@ -862,12 +867,12 @@ onBeforeUnmount(() => {
 .ik-banner-slot[aria-busy="true"]::before {
   content: "";
   position: absolute;
-  inset: 0 16px;
+  inset: 12px 16px 0;
   border-radius: 14px;
   background: linear-gradient(135deg, #111 0%, #161616 50%, #111 100%);
 }
 @media (max-width: 639px) {
-  .ik-banner-slot[aria-busy="true"]::before { inset: 0 12px; }
+  .ik-banner-slot[aria-busy="true"]::before { inset: 12px 12px 0; }
 }
 
 /* User info inside banner */
