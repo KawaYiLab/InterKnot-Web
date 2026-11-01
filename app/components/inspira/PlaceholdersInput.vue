@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/vue/24/outline";
+import InspiraShineBorder from "~/components/inspira/ShineBorder.vue";
+import InspiraVanishCanvas from "~/components/inspira/VanishCanvas.vue";
 
 /**
- * 移植自 Inspira UI「Placeholders And Vanish Input」的轮播占位：
- * 输入框为空时，占位提示每隔几秒从下往上换一条。改写为 scoped CSS，去掉了提交时的粒子消散。
+ * 移植自 Inspira UI「Placeholders And Vanish Input」，外观与敲敲输入框（DmComposer）一致：
+ * 点阵底 + 粗描边 + 流光边框，右侧 zzzui 按钮；空输入时占位从下往上轮播，
+ * 点清空时文字碎成粒子散掉。搜索提交不清空输入，所以提交时不播消散。
  */
 const props = withDefaults(
   defineProps<{
     placeholders?: string[];
     ariaLabel?: string;
     interval?: number;
+    submitLabel?: string;
   }>(),
   {
     placeholders: () => ["搜索..."],
     interval: 3000,
+    submitLabel: "搜索",
   },
 );
 
@@ -26,6 +31,7 @@ const emit = defineEmits<{
 }>();
 
 const inputRef = ref<HTMLInputElement | null>(null);
+const vanishRef = ref<InstanceType<typeof InspiraVanishCanvas> | null>(null);
 const current = ref(0);
 let timer: number | null = null;
 
@@ -61,6 +67,7 @@ onBeforeUnmount(() => {
 const submit = () => emit("submit", model.value);
 
 const clear = () => {
+  if (inputRef.value) vanishRef.value?.play(inputRef.value);
   model.value = "";
   inputRef.value?.focus();
 };
@@ -72,27 +79,30 @@ defineExpose({
 </script>
 
 <template>
-  <form class="ik-pi" :class="{ 'has-value': !!model }" role="search" @submit.prevent="submit">
+  <form class="ik-pi" role="search" @submit.prevent="submit">
+    <InspiraShineBorder class="ik-pi__shine" :border-width="3" />
     <MagnifyingGlassIcon class="ik-pi__icon" aria-hidden="true" />
-    <input
-      ref="inputRef"
-      v-model="model"
-      class="ik-pi__input"
-      type="search"
-      enterkeyhint="search"
-      autocomplete="off"
-      :aria-label="ariaLabel || placeholders[0]"
-      @focus="emit('focus')"
-      @blur="emit('blur')"
-    />
-    <div class="ik-pi__placeholder" aria-hidden="true">
-      <Transition name="ik-pi-swap" mode="out-in">
-        <span v-if="!model" :key="current" class="ik-pi__placeholder-text">{{ placeholders[current] }}</span>
+    <div class="ik-pi__field">
+      <input
+        ref="inputRef"
+        v-model="model"
+        class="ik-pi__input"
+        type="search"
+        enterkeyhint="search"
+        autocomplete="off"
+        :aria-label="ariaLabel || placeholders[0]"
+        @focus="emit('focus')"
+        @blur="emit('blur')"
+      />
+      <Transition name="ik-pi-swap">
+        <span v-if="!model" :key="current" class="ik-pi__placeholder" aria-hidden="true">{{ placeholders[current] }}</span>
       </Transition>
+      <InspiraVanishCanvas ref="vanishRef" />
     </div>
     <button v-if="model" type="button" class="ik-pi__clear" aria-label="清空" @click="clear">
       <XMarkIcon aria-hidden="true" />
     </button>
+    <z-button class="ik-pi__submit" native-type="submit">{{ submitLabel }}</z-button>
   </form>
 </template>
 
@@ -101,54 +111,62 @@ defineExpose({
   position: relative;
   display: flex;
   align-items: center;
+  gap: 6px;
   width: 100%;
-  height: 56px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px 4px 4px 18px;
+  border: 3px solid #313131;
   border-radius: 999px;
-  background: rgba(20, 20, 20, 0.78);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
-}
-
-.ik-pi:hover {
-  border-color: rgba(255, 255, 255, 0.18);
+  background: #050505 url("/images/tab-bg-point.webp") repeat;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .ik-pi:focus-within {
-  border-color: var(--ik-primary, #bfff09);
-  background: rgba(23, 23, 23, 0.92);
-  box-shadow: 0 0 0 4px rgba(191, 255, 9, 0.12), 0 10px 30px rgba(0, 0, 0, 0.35);
+  border-color: #fbfe00;
+  box-shadow: 0 0 0 4px rgba(251, 254, 0, 0.12), 0 0 24px rgba(251, 254, 0, 0.12);
+}
+
+/* 流光叠在静态描边上；聚焦后描边已经是黄色，流光退场 */
+.ik-pi__shine {
+  transition: opacity 200ms ease;
+}
+
+.ik-pi:focus-within .ik-pi__shine {
+  opacity: 0;
 }
 
 .ik-pi__icon {
-  position: absolute;
-  left: 22px;
+  flex: 0 0 auto;
   width: 20px;
   height: 20px;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.4);
   stroke-width: 2.2;
-  pointer-events: none;
-  transition: color 0.2s ease;
+  transition: color 160ms ease;
 }
 
 .ik-pi:focus-within .ik-pi__icon {
-  color: var(--ik-primary, #bfff09);
+  color: #fbfe00;
+}
+
+.ik-pi__field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
 }
 
 .ik-pi__input {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  padding: 0 52px 0 54px;
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 11px 8px;
   border: 0;
-  border-radius: inherit;
   background: transparent;
   color: #fff;
-  font: inherit;
+  caret-color: #fbfe00;
+  font-family: inherit;
   font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
   outline: none;
   appearance: none;
 }
@@ -157,92 +175,95 @@ defineExpose({
   display: none;
 }
 
-.ik-pi__placeholder {
-  position: absolute;
-  inset: 0 52px 0 54px;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  pointer-events: none;
+.ik-pi__input::selection {
+  background: #fbfe00;
+  color: #000;
 }
 
-.ik-pi__placeholder-text {
+.ik-pi__placeholder {
+  position: absolute;
+  top: 11px;
+  left: 8px;
+  right: 8px;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.38);
+  color: rgba(255, 255, 255, 0.32);
   font-size: 16px;
+  font-weight: 500;
+  line-height: 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .ik-pi-swap-enter-active,
 .ik-pi-swap-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: opacity 300ms ease, transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .ik-pi-swap-enter-from {
   opacity: 0;
-  transform: translateY(14px);
+  transform: translateY(60%);
 }
 
 .ik-pi-swap-leave-to {
   opacity: 0;
-  transform: translateY(-14px);
+  transform: translateY(-60%);
 }
 
 .ik-pi__clear {
-  position: absolute;
-  right: 10px;
-  z-index: 2;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: color 140ms ease, background-color 140ms ease;
 }
 
 .ik-pi__clear:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
 .ik-pi__clear svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   stroke-width: 2.2;
+}
+
+.ik-pi__submit {
+  flex: 0 0 auto;
 }
 
 @media (max-width: 768px) {
   .ik-pi {
-    height: 48px;
+    padding-left: 14px;
   }
 
   .ik-pi__icon {
-    left: 18px;
     width: 18px;
     height: 18px;
   }
 
-  .ik-pi__input,
-  .ik-pi__placeholder-text {
+  .ik-pi__input {
+    height: 40px;
+    padding: 9px 6px;
     font-size: 15px;
   }
 
-  .ik-pi__input {
-    padding: 0 48px 0 46px;
-  }
-
   .ik-pi__placeholder {
-    inset: 0 48px 0 46px;
+    top: 9px;
+    left: 6px;
+    right: 6px;
+    font-size: 15px;
   }
 
   .ik-pi__clear {
-    right: 8px;
     width: 32px;
     height: 32px;
   }

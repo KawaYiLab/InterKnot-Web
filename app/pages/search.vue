@@ -3,7 +3,7 @@ import { useElementVisibility, useWindowSize } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { AcceptableValue } from "reka-ui";
 import { TabsContent, TabsIndicator, TabsList, TabsRoot, TabsTrigger } from "reka-ui";
-import { ArrowUpRightIcon, ChatBubbleLeftRightIcon, CheckIcon, EyeIcon, HeartIcon, PlusIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/vue/24/outline";
+import { ArrowUpRightIcon, ChatBubbleLeftRightIcon, EyeIcon, HeartIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/vue/24/outline";
 import type { Category, Post, Tag } from "~/types/entities";
 import type { PostSearchSort, SearchComment, SearchUser } from "~/composables/useApi";
 import { resolveErrorMessage } from "~/utils/api-error";
@@ -364,12 +364,16 @@ const formatCount = (n: number | null, cap = 999) => {
   if (n === null) return "";
   return n > cap ? `${cap}+` : String(n);
 };
+// 重新加载时保留旧数字（只调暗），Tab 不会因为数字消失又出现而左右跳
 const typeCounts = computed<Record<SearchType, string>>(() => ({
-  post: postsLoading.value ? "" : formatCount(postsTotal.value),
-  user: usersLoading.value || !usersLoaded.value
-    ? ""
-    : users.value.length >= USER_LIMIT ? `${USER_LIMIT}+` : String(users.value.length),
-  comment: commentsLoading.value ? "" : formatCount(commentsTotal.value),
+  post: formatCount(postsTotal.value),
+  user: !usersLoaded.value ? "" : users.value.length >= USER_LIMIT ? `${USER_LIMIT}+` : String(users.value.length),
+  comment: formatCount(commentsTotal.value),
+}));
+const typeCountsStale = computed<Record<SearchType, boolean>>(() => ({
+  post: postsLoading.value,
+  user: usersLoading.value,
+  comment: commentsLoading.value,
 }));
 
 // ── 瀑布流（与首页同款） ──
@@ -507,7 +511,7 @@ const retry = () => {
           <TabsTrigger v-for="t in TYPES" :key="t.key" :value="t.key" as-child>
             <button type="button" class="ik-seg__item">
               {{ t.label }}
-              <span v-if="typeCounts[t.key]" class="ik-seg__count">{{ typeCounts[t.key] }}</span>
+              <span class="ik-seg__count" :class="{ 'is-stale': typeCountsStale[t.key] }">{{ typeCounts[t.key] }}</span>
             </button>
           </TabsTrigger>
         </TabsList>
@@ -701,19 +705,15 @@ const retry = () => {
 
         <!-- 用户 -->
         <div v-else-if="activeType === 'user'" class="ik-search-results">
-          <div v-if="usersLoading && !users.length" class="ik-search-grid ik-search-grid--users" aria-busy="true" aria-label="正在搜索用户">
+          <div v-if="usersLoading && !users.length" class="ik-search-grid" aria-busy="true" aria-label="正在搜索用户">
             <div v-for="i in 6" :key="i" class="ik-user is-skel">
-              <div class="ik-user__link">
-                <span class="ik-skel ik-skel--avatar" />
-                <div class="ik-user__main">
-                  <span class="ik-skel ik-skel--line" style="width: 48%" />
-                  <span class="ik-skel ik-skel--line" style="width: 88%" />
-                  <span class="ik-skel ik-skel--line" style="width: 60%" />
-                </div>
+              <span class="ik-skel ik-skel--avatar" />
+              <div class="ik-user__main">
+                <span class="ik-skel ik-skel--line" style="width: 46%" />
+                <span class="ik-skel ik-skel--line ik-skel--thin" style="width: 30%" />
+                <span class="ik-skel ik-skel--line ik-skel--thin" style="width: 72%" />
               </div>
-              <div class="ik-user__footer">
-                <span class="ik-skel ik-skel--button" />
-              </div>
+              <span class="ik-skel ik-skel--button" />
             </div>
           </div>
 
@@ -728,57 +728,44 @@ const retry = () => {
             <p class="ik-search-empty__hint">用户名要包含这几个字才能搜到</p>
           </div>
 
-          <ul v-else class="ik-search-grid ik-search-grid--users">
-            <li v-for="u in users" :key="u.id" class="ik-user">
-              <NuxtLink :to="profileLink(u.id)" class="ik-user__link" @click="rememberKeyword">
+          <ul v-else class="ik-search-grid">
+            <li v-for="(u, i) in users" :key="u.id" class="ik-user ik-reveal" :style="{ '--i': i }">
+              <NuxtLink :to="profileLink(u.id)" class="ik-user__avatar-wrap" tabindex="-1" aria-hidden="true" @click="rememberKeyword">
                 <img :src="u.avatar || '/images/default-avatar.webp'" alt="" class="ik-user__avatar" loading="lazy" @error="onAvatarError" />
-                <div class="ik-user__main">
-                  <div class="ik-user__name-row">
-                    <h2 class="ik-user__name" :title="u.name">
-                      <template v-for="(part, j) in splitHighlight(u.name, keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
-                    </h2>
-                    <span class="ik-user__level">Lv.{{ u.level }}</span>
-                  </div>
-                  <p class="ik-user__summary">
-                    <span class="ik-user__meta">{{ u.followerCount.toLocaleString('zh-CN') }} 粉丝</span>
-                    <span v-if="u.bio" class="ik-user__bio">{{ u.bio }}</span>
-                  </p>
-                </div>
+                <span class="ik-user__level">{{ u.level || 1 }}</span>
               </NuxtLink>
-              <div class="ik-user__footer">
-                <button
-                  v-if="!isSelf(u)"
-                  type="button"
-                  class="ik-user__follow"
-                  :class="{ 'is-following': u.isFollowing }"
-                  :disabled="followPending.has(u.id)"
-                  :aria-busy="followPending.has(u.id)"
-                  :aria-pressed="u.isFollowing"
-                  :aria-label="`${u.isFollowing ? '取消关注' : '关注'}${u.name}`"
-                  @click="toggleFollow(u)"
-                >
-                  <span v-if="followPending.has(u.id)" class="ik-user__spinner" aria-hidden="true" />
-                  <CheckIcon v-else-if="u.isFollowing" aria-hidden="true" />
-                  <PlusIcon v-else aria-hidden="true" />
-                  {{ u.isFollowing ? '已关注' : '关注' }}
-                </button>
-              </div>
+              <NuxtLink :to="profileLink(u.id)" class="ik-user__main" @click="rememberKeyword">
+                <h2 class="ik-user__name" :title="u.name">
+                  <template v-for="(part, j) in splitHighlight(u.name, keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
+                </h2>
+                <span class="ik-user__meta">{{ u.followerCount.toLocaleString('zh-CN') }} 粉丝</span>
+                <span v-if="u.bio" class="ik-user__bio">{{ u.bio }}</span>
+              </NuxtLink>
+              <z-button
+                v-if="!isSelf(u)"
+                size="small"
+                class="ik-user__follow"
+                :class="{ 'is-following': u.isFollowing }"
+                :loading="followPending.has(u.id)"
+                :aria-pressed="u.isFollowing"
+                :aria-label="`${u.isFollowing ? '取消关注' : '关注'}${u.name}`"
+                @click="toggleFollow(u)"
+              >{{ u.isFollowing ? '已关注' : '关注' }}</z-button>
             </li>
           </ul>
         </div>
 
         <!-- 评论 -->
         <div v-else class="ik-search-results">
-          <div v-if="commentsLoading && !comments.length" class="ik-search-comments" aria-busy="true" aria-label="正在搜索评论">
+          <div v-if="commentsLoading && !comments.length" class="ik-search-grid ik-search-grid--comments" aria-busy="true" aria-label="正在搜索评论">
             <div v-for="i in 4" :key="i" class="ik-comment-card is-skel">
-              <div class="ik-comment__identity">
+              <div class="ik-comment__head">
                 <span class="ik-skel ik-skel--avatar-sm" />
-                <span class="ik-skel ik-skel--line" style="width: 80px" />
+                <span class="ik-skel ik-skel--line" style="width: 120px" />
               </div>
               <div class="ik-comment__content">
-                <span class="ik-skel ik-skel--line" style="width: 92%" />
-                <span class="ik-skel ik-skel--line" style="width: 80%" />
-                <span class="ik-skel ik-skel--line" style="width: 54%" />
+                <span class="ik-skel ik-skel--line" style="width: 94%" />
+                <span class="ik-skel ik-skel--line" style="width: 62%" />
               </div>
               <span class="ik-skel ik-skel--source" />
             </div>
@@ -796,8 +783,8 @@ const retry = () => {
           </div>
 
           <template v-else>
-            <ul class="ik-search-comments">
-              <li v-for="c in comments" :key="c.id" class="ik-comment-card">
+            <ul class="ik-search-grid ik-search-grid--comments">
+              <li v-for="(c, i) in comments" :key="c.id" class="ik-comment-card ik-reveal" :style="{ '--i': i % 12 }">
                 <div class="ik-comment__head">
                   <NuxtLink
                     v-if="!c.isAnonymous && c.author.documentId"
@@ -806,24 +793,19 @@ const retry = () => {
                     @click="rememberKeyword"
                   >
                     <img :src="c.author.avatar || '/images/default-avatar.webp'" alt="" class="ik-comment__avatar" loading="lazy" @error="onAvatarError" />
-                    <span class="ik-comment__byline">
-                      <span class="ik-comment__author">{{ c.author.name || '匿名用户' }}</span>
-                      <time class="ik-comment__time" :datetime="c.createdAt">{{ formatTime(c.createdAt) }}</time>
-                    </span>
+                    <span class="ik-comment__author">{{ c.author.name || '匿名用户' }}</span>
                   </NuxtLink>
                   <span v-else class="ik-comment__identity">
                     <img :src="!c.isAnonymous && c.author.avatar || '/images/default-avatar.webp'" alt="" class="ik-comment__avatar" loading="lazy" @error="onAvatarError" />
-                    <span class="ik-comment__byline">
-                      <span class="ik-comment__author">{{ c.isAnonymous ? '匿名用户' : c.author.name || '匿名用户' }}</span>
-                      <time class="ik-comment__time" :datetime="c.createdAt">{{ formatTime(c.createdAt) }}</time>
-                    </span>
+                    <span class="ik-comment__author">{{ c.isAnonymous ? '匿名用户' : c.author.name || '匿名用户' }}</span>
                   </span>
+                  <time class="ik-comment__time" :datetime="c.createdAt">{{ formatTime(c.createdAt) }}</time>
+                  <span v-if="c.likeCount" class="ik-comment__likes" :aria-label="`${c.likeCount} 个赞`"><HeartIcon aria-hidden="true" />{{ c.likeCount }}</span>
                 </div>
                 <a :href="commentLink(c)" class="ik-comment__content" @click="openComment(c, $event)">
                   <p class="ik-comment__body">
                     <template v-for="(part, j) in splitHighlight(commentText(c), keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
                   </p>
-                  <span v-if="c.likeCount" class="ik-comment__likes" :aria-label="`${c.likeCount} 个赞`"><HeartIcon aria-hidden="true" />{{ c.likeCount }}</span>
                 </a>
                 <a
                   :href="`/post/${encodeURIComponent(c.postId)}`"
@@ -1031,14 +1013,23 @@ mark {
   font-weight: 600;
 }
 
+/* 数量占固定宽度（最长 999+），数字变化或加载中都不推挤后面的 Tab */
 .ik-seg__count {
-  padding: 3px 6px;
-  border-radius: 8px;
-  background: #202020;
-  color: #b5b5b5;
-  font-size: 12px;
+  min-width: 4ch;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 13px;
   font-weight: 500;
+  text-align: left;
   font-variant-numeric: tabular-nums;
+  transition: opacity 0.2s ease;
+}
+
+.ik-seg__item[data-state="active"] .ik-seg__count {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.ik-seg__count.is-stale {
+  opacity: 0.4;
 }
 
 /* ── 空搜索 ── */
@@ -1287,11 +1278,13 @@ a.ik-search-hot__item:hover {
   transform: rotate(180deg);
 }
 
+/* 横向可滚动；上下留 6px 给焦点框，不被 overflow 裁掉 */
 .ik-search-related {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 28px;
+  margin: -6px -6px 22px;
+  padding: 6px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1321,13 +1314,18 @@ a.ik-search-hot__item:hover {
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 
+/* 悬停只换描边和底色，不位移 */
 .ik-related:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: #1c1c1c;
-  transform: translateY(-1px);
+  border-color: rgba(191, 255, 9, 0.55);
+  background: #1a1d12;
+  color: #fff;
+}
+
+.ik-related:focus-visible {
+  outline-offset: 2px;
 }
 
 .ik-related--user {
@@ -1354,6 +1352,11 @@ a.ik-search-hot__item:hover {
   color: rgba(255, 255, 255, 0.5);
 }
 
+.ik-related--more:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: #1c1c1c;
+}
+
 .ik-related--tag {
   padding: 0 16px;
   color: var(--ik-primary, #bfff09);
@@ -1365,7 +1368,7 @@ a.ik-search-hot__item:hover {
   transition: opacity 0.15s ease;
 }
 
-/* ── 用户结果 / 评论阅读列表 ── */
+/* ── 用户 / 评论：同一套卡片网格 ── */
 .ik-search-results {
   width: 100%;
   margin: 0 auto;
@@ -1373,232 +1376,179 @@ a.ik-search-hot__item:hover {
 
 .ik-search-grid {
   display: grid;
-  gap: 52px 48px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr));
+  gap: 20px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.ik-search-grid--users {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.ik-search-grid--comments {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
 }
 
+.ik-user,
+.ik-comment-card {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  background: #0e0e0e;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.ik-user:not(.is-skel):hover,
+.ik-comment-card:not(.is-skel):hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: #121212;
+}
+
+/* 用户卡：头像（左上角等级徽章，与个人主页一致）| 名字·粉丝·简介 | 关注 */
 .ik-user {
-  position: relative;
-  min-width: 0;
-  min-height: 104px;
-  padding-left: 104px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 124px;
+  padding: 24px;
 }
 
-.ik-user__link {
+.ik-user__avatar-wrap {
+  position: relative;
+  flex: 0 0 auto;
   display: block;
-  min-width: 0;
-  color: inherit;
-  text-decoration: none;
 }
 
 .ik-user__avatar,
 .ik-user .ik-skel--avatar {
-  position: absolute;
-  top: 2px;
-  left: 0;
-  width: 84px;
-  height: 84px;
-  border: 1px solid #383838;
+  display: block;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   object-fit: cover;
   background: #252525;
 }
 
-.ik-user__main {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+.ik-user__level {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border: 2px solid #0e0e0e;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s ease;
 }
 
-.ik-user__name-row {
+.ik-user:hover .ik-user__level {
+  border-color: #121212;
+}
+
+.ik-user__main {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
+  color: inherit;
+  text-decoration: none;
 }
 
 .ik-user__name {
   min-width: 0;
-  margin: 0;
+  margin: 0 0 2px;
   overflow: hidden;
   color: #f4f4f4;
-  font-size: clamp(18px, 1.4vw, 22px);
+  font-size: 17px;
   font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+a.ik-user__main:hover .ik-user__name {
+  color: #fff;
+}
+
+.ik-user__meta,
+.ik-user__bio {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
   line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ik-user__level {
-  flex: 0 0 auto;
-  padding: 2px 5px;
-  border: 1px solid #3b4430;
-  border-radius: 3px;
-  color: #bad396;
-  font-size: 11px;
-  font-weight: 700;
-  font-style: italic;
-  line-height: 1.2;
-}
-
-.ik-user__summary {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  min-width: 0;
-  margin: 0;
-  color: #a6a6a6;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
 .ik-user__meta {
-  flex: 0 0 auto;
-  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
 .ik-user__bio {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ik-user__footer {
-  display: flex;
-  align-items: center;
-  min-height: 34px;
-  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .ik-user__follow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 100px;
-  height: 34px;
-  padding: 0 16px;
-  border: 1px solid var(--ik-primary);
-  border-radius: 8px;
-  background: var(--ik-primary);
-  color: #000;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.ik-user__follow svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 2;
+  flex: 0 0 auto;
+  min-width: 3.5em;
 }
 
 .ik-user__follow.is-following {
-  border-color: #454545;
-  background: transparent;
-  color: #b5b5b5;
+  color: rgba(255, 255, 255, 0.55);
 }
 
-.ik-user__follow:not(:disabled):hover {
-  border-color: #d2ff59;
-  background: #d2ff59;
-  color: #000;
-}
-
-.ik-user__follow.is-following:not(:disabled):hover {
-  border-color: #8a8a8a;
-  background: #202020;
-  color: #f4f4f4;
-}
-
-.ik-user__follow:disabled {
-  opacity: 0.7;
-}
-
-.ik-user__spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: ik-follow-spin 0.8s linear infinite;
-}
-
-@keyframes ik-follow-spin {
-  to { transform: rotate(360deg); }
-}
-
-.ik-search-comments {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
+/* 评论卡：作者 · 时间 · 赞 / 正文 / 原帖 */
 .ik-comment-card {
-  display: grid;
-  grid-template-columns: 184px minmax(0, 1fr) 280px;
-  align-items: start;
-  gap: 32px;
-  min-height: 164px;
-  padding: 28px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
 }
 
-.ik-comment-card:first-child {
-  padding-top: 0;
-}
-
-.ik-comment-card + .ik-comment-card {
-  border-top: 1px solid #292929;
-}
-
-.ik-comment__head,
-.ik-comment__byline {
+.ik-comment__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
 }
 
 .ik-comment__identity {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
+  color: inherit;
+  text-decoration: none;
 }
 
 .ik-comment__avatar {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   border-radius: 50%;
   object-fit: cover;
   background: #2a2a2a;
 }
 
-.ik-comment__byline {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .ik-comment__author {
-  display: -webkit-box;
+  min-width: 0;
   overflow: hidden;
-  color: #e8e8e8;
-  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
   font-weight: 600;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s ease;
 }
 
 a.ik-comment__identity:hover .ik-comment__author {
@@ -1606,17 +1556,32 @@ a.ik-comment__identity:hover .ik-comment__author {
 }
 
 .ik-comment__time {
-  color: #a6a6a6;
-  font-size: 13px;
-  line-height: 1.4;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.ik-comment__time::before {
+  content: "·";
+  margin-right: 10px;
+}
+
+.ik-comment__likes {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 5px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.ik-comment__likes svg {
+  width: 15px;
+  height: 15px;
 }
 
 .ik-comment__content {
-  display: flex;
-  flex-direction: column;
-  align-self: stretch;
-  justify-content: space-between;
-  gap: 18px;
+  display: block;
+  flex: 1 1 auto;
   min-width: 0;
   color: inherit;
   text-decoration: none;
@@ -1624,60 +1589,45 @@ a.ik-comment__identity:hover .ik-comment__author {
 
 .ik-comment__body {
   display: -webkit-box;
-  max-width: 72ch;
   margin: 0;
   overflow: hidden;
-  color: #e8e8e8;
-  font-size: 18px;
-  line-height: 1.85;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 16px;
+  line-height: 1.75;
   overflow-wrap: anywhere;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
+  transition: color 0.15s ease;
 }
 
 .ik-comment__content:hover .ik-comment__body {
   color: #fff;
 }
 
-.ik-comment__likes {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  gap: 6px;
-  color: #a6a6a6;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
-
-.ik-comment__likes svg {
-  width: 16px;
-  height: 16px;
-}
-
 .ik-comment__post {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) 16px;
+  display: flex;
   align-items: center;
-  align-self: center;
   gap: 12px;
   min-width: 0;
-  padding: 10px;
-  border: 1px solid #303030;
+  padding: 8px 14px 8px 8px;
   border-radius: 12px;
-  background: #202020;
-  transition: border-color 0.15s ease;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
 }
 
 .ik-comment__post:hover {
-  border-color: #686868;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .ik-comment__cover,
 .ik-comment__cover-placeholder {
-  width: 64px;
-  height: 64px;
-  border-radius: 7px;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
   object-fit: cover;
   background: #2a2a2a;
 }
@@ -1685,31 +1635,36 @@ a.ik-comment__identity:hover .ik-comment__author {
 .ik-comment__cover-placeholder {
   display: grid;
   place-items: center;
-  color: #9a9a9a;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .ik-comment__cover-placeholder svg {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
 }
 
 .ik-comment__post-title {
-  display: -webkit-box;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: #c2c2c2;
-  font-size: 14px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.ik-comment__post:hover .ik-comment__post-title {
+  color: #fff;
 }
 
 .ik-comment__post-arrow {
+  flex: 0 0 auto;
   width: 16px;
   height: 16px;
-  color: #9a9a9a;
+  color: rgba(255, 255, 255, 0.35);
+  transition: color 0.15s ease;
 }
 
 .ik-comment__post:hover .ik-comment__post-arrow {
@@ -1719,37 +1674,6 @@ a.ik-comment__identity:hover .ik-comment__author {
 .ik-search :is(a, button, [role="tabpanel"]):focus-visible {
   outline: 2px solid var(--ik-primary);
   outline-offset: 4px;
-}
-
-@media (max-width: 1200px) {
-  .ik-comment-card {
-    grid-template-columns: minmax(0, 1fr) 250px;
-    gap: 20px 28px;
-    padding: 28px 0;
-  }
-
-  .ik-comment__head {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .ik-comment__content {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .ik-comment__post,
-  .ik-skel--source {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-}
-
-@media (max-width: 1280px) {
-  .ik-search-grid--users {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 44px 36px;
-  }
 }
 
 /* ── 底部 / 空 / 出错 ── */
@@ -1853,33 +1777,47 @@ a.ik-comment__identity:hover .ik-comment__author {
   border-radius: 50%;
 }
 
+.ik-skel--thin {
+  height: 12px;
+}
+
 .ik-skel--avatar-sm {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   border-radius: 50%;
 }
 
 .ik-skel--button {
-  width: 100px;
+  flex: 0 0 auto;
+  width: 72px;
   height: 34px;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .ik-skel--source {
-  align-self: center;
-  height: 86px;
+  height: 56px;
   border-radius: 12px;
+}
+
+.ik-user.is-skel .ik-user__main {
+  gap: 10px;
+}
+
+.ik-comment-card.is-skel .ik-comment__content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ik-skel,
-  .ik-reveal,
-  .ik-user__spinner {
+  .ik-reveal {
     animation: none;
   }
 
-  .ik-user__follow,
+  .ik-user,
+  .ik-comment-card,
   .ik-comment__post {
     transition: none;
   }
@@ -1958,94 +1896,38 @@ a.ik-comment__identity:hover .ik-comment__author {
   }
 
   .ik-search-related {
-    margin: 0 -16px 20px;
-    padding: 0 16px;
+    margin: -6px -16px 14px;
+    padding: 6px 16px;
   }
 
-  .ik-search-grid--users {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 32px;
+  .ik-search-grid {
+    gap: 12px;
   }
 
   .ik-user {
-    min-height: 100px;
-    padding-left: 80px;
+    gap: 14px;
+    min-height: 0;
+    padding: 16px;
   }
 
   .ik-user__avatar,
   .ik-user .ik-skel--avatar {
-    width: 64px;
-    height: 64px;
+    width: 52px;
+    height: 52px;
   }
 
   .ik-user__name {
-    font-size: 18px;
-  }
-
-  .ik-user__follow {
-    min-width: 96px;
-    height: 40px;
-    padding: 0 14px;
+    font-size: 16px;
   }
 
   .ik-comment-card {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
-    padding: 24px 0;
-  }
-
-  .ik-comment__head,
-  .ik-comment__content,
-  .ik-comment__post,
-  .ik-skel--source {
-    grid-column: auto;
-    grid-row: auto;
-  }
-
-  .ik-comment__avatar,
-  .ik-skel--avatar-sm {
-    width: 36px;
-    height: 36px;
-    flex-basis: 36px;
-  }
-
-  .ik-comment__byline {
-    gap: 3px;
-  }
-
-  .ik-comment__author {
-    font-size: 14px;
-  }
-
-  .ik-comment__time {
-    font-size: 12px;
+    gap: 12px;
+    padding: 16px;
   }
 
   .ik-comment__body {
-    font-size: 16px;
-    line-height: 1.8;
-  }
-
-  .ik-comment__content {
-    gap: 12px;
-  }
-
-  .ik-comment__post {
-    grid-template-columns: 44px minmax(0, 1fr) 16px;
-    gap: 10px;
-    padding: 8px;
-  }
-
-  .ik-comment__cover,
-  .ik-comment__cover-placeholder {
-    width: 44px;
-    height: 44px;
-  }
-
-  .ik-comment__post-title {
-    font-size: 13px;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    font-size: 15px;
+    line-height: 1.7;
   }
 
   .ik-search-empty {
