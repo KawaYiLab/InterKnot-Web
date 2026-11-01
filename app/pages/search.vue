@@ -100,12 +100,15 @@ const postsTotal = ref<number | null>(null);
 const postsLoading = ref(false);
 const postsLoadingMore = ref(false);
 const postsError = ref("");
+// 触底加载失败后不再自动重试（否则哨兵一直可见会无限重试），等用户点「重试」
+const postsMoreFailed = ref(false);
 let postsVersion = 0;
 
 const loadPosts = async (reset: boolean) => {
   const q = keyword.value;
   if (!q) return;
   if (!reset && (postsLoading.value || postsLoadingMore.value || !postsHasMore.value)) return;
+  postsMoreFailed.value = false;
   const version = reset ? ++postsVersion : postsVersion;
   if (reset) {
     postsLoading.value = true;
@@ -132,7 +135,7 @@ const loadPosts = async (reset: boolean) => {
   } catch (err) {
     if (version !== postsVersion) return;
     if (reset) postsError.value = resolveErrorMessage(err, "搜索失败了");
-    else message.error(resolveErrorMessage(err, "加载失败，请重试"));
+    else postsMoreFailed.value = true;
   } finally {
     if (version === postsVersion) {
       postsLoading.value = false;
@@ -174,12 +177,14 @@ const commentsTotal = ref<number | null>(null);
 const commentsLoading = ref(false);
 const commentsLoadingMore = ref(false);
 const commentsError = ref("");
+const commentsMoreFailed = ref(false);
 let commentsVersion = 0;
 
 const loadComments = async (reset: boolean) => {
   const q = keyword.value;
   if (!q) return;
   if (!reset && (commentsLoading.value || commentsLoadingMore.value || !commentsHasMore.value)) return;
+  commentsMoreFailed.value = false;
   const version = reset ? ++commentsVersion : commentsVersion;
   if (reset) {
     commentsLoading.value = true;
@@ -202,7 +207,7 @@ const loadComments = async (reset: boolean) => {
   } catch (err) {
     if (version !== commentsVersion) return;
     if (reset) commentsError.value = resolveErrorMessage(err, "搜索失败了");
-    else message.error(resolveErrorMessage(err, "加载失败，请重试"));
+    else commentsMoreFailed.value = true;
   } finally {
     if (version === commentsVersion) {
       commentsLoading.value = false;
@@ -250,6 +255,7 @@ const resetResults = () => {
   postsTotal.value = null;
   postsHasMore.value = false;
   postsError.value = "";
+  postsMoreFailed.value = false;
   users.value = [];
   usersLoaded.value = false;
   usersError.value = "";
@@ -257,6 +263,7 @@ const resetResults = () => {
   commentsTotal.value = null;
   commentsHasMore.value = false;
   commentsError.value = "";
+  commentsMoreFailed.value = false;
   tags.value = [];
 };
 
@@ -303,8 +310,8 @@ watch(
   [sentinelVisible, activeType, postsLoading, postsLoadingMore, commentsLoading, commentsLoadingMore],
   () => {
     if (!sentinelVisible.value) return;
-    if (activeType.value === "post") void loadPosts(false);
-    else if (activeType.value === "comment") void loadComments(false);
+    if (activeType.value === "post" && !postsMoreFailed.value) void loadPosts(false);
+    else if (activeType.value === "comment" && !commentsMoreFailed.value) void loadComments(false);
   },
 );
 
@@ -366,6 +373,7 @@ watch(
   (open) => {
     if (open) return;
     window.setTimeout(() => {
+      if (postModal.isOpen.value) return;
       posts.value = api.mergeReadStatus(posts.value);
     }, 320);
   },
@@ -601,6 +609,7 @@ const retry = () => {
               </VirtualMasonry>
               <div class="ik-search-footer">
                 <img v-if="postsLoadingMore" class="ik-search-footer__gif" src="/images/Bangboo.gif" alt="加载中" />
+                <z-button v-else-if="postsMoreFailed" @click="loadPosts(false)">加载失败，重试</z-button>
                 <span v-else-if="!postsHasMore">已经到底啦</span>
               </div>
             </template>
@@ -708,6 +717,7 @@ const retry = () => {
             </ul>
             <div class="ik-search-footer">
               <img v-if="commentsLoadingMore" class="ik-search-footer__gif" src="/images/Bangboo.gif" alt="加载中" />
+              <z-button v-else-if="commentsMoreFailed" @click="loadComments(false)">加载失败，重试</z-button>
               <span v-else-if="!commentsHasMore">已经到底啦</span>
             </div>
           </template>
