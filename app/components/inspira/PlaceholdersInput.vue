@@ -104,7 +104,9 @@ defineExpose({
   height: 56px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
-  background: #141414;
+  background: rgba(20, 20, 20, 0.78);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
@@ -115,7 +117,7 @@ defineExpose({
 
 .ik-pi:focus-within {
   border-color: var(--ik-primary, #bfff09);
-  background: #171717;
+  background: rgba(23, 23, 23, 0.92);
   box-shadow: 0 0 0 4px rgba(191, 255, 9, 0.12), 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 

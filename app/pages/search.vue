@@ -460,6 +460,8 @@ const retry = () => {
 </script>
 
 <template>
+  <div class="ik-search-page" :class="{ 'is-idle': !keyword }">
+  <div class="ik-search-backdrop" aria-hidden="true" />
   <section class="ik-search" :class="{ 'is-idle': !keyword }">
     <TabsRoot
       :model-value="activeType"
@@ -798,9 +800,36 @@ const retry = () => {
       </div>
     </TabsRoot>
   </section>
+  </div>
 </template>
 
 <style scoped>
+/* 搜索框背后的素材图：铺满整宽，往下渐隐进黑底 */
+.ik-search-page {
+  position: relative;
+  isolation: isolate;
+}
+
+.ik-search-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  height: 460px;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.15) 45%, rgba(0, 0, 0, 0.85) 100%),
+    url("/images/search-hero-bg.webp") center 38% / cover no-repeat;
+  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.ik-search-page.is-idle .ik-search-backdrop {
+  height: 620px;
+}
+
 /* 间距节奏：4 / 8 / 12 / 16 / 24 / 32 / 48 */
 .ik-search {
   position: relative;
@@ -895,6 +924,12 @@ mark {
 
 .ik-seg__item:active {
   transform: scale(0.97);
+}
+
+.ik-seg--lg {
+  background: rgba(18, 18, 18, 0.78);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 
 .ik-seg--lg .ik-seg__item {
@@ -1604,6 +1639,17 @@ a.ik-search-hot__item:hover {
 }
 
 @media (max-width: 768px) {
+  .ik-search-backdrop {
+    height: 300px;
+    background-image:
+      linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.15) 45%, rgba(0, 0, 0, 0.85) 100%),
+      url("/images/search-hero-bg-sm.webp");
+  }
+
+  .ik-search-page.is-idle .ik-search-backdrop {
+    height: 360px;
+  }
+
   .ik-search {
     width: calc(100% - 32px);
     padding: 16px 0 40px;
