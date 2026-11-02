@@ -23,7 +23,7 @@
     "highlight.js": "^11.11.1",
     "isomorphic-dompurify": "^3.12.0",
     "markdown-it": "^14.3.3",
-    "nuxt": "^4.6.2",
+    "nuxt": "^4.6.3",
     "ofetch": "^1.4.1",
     "photoswipe": "^5.4.4",
     "pinia": "^3.0.3",
