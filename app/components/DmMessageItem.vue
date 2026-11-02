@@ -63,7 +63,7 @@ const fullTime = computed(() => formatFullTime(props.entry.msg.createdAt));
 
 /** 将 system 标记转换为更友好的文案 */
 const SYSTEM_LABELS: Record<string, string> = {
-  '[对话已重置]': '已清空记忆，开始新话题',
+  '[对话已重置]': '开始新话题',
 };
 const systemLabel = computed(
   () => SYSTEM_LABELS[props.entry.msg.content?.trim() ?? ''] ?? props.entry.msg.content,
