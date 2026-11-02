@@ -15,7 +15,8 @@
         'z-button--round': round,
         'z-button--circle': circle,
         'z-button--disabled': disabled || loading,
-        'z-button--active': isActive
+        'z-button--active': isActive,
+        'is-fading': isInactive
       }
     ]"
     :disabled="disabled || loading"
