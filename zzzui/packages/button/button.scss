@@ -292,7 +292,9 @@
     }
     $button-active-animate: z_ani_background $--animate-color-duration $--animate-color-bezier infinite alternate,
                             z_ani_size $--animate-size-duration $--animate-size-bezier infinite;
-    &:has(.is-fadeout) {
+    // 松手后的闪烁态。不用 :has(.is-fadeout)：:has 后面跟属性选择器时，
+    // 页面上任何节点增删都会让浏览器重算所有带 class 的元素（实测一次 2ms+，手机上更久）。
+    &.is-fading {
       animation: z_ani_btn_inactive_color $--animate-flash-duration $--animate-flash-bezier $--animate-flash-count alternate;
       &>.z-button__content,
       &>.z-button__icon,

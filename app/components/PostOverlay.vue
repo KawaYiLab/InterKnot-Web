@@ -11,7 +11,7 @@ import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
 import { formatTime } from "~/utils/time";
-import { StarIcon, AtSymbolIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
+import { StarIcon, AtSymbolIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { HeartIcon, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 import { useMentionInput } from "~/composables/useMentionInput";
 import { useScrollHint } from "~/composables/useScrollHint";
@@ -31,6 +31,7 @@ import UserHoverCard from "./UserHoverCard.vue";
 import IkZzzMarquee from "./IkZzzMarquee.vue";
 import CommentItem from "./CommentItem.vue";
 import ScrollHintArrows from "./ScrollHintArrows.vue";
+import CoverPager from "./CoverPager.vue";
 import CommentsToolbar from "./CommentsToolbar.vue";
 import type { CommentSort } from "~/composables/useApi";
 import MentionHighlightOverlay from "./MentionHighlightOverlay.vue";
@@ -1717,41 +1718,12 @@ onBeforeUnmount(() => {
                             </div>
                           </div>
 
-                          <button
-                            v-show="coverIndex > 0"
-                            type="button"
-                            class="ik-dialog__cover-nav ik-dialog__cover-nav--prev"
-                            aria-label="上一张"
-                            @click.stop="goCover(coverIndex - 1)"
-                          >
-                            <ChevronLeftIcon style="width:20px;height:20px" />
-                          </button>
-                          <button
-                            v-show="coverIndex < covers.length - 1"
-                            type="button"
-                            class="ik-dialog__cover-nav ik-dialog__cover-nav--next"
-                            aria-label="下一张"
-                            @click.stop="goCover(coverIndex + 1)"
-                          >
-                            <ChevronRightIcon style="width:20px;height:20px" />
-                          </button>
-
-                          <div class="ik-dialog__cover-dots">
-                            <button
-                              v-for="(_, i) in covers"
-                              :key="i"
-                              type="button"
-                              class="ik-dialog__cover-dot"
-                              :class="{ 'ik-dialog__cover-dot--active': i === coverIndex }"
-                              :aria-label="`第 ${i + 1} 张`"
-                              :aria-current="i === coverIndex ? 'true' : undefined"
-                              @click.stop="goCover(i)"
-                            />
-                          </div>
-
-                          <span class="ik-dialog__cover-count ik-dialog__cover-count--top">
-                            {{ coverIndex + 1 }} / {{ covers.length }}
-                          </span>
+                          <CoverPager
+                            :index="coverIndex"
+                            :total="covers.length"
+                            @prev="goCover(coverIndex - 1)"
+                            @next="goCover(coverIndex + 1)"
+                          />
                         </template>
 
                         <!-- 无图片封面但有 B 站视频：在封面区域直接放播放器 -->
@@ -2646,25 +2618,6 @@ html.no-gpu .ik-dialog {
   cursor: var(--ik-cursor-pointer);
 }
 
-.ik-dialog__cover-count {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  padding: 2px 10px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.65);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.ik-dialog__cover-count--top {
-  top: 10px;
-  bottom: auto;
-}
-
 /* 多图轮播 */
 .ik-dialog__cover-scroller {
   position: absolute;
@@ -2686,75 +2639,6 @@ html.no-gpu .ik-dialog {
   width: 100%;
   height: 100%;
   min-width: 0;
-}
-
-.ik-dialog__cover-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  cursor: var(--ik-cursor-pointer);
-  transition: background 160ms ease, opacity 160ms ease;
-  z-index: 2;
-}
-
-.ik-dialog__cover-nav:hover {
-  background: rgba(0, 0, 0, 0.75);
-}
-
-.ik-dialog__cover-nav--prev {
-  left: 10px;
-}
-
-.ik-dialog__cover-nav--next {
-  right: 10px;
-}
-
-.ik-dialog__cover-dots {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  z-index: 2;
-}
-
-.ik-dialog__cover-dot {
-  appearance: none;
-  border: none;
-  padding: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.45);
-  cursor: var(--ik-cursor-pointer);
-  transition: width 200ms ease, background-color 200ms ease, transform 160ms ease;
-}
-
-.ik-dialog__cover-dot:hover {
-  background: rgba(255, 255, 255, 0.8);
-  transform: scale(1.2);
-}
-
-.ik-dialog__cover-dot--active {
-  width: 18px;
-  background: var(--ik-primary);
-}
-
-.ik-dialog__cover-dot--active:hover {
-  background: var(--ik-primary);
-  transform: none;
 }
 
 /* 正文：封面右侧单独滚动的一列 */
