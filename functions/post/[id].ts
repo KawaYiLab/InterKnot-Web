@@ -13,6 +13,8 @@ import {
 /** GET /v1/posts/{id} 里用得到的字段。 */
 interface PostDetail {
   id: string;
+  /** 帖子编号，帖子地址用它。 */
+  postNo?: number;
   title: string;
   body: string;
   covers?: { url: string }[];
@@ -34,13 +36,16 @@ const BODY_MAX = 5000;
 async function load(env: Env, id: string): Promise<LoadResult> {
   const post = await fetchApi<PostDetail>(env, `/v1/posts/${encodeURIComponent(id)}`);
   if (post === "not_found" || "failed" in post) return post;
+  // 帖子 id 打开的旧地址跳到编号地址。
+  const key = String(post.postNo ?? post.id);
+  if (id !== key) return { redirect: `/post/${encodeURIComponent(key)}` };
 
   const paragraphs = markdownToParagraphs(post.body || "");
   const plain = paragraphs.join(" ");
   const description = truncate(plain, 160) || "绳网是绝区零玩家论坛，聊攻略、角色、剧情和同人创作。";
   const title = `${post.title || "无标题"} - 绝区零绳网`;
   const image = post.covers?.[0]?.url || post.externalVideos?.[0]?.coverUrl || DEFAULT_IMAGE;
-  const url = `${siteOrigin(env)}/post/${encodeURIComponent(post.id)}`;
+  const url = `${siteOrigin(env)}/post/${encodeURIComponent(key)}`;
   const authorUrl = !post.author.anonymous && post.author.id
     ? `${siteOrigin(env)}/profile/${encodeURIComponent(String(post.author.memberNo ?? post.author.id))}`
     : undefined;

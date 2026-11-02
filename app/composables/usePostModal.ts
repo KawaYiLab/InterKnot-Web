@@ -5,6 +5,7 @@
 import type { Author } from "~/types/entities";
 import type { HistoryState } from "vue-router";
 import { overlayHistoryState } from "~/utils/overlay-history";
+import { isPostSnowflake, knownPostId, postPath } from "~/utils/post-path";
 
 let _historyPushed = false;
 let _closing = false;
@@ -82,14 +83,37 @@ export function usePostModal() {
     preview.value = opts?.preview ?? null;
     targetCommentId.value = opts?.commentId ?? null;
     isOpen.value = true;
-    void api.getPost(id).catch(() => {});
+    void api.getPost(id).then((post) => shortenUrl(post.id, post.postNo, background.key)).catch(() => {});
   }
 
-  function open(id: string, opts?: OpenOptions) {
-    if (!import.meta.client || !id) return;
+  /** 用帖子 id 打开的浮层，查到编号后把地址换成短的（不新增历史项）。 */
+  function shortenUrl(id: string, postNo: number | undefined, key: string) {
+    const state = window.history.state;
+    if (postNo == null || _activeKey !== key || state?.postModalKey !== key || state.postId !== id) return;
+    const url = postPath(id, postNo) + window.location.search + window.location.hash;
+    if (url === locationUrl()) return;
+    const next = { ...state };
+    for (const k of ROUTER_STATE_KEYS) delete next[k];
+    router.options.history.replace(url, next as HistoryState);
+  }
+
+  function open(ref: string, opts?: OpenOptions) {
+    if (!import.meta.client || !ref) return;
+    const id = knownPostId(ref);
+    // 没见过的编号（站内链接里的 /post/7012）：先换成帖子 id，浮层和评论接口都按 id。
+    if (!isPostSnowflake(id)) {
+      void api.getPost(id)
+        .then((post) => openById(post.id || id, opts))
+        .catch(() => openById(id, opts));
+      return;
+    }
+    openById(id, opts);
+  }
+
+  function openById(id: string, opts?: OpenOptions) {
     // back 是异步的。先等它落到背景项，再处理最新的打开意图，不能替换正在退出的项。
     if (_closing) {
-      _queuedOpen = () => open(id, opts);
+      _queuedOpen = () => openById(id, opts);
       return;
     }
     const history = router.options.history;
@@ -115,7 +139,7 @@ export function usePostModal() {
       backgrounds.set(background.key, background);
     }
     background!.options = opts;
-    const url = `/post/${encodeURIComponent(id)}` + (opts?.commentId ? `?comment=${encodeURIComponent(opts.commentId)}` : "");
+    const url = postPath(id) + (opts?.commentId ? `?comment=${encodeURIComponent(opts.commentId)}` : "");
     const state = overlayHistoryState({
       __postModal: true,
       postModalKey: background!.key,

@@ -22,12 +22,19 @@ import ScrollHintArrows from "~/components/ScrollHintArrows.vue";
 import CommentsToolbar from "~/components/CommentsToolbar.vue";
 import type { CommentSort } from "~/composables/useApi";
 
+definePageMeta({ middleware: "post-no" });
+
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 
 const { isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useImageGallery();
 
 const route = useRoute();
 const api = useApi();
+/** 详情是不是地址里这篇（地址可能是编号，也可能是帖子 id）。 */
+const isRoutePost = (p: Post) => {
+  const key = String(route.params.id || "");
+  return p.id === key || (p.postNo != null && String(p.postNo) === key);
+};
 const auth = useAuthStore();
 const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
@@ -45,7 +52,7 @@ const isBlocked = ref(false);
 const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
 const readingActive = computed(() => !loading.value && !loadError.value && !isBlocked.value &&
-  !!post.value && post.value.id === String(route.params.id || "") && !post.value.isHidden &&
+  !!post.value && isRoutePost(post.value) && !post.value.isHidden &&
   !postModal.isOpen.value && !knockModal.visible.value);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
@@ -150,7 +157,9 @@ const onEmojiSelect = async (emoji: string) => {
 
 const commentImages = useCommentImages();
 
-const postId = computed(() => String(route.params.id || ""));
+// 地址里一般是帖子编号；评论、阅读记录等接口只认帖子 id，加载完以详情里的 id 为准。
+const routeRef = computed(() => String(route.params.id || ""));
+const postId = computed(() => (post.value && isRoutePost(post.value) ? post.value.id : routeRef.value));
 
 const targetCommentId = computed(() => {
   const c = route.query.comment;

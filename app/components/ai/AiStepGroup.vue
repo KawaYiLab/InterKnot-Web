@@ -220,7 +220,7 @@ const summary = computed(() => {
               </span>
               <a
                 v-if="step.postId && step.subtitle"
-                :href="`/post/${step.postId}`"
+                :href="postPath(step.postId)"
                 class="ai-steps__subtitle is-link"
                 @click.prevent.stop="emit('open-post', step.postId)"
               >{{ step.subtitle }}</a>
@@ -235,7 +235,7 @@ const summary = computed(() => {
             <ul v-if="step.items?.length && openItems.has(step.stepId)" class="ai-steps__hits">
               <li v-for="item in step.items" :key="item.documentId">
                 <a
-                  :href="`/post/${item.documentId}`"
+                  :href="postPath(item.documentId)"
                   class="ai-steps__hit"
                   @click.prevent="emit('open-post', item.documentId)"
                 >{{ item.title || "无标题" }}</a>

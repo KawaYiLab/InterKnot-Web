@@ -712,7 +712,7 @@ async function publish() {
       // 编辑重发：回到委托详情页查看更新后的内容。
       const editedId = documentId.value;
       message.success("委托已更新");
-      router.replace(`/post/${editedId}`);
+      router.replace(postPath(editedId));
       return;
     }
 

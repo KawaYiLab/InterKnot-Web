@@ -143,7 +143,7 @@ const handleOpen = (e: MouseEvent) => {
     @focusout="cancelPrefetch"
   >
     <NuxtLink
-      :to="`/post/${post.id}`"
+      :to="postPath(post.id, post.postNo)"
       class="ik-card__link"
       no-prefetch
     >

@@ -49,6 +49,7 @@ import type {
 import { DEFAULT_PAGE_SIZE, toPage } from "~/utils/pagination";
 import type { MentionCandidate } from "~/composables/useMentionInput";
 import { toMediaUrl } from "~/utils/image";
+import { knownPostId, rememberPostNo } from "~/utils/post-path";
 import {
   BENEFIT_MAX_LEVEL,
   benefitsForLevel,
@@ -474,8 +475,13 @@ function toPost(raw: unknown): Post {
     covers = [];
   }
 
+  const id = String(data.id || "");
+  const postNo = num(data.postNo);
+  rememberPostNo(id, postNo);
+
   return {
-    id: String(data.id || ""),
+    id,
+    postNo,
     title: String(data.title || "无标题"),
     body: "",
     // 正文是 Markdown：详情给全文 body，卡片只有纯文本摘要 excerpt。
@@ -1188,12 +1194,22 @@ export function useApi() {
 
   // ── 帖子详情 ──────────────────────────────────────
 
-  const getPost = async (id: string): Promise<Post> => {
+  /** `ref` 是帖子 id 或帖子编号（地址里的 `/post/7012`）。缓存一律记在帖子 id 名下。 */
+  const getPost = async (ref: string): Promise<Post> => {
+    const key = knownPostId(ref);
     const post = await cachedRead(
-      qk.articles.detail(id),
-      async () => toPost(await $api(`/v1/posts/${encodeURIComponent(id)}`)),
+      qk.articles.detail(key),
+      async () => toPost(await $api(`/v1/posts/${encodeURIComponent(key)}`)),
       STALE_DETAIL,
     );
+    // 第一次用编号打开：挪到 id 名下，之后的刷新、点赞后的失效都按 id。
+    const qc = $queryClient as QueryClient | undefined;
+    if (qc && post.id && post.id !== key) {
+      qc.setQueryData(qk.articles.detail(post.id), post, {
+        updatedAt: qc.getQueryState(qk.articles.detail(key))?.dataUpdatedAt,
+      });
+      qc.removeQueries({ queryKey: qk.articles.detail(key), exact: true });
+    }
     return mergeReadStatus([post])[0]!;
   };
 

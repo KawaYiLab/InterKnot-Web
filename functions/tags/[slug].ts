@@ -12,6 +12,7 @@ import {
 interface FeedPage {
   items: {
     id: string;
+    postNo?: number;
     title: string;
     excerpt: string;
     tags?: { name: string; slug: string }[];
@@ -38,7 +39,7 @@ async function load(env: Env, slug: string): Promise<LoadResult> {
   );
   const items = page.items
     .map((p) => {
-      const href = `/post/${encodeURIComponent(p.id)}`;
+      const href = `/post/${encodeURIComponent(String(p.postNo ?? p.id))}`;
       const excerpt = p.excerpt ? `<p>${escapeHtml(truncate(p.excerpt, 120))}</p>` : "";
       return `<li><a href="${href}">${escapeHtml(p.title)}</a>${excerpt}</li>`;
     })
@@ -61,7 +62,7 @@ async function load(env: Env, slug: string): Promise<LoadResult> {
         itemListElement: page.items.map((p, i) => ({
           "@type": "ListItem",
           position: i + 1,
-          url: `${siteOrigin(env)}/post/${encodeURIComponent(p.id)}`,
+          url: `${siteOrigin(env)}/post/${encodeURIComponent(String(p.postNo ?? p.id))}`,
           name: p.title,
         })),
       },

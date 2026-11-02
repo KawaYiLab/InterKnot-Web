@@ -270,6 +270,8 @@ export interface PostTag {
 
 export interface Post {
   id: string;
+  /** 帖子短编号，帖子地址用它（`/post/7012`）。 */
+  postNo?: number;
   title: string;
   body?: string;
   bodyText?: string;

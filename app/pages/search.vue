@@ -468,7 +468,7 @@ const retry = () => {
           <CardSpotlight class="ik-search-hot">
             <ol v-if="hotPosts.length" class="ik-search-hot__list">
               <li v-for="(p, i) in hotPosts" :key="p.id" class="ik-reveal" :style="{ '--i': i }">
-                <a :href="`/post/${encodeURIComponent(p.id)}`" class="ik-search-hot__item" @click="openPost(p, $event)">
+                <a :href="postPath(p.id, p.postNo)" class="ik-search-hot__item" @click="openPost(p, $event)">
                   <span class="ik-search-hot__rank" :class="{ 'is-top': i < 3 }">{{ i + 1 }}</span>
                   <span class="ik-search-hot__title">{{ p.title }}</span>
                   <span class="ik-search-hot__views"><EyeIcon aria-hidden="true" />{{ p.views }}</span>
