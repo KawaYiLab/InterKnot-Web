@@ -1,32 +1,27 @@
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, getCurrentScope, nextTick, onScopeDispose, ref, watch } from "vue";
 import type { Ref } from "vue";
 import type { Comment } from "~/types/entities";
+
+type LoadGuard = () => boolean;
 
 export interface UseCommentSeekOptions {
   targetCommentId: Ref<string | null>;
   comments: Ref<Comment[]>;
   commentsHasNext: Ref<boolean>;
-  loadComments: () => Promise<void>;
-  /**
-   * 从某条评论所在的楼层重新加载时间线（GET comments?anchor=）。目标不在已加载的楼层里时
-   * 直接跳过去，不用一页页往后翻。
-   */
-  loadAround: (commentId: string) => Promise<void>;
-  /** 评论 DOM 是否已渲染（如 PostOverlay 的 commentsVisible），未渲染则先等待 */
+  /** 异步加载提交结果前也检查 guard，避免旧定位替换新目标的时间线。 */
+  loadComments: (isCurrent?: LoadGuard) => Promise<void>;
+  loadAround: (commentId: string, isCurrent?: LoadGuard) => Promise<void>;
   commentsVisible?: Ref<boolean>;
+  /** 浮层只查询自己的评论，不能命中背景独立页里的同一条评论。 */
+  root?: Ref<HTMLElement | null>;
 }
 
 export interface SeekOptions {
-  /** 是否对目标评论添加高亮特效，默认 true */
   highlight?: boolean;
-  /** 滚动行为：'smooth' | 'auto'，默认 'smooth' */
   behavior?: ScrollBehavior;
 }
 
-/**
- * 评论区目标定位 composable：目标已加载就直接滚过去，否则从目标所在楼层重新加载，找到后滚动并高亮。
- * 用于 PostOverlay 与 post/[id].vue 共享同一套「定位目标评论」逻辑。
- */
+/** 最新定位意图优先；切帖、关闭和卸载均可取消待完成的加载与 DOM 等待。 */
 export function useCommentSeek({
   targetCommentId,
   comments,
@@ -34,92 +29,84 @@ export function useCommentSeek({
   loadComments,
   loadAround,
   commentsVisible,
+  root,
 }: UseCommentSeekOptions) {
   const targetFound = ref(false);
   const seeking = ref(false);
   const currentTargetId = ref<string | null>(null);
   const shouldHighlight = ref(true);
+  let generation = 0;
+  let cancelVisibilityWait: (() => void) | null = null;
 
   const isLoaded = (id: string) => comments.value.some((c) => c.id === id);
-
   const highlightedCommentId = computed(() =>
-    targetFound.value && shouldHighlight.value ? (currentTargetId.value ?? targetCommentId.value) : null,
+    targetFound.value && shouldHighlight.value ? currentTargetId.value : null,
   );
 
-  const scrollToTarget = async (targetId: string, behavior: ScrollBehavior = "smooth") => {
-    if (!targetId || !targetFound.value) return;
+  const cancel = () => {
+    generation++;
+    cancelVisibilityWait?.();
+    seeking.value = false;
+    targetFound.value = false;
+    currentTargetId.value = null;
+  };
 
-    // 如果调用方延迟渲染评论 DOM（如 PostOverlay 的入场动画），
-    // 先等待评论可见再滚动，避免目标元素尚未挂载导致滚动失效。
+  const scrollToTarget = async (targetId: string, behavior: ScrollBehavior, isCurrent: LoadGuard) => {
     if (commentsVisible && !commentsVisible.value) {
       await new Promise<void>((resolve) => {
         let stop: ReturnType<typeof watch> | undefined;
-        const timer = setTimeout(() => {
+        const finish = () => {
+          clearTimeout(timer);
           stop?.();
+          if (cancelVisibilityWait === finish) cancelVisibilityWait = null;
           resolve();
-        }, 3000);
-        stop = watch(
-          commentsVisible,
-          (visible) => {
-            if (visible) {
-              clearTimeout(timer);
-              stop?.();
-              resolve();
-            }
-          },
-          { immediate: false },
-        );
+        };
+        const timer = setTimeout(finish, 3000);
+        cancelVisibilityWait = finish;
+        stop = watch(commentsVisible, (visible) => { if (visible) finish(); }, { flush: "sync" });
       });
-      if (!commentsVisible.value) return;
     }
-
+    if (!isCurrent() || (commentsVisible && !commentsVisible.value)) return;
     await nextTick();
+    if (!isCurrent()) return;
     const safeId = typeof CSS !== "undefined" && typeof CSS.escape === "function"
       ? CSS.escape(targetId)
       : targetId.replace(/["\\]/g, "\\$&");
-    const el = document.querySelector(
-      `[data-comment-id="${safeId}"]`,
-    ) as HTMLElement | null;
-    if (!el) return;
-    el.scrollIntoView?.({ behavior, block: "start" });
+    const container = root ? root.value : document;
+    const el = container?.querySelector<HTMLElement>(`[data-comment-id="${safeId}"]`);
+    el?.scrollIntoView?.({ behavior, block: "start" });
   };
 
   const seek = async (overrideTargetId?: string, options?: SeekOptions) => {
+    cancel();
+    const request = generation;
+    const isCurrent = () => request === generation;
     const effectiveTargetId = overrideTargetId ?? targetCommentId.value;
     currentTargetId.value = effectiveTargetId;
     shouldHighlight.value = options?.highlight ?? true;
-    const scrollBehavior = options?.behavior ?? "smooth";
-    if (!effectiveTargetId) {
-      targetFound.value = false;
-      await loadComments();
-      return false;
-    }
-    if (seeking.value) return false;
     seeking.value = true;
-    targetFound.value = false;
     try {
-      // 首屏还没拉时先拉第一页：目标多半就在里面，省一次跳转。
-      if (!comments.value.length && commentsHasNext.value) await loadComments();
-      if (!isLoaded(effectiveTargetId)) await loadAround(effectiveTargetId);
-      if (!isLoaded(effectiveTargetId)) return false;
+      if (!effectiveTargetId) {
+        await loadComments(isCurrent);
+        return false;
+      }
+      if (!comments.value.length && commentsHasNext.value) await loadComments(isCurrent);
+      if (!isCurrent()) return false;
+      if (!isLoaded(effectiveTargetId)) await loadAround(effectiveTargetId, isCurrent);
+      if (!isCurrent() || !isLoaded(effectiveTargetId)) return false;
       targetFound.value = true;
-      await scrollToTarget(effectiveTargetId, scrollBehavior);
-      return true;
+      await scrollToTarget(effectiveTargetId, options?.behavior ?? "smooth", isCurrent);
+      return isCurrent();
+    } catch (error) {
+      if (!isCurrent()) return false;
+      throw error;
     } finally {
-      seeking.value = false;
+      if (isCurrent()) seeking.value = false;
     }
   };
 
-  // 目标评论切换时清除高亮状态，避免旧 target 残留
-  watch(
-    targetCommentId,
-    (newVal) => {
-      currentTargetId.value = newVal;
-      shouldHighlight.value = true;
-      targetFound.value = false;
-    },
-    { immediate: true },
-  );
+  watch(targetCommentId, cancel, { flush: "sync" });
+  if (getCurrentScope()) onScopeDispose(cancel);
 
-  return { seek, targetFound, seeking, highlightedCommentId };
+  return { seek, cancel, targetFound, seeking, highlightedCommentId };
 }

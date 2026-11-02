@@ -322,32 +322,21 @@ const resolveActiveTab = (path: string): HeaderTabName => {
   return null;
 };
 
+// 搜索页有自己的大搜索框，顶部的就藏起来，避免两个输入框
+const onSearchPage = computed(() => route.path === "/search");
+
 const applySearch = async () => {
   if (applyingSearch.value) return;
 
   const keyword = searchKeyword.value.trim();
-  const currentKeyword = pickFirstQuery(route.query.q as string | string[] | undefined).trim();
-  const query = keyword ? { q: keyword } : {};
-
   // 仅记录用户主动发起的非空搜索（applySearch 只由用户交互触发）
   if (keyword) addSearchHistory(keyword);
-
-  if (route.path === "/" && keyword === currentKeyword) {
-    return;
-  }
+  // 收起手机键盘
+  blurSearchInput();
 
   applyingSearch.value = true;
-  if (route.path === "/") {
-    try {
-      await router.replace({ path: "/", query });
-      return;
-    } finally {
-      applyingSearch.value = false;
-    }
-  }
-
   try {
-    await router.push({ path: "/", query });
+    await router.push({ path: "/search", query: keyword ? { q: keyword } : {} });
   } finally {
     applyingSearch.value = false;
   }
@@ -485,6 +474,7 @@ watch(
 
       <div class="ik-header__middle">
         <div
+          v-show="!onSearchPage"
           class="ik-search-shell"
           @focusin="handleSearchFocus"
           @focusout="handleSearchBlur"

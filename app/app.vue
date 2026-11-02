@@ -2,6 +2,7 @@
 import PostOverlay from "~/components/PostOverlay.vue";
 import type { Ref } from "vue";
 import { OVERLAY_KNOCK_KEY, overlayHistoryState } from "~/utils/overlay-history";
+import { registerPostModalPopState } from "~/utils/post-modal-history";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -43,17 +44,13 @@ if (import.meta.client) {
     }
   });
 
-  // 监听浏览器后退/前进：如果弹窗打开，关闭它
-  window.addEventListener("popstate", postModal.handlePopState);
+  const removePostHistoryHandler = registerPostModalPopState(postModal.handlePopState);
   window.addEventListener("popstate", knockModal.handlePopState);
 
-  // 路由变化时收起弹窗。同 path 仅 query 变化（history.back 去掉 ik_knock）时
-  // 只关敲敲；委托弹窗用 /post/:id，path 变化时关闭。
-  router.beforeEach((to, from) => {
+  // 真正的路由导航（包括 query 变化）退出浮层；浮层自己的 Back/Forward 不走这里。
+  const removeRouteGuard = router.beforeEach((to, from) => {
+    if (to.fullPath !== from.fullPath && postModal.isOpen.value) postModal.teardown();
     if (to.path !== from.path) {
-      // 浮层只占一条 /post/:id 历史，切换相关委托走 replaceState 不触发路由导航；
-      // 因此任何真正的路由跳转（回首页 / 标签页，或点编辑 / 标签跳出）都应收起浮层。
-      if (postModal.isOpen.value) postModal.teardown();
       // 从委托弹窗 back 回带 ik_knock 的页面时，敲敲仍应保留
       const knockStillInUrl = Boolean(to.query[OVERLAY_KNOCK_KEY]);
       if (knockModal.visible.value && !knockStillInUrl) {
@@ -67,6 +64,11 @@ if (import.meta.client) {
     if (knockModal.visible.value && hadKnock && !hasKnock) {
       knockModal.teardown();
     }
+  });
+  onBeforeUnmount(() => {
+    removePostHistoryHandler();
+    window.removeEventListener("popstate", knockModal.handlePopState);
+    removeRouteGuard?.();
   });
 }
 
@@ -146,7 +148,7 @@ const overlayOpen = computed(
 </script>
 
 <template>
-  <div>
+  <div :inert="postModal.isOpen.value || undefined">
     <IkZzzMarquee class="ik-global-marquee" :paused="overlayOpen" />
     <!-- backdrop-filter 合成层预热：1×1 不可见元素，让 GPU 在首屏就把
          模糊着色器编译好、合成层分配好。否则用户第一次打开弹窗再关闭时，
@@ -158,7 +160,7 @@ const overlayOpen = computed(
 
     <AppHeader />
     <SiteBanner />
-    <main class="ik-page">
+    <main class="ik-page" tabindex="-1">
       <NuxtPage />
     </main>
     <MobileBottomNav v-if="showMobileBottomNav" />

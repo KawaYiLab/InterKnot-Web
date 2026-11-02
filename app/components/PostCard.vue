@@ -23,6 +23,7 @@ import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/ut
 import { loadBrandFonts } from "~/utils/brand-fonts";
 import { toCardCoverThumbUrl } from "~/utils/image";
 import { toCardExcerpt } from "~/utils/card-excerpt";
+import { splitHighlight } from "~/utils/highlight";
 import UserHoverCard from "./UserHoverCard.vue";
 
 const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
@@ -31,6 +32,8 @@ const props = defineProps<{
   post: Post;
   eager?: boolean;
   highlighted?: boolean;
+  /** 搜索词：标题里的命中部分高亮 */
+  keyword?: string;
 }>();
 
 const emit = defineEmits<{
@@ -39,6 +42,7 @@ const emit = defineEmits<{
 
 const authorName = computed(() => props.post.author?.name || "未知作者");
 const excerpt = computed(() => toCardExcerpt(props.post.bodyText));
+const titleParts = computed(() => splitHighlight(props.post.title, props.keyword));
 
 // 悬浮卡仅在支持悬停的设备（桌面鼠标）才有意义；触屏上它本就不弹，却仍会
 // 为每张卡片实例化多个 composable。用此开关在移动端彻底不挂载，省掉浪费。
@@ -211,7 +215,8 @@ const handleOpen = (e: MouseEvent) => {
         </div>
 
         <h3 class="ik-card__title" :class="{ 'ik-card__title--read': post.isRead }">
-          {{ post.title }}
+          <template v-if="keyword"><template v-for="(part, i) in titleParts" :key="i"><mark v-if="part.hit" class="ik-card__hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></template>
+          <template v-else>{{ post.title }}</template>
         </h3>
         <p v-if="excerpt" class="ik-card__excerpt">{{ excerpt }}</p>
       </div>
@@ -424,6 +429,11 @@ const handleOpen = (e: MouseEvent) => {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   word-break: break-word;
+}
+
+.ik-card__hit {
+  background: transparent;
+  color: var(--ik-primary, #fbfe00);
 }
 
 .ik-card__title--read {

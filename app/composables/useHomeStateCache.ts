@@ -15,7 +15,6 @@ export interface HomeStateSnapshot {
    */
   endCursor: string;
   hasNextPage: boolean;
-  query: string;
   category: string;
   feed: ArticleFeed;
   sort: ArticleSort;
