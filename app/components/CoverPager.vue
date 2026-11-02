@@ -2,8 +2,9 @@
 import { computed } from "vue";
 
 /**
- * 多图切换器：黑色胶囊里「斜切左键 + 两位页码 + 斜切右键」，样式参照米游社绝区零百科首页轮播。
- * 只负责展示和发出翻页意图，滑动由外层轮播处理。
+ * 多图切换器，照搬米游社绝区零百科首页轮播的 new-swiper-pagination：
+ * 62×20 黑色胶囊，左右是原版箭头切图，中间是 Impact 斜体两位页码。
+ * 到头后再点会绕回另一端，和原版的循环轮播一致。
  */
 const props = defineProps<{
   /** 当前页，从 0 开始 */
@@ -12,137 +13,107 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  prev: [];
-  next: [];
+  go: [index: number];
 }>();
 
 const label = computed(() => String(props.index + 1).padStart(2, "0"));
-const atStart = computed(() => props.index <= 0);
-const atEnd = computed(() => props.index >= props.total - 1);
+const prev = () => emit("go", (props.index - 1 + props.total) % props.total);
+const next = () => emit("go", (props.index + 1) % props.total);
 </script>
 
 <template>
   <div class="ik-cover-pager" @click.stop>
-    <button
-      type="button"
-      class="ik-cover-pager__btn ik-cover-pager__btn--prev"
-      aria-label="上一张"
-      :disabled="atStart"
-      @click="emit('prev')"
-    >
-      <svg viewBox="0 0 30 22" aria-hidden="true">
-        <path class="ik-cover-pager__shape" d="M11 1.5H28.5L24.5 20.5H11A9.5 9.5 0 0 1 11 1.5Z" />
-        <path class="ik-cover-pager__chevron" d="M15.5 7L11.5 11L15.5 15" />
-      </svg>
-    </button>
-    <span class="ik-cover-pager__num" aria-live="polite" :aria-label="`第 ${index + 1} 张，共 ${total} 张`">{{ label }}</span>
-    <button
-      type="button"
-      class="ik-cover-pager__btn ik-cover-pager__btn--next"
-      aria-label="下一张"
-      :disabled="atEnd"
-      @click="emit('next')"
-    >
-      <svg viewBox="0 0 30 22" aria-hidden="true">
-        <path class="ik-cover-pager__shape" d="M5.5 1.5H19A9.5 9.5 0 0 1 19 20.5H1.5L5.5 1.5Z" />
-        <path class="ik-cover-pager__chevron" d="M14.5 7L18.5 11L14.5 15" />
-      </svg>
-    </button>
+    <button type="button" class="ik-cover-pager__btn ik-cover-pager__btn--prev" aria-label="上一张" @click="prev" />
+    <span class="ik-cover-pager__num" :aria-label="`第 ${index + 1} 张，共 ${total} 张`">{{ label }}</span>
+    <button type="button" class="ik-cover-pager__btn ik-cover-pager__btn--next" aria-label="下一张" @click="next" />
   </div>
 </template>
 
 <style scoped>
+/* 原版用 Impact。Impact 是商业字体不能打包，系统自带就用系统的（Windows/macOS），
+   否则用外形几乎一样的 Anton（OFL 授权，只截了 0-9，3.5KB）。 */
+@font-face {
+  font-family: "IK Pager Digits";
+  src: local("Impact"), url("~/assets/fonts/anton-digits.woff2") format("woff2");
+  unicode-range: U+0030-0039;
+  font-display: block;
+}
+
+/* 尺寸和位置按原版渲染结果取值 */
 .ik-cover-pager {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
+  right: 4px;
+  bottom: 4px;
   z-index: 2;
-  display: flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 3px;
-  border-radius: 999px;
+  box-sizing: border-box;
+  width: 62px;
+  height: 20px;
+  border: 0.588px solid #000;
+  border-radius: 12.941px;
   background: #000;
   user-select: none;
   -webkit-user-select: none;
 }
 
+/* 桌面端帖子弹窗整体放大了 1.1 倍，这里缩回去，屏幕上保持原版的 62×20 */
+@media (min-width: 1025px) {
+  .ik-cover-pager {
+    transform: scale(calc(1 / 1.1));
+    transform-origin: right bottom;
+  }
+}
+
 .ik-cover-pager__btn {
-  position: relative;
-  display: block;
-  width: 30px;
-  height: 22px;
+  position: absolute;
+  top: 1.412px;
+  width: 20px;
+  height: 16px;
   padding: 0;
   border: none;
-  background: none;
+  background: center / cover no-repeat;
   cursor: var(--ik-cursor-pointer);
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 触屏上按钮只有 22px 高，往外扩一圈点击区域 */
-.ik-cover-pager__btn::before {
-  content: "";
-  position: absolute;
-  inset: -8px -4px;
+.ik-cover-pager__btn--prev {
+  left: 1.412px;
+  background-image: url("~/assets/images/cover-pager/left.png");
 }
 
-.ik-cover-pager__btn svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.ik-cover-pager__shape {
-  fill: #d9dadc;
-  stroke: #d9dadc;
-  stroke-width: 2;
-  stroke-linejoin: round;
-  transition: fill 120ms ease, stroke 120ms ease;
-}
-
-.ik-cover-pager__chevron {
-  fill: none;
-  stroke: #0e0e0e;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.ik-cover-pager__btn--next {
+  left: 39.412px;
+  background-image: url("~/assets/images/cover-pager/right.png");
 }
 
 @media (hover: hover) {
-  .ik-cover-pager__btn:not(:disabled):hover .ik-cover-pager__shape {
-    fill: var(--ik-primary);
-    stroke: var(--ik-primary);
+  .ik-cover-pager__btn--prev:hover {
+    background-image: url("~/assets/images/cover-pager/left-hover.png");
+  }
+
+  .ik-cover-pager__btn--next:hover {
+    background-image: url("~/assets/images/cover-pager/right-hover.png");
   }
 }
 
-.ik-cover-pager__btn:not(:disabled):active .ik-cover-pager__shape {
-  fill: var(--ik-primary);
-  stroke: var(--ik-primary);
+.ik-cover-pager__btn--prev:active {
+  background-image: url("~/assets/images/cover-pager/left-hover.png");
 }
 
-.ik-cover-pager__btn:disabled {
-  cursor: default;
-}
-
-.ik-cover-pager__btn:disabled .ik-cover-pager__shape {
-  fill: #5a5b5d;
-  stroke: #5a5b5d;
+.ik-cover-pager__btn--next:active {
+  background-image: url("~/assets/images/cover-pager/right-hover.png");
 }
 
 .ik-cover-pager__num {
-  min-width: 26px;
-  margin: 0 2px;
-  text-align: center;
+  position: absolute;
+  top: 0.412px;
+  left: 20.412px;
   color: rgba(255, 255, 255, 0.48);
-  font-family: Impact, "Arial Narrow", "Roboto Condensed", sans-serif-condensed, sans-serif;
-  font-size: 20px;
+  font-family: "IK Pager Digits", impact, sans-serif;
+  font-size: 14.118px;
   font-style: italic;
-  /* Impact 只有一个字重，不让浏览器再加粗；没有 Impact 的系统退到粗体窄字 */
-  font-weight: 700;
-  font-synthesis: style;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  line-height: 18.824px;
+  white-space: nowrap;
   pointer-events: none;
 }
 </style>

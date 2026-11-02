@@ -1721,8 +1721,7 @@ onBeforeUnmount(() => {
                           <CoverPager
                             :index="coverIndex"
                             :total="covers.length"
-                            @prev="goCover(coverIndex - 1)"
-                            @next="goCover(coverIndex + 1)"
+                            @go="goCover"
                           />
                         </template>
 
