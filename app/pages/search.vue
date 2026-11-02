@@ -684,7 +684,7 @@ const retry = () => {
                   <h2 class="ik-user__name" :title="u.name">
                     <template v-for="(part, j) in splitHighlight(u.name, keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
                   </h2>
-                  <span class="ik-user__meta">{{ u.followerCount.toLocaleString('zh-CN') }} 粉丝</span>
+                  <span class="ik-user__meta">{{ u.followerCount.toLocaleString('zh-CN') }} 关注</span>
                   <span v-if="u.bio" class="ik-user__bio">{{ u.bio }}</span>
                 </NuxtLink>
               </div>
