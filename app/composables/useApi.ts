@@ -159,6 +159,7 @@ export type PostSearchSort = "relevance" | "latest" | "hot";
 /** 用户搜索结果（GET /v1/users/search） */
 export interface SearchUser {
   id: string;
+  memberNo?: number;
   name: string;
   level: number;
   avatar: string;
@@ -293,6 +294,7 @@ interface MediaDto {
 
 interface AuthorDto {
   id?: string | null;
+  memberNo?: number | null;
   name: string;
   anonymous?: boolean;
   avatarUrl?: string | null;
@@ -401,6 +403,7 @@ function toAuthor(raw: AuthorDto | null | undefined): Author {
     id,
     documentId: id,
     authorId: id,
+    memberNo: id ? num(raw?.memberNo) : undefined,
     username: raw?.name,
     name: raw?.name || "Unknown",
     avatar: normalizeMediaUrl(raw?.avatarUrl),
@@ -616,6 +619,7 @@ function toSelfAuthor(raw: unknown): Author {
     id,
     documentId: id,
     authorId: id,
+    memberNo: num(me.memberNo),
     username: str(me.username),
     login: str(me.username),
     name: str(me.username) || "Unknown",
@@ -1140,6 +1144,7 @@ export function useApi() {
       .filter((u) => str(u.id) && str(u.username))
       .map((u) => ({
         id: String(u.id),
+        memberNo: num(u.memberNo),
         name: String(u.username),
         level: num(u.level) ?? 1,
         avatar: normalizeMediaUrl(u.avatarUrl),
@@ -1500,11 +1505,17 @@ export function useApi() {
   // ── 作者主页 ──────────────────────────────────────
 
   const getProfile = async (userId: string): Promise<Profile> => {
-    return cachedRead(
-      qk.profile.detail(userId),
-      () => getProfileImpl(userId),
-      STALE_DETAIL,
-    );
+    const key = qk.profile.detail(userId);
+    const profile = await cachedRead(key, () => getProfileImpl(userId), STALE_DETAIL);
+    // 用 id 查到的也记一份到会员号名下：主页地址换成会员号后不用再拉一次。
+    const alias = profile.memberNo != null ? String(profile.memberNo) : null;
+    const qc = $queryClient as QueryClient | undefined;
+    if (qc && alias && alias !== userId) {
+      qc.setQueryData(qk.profile.detail(alias), profile, {
+        updatedAt: qc.getQueryState(key)?.dataUpdatedAt,
+      });
+    }
+    return profile;
   };
 
   const getProfileImpl = async (userId: string): Promise<Profile> => {

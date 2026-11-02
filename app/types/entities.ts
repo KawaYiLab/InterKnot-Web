@@ -1,6 +1,8 @@
 export interface Author {
   id?: string | number;
   documentId?: string;
+  /** 会员号（展示用 UID，也是主页地址里的编号） */
+  memberNo?: number;
   authorId?: string;
   username?: string;
   login?: string;
@@ -567,6 +569,7 @@ export type DmPseudoConversationId =
 export interface DmPeer {
   userId: string | null;
   authorDocumentId: string | null;
+  memberNo?: number | null;
   name: string;
   avatar: string | null;
   level: number | null;
@@ -628,6 +631,7 @@ export interface DmConversationSummary {
 export interface DmMessageSender {
   userId: string | null;
   authorDocumentId: string | null;
+  memberNo?: number | null;
   name: string;
   avatar: string | null;
   level: number | null;

@@ -426,7 +426,7 @@ const deletingSessionId = ref<string | null>(null);
 const peerProfileUrl = computed<string | null>(() => {
   const peer = activeConversation.value?.peer;
   if (!peer?.authorDocumentId || peer.isAiAgent) return null;
-  return `/profile/${peer.authorDocumentId}`;
+  return profilePath(peer.authorDocumentId, peer.memberNo);
 });
 
 /** 当前会话对端是否可跳转个人主页——从 peerProfileUrl 派生 */
@@ -931,7 +931,7 @@ const enrichedMessages = useDmMessageEntries(activeMessages, (msg, previousCreat
     avatarClickable,
     // avatarClickable 为 true 时 canClickAvatar 已保证 authorDocumentId 存在
     profileUrl: avatarClickable
-      ? `/profile/${msg.sender!.authorDocumentId}`
+      ? profilePath(msg.sender!.authorDocumentId, msg.sender!.memberNo)
       : null,
   };
 });

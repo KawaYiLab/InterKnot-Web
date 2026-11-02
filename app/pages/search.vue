@@ -370,7 +370,7 @@ watch(
   },
 );
 
-const profileLink = (id: string) => `/profile/${encodeURIComponent(id)}`;
+const profileLink = (u: SearchUser) => profilePath(u.id, u.memberNo);
 const rememberKeyword = () => addHistory(keyword.value);
 
 const isSelf = (u: SearchUser) => !!auth.user?.id && String(auth.user.id) === u.id;
@@ -531,7 +531,7 @@ const retry = () => {
             <NuxtLink
               v-for="(u, i) in relatedUsers"
               :key="u.id"
-              :to="profileLink(u.id)"
+              :to="profileLink(u)"
               class="ik-related ik-related--user ik-reveal"
               :style="{ '--i': i }"
               @click="rememberKeyword"
@@ -656,7 +656,7 @@ const retry = () => {
             <li v-for="(u, i) in users" :key="u.id" class="ik-user ik-reveal" :style="{ '--i': i }">
               <!-- 顶部是装备的名片，没装备时用默认横幅（与个人主页一致） -->
               <NuxtLink
-                :to="profileLink(u.id)"
+                :to="profileLink(u)"
                 class="ik-user__banner"
                 :class="{ 'is-default': !u.card?.image }"
                 :style="u.card?.image ? { backgroundImage: `url('${u.card.image}')` } : undefined"
@@ -666,7 +666,7 @@ const retry = () => {
                 @click="rememberKeyword"
               />
               <div class="ik-user__body">
-                <NuxtLink :to="profileLink(u.id)" class="ik-user__avatar-wrap" tabindex="-1" aria-hidden="true" @click="rememberKeyword">
+                <NuxtLink :to="profileLink(u)" class="ik-user__avatar-wrap" tabindex="-1" aria-hidden="true" @click="rememberKeyword">
                   <img :src="u.avatar || '/images/default-avatar.webp'" alt="" class="ik-user__avatar" loading="lazy" @error="onAvatarError" />
                   <span class="ik-user__level">{{ u.level || 1 }}</span>
                 </NuxtLink>
@@ -680,7 +680,7 @@ const retry = () => {
                   :aria-label="`${u.isFollowing ? '取消关注' : '关注'}${u.name}`"
                   @click="toggleFollow(u)"
                 >{{ u.isFollowing ? '已关注' : '关注' }}</z-button>
-                <NuxtLink :to="profileLink(u.id)" class="ik-user__main" @click="rememberKeyword">
+                <NuxtLink :to="profileLink(u)" class="ik-user__main" @click="rememberKeyword">
                   <h2 class="ik-user__name" :title="u.name">
                     <template v-for="(part, j) in splitHighlight(u.name, keyword)" :key="j"><mark v-if="part.hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template>
                   </h2>

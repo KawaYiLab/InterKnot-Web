@@ -116,7 +116,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
       }"
     >
       <div class="ik-comment__avatar-col">
-        <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
+        <UserHoverCard :author-id="comment.author?.documentId" :member-no="comment.author?.memberNo" :clickable="!!comment.author?.documentId">
           <div class="ik-comment__avatar-wrap">
             <img
               :src="comment.author?.avatar || '/images/default-avatar.webp'"
@@ -133,7 +133,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
       <div class="ik-comment__content-col">
         <!-- Author -->
         <div class="ik-comment__author-row">
-          <UserHoverCard :author-id="comment.author?.documentId" :clickable="!!comment.author?.documentId">
+          <UserHoverCard :author-id="comment.author?.documentId" :member-no="comment.author?.memberNo" :clickable="!!comment.author?.documentId">
             <span class="ik-comment__name">
               <template v-if="isPostAuthor">[楼主]</template>{{ comment.author?.name || "匿名用户" }}
             </span>

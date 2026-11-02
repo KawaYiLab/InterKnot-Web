@@ -35,10 +35,17 @@ export interface ApiFailure {
   failed: string;
 }
 
-export type LoadResult = PageSeo | "not_found" | ApiFailure;
+/** 换成规范地址（301），例如主页的用户 id 换成会员号。查询参数原样带上。 */
+export interface Redirect {
+  redirect: string;
+}
+
+export type LoadResult = PageSeo | "not_found" | ApiFailure | Redirect;
 
 const isFailure = (v: unknown): v is ApiFailure =>
   typeof v === "object" && v !== null && "failed" in v;
+const isRedirect = (v: unknown): v is Redirect =>
+  typeof v === "object" && v !== null && "redirect" in v;
 
 const DEFAULT_API = "https://ik.tiwat.cn";
 const DEFAULT_SITE = "https://interk.net";
@@ -151,6 +158,12 @@ async function render(
     env.ASSETS.fetch(new URL("/", request.url)),
     load().catch((): ApiFailure => ({ failed: "load-error" })),
   ]);
+  if (isRedirect(seo)) {
+    const from = new URL(request.url);
+    const to = new URL(seo.redirect, from);
+    to.search = from.search;
+    return new Response(null, { status: 301, headers: { location: to.toString(), "x-ik-seo": "redirect" } });
+  }
   if (!shell.ok) return shell;
 
   const headers = new Headers(shell.headers);

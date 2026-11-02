@@ -23,6 +23,8 @@ import { estimatePostCardHeight } from "~/utils/post-card-height";
 import PostCardSkeleton from "~/components/PostCardSkeleton.vue";
 import { generateSkeletons, estimateSkeletonHeight, type SkeletonItem } from "~/utils/skeleton";
 
+definePageMeta({ middleware: "profile-member-no" });
+
 const PAGE_SIZE = 20;
 // 未自定义展示时，主页默认展示与本页同排序的前 6 篇（后端同为 updatedAt:desc）。
 const DEFAULT_SHOWCASE_SIZE = 6;

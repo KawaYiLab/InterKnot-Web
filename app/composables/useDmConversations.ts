@@ -64,6 +64,7 @@ const MESSAGE_PAGE_SIZE = 50;
 
 interface PeerDto {
   id?: string | null;
+  memberNo?: number | null;
   name: string;
   level?: number | null;
   avatarUrl?: string | null;
@@ -378,6 +379,7 @@ export function useDmConversations(): UseDmConversations {
     return {
       userId,
       authorDocumentId: userId,
+      memberNo: userId ? peer?.memberNo ?? null : null,
       name: peer?.name || "",
       avatar: peer?.avatarUrl ?? null,
       level: peer?.level ?? null,
@@ -463,6 +465,7 @@ export function useDmConversations(): UseDmConversations {
       return {
         userId: senderId,
         authorDocumentId: senderId,
+        memberNo: me?.memberNo ?? null,
         name: me?.name || me?.username || "",
         avatar: me?.avatar || null,
         level: me?.level ?? null,
@@ -473,6 +476,7 @@ export function useDmConversations(): UseDmConversations {
     return {
       userId: senderId || null,
       authorDocumentId: senderId || null,
+      memberNo: senderId ? peer?.memberNo ?? null : null,
       name: peer?.name || "",
       avatar: peer?.avatar ?? null,
       level: peer?.level ?? null,

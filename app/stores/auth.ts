@@ -60,10 +60,8 @@ export const useAuthStore = defineStore("auth", {
       state.user.examPassed === false &&
       !state.user.isAdmin &&
       !state.user.isAiAgent,
-    profilePath: (state): string | null => {
-      const id = state.user?.id;
-      return id ? `/profile/${id}` : null;
-    },
+    profilePath: (state): string | null =>
+      profilePath(state.user?.id, state.user?.memberNo) || null,
   },
   actions: {
     hydrate() {

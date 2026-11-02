@@ -4,6 +4,8 @@ import type { Avatar, BusinessCard, DailyExpStatus, Post, Profile } from "~/type
 import { isNotFoundError, resolveErrorMessage } from "~/utils/api-error";
 import { getCoverAspectRatio } from "~/utils/cover";
 
+definePageMeta({ middleware: "profile-member-no" });
+
 const route = useRoute();
 const router = useRouter();
 const api = useApi();

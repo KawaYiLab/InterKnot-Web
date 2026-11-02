@@ -1525,7 +1525,7 @@ onBeforeUnmount(() => {
             <!-- ── Header Bar ─────────────────────── -->
             <div class="ik-dialog__header">
               <div class="ik-dialog__header-left">
-                <UserHoverCard :author-id="headerAuthor?.documentId" :clickable="!!headerAuthor?.documentId">
+                <UserHoverCard :author-id="headerAuthor?.documentId" :member-no="headerAuthor?.memberNo" :clickable="!!headerAuthor?.documentId">
                   <div class="ik-dialog__avatar-wrap">
                     <div class="ik-dialog__avatar-shell">
                       <img
@@ -1542,7 +1542,7 @@ onBeforeUnmount(() => {
                 </UserHoverCard>
                 <div v-if="headerAuthor" class="ik-dialog__author-info">
                   <div class="ik-dialog__author-row">
-                    <UserHoverCard :author-id="headerAuthor.documentId" :clickable="!!headerAuthor?.documentId">
+                    <UserHoverCard :author-id="headerAuthor.documentId" :member-no="headerAuthor?.memberNo" :clickable="!!headerAuthor?.documentId">
                       <span class="ik-dialog__author-name">
                         {{ headerAuthor.name || "匿名用户" }}
                       </span>

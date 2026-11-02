@@ -5,6 +5,8 @@ import { useHoverCapable } from "~/composables/useHoverCapable";
 
 const props = withDefaults(defineProps<{
   authorId?: string;
+  /** 会员号：有的话主页链接用它。 */
+  memberNo?: number;
   clickable?: boolean;
 }>(), {
   clickable: false,
@@ -129,7 +131,8 @@ const onCardLeave = () => {
   }, HIDE_DELAY);
 };
 
-const profileUrl = computed(() => props.authorId ? `/profile/${props.authorId}` : "");
+const profileUrl = computed(() =>
+  props.authorId ? profilePath(props.authorId, props.memberNo ?? profile.value?.memberNo) : "");
 const triggerEvents = computed(() => hoverCapable.value
   ? { mouseenter: onTriggerEnter, mouseleave: onTriggerLeave }
   : {});

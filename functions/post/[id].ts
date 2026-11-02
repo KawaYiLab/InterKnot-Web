@@ -17,7 +17,7 @@ interface PostDetail {
   body: string;
   covers?: { url: string }[];
   externalVideos?: { coverUrl?: string }[];
-  author: { id?: string | null; name: string; anonymous: boolean };
+  author: { id?: string | null; memberNo?: number | null; name: string; anonymous: boolean };
   tags?: { name: string; slug: string }[];
   viewCount?: number;
   likeCount?: number;
@@ -42,7 +42,7 @@ async function load(env: Env, id: string): Promise<LoadResult> {
   const image = post.covers?.[0]?.url || post.externalVideos?.[0]?.coverUrl || DEFAULT_IMAGE;
   const url = `${siteOrigin(env)}/post/${encodeURIComponent(post.id)}`;
   const authorUrl = !post.author.anonymous && post.author.id
-    ? `${siteOrigin(env)}/profile/${encodeURIComponent(post.author.id)}`
+    ? `${siteOrigin(env)}/profile/${encodeURIComponent(String(post.author.memberNo ?? post.author.id))}`
     : undefined;
   const modified = post.editedAt || post.publishedAt;
 

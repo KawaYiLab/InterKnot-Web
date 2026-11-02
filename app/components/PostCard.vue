@@ -183,7 +183,7 @@ const handleOpen = (e: MouseEvent) => {
 
       <div class="ik-card__body">
         <div class="ik-card__author-row">
-          <UserHoverCard v-if="canHover" :author-id="post.author?.documentId">
+          <UserHoverCard v-if="canHover" :author-id="post.author?.documentId" :member-no="post.author?.memberNo">
             <div class="ik-card__avatar-shell">
               <img
                 :src="avatarSrc"
@@ -206,7 +206,7 @@ const handleOpen = (e: MouseEvent) => {
             />
           </div>
           <div class="ik-card__author-block">
-            <UserHoverCard v-if="canHover" :author-id="post.author?.documentId">
+            <UserHoverCard v-if="canHover" :author-id="post.author?.documentId" :member-no="post.author?.memberNo">
               <p class="ik-card__author-name">{{ authorName }}</p>
             </UserHoverCard>
             <p v-else class="ik-card__author-name">{{ authorName }}</p>
