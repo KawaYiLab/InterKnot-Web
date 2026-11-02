@@ -90,7 +90,7 @@ const searchFor = (q: string) => {
 };
 
 // ── 页面自己的大搜索框：边输边搜（防抖），回车立即生效 ──
-const PLACEHOLDERS = ["搜委托标题和正文", "搜用户名", "搜标签，比如 邦布"];
+const PLACEHOLDERS = ["搜索委托", "搜索用户", "搜索标签"];
 const LIVE_DEBOUNCE_MS = 300;
 const inputRef = ref<InstanceType<typeof PlaceholdersInput> | null>(null);
 const input = ref(keyword.value);
@@ -649,7 +649,7 @@ const retry = () => {
           <div v-else-if="!users.length" class="ik-search-empty">
             <img src="/images/Bangboo.gif" alt="" class="ik-search-empty__art" />
             <p class="ik-search-empty__title">没有找到相关用户</p>
-            <p class="ik-search-empty__hint">用户名要包含这几个字才能搜到</p>
+            <p class="ik-search-empty__hint">今天的风甚是喧嚣啊~</p>
           </div>
 
           <ul v-else class="ik-search-grid">
