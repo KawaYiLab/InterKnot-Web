@@ -203,6 +203,8 @@ export interface CoverImage {
   url: string;
   width?: number;
   height?: number;
+  /** base64 的 ThumbHash，图片到之前当模糊占位 */
+  thumbhash?: string;
 }
 
 export interface ExternalVideo {
@@ -281,6 +283,8 @@ export interface Post {
   cover?: string;
   coverWidth?: number;
   coverHeight?: number;
+  /** 封面的 ThumbHash（base64），卡片用它做占位 */
+  coverThumbhash?: string;
   views?: number;
   likesCount?: number;
   commentsCount?: number;

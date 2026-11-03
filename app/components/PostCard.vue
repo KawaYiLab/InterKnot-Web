@@ -1,19 +1,6 @@
 <script lang="ts">
 const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
-
-// 跨实例缓存已经加载过的封面 URL。虚拟列表在上下滚动时会反复挂载/卸载
-// PostCard，这个缓存能让“下滑时已经加载过”的封面在重新上翻进入视口时
-// 直接显示，不再重播 opacity 进场过渡。
-const _loadedCoverUrls = new Set<string>();
-
-function isCoverLoaded(src: string) {
-  return _loadedCoverUrls.has(src);
-}
-
-function markCoverLoaded(src: string) {
-  if (src) _loadedCoverUrls.add(src);
-}
 </script>
 
 <script setup lang="ts">
@@ -21,7 +8,8 @@ import { computed, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 import { loadBrandFonts } from "~/utils/brand-fonts";
-import { toCardCoverThumbUrl } from "~/utils/image";
+import { toAvatarThumbUrl, toCardCoverThumbUrl } from "~/utils/image";
+import { thumbhashToDataUrl } from "~/utils/thumbhash";
 import { toCardExcerpt } from "~/utils/card-excerpt";
 import { splitHighlight } from "~/utils/highlight";
 import UserHoverCard from "./UserHoverCard.vue";
@@ -47,13 +35,21 @@ const titleParts = computed(() => splitHighlight(props.post.title, props.keyword
 // 悬浮卡仅在支持悬停的设备（桌面鼠标）才有意义；触屏上它本就不弹，却仍会
 // 为每张卡片实例化多个 composable。用此开关在移动端彻底不挂载，省掉浪费。
 const canHover = useHoverCapable();
-const gpuAccelerated = useGpuAccelerated();
+// 悬浮卡等鼠标第一次进作者栏才挂：每张卡常驻两个 UserHoverCard 实例，
+// 虚拟列表滚动时成批挂载/卸载，是卡片最重的部分。
+const hoverCardArmed = ref(false);
+const armHoverCard = () => {
+  if (canHover.value) hoverCardArmed.value = true;
+};
 
 const coverSrc = ref(DEFAULT_COVER_IMAGE);
-// 初始状态优先从跨实例缓存读取：如果同一张封面已经在本页面加载过，
-// 重新进入视口时不应再次展示 loading 态并重播过渡动画。
-const coverImageLoaded = ref(isCoverLoaded(coverSrc.value));
 const coverIsFallback = ref(false);
+// 图片到之前用接口给的 ThumbHash 模糊图垫底，图到了直接盖上，不做淡入：
+// 淡入期间每张图都是一个合成动画，滚动时几十张同时淡入会让每帧都重新分层。
+const coverPlaceholder = computed(() => {
+  const url = thumbhashToDataUrl(props.post.coverThumbhash);
+  return url ? `url("${url}")` : undefined;
+});
 const avatarSrc = ref(DEFAULT_AVATAR_IMAGE);
 
 const hasBackendCoverSize = computed(() =>
@@ -76,18 +72,14 @@ const coverAspectRatio = computed(() => {
   return FALLBACK_COVER_ASPECT_RATIO;
 });
 
-const coverReady = computed(() => coverImageLoaded.value);
-
 watch(
   () => [props.post.id, props.post.cover] as const,
   ([newId, newCover], oldValue) => {
     if (oldValue && newId === oldValue[0] && newCover === oldValue[1]) return;
     const cover = newCover?.trim();
-    // 瀑布流卡片尺寸不大，使用缩略图避免在 CPU / 无 GPU 路径下解码和绘制超大原图。
-    coverSrc.value = cover ? toCardCoverThumbUrl(cover, gpuAccelerated.value) : DEFAULT_COVER_IMAGE;
+    // 按卡片显示宽度和屏幕倍率取缩略图，不多解码像素。
+    coverSrc.value = cover ? toCardCoverThumbUrl(cover) : DEFAULT_COVER_IMAGE;
     coverIsFallback.value = !cover;
-    // 同一封面 URL 已加载过时，直接就绪，避免虚拟列表重挂载时重播过渡。
-    coverImageLoaded.value = isCoverLoaded(coverSrc.value);
   },
   { immediate: true },
 );
@@ -97,30 +89,22 @@ watch(
 watch(
   () => [props.post.id, props.post.author?.avatar] as const,
   () => {
-    avatarSrc.value = props.post.author?.avatar || DEFAULT_AVATAR_IMAGE;
+    const avatar = props.post.author?.avatar;
+    avatarSrc.value = avatar ? toAvatarThumbUrl(avatar) : DEFAULT_AVATAR_IMAGE;
   },
   { immediate: true },
 );
 
 const onCoverLoad = () => {
-  coverImageLoaded.value = true;
-  markCoverLoaded(coverSrc.value);
   // 首屏封面到位后再拉品牌字体，避免两者抢带宽拖慢 LCP
   if (props.eager) loadBrandFonts();
 };
 
 const onCoverError = () => {
   if (props.eager) loadBrandFonts();
-  if (coverSrc.value === DEFAULT_COVER_IMAGE) {
-    coverImageLoaded.value = true;
-    markCoverLoaded(coverSrc.value);
-    return;
-  }
-
+  if (coverSrc.value === DEFAULT_COVER_IMAGE) return;
   coverSrc.value = DEFAULT_COVER_IMAGE;
   coverIsFallback.value = true;
-  coverImageLoaded.value = true;
-  markCoverLoaded(coverSrc.value);
 };
 
 const onAvatarError = () => {
@@ -148,11 +132,14 @@ const handleOpen = (e: MouseEvent) => {
       no-prefetch
     >
       <div class="ik-card__cover-wrap">
-        <div class="ik-card__cover-frame" :style="{ aspectRatio: String(coverAspectRatio) }">
+        <div
+          class="ik-card__cover-frame"
+          :style="{ aspectRatio: String(coverAspectRatio), backgroundImage: coverPlaceholder }"
+        >
           <img
             :src="coverSrc"
             :alt="coverIsFallback ? 'default cover' : post.title"
-            :class="['ik-card__cover', { 'ik-card__cover--fallback': coverIsFallback, 'ik-card__cover--loading': !coverReady }]"
+            :class="['ik-card__cover', { 'ik-card__cover--fallback': coverIsFallback }]"
             :loading="eager ? 'eager' : 'lazy'"
             decoding="async"
             :fetchpriority="eager ? 'high' : 'low'"
@@ -169,12 +156,15 @@ const handleOpen = (e: MouseEvent) => {
             xmlns="http://www.w3.org/2000/svg"
             aria-hidden="true"
           >
-            <path
-              d="M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z"
-              stroke="currentColor"
-              stroke-width="1.8"
-            />
-            <circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8" />
+            <!-- 先画一圈半透明黑描边当阴影：比 filter: drop-shadow 便宜（滤镜每张卡单独离屏绘制） -->
+            <g stroke="rgba(0, 0, 0, 0.55)" stroke-width="3.6">
+              <path d="M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z" />
+              <circle cx="12" cy="12" r="3.2" />
+            </g>
+            <g stroke="currentColor" stroke-width="1.8">
+              <path d="M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z" />
+              <circle cx="12" cy="12" r="3.2" />
+            </g>
           </svg>
           <span>{{ post.views || 0 }}</span>
         </div>
@@ -182,8 +172,13 @@ const handleOpen = (e: MouseEvent) => {
       </div>
 
       <div class="ik-card__body">
-        <div class="ik-card__author-row">
-          <UserHoverCard v-if="canHover" :author-id="post.author?.documentId" :member-no="post.author?.memberNo">
+        <div class="ik-card__author-row" @mouseenter="armHoverCard">
+          <UserHoverCard
+            v-if="hoverCardArmed"
+            :author-id="post.author?.documentId"
+            :member-no="post.author?.memberNo"
+            open-if-hovered
+          >
             <div class="ik-card__avatar-shell">
               <img
                 :src="avatarSrc"
@@ -195,21 +190,30 @@ const handleOpen = (e: MouseEvent) => {
               />
             </div>
           </UserHoverCard>
-          <div v-else class="ik-card__avatar-shell">
-            <img
-              :src="avatarSrc"
-              :alt="authorName"
-              class="ik-card__avatar-image"
-              loading="lazy"
-              decoding="async"
-              @error="onAvatarError"
-            />
+          <div v-else class="ik-card__hover-slot">
+            <div class="ik-card__avatar-shell">
+              <img
+                :src="avatarSrc"
+                :alt="authorName"
+                class="ik-card__avatar-image"
+                loading="lazy"
+                decoding="async"
+                @error="onAvatarError"
+              />
+            </div>
           </div>
           <div class="ik-card__author-block">
-            <UserHoverCard v-if="canHover" :author-id="post.author?.documentId" :member-no="post.author?.memberNo">
+            <UserHoverCard
+              v-if="hoverCardArmed"
+              :author-id="post.author?.documentId"
+              :member-no="post.author?.memberNo"
+              open-if-hovered
+            >
               <p class="ik-card__author-name">{{ authorName }}</p>
             </UserHoverCard>
-            <p v-else class="ik-card__author-name">{{ authorName }}</p>
+            <div v-else class="ik-card__hover-slot">
+              <p class="ik-card__author-name">{{ authorName }}</p>
+            </div>
             <div class="ik-card__author-divider" />
           </div>
         </div>
@@ -225,13 +229,14 @@ const handleOpen = (e: MouseEvent) => {
 </template>
 
 <style scoped>
+/* 裁剪只留 .ik-card__link 一层：每多一层圆角裁剪 / contain: paint，
+   每张卡就多几个绘制块，滚动时逐帧重新分层的开销随之上涨。 */
 .ik-card {
   position: relative;
   border-radius: var(--ik-post-card-radius);
   background: var(--ik-post-card-outer-bg);
   padding: var(--ik-post-card-padding);
-  overflow: hidden;
-  contain: layout style paint;
+  contain: layout style;
 }
 
 /* 新帖高亮的彩色外框画在内容「之上」，并向内多压 1px。
@@ -286,12 +291,12 @@ const handleOpen = (e: MouseEvent) => {
 
 .ik-card__cover-wrap {
   position: relative;
-  overflow: hidden;
 }
 
 .ik-card__cover-frame {
   width: 100%;
-  background: var(--ik-post-card-cover-bg);
+  background-color: var(--ik-post-card-cover-bg);
+  background-size: 100% 100%;
 }
 
 .ik-card__solved {
@@ -315,23 +320,12 @@ const handleOpen = (e: MouseEvent) => {
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  transition: opacity 400ms ease;
-}
-
-:deep(.ik-card__cover--loading) {
-  opacity: 0;
 }
 
 /* fallback 时 frame 已切换为占位图原生比例，
    占位图天然填满 frame，沿用 object-fit: cover 即可 */
 :deep(.ik-card__cover--fallback) {
   background: var(--ik-post-card-cover-bg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :deep(.ik-card__cover) {
-    transition: none;
-  }
 }
 
 .ik-card__views {
@@ -344,7 +338,7 @@ const handleOpen = (e: MouseEvent) => {
   color: #fff;
   font-size: var(--ik-post-card-views-font-size);
   font-weight: 700;
-  text-shadow: 
+  text-shadow:
     0 0 4px rgba(0, 0, 0, 0.8),
     0 1px 2px rgba(0, 0, 0, 0.9);
 }
@@ -352,8 +346,7 @@ const handleOpen = (e: MouseEvent) => {
 .ik-card__views-icon {
   width: var(--ik-post-card-views-icon-size);
   height: var(--ik-post-card-views-icon-size);
-  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6))
-          drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7));
+  overflow: visible;
 }
 
 .ik-card__body {
@@ -377,6 +370,10 @@ const handleOpen = (e: MouseEvent) => {
   padding: var(--ik-post-card-avatar-padding);
   border-radius: 999px;
   background: var(--ik-post-card-inner-bg);
+}
+
+.ik-card__hover-slot {
+  display: inline-block;
 }
 
 .ik-card__avatar-image {

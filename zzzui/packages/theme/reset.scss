@@ -4,7 +4,9 @@
   box-sizing: border-box;
 }
 
-:where([class^="z-"], [class*=" z-"]) *,
+// 元素本身的 border-box 已由站点全局 `* { box-sizing: border-box }` 覆盖
+// （app/assets/styles/theme.css）。`:where(...) *` 要对页面每个元素往上找祖先匹配
+// 属性子串，样式重算里它是最贵的一条，这里只保留伪元素。
 :where([class^="z-"], [class*=" z-"]) *::before,
 :where([class^="z-"], [class*=" z-"]) *::after {
   box-sizing: border-box;

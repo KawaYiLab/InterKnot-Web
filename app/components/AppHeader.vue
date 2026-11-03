@@ -6,6 +6,11 @@ import { LEVEL_THRESHOLDS, MAX_LEVEL } from "~/utils/level";
 import { toThumbUrl } from "~/utils/image";
 import type { SearchSuggestion } from "~/composables/useApi";
 
+// 选中标签的黄色呼吸：底层黄色 + 上层浅一档的黄绿色只动 opacity，
+// 叠加效果等于两色线性渐变。直接动画 color 不能交给合成线程，
+// 会让整页每帧重算样式、重绘、重新分层（页面静止时也一样）。
+const TAB_HIGHLIGHT_LAYERS = ["ik-tab-highlight__base", "ik-tab-highlight__alt"] as const;
+
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
@@ -607,12 +612,11 @@ watch(
             :aria-selected="activeTab === 'home'"
             @click="handleTabChange('home')"
           >
-            <svg class="ik-tab-highlight ik-tab-highlight--first" viewBox="0 0 110.7 42" aria-hidden="true">
-              <path
-                d="M 21 0 L 94.38 0 A 10 10 0 0 1 103.29 14.54 L 93.75 33.26 A 16 16 0 0 1 79.5 42 L 21 42 A 21 21 0 0 1 21 0 Z"
-                fill="currentColor"
-              />
-            </svg>
+            <span class="ik-tab-highlight ik-tab-highlight--first" aria-hidden="true">
+              <svg v-for="layer in TAB_HIGHLIGHT_LAYERS" :key="layer" :class="layer" viewBox="0 0 110.7 42">
+                <path d="M 21 0 L 94.38 0 A 10 10 0 0 1 103.29 14.54 L 93.75 33.26 A 16 16 0 0 1 79.5 42 L 21 42 A 21 21 0 0 1 21 0 Z" fill="currentColor" />
+              </svg>
+            </span>
             <span class="ik-header-tab__content">推送</span>
           </button>
 
@@ -625,12 +629,11 @@ watch(
             :aria-label="knockUnread > 0 ? `敲敲，${knockUnread} 条未读` : '敲敲'"
             @click="handleTabChange('notification')"
           >
-            <svg class="ik-tab-highlight ik-tab-highlight--middle" viewBox="0 0 121.4 42" aria-hidden="true">
-              <path
-                d="M 105.08 0 A 10 10 0 0 1 113.99 14.54 L 104.45 33.26 A 16 16 0 0 1 90.2 42 L 16.32 42 A 10 10 0 0 1 7.41 27.46 L 16.95 8.74 A 16 16 0 0 1 31.2 0 Z"
-                fill="currentColor"
-              />
-            </svg>
+            <span class="ik-tab-highlight ik-tab-highlight--middle" aria-hidden="true">
+              <svg v-for="layer in TAB_HIGHLIGHT_LAYERS" :key="layer" :class="layer" viewBox="0 0 121.4 42">
+                <path d="M 105.08 0 A 10 10 0 0 1 113.99 14.54 L 104.45 33.26 A 16 16 0 0 1 90.2 42 L 16.32 42 A 10 10 0 0 1 7.41 27.46 L 16.95 8.74 A 16 16 0 0 1 31.2 0 Z" fill="currentColor" />
+              </svg>
+            </span>
             <span class="ik-header-tab__content">
               敲敲
               <KnockDragBadge
@@ -651,12 +654,11 @@ watch(
             :aria-selected="activeTab === 'create'"
             @click="handleTabChange('create')"
           >
-            <svg class="ik-tab-highlight ik-tab-highlight--middle" viewBox="0 0 121.4 42" aria-hidden="true">
-              <path
-                d="M 105.08 0 A 10 10 0 0 1 113.99 14.54 L 104.45 33.26 A 16 16 0 0 1 90.2 42 L 16.32 42 A 10 10 0 0 1 7.41 27.46 L 16.95 8.74 A 16 16 0 0 1 31.2 0 Z"
-                fill="currentColor"
-              />
-            </svg>
+            <span class="ik-tab-highlight ik-tab-highlight--middle" aria-hidden="true">
+              <svg v-for="layer in TAB_HIGHLIGHT_LAYERS" :key="layer" :class="layer" viewBox="0 0 121.4 42">
+                <path d="M 105.08 0 A 10 10 0 0 1 113.99 14.54 L 104.45 33.26 A 16 16 0 0 1 90.2 42 L 16.32 42 A 10 10 0 0 1 7.41 27.46 L 16.95 8.74 A 16 16 0 0 1 31.2 0 Z" fill="currentColor" />
+              </svg>
+            </span>
             <span class="ik-header-tab__content">委托</span>
           </button>
 
@@ -668,12 +670,11 @@ watch(
             :aria-selected="activeTab === 'mine'"
             @click="handleTabChange('mine')"
           >
-            <svg class="ik-tab-highlight ik-tab-highlight--last" viewBox="0 0 110.7 42" aria-hidden="true">
-              <path
-                d="M 89.7 0 A 21 21 0 0 1 89.7 42 L 13.05 42 A 8 8 0 0 1 5.93 30.37 L 16.95 8.74 A 16 16 0 0 1 31.2 0 Z"
-                fill="currentColor"
-              />
-            </svg>
+            <span class="ik-tab-highlight ik-tab-highlight--last" aria-hidden="true">
+              <svg v-for="layer in TAB_HIGHLIGHT_LAYERS" :key="layer" :class="layer" viewBox="0 0 110.7 42">
+                <path d="M 89.7 0 A 21 21 0 0 1 89.7 42 L 13.05 42 A 8 8 0 0 1 5.93 30.37 L 16.95 8.74 A 16 16 0 0 1 31.2 0 Z" fill="currentColor" />
+              </svg>
+            </span>
             <span class="ik-header-tab__content">{{ mineTabText }}</span>
           </button>
         </div>
@@ -1288,12 +1289,28 @@ watch(
   position: absolute;
   top: 0;
   z-index: 1;
+  display: block;
   height: 42px;
-  color: #fbfe00;
   opacity: 0;
   pointer-events: none;
   transform: scale(1.1);
   transform-origin: center;
+}
+
+.ik-tab-highlight > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ik-tab-highlight__base {
+  color: #fbfe00;
+}
+
+.ik-tab-highlight__alt {
+  color: #dcfe00;
+  opacity: 0;
 }
 
 .ik-tab-highlight--first {
@@ -1311,20 +1328,23 @@ watch(
   width: 110.7px;
 }
 
+/* 只用 transform / opacity：两者都在合成线程上跑，不占主线程 */
 .ik-header-tab.is-active .ik-tab-highlight {
   opacity: 1;
-  animation:
-    ik-tab-highlight-color 800ms linear infinite alternate,
-    ik-tab-highlight-scale 700ms linear infinite;
+  animation: ik-tab-highlight-scale 700ms linear infinite;
 }
 
-@keyframes ik-tab-highlight-color {
+.ik-header-tab.is-active .ik-tab-highlight__alt {
+  animation: ik-tab-highlight-alt 800ms linear infinite alternate;
+}
+
+@keyframes ik-tab-highlight-alt {
   from {
-    color: #fbfe00;
+    opacity: 0;
   }
 
   to {
-    color: #dcfe00;
+    opacity: 1;
   }
 }
 

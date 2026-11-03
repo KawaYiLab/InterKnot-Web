@@ -601,7 +601,6 @@ const retry = () => {
                 :gap="feedGap"
                 :min-columns="2"
                 :max-columns="5"
-                :buffer="1800"
                 :estimated-height="300"
                 :height-mapper="estimatePostCardHeight"
                 :key-mapper="postKey"

@@ -1,7 +1,7 @@
 /**
  * Global image fade-in plugin.
  *
- * All <img> (except PostCard covers which have their own system)
+ * All <img> (except PostCard covers and avatars, which show without a fade)
  * start at opacity 0 via CSS and get revealed with a 280ms transition
  * once they finish loading.
  *
@@ -13,9 +13,9 @@ export default defineNuxtPlugin(() => {
   const isSpaLoadingImg = (img: HTMLImageElement) =>
     Boolean(img.closest("#spa-loading-screen"));
 
-  // PostCard covers manage their own loading state; skip them entirely.
+  // 瀑布流卡片的封面和头像不淡入（见 theme.css），直接跳过。
   const isPostCardCover = (img: HTMLImageElement) =>
-    img.classList.contains("ik-card__cover");
+    img.classList.contains("ik-card__cover") || img.classList.contains("ik-card__avatar-image");
 
   const loadedSrcs = new Set<string>();
 

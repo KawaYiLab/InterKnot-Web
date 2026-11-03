@@ -8,8 +8,14 @@ const props = withDefaults(defineProps<{
   /** 会员号：有的话主页链接用它。 */
   memberNo?: number;
   clickable?: boolean;
+  /**
+   * 挂载时如果鼠标已经停在触发区上，直接开始计时弹出。
+   * 给按需挂载的场景用（如瀑布流卡片：鼠标进入作者栏才挂本组件，错过了 mouseenter）。
+   */
+  openIfHovered?: boolean;
 }>(), {
   clickable: false,
+  openIfHovered: false,
 });
 
 const hoverCapable = useHoverCapable();
@@ -148,6 +154,10 @@ const formatNumber = (n: number) => {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
 };
+
+onMounted(() => {
+  if (props.openIfHovered && getTriggerEl()?.matches(":hover")) onTriggerEnter();
+});
 
 onBeforeUnmount(() => {
   clearTimers();

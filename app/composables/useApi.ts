@@ -290,6 +290,8 @@ interface MediaDto {
   width?: number | null;
   height?: number | null;
   name?: string;
+  /** base64 的 ThumbHash 模糊占位 */
+  thumbhash?: string | null;
   createdAt?: string;
 }
 
@@ -346,7 +348,9 @@ function toMediaMeta(raw: MediaDto | null | undefined): MediaMeta | null {
 
 function toCoverImage(raw: MediaDto): CoverImage | null {
   const meta = toMediaMeta(raw);
-  return meta ? { documentId: raw.id, ...meta } : null;
+  if (!meta) return null;
+  const thumbhash = typeof raw.thumbhash === "string" && raw.thumbhash ? raw.thumbhash : undefined;
+  return { documentId: raw.id, ...meta, ...(thumbhash ? { thumbhash } : {}) };
 }
 
 function toCoverImages(raw: unknown): CoverImage[] {
@@ -468,10 +472,12 @@ function toPost(raw: unknown): Post {
   let coverUrl = covers[0]?.url || "";
   let coverW = covers[0]?.width;
   let coverH = covers[0]?.height;
+  let coverThumbhash = covers[0]?.thumbhash;
   if (!coverUrl && externalVideos?.[0]?.coverUrl) {
     coverUrl = externalVideos[0].coverUrl;
     coverW = undefined;
     coverH = undefined;
+    coverThumbhash = undefined;
     covers = [];
   }
 
@@ -492,6 +498,7 @@ function toPost(raw: unknown): Post {
     cover: coverUrl,
     coverWidth: coverW,
     coverHeight: coverH,
+    coverThumbhash,
     views: Number(data.viewCount ?? 0),
     likesCount: Number(data.likeCount ?? 0),
     commentsCount: Number(data.commentCount ?? 0),

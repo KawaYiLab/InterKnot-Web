@@ -487,7 +487,8 @@ const fetchList = async (reset = false) => {
       }
       list.value = uniqueNodes;
     } else {
-      addEnterAnimations(uniqueNodes);
+      // 翻页追加的卡片不播入场动画：它们在视口下方，滚到时才挂载，
+      // 动画只会在快速滚动时和图片解码、重新分层挤在同一帧里。
       list.value = [...list.value, ...uniqueNodes];
     }
 
@@ -1135,7 +1136,6 @@ onBeforeUnmount(() => {
               :gap="feedGap"
               :min-columns="2"
               :max-columns="5"
-              :buffer="1800"
               :estimated-height="300"
               :height-mapper="estimatePostCardHeight"
               :key-mapper="masonryKeyMapper"

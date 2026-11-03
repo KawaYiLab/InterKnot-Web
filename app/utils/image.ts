@@ -187,11 +187,24 @@ export function toThumbUrl(url: string | undefined, width = 360): string {
 }
 
 /**
- * 瀑布流卡片封面缩略图：有 GPU 加速时用 720px 覆盖 2x–3x DPR；无 GPU 时降到 480px，
- * 优先保证解码和绘制帧率。委托弹窗的 blur-up 占位图复用同一 URL，直接命中卡片已加载的缓存。
+ * 瀑布流卡片封面缩略图：卡片宽约 170–330px，按屏幕倍率取 360 / 480 / 720 三档
+ * （沿用既有档位，CDN 缓存能命中）。1x 屏取 720 等于多解码 4 倍像素，
+ * 滚动时解码排队会出白块。委托弹窗的 blur-up 占位图复用同一 URL，直接命中卡片已加载的缓存。
  */
-export function toCardCoverThumbUrl(url: string | undefined, gpuAccelerated: boolean): string {
-  return toThumbUrl(url, gpuAccelerated ? 720 : 480);
+export function toCardCoverThumbUrl(url: string | undefined): string {
+  return toThumbUrl(url, cardCoverThumbWidth());
+}
+
+function cardCoverThumbWidth(): number {
+  const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
+  if (dpr <= 1.2) return 360;
+  if (dpr <= 1.6) return 480;
+  return 720;
+}
+
+/** 卡片 / 列表里的小头像（显示 42px 左右）：128px 够 3x 屏，后端默认给的是 360px。 */
+export function toAvatarThumbUrl(url: string | undefined): string {
+  return toThumbUrl(url, 128);
 }
 
 /**

@@ -61,7 +61,6 @@ const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const reportDialog = useReportDialog();
 const message = useMessage();
-const gpuAccelerated = useGpuAccelerated();
 const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
 const isMobile = useMediaQuery("(max-width: 768px)", { ssrWidth: initialWidth });
 const isCompact = useMediaQuery("(max-width: 1024px)", { ssrWidth: initialWidth });
@@ -314,7 +313,7 @@ const previewCover = computed(() => {
   const cover = props.preview?.cover?.trim();
   // 预览图仅作为 blur-up 占位，统一走缩略图，避免首页卡片传入大原图
   // 时 decode() 占用过多资源导致弹窗入场掉帧。与卡片封面同一 URL，入场时直接命中缓存。
-  return cover ? toCardCoverThumbUrl(cover, gpuAccelerated.value) : null;
+  return cover ? toCardCoverThumbUrl(cover) : null;
 });
 const coverPreviewSrc = (i: number) => {
   const cover = covers.value[i];
