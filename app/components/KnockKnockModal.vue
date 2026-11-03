@@ -26,7 +26,6 @@ import type { BubbleRender, EnrichedMessage } from "~/utils/dm-view";
 import type DmComposer from "~/components/DmComposer.vue";
 import FairyMascotEye from "~/components/fairy/FairyMascotEye.vue";
 import InspiraFlickeringGrid from "~/components/inspira/FlickeringGrid.vue";
-import InspiraHyperText from "~/components/inspira/HyperText.vue";
 import Collapsible from "~/components/ui/collapsible/Collapsible.vue";
 import CollapsibleContent from "~/components/ui/collapsible/CollapsibleContent.vue";
 import { useMediaQuery } from "@vueuse/core";
@@ -1479,7 +1478,7 @@ const handleMobileBack = () => {
                       </g>
                     </svg>
                   </span>
-                  <InspiraHyperText class="ik-knock__brand-text" text="knock knock" />
+                  <span class="ik-knock__brand-text">knock knock</span>
                 </div>
                 <button
                   class="ik-dialog__close"
@@ -2131,35 +2130,11 @@ const handleMobileBack = () => {
   overflow: visible;
 }
 
-/* 手机歪着放；弹窗打开时像来电一样晃两下 */
+/* 手机歪着放 */
 .ik-knock__brand-phone {
   transform-box: view-box;
   transform-origin: 21px 28px;
   transform: rotate(-14deg);
-  animation: ik-knock-ring 900ms ease-in-out 200ms 1 both;
-}
-
-@keyframes ik-knock-ring {
-  0%,
-  100% {
-    transform: rotate(-14deg);
-  }
-  15%,
-  45%,
-  75% {
-    transform: rotate(-24deg);
-  }
-  30%,
-  60%,
-  90% {
-    transform: rotate(-4deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ik-knock__brand-phone {
-    animation: none;
-  }
 }
 
 .ik-knock__brand-text {
