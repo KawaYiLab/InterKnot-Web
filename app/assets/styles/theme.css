@@ -276,8 +276,10 @@ button:disabled,
 
 /* ── Image fade-in on load ──────────────────── */
 /* 瀑布流卡片里的封面和头像不淡入：滚动时几十张图同时淡入，每张都是一个合成动画，
-   会让每帧都重新分层。卡片封面用 ThumbHash 垫底，图到了直接显示。 */
-img:not(.ik-card__cover):not(.ik-card__avatar-image) {
+   会让每帧都重新分层。卡片封面用 ThumbHash 垫底，图到了直接显示。
+   排除项必须写在同一个 :not() 里：:not(a, b) 的优先级只算一个类，保持 (0,1,1) 不变，
+   否则会压过 `.pswp .pswp__img` 这类按原优先级写的覆盖规则（画廊大图会变透明）。 */
+img:not(.ik-card__cover, .ik-card__avatar-image) {
   opacity: 0;
   transition: opacity 280ms ease;
 }
@@ -288,7 +290,7 @@ img:not(.ik-card__cover):not(.ik-card__avatar-image) {
   transition: none;
 }
 
-img:not(.ik-card__cover):not(.ik-card__avatar-image).ik-img-revealed {
+img:not(.ik-card__cover, .ik-card__avatar-image).ik-img-revealed {
   opacity: 1;
 }
 
