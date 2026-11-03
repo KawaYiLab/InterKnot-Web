@@ -21,8 +21,6 @@ const props = defineProps<{
   /** 是否显示「重新生成」（仅会话最后一条 AI 回复且无流式进行中） */
   showRegenerate: boolean;
   regenerating: boolean;
-  /** 会话内搜索：当前命中消息高亮 */
-  searchHit?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -117,7 +115,6 @@ const awaitingFirstData = computed(
       :class="{
         'is-new': entry.isNew,
         'is-mine': entry.isMine,
-        'is-search-hit': !!searchHit,
       }"
       :data-mid="entry.msg.documentId"
       @contextmenu="emit('contextmenu', $event, entry.msg)"
@@ -357,11 +354,6 @@ const awaitingFirstData = computed(
   /* 参考 chat-generator：头像与气泡间留出昵尖角的位置 */
   gap: 10px;
   align-items: flex-start;
-}
-
-/* 会话内搜索：当前命中消息的气泡打黄圈提示 */
-.ik-knock__msg.is-search-hit .ik-knock__msg-bubble {
-  box-shadow: 0 0 0 2px #fbfe00;
 }
 
 .ik-knock__msg-avatar {

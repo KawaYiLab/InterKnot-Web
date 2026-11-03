@@ -346,24 +346,25 @@ const pick = (key: string | null) => {
   outline-offset: -2px;
 }
 
-/* 当前生效的模型：整行亮黄（同侧栏选中项） */
-.ik-model__item.is-active {
-  background: #fbfe00;
+/* 当前生效的模型：与举报选项一致的绿色底、黑色字 */
+.ik-model__item.is-active,
+.ik-model__item.is-active:hover {
+  background: var(--ik-primary, #BFFF09);
   color: #000;
 }
 
 .ik-model__item.is-active .ik-model__item-desc {
-  color: rgba(0, 0, 0, 0.6);
+  color: #000;
 }
 
 .ik-model__item.is-active .ik-model__item-badge {
-  background: #000;
-  color: #fbfe00;
+  background: rgba(0, 0, 0, 0.12);
+  color: #000;
 }
 
 .ik-model__item.is-active .ik-model__item-default {
   background: rgba(0, 0, 0, 0.12);
-  color: rgba(0, 0, 0, 0.6);
+  color: #000;
 }
 
 /* 「跟随角色默认」是回退项，用一条分隔线与模型列表分开 */

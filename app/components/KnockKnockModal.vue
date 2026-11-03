@@ -9,10 +9,7 @@ import {
 import {
   ChevronLeftIcon,
   ChevronDownIcon,
-  ChevronUpIcon,
   TrashIcon,
-  MagnifyingGlassIcon,
-  XMarkIcon,
   PlusIcon,
   PencilIcon,
 } from "@heroicons/vue/24/outline";
@@ -25,10 +22,8 @@ import { extractCitations, isWorkflowSettled } from "~/utils/workflow";
 import type { BubbleRender, EnrichedMessage } from "~/utils/dm-view";
 import type DmComposer from "~/components/DmComposer.vue";
 import FairyMascotEye from "~/components/fairy/FairyMascotEye.vue";
-import InspiraFlickeringGrid from "~/components/inspira/FlickeringGrid.vue";
 import Collapsible from "~/components/ui/collapsible/Collapsible.vue";
 import CollapsibleContent from "~/components/ui/collapsible/CollapsibleContent.vue";
-import { useMediaQuery } from "@vueuse/core";
 import { useChatScroll } from "~/composables/useChatScroll";
 import { useDmMessageEntries } from "~/composables/useDmMessageEntries";
 
@@ -659,9 +654,6 @@ const composerRotatingPlaceholders = computed<string[] | undefined>(() => {
   return ["输入消息，Enter 发送", "Shift+Enter 换行", "粘贴截图可以直接发图"];
 });
 
-/** 点阵背景只在桌面端、且没开「减少动态效果」时挂载（canvas 动画费电） */
-const showFlickeringGrid = useMediaQuery("(min-width: 769px) and (prefers-reduced-motion: no-preference)");
-
 const composerPlaceholder = computed<string>(() => {
   const conv = activeConversation.value;
   if (!conv) return "";
@@ -999,9 +991,8 @@ watch(activeConversationId, async (id, oldId, onCleanup) => {
   // 切换会话时关闭编辑态
   editingMessageId.value = null;
   editingDraft.value = "";
-  // 渲染窗口与会话内搜索都是会话级状态 → 一并复位
+  // 切换会话时复位渲染窗口
   renderWindow.value = RENDER_WINDOW_STEP;
-  closeDmSearch();
   messagesSettling.value = !!id;
   if (!id) return;
   try {
@@ -1284,87 +1275,9 @@ const doSend = async () => {
   }
 };
 
-// ── Phase 4 会话内搜索 ───────────────────────────
-const dmSearchOpen = ref(false);
-const dmSearchQuery = ref("");
-/** 当前定位在第几个命中（0-based；query 变化时复位） */
-const dmSearchIndex = ref(0);
-const dmSearchInputRef = ref<HTMLInputElement | null>(null);
-
-/** 命中消息 documentId 列表（时间正序）：纯文本消息小写包含匹配 */
-const dmSearchHits = computed<string[]>(() => {
-  const q = dmSearchQuery.value.trim().toLowerCase();
-  if (!dmSearchOpen.value || !q) return [];
-  const hits: string[] = [];
-  for (const entry of enrichedMessages.value) {
-    if (entry.msg.deletedAt) continue;
-    if (typeof entry.rendered !== "string") continue;
-    if (entry.rendered.toLowerCase().includes(q)) {
-      hits.push(entry.msg.documentId);
-    }
-  }
-  return hits;
-});
-
-/** 当前命中的消息 documentId：传给 DmMessageItem 打黄圈高亮 */
-const currentSearchHitId = computed<string | null>(
-  () => dmSearchHits.value[dmSearchIndex.value] ?? null,
-);
-
-const closeDmSearch = () => {
-  dmSearchOpen.value = false;
-  dmSearchQuery.value = "";
-  dmSearchIndex.value = 0;
-};
-
-const toggleDmSearch = () => {
-  if (dmSearchOpen.value) {
-    closeDmSearch();
-    return;
-  }
-  dmSearchOpen.value = true;
-  nextTick(() => dmSearchInputRef.value?.focus());
-};
-
-/** 上一条 / 下一条命中（首尾循环） */
-const goToSearchHit = (delta: number) => {
-  const total = dmSearchHits.value.length;
-  if (total === 0) return;
-  dmSearchIndex.value = (dmSearchIndex.value + delta + total) % total;
-};
-
-/** 命中消息在渲染窗口之外时先扩窗到能渲染它（配合窗口化） */
-const ensureMessageRendered = (documentId: string) => {
-  const list = enrichedMessages.value;
-  const idx = list.findIndex((e) => e.msg.documentId === documentId);
-  if (idx === -1) return;
-  const hiddenCount = list.length - renderWindow.value;
-  if (idx < hiddenCount) {
-    renderWindow.value = list.length - idx;
-  }
-};
-
-/** 滚动到当前命中的消息（黄圈高亮由 DmMessageItem 按 searchHit prop 渲染） */
-const scrollToSearchHit = (documentId: string) => {
-  stopFollowing();
-  ensureMessageRendered(documentId);
-  nextTick(() => {
-    const target = messagesRef.value?.querySelector(`[data-mid="${documentId}"]`);
-    target?.scrollIntoView({ block: "center" });
-  });
-};
-
-// query 变化 → 复位到第一个命中；命中变化 → 滚动定位
-watch(dmSearchQuery, () => {
-  dmSearchIndex.value = 0;
-});
-watch(currentSearchHitId, (id) => {
-  if (id) scrollToSearchHit(id);
-});
-
 // Enter 发送 / Shift+Enter 换行的键盘处理已随 Phase 4 拆分内聚到 DmComposer
 
-/** ESC 优先关闭：上下文菜单 → 会话内搜索 → 编辑模式 → 弹窗本体 */
+/** ESC 优先关闭：上下文菜单 → 编辑模式 → 弹窗本体 */
 const onKeyDown = (e: KeyboardEvent) => {
   if (e.key !== "Escape" || !visible.value) return;
   // 如果有更上层的弹窗（如委托详情 overlay）处于打开状态，不关闭敲敲
@@ -1374,10 +1287,6 @@ const onKeyDown = (e: KeyboardEvent) => {
   if (dmImages.showPicker.value) return;
   if (contextMenuMessageId.value) {
     hideContextMenu();
-    return;
-  }
-  if (dmSearchOpen.value) {
-    closeDmSearch();
     return;
   }
   if (editingMessageId.value) {
@@ -1799,19 +1708,8 @@ const handleMobileBack = () => {
                         :reset-at="headerQuota.resetAt"
                       />
                     </div>
-                    <div v-if="activeConversation" class="ik-knock__header-actions" role="group" aria-label="会话操作">
+                    <div v-if="isActiveAiConversation && activeConversationId" class="ik-knock__header-actions" role="group" aria-label="会话操作">
                       <button
-                        type="button"
-                        class="ik-knock__header-button ik-knock__search-toggle"
-                        :class="{ 'is-active': dmSearchOpen }"
-                        aria-label="搜索聊天记录"
-                        title="搜索聊天记录"
-                        @click="toggleDmSearch"
-                      >
-                        <MagnifyingGlassIcon class="ik-knock__search-toggle-icon" aria-hidden="true" />
-                      </button>
-                      <button
-                        v-if="isActiveAiConversation && activeConversationId"
                         type="button"
                         class="ik-knock__header-button ik-knock__session-action"
                         :disabled="deletingSessionId === activeConversationId"
@@ -1823,50 +1721,7 @@ const handleMobileBack = () => {
                       </button>
                     </div>
                   </header>
-                  <!-- Phase 4 会话内搜索条：命中计数 + 上下跳转 -->
-                  <div v-if="dmSearchOpen" class="ik-knock__search-bar">
-                    <MagnifyingGlassIcon class="ik-knock__search-bar-icon" aria-hidden="true" />
-                    <input
-                      ref="dmSearchInputRef"
-                      v-model="dmSearchQuery"
-                      type="text"
-                      class="ik-knock__search-input"
-                      placeholder="搜索聊天记录…"
-                      @keydown.enter.prevent="goToSearchHit(1)"
-                    />
-                    <span class="ik-knock__search-count" aria-live="polite">
-                      {{ dmSearchHits.length ? `${dmSearchIndex + 1}/${dmSearchHits.length}` : (dmSearchQuery.trim() ? "0 条" : "") }}
-                    </span>
-                    <button
-                      type="button"
-                      class="ik-knock__search-nav"
-                      :disabled="!dmSearchHits.length"
-                      aria-label="上一条"
-                      @click="goToSearchHit(-1)"
-                    >
-                      <ChevronUpIcon class="ik-knock__search-nav-icon" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      class="ik-knock__search-nav"
-                      :disabled="!dmSearchHits.length"
-                      aria-label="下一条"
-                      @click="goToSearchHit(1)"
-                    >
-                      <ChevronDownIcon class="ik-knock__search-nav-icon" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      class="ik-knock__search-nav"
-                      aria-label="关闭搜索"
-                      @click="closeDmSearch"
-                    >
-                      <XMarkIcon class="ik-knock__search-nav-icon" aria-hidden="true" />
-                    </button>
-                  </div>
                   <div class="ik-knock__main-body">
-                    <!-- 聊天区背景：微弱明灭的黄色点阵（手机端与减少动态效果时不挂） -->
-                    <InspiraFlickeringGrid v-if="showFlickeringGrid" class="ik-knock__main-grid" />
                     <!-- 会话消息流（wrap 承载「回到底部」悬浮按钮的定位上下文） -->
                     <div
                       v-if="activeConversation && activeMessages.length"
@@ -1903,7 +1758,6 @@ const handleMobileBack = () => {
                             :copied-id="copiedMessageId"
                             :show-regenerate="entry.aiRich && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
                             :regenerating="regeneratingAi"
-                            :search-hit="entry.msg.documentId === currentSearchHitId"
                             @contextmenu="showContextMenu"
                             @profile="goToProfile"
                             @open-post="openPostFromBubble"
@@ -2518,9 +2372,10 @@ const handleMobileBack = () => {
   color: #ddd;
 }
 
-.ik-knock__session.is-active {
-  background: rgba(251, 254, 0, 0.12);
-  color: #fbfe00;
+.ik-knock__session.is-active,
+.ik-knock__session.is-active:hover {
+  background: var(--ik-primary, #BFFF09);
+  color: #000;
 }
 
 .ik-knock__session.is-active::before {
@@ -2530,10 +2385,10 @@ const handleMobileBack = () => {
   top: 8px;
   bottom: 8px;
   width: 2px;
-  background: #fbfe00;
+  background: var(--ik-primary, #BFFF09);
 }
 
-.ik-knock__session.has-unread {
+.ik-knock__session.has-unread:not(.is-active) {
   color: #fff;
 }
 
@@ -2592,7 +2447,7 @@ const handleMobileBack = () => {
 }
 
 .ik-knock__session.is-active .ik-knock__session-time {
-  color: rgba(251, 254, 0, 0.6);
+  color: #000;
 }
 
 .ik-knock__session-dot {
@@ -2601,6 +2456,10 @@ const handleMobileBack = () => {
   height: 8px;
   border-radius: 999px;
   background: #fbfe00;
+}
+
+.ik-knock__session.is-active .ik-knock__session-dot {
+  background: #000;
 }
 
 .ik-knock__session-tools {
@@ -2643,6 +2502,11 @@ const handleMobileBack = () => {
 .ik-knock__session-tool:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
+}
+
+.ik-knock__session.is-active .ik-knock__session-tool:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.1);
+  color: #000;
 }
 
 .ik-knock__session-tool:disabled {
@@ -2822,99 +2686,10 @@ const handleMobileBack = () => {
   outline-offset: 2px;
 }
 
-.ik-knock__search-toggle.is-active,
-.ik-knock__search-toggle.is-active:hover {
-  color: #000;
-  background: #fbfe00;
-}
-
-.ik-knock__session-action-icon,
-.ik-knock__search-toggle-icon {
+.ik-knock__session-action-icon {
   width: 20px;
   height: 20px;
 }
-
-/* 搜索条：header 下方整行；输入 + 命中计数 + 上下跳转 + 关闭 */
-.ik-knock__search-bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: #161616;
-  border-bottom: 2px solid #202020;
-}
-
-.ik-knock__search-bar-icon {
-  flex-shrink: 0;
-  width: 15px;
-  height: 15px;
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.ik-knock__search-input {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 10px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 140ms ease;
-}
-
-.ik-knock__search-input:focus {
-  border-color: #fbfe00;
-}
-
-.ik-knock__search-input::placeholder {
-  color: rgba(255, 255, 255, 0.32);
-}
-
-.ik-knock__search-count {
-  flex-shrink: 0;
-  min-width: 40px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.45);
-  font-variant-numeric: tabular-nums;
-}
-
-.ik-knock__search-nav {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #999;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-}
-
-.ik-knock__search-nav:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ik-knock__search-nav:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.ik-knock__search-nav-icon {
-  width: 15px;
-  height: 15px;
-}
-
 
 /* system 分界 / 消息气泡 / 引用卡 / 操作条样式随 Phase 4 拆分移至 DmMessageItem.vue */
 
@@ -2979,20 +2754,12 @@ const handleMobileBack = () => {
 
 .ik-knock__main-body {
   position: relative;
-  /* 点阵背景用 z-index:-1 垫在消息与输入框下面，这里隔出层叠上下文 */
-  isolation: isolate;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 18px;
   overflow: hidden;
-}
-
-.ik-knock__main-grid {
-  z-index: -1;
-  -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 15%, transparent 75%);
-  mask-image: radial-gradient(ellipse at 50% 40%, #000 15%, transparent 75%);
 }
 
 .ik-knock__empty-stage {
