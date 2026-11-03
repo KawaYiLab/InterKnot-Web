@@ -1,5 +1,8 @@
 import DOMPurify from "isomorphic-dompurify";
 import MarkdownIt from "markdown-it";
+import markdownItCjkFriendly from "markdown-it-cjk-friendly";
+import { tex } from "@mdit/plugin-tex";
+import { renderToString } from "katex";
 import hljs from "highlight.js/lib/core";
 import javascript from "highlight.js/lib/languages/javascript";
 import typescript from "highlight.js/lib/languages/typescript";
@@ -62,6 +65,34 @@ const highlightCode = (code: string, lang: string): string => {
   }
 };
 
+type ChatMarkdownEnv = { math: string[] };
+
+const MATH_CACHE_LIMIT = 128;
+const mathCache = new Map<string, string>();
+
+const renderMath = (content: string, displayMode: boolean): string => {
+  const key = `${displayMode ? "block" : "inline"}:${content}`;
+  const cached = mathCache.get(key);
+  if (cached) return cached;
+
+  const html = renderToString(content, {
+    displayMode,
+    output: "htmlAndMathml",
+    trust: false,
+    throwOnError: false,
+    strict: "ignore",
+    maxExpand: 1000,
+    maxSize: 10,
+    // 定义只在当前公式中生效，不污染后续消息或流式重渲染。
+    macros: {},
+  });
+  if (mathCache.size >= MATH_CACHE_LIMIT) {
+    mathCache.delete(mathCache.keys().next().value!);
+  }
+  mathCache.set(key, html);
+  return html;
+};
+
 const createRenderer = (withHighlight: boolean): MarkdownIt => {
   const md = new MarkdownIt({
     html: false,
@@ -69,6 +100,16 @@ const createRenderer = (withHighlight: boolean): MarkdownIt => {
     breaks: true,
     typographer: false, // 关闭"花体引号"等替换，避免破坏代码示例
     ...(withHighlight ? { highlight: highlightCode } : {}),
+  });
+  md.use(markdownItCjkFriendly);
+  md.use(tex, {
+    delimiters: "all",
+    render: (content, displayMode, env) => {
+      const math = (env as ChatMarkdownEnv).math;
+      const index = math.push(renderMath(content, displayMode)) - 1;
+      const placeholder = `<span data-ik-math="${index}"></span>`;
+      return displayMode ? `<p>${placeholder}</p>\n` : placeholder;
+    },
   });
 
   // 链接：外链自动 target=_blank + rel=noopener nofollow noreferrer；
@@ -166,6 +207,8 @@ const SANITIZE_CONFIG = {
     "title",
     "class",
     "data-lang",
+    "data-ik-math",
+    "start",
     "colspan",
     "rowspan",
     "align",
@@ -216,6 +259,12 @@ export function formatChatMarkdown(
 ): string {
   if (!text) return "";
   const md = opts?.highlight ? mdHighlight : mdPlain;
-  const rendered = md.render(normalizePostLinks(text));
-  return DOMPurify.sanitize(rendered, SANITIZE_CONFIG);
+  const env: ChatMarkdownEnv = { math: [] };
+  const rendered = md.render(normalizePostLinks(text), env);
+  const sanitized = DOMPurify.sanitize(rendered, SANITIZE_CONFIG);
+  // KaTeX 的 MathML、SVG 和定位样式不经过普通正文的窄白名单。
+  // 只回填本次由 trust:false 生成的公式；html:false 的正文无法伪造占位标签。
+  return sanitized.replace(/<span data-ik-math="(\d+)"><\/span>/g, (placeholder, index: string) =>
+    env.math[Number(index)] ?? placeholder,
+  );
 }

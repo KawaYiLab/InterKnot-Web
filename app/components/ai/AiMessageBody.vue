@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { formatChatMarkdown } from "~/utils/format-chat";
 import { wrapGeneratingTail } from "~/utils/text-generate";
+import "katex/dist/katex.min.css";
 
 /**
  * AI 会话气泡的富文本正文：markdown 渲染 + 代码高亮 + 代码块复制 +
@@ -276,6 +277,31 @@ const onClick = async (e: MouseEvent) => {
 .ik-ai-md :deep(img) {
   max-width: 100%;
   border-radius: 8px;
+}
+
+/* ── 数学公式 ─────────────────────────── */
+.ik-ai-md :deep(.katex) {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.15em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+  font-size: 1.05em;
+}
+
+.ik-ai-md :deep(.katex-display) {
+  max-width: 100%;
+  margin: 0.6em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.ik-ai-md :deep(.katex-display > .katex) {
+  display: block;
+  min-width: max-content;
+  max-width: none;
+  overflow: visible;
 }
 
 /* ── 表格 ─────────────────────────────── */
