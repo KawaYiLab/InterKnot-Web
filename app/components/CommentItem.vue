@@ -39,10 +39,7 @@ const props = defineProps<{
    */
   acceptEnabled?: boolean;
   highlightedCommentId?: string | null;
-  /**
-   * 列表顶部的采纳 / 置顶副本：同一条评论在时间线里还会出现在自己的楼层，
-   * 副本不带 data-comment-id，定位与阅读断点都只认时间线里那一条。
-   */
+  /** 时间线开头的采纳 / 置顶（时间线里没有它们）。阅读断点不记它们。 */
   featured?: boolean;
 }>();
 
@@ -117,11 +114,11 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 </script>
 
 <template>
-  <div class="ik-comment" :class="{ 'ik-comment--self': isOwnComment }" :data-comment-id="featured ? undefined : comment.id">
+  <div class="ik-comment" :class="{ 'ik-comment--self': isOwnComment }" :data-comment-id="comment.id" :data-featured="featured || undefined">
     <div
       class="ik-comment__main"
       :class="{
-        'ik-comment__main--target': !featured && comment.id === highlightedCommentId,
+        'ik-comment__main--target': comment.id === highlightedCommentId,
       }"
     >
       <div class="ik-comment__avatar-col">

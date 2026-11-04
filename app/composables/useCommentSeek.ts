@@ -7,6 +7,8 @@ type LoadGuard = () => boolean;
 export interface UseCommentSeekOptions {
   targetCommentId: Ref<string | null>;
   comments: Ref<Comment[]>;
+  /** 时间线开头的采纳 / 置顶：它们不在 comments 里，定位到它们时滚到顶部那一条。 */
+  featured?: Ref<Comment[]>;
   commentsHasNext: Ref<boolean>;
   /** 异步加载提交结果前也检查 guard，避免旧定位替换新目标的时间线。 */
   loadComments: (isCurrent?: LoadGuard) => Promise<void>;
@@ -30,6 +32,7 @@ interface SeekIntent {
 export function useCommentSeek({
   targetCommentId,
   comments,
+  featured,
   commentsHasNext,
   loadComments,
   loadAround,
@@ -45,7 +48,8 @@ export function useCommentSeek({
   let activeIntent: SeekIntent | null = null;
   let pausedIntent: SeekIntent | null = null;
 
-  const isLoaded = (id: string) => comments.value.some((c) => c.id === id);
+  const isLoaded = (id: string) =>
+    comments.value.some((c) => c.id === id) || !!featured?.value.some((c) => c.id === id);
   const highlightedCommentId = computed(() =>
     targetFound.value && shouldHighlight.value ? currentTargetId.value : null,
   );

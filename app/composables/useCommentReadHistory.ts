@@ -137,7 +137,7 @@ export function findTopVisibleComment(
 
   // 2. 遍历容器内的评论节点，寻找正处于视口顶部的评论
   const containerRect = container.getBoundingClientRect();
-  const elements = container.querySelectorAll<HTMLElement>(".ik-comment[data-comment-id]");
+  const elements = container.querySelectorAll<HTMLElement>(".ik-comment[data-comment-id]:not([data-featured])");
   if (!elements.length) return null;
 
   let bestEl: HTMLElement | null = null;

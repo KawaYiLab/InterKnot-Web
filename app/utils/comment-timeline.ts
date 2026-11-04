@@ -19,7 +19,7 @@ export function removeFromTimeline(list: Comment[], removed: Comment): Comment[]
   });
 }
 
-/** 新发的评论回复了列表里的某条：那条的回复数加一（同一条评论在顶部副本和时间线里各一份）。 */
+/** 新发的评论回复了列表里的某条：那条的回复数加一（被回复的可能在时间线里，也可能是顶部的采纳 / 置顶）。 */
 export function countNewReply(lists: Comment[][], created: Comment) {
   const targetId = created.replyTo?.comment?.id;
   if (!targetId) return;

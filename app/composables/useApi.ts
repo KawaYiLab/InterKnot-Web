@@ -1271,7 +1271,7 @@ export function useApi() {
           ...(sort !== "oldest" ? { sort } : {}),
         },
       });
-      // 最佳答案在最前，其次置顶（两者后端已互斥去重）。
+      // 最佳答案在最前，其次置顶；只在时间线开头那一页才有，items 里不含它们。
       const featured = [res.accepted, res.pinned].filter((c): c is Rec => !!c).map(toComment);
       return {
         ...toPage(res.items.map(toComment), res.nextCursor),

@@ -66,7 +66,7 @@ const relatedReady = ref(false);
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
 
-// 评论时间线：按 commentSort 排（每次进帖子都从最早开始）。featured 是第一页额外给的采纳 / 置顶（在时间线里也照常出现）。
+// 评论时间线：按 commentSort 排（每次进帖子都从最早开始）。featured 是放在时间线开头的采纳 / 置顶（时间线里没有它们，只在加载到开头时才有）。
 const commentSort = ref<CommentSort>("oldest");
 const comments = ref<Comment[]>([]);
 const featuredComments = ref<Comment[]>([]);
@@ -75,10 +75,6 @@ const commentsHasNext = ref(true);
 // 从中间某条评论开始加载时，往回（列表上方）翻页的游标。
 const commentsPrevCursor = ref("");
 const commentsLoadingEarlier = ref(false);
-// 置顶 / 采纳的评论本来就是时间线第一条时，顶部不再重复显示一份。
-const featuredOnTop = computed(() =>
-  featuredComments.value.filter((c) => c.id !== comments.value[0]?.id),
-);
 const commentsLoading = ref(false);
 const commentsInitialLoading = ref(true);
 
@@ -291,8 +287,8 @@ const loadCommentsAround = async (commentId: string) => {
   try {
     const page = await api.getComments(postId.value, "", false, { anchor: commentId, sort: commentSort.value });
     if (isCommentLoadingCancelled) return;
-    // 锚点不可见时后端按第一页处理，这时顶部的采纳 / 置顶照常给。
-    if (!page.prevCursor) featuredComments.value = page.featured;
+    // 只有加载到时间线开头时后端才给采纳 / 置顶（锚点就是它们、或锚点不可见时也按第一页处理）。
+    featuredComments.value = page.prevCursor ? [] : page.featured;
     comments.value = page.nodes;
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
@@ -317,6 +313,8 @@ const loadEarlierComments = async () => {
     await prependKeepingPosition(comments.value[0]?.id, () => {
       comments.value.unshift(...page.nodes);
       commentsPrevCursor.value = page.prevCursor;
+      // 翻回开头了：采纳 / 置顶放回顶部。
+      if (!page.prevCursor) featuredComments.value = page.featured;
     });
   } catch (err) {
     message.error(resolveErrorMessage(err, "获取评论失败"));
@@ -338,6 +336,7 @@ const refreshComments = async () => {
 const { seek, highlightedCommentId, targetFound, seeking } = useCommentSeek({
   targetCommentId,
   comments,
+  featured: featuredComments,
   commentsHasNext,
   loadComments,
   loadAround: loadCommentsAround,
@@ -1363,11 +1362,12 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                 </template>
-                <div v-else-if="!comments.length" class="ik-empty" style="padding: 40px 0">啥都木有¯\(°_o)/¯</div>
+                <div v-else-if="!comments.length && !featuredComments.length" class="ik-empty" style="padding: 40px 0">啥都木有¯\(°_o)/¯</div>
                 <CommentItem
-                  v-for="comment in featuredOnTop"
+                  v-for="comment in featuredComments"
                   :key="`featured-${comment.id}`"
                   featured
+                  :highlighted-comment-id="highlightedCommentId"
                   :comment="comment"
                   :current-user-author-id="auth.user?.authorId"
                   :post-author-id="post.author?.documentId"
@@ -1417,7 +1417,7 @@ onBeforeUnmount(() => {
                   @unaccept-comment="handleUnacceptComment"
                 />
                 <div
-                  v-if="comments.length"
+                  v-if="comments.length || featuredComments.length"
                   ref="commentsSentinelRef"
                   class="ik-comments-sentinel"
                 >

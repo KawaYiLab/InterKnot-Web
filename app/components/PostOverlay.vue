@@ -87,7 +87,7 @@ const headerCreatedAt = computed<string | undefined>(() =>
 const headerTitle = computed<string>(() => post.value?.title ?? props.preview?.title ?? "");
 const headerCategory = computed(() => post.value?.category ?? props.preview?.category ?? null);
 
-// 评论时间线：按 commentSort 排（每次进帖子都从最早开始）。featured 是第一页额外给的采纳 / 置顶（在时间线里也照常出现）。
+// 评论时间线：按 commentSort 排（每次进帖子都从最早开始）。featured 是放在时间线开头的采纳 / 置顶（时间线里没有它们，只在加载到开头时才有）。
 const commentSort = ref<CommentSort>("oldest");
 const comments = ref<Comment[]>([]);
 const featuredComments = ref<Comment[]>([]);
@@ -96,10 +96,6 @@ const commentsHasNext = ref(true);
 // 从中间某条评论开始加载时，往回（列表上方）翻页的游标。
 const commentsPrevCursor = ref("");
 const commentsLoadingEarlier = ref(false);
-// 置顶 / 采纳的评论本来就是时间线第一条时，顶部不再重复显示一份。
-const featuredOnTop = computed(() =>
-  featuredComments.value.filter((c) => c.id !== comments.value[0]?.id),
-);
 const commentsLoading = ref(false);
 // 首次评论加载是否已结束。评论加载被刻意延后（scheduleLoadComments 用
 // rAF + requestIdleCallback），在它真正开始前 commentsLoading 仍是 false，
@@ -118,7 +114,9 @@ const showCommentsSkeleton = computed(() => {
   if (!commentsVisible.value && comments.value.length > 0) return true;
   return comments.value.length === 0 && (!commentsLoaded.value || commentsLoading.value);
 });
-const showCommentsEmpty = computed(() => comments.value.length === 0 && commentsLoaded.value && !commentsLoading.value);
+const showCommentsEmpty = computed(
+  () => comments.value.length === 0 && featuredComments.value.length === 0 && commentsLoaded.value && !commentsLoading.value,
+);
 
 // 用于在 postId 切换时废弃旧的评论请求，避免旧数据污染新委托
 let currentCommentLoadId = 0;
@@ -604,8 +602,8 @@ const loadCommentsAround = async (commentId: string, isSeekCurrent = () => true)
   try {
     const page = await api.getComments(request.postId, "", false, { anchor: commentId, sort: commentSort.value });
     if (!isCurrentCommentRequest(request) || !isSeekCurrent()) return;
-    // 锚点不可见时后端按第一页处理，这时顶部的采纳 / 置顶照常给。
-    if (!page.prevCursor) featuredComments.value = page.featured;
+    // 只有加载到时间线开头时后端才给采纳 / 置顶（锚点就是它们、或锚点不可见时也按第一页处理）。
+    featuredComments.value = page.prevCursor ? [] : page.featured;
     comments.value = page.nodes;
     commentsCursor.value = page.endCursor;
     commentsHasNext.value = page.hasNextPage;
@@ -633,6 +631,8 @@ const loadEarlierComments = async () => {
       () => {
         comments.value.unshift(...page.nodes);
         commentsPrevCursor.value = page.prevCursor;
+        // 翻回开头了：采纳 / 置顶放回顶部。
+        if (!page.prevCursor) featuredComments.value = page.featured;
       },
       getActiveCommentsContainer(),
     );
@@ -664,6 +664,7 @@ const targetCommentId = computed(() => props.targetCommentId ?? null);
 const { seek, cancel: cancelSeek, pause: pauseSeek, resume: resumeSeek, highlightedCommentId } = useCommentSeek({
   targetCommentId,
   comments,
+  featured: featuredComments,
   commentsHasNext,
   loadComments,
   commentsVisible,
@@ -1904,9 +1905,10 @@ onBeforeUnmount(() => {
                       <div v-else-if="showCommentsEmpty" class="ik-empty" style="padding: 40px 0">啥都木有¯\(°_o)/¯</div>
                       <template v-if="commentsVisible">
                         <CommentItem
-                          v-for="comment in featuredOnTop"
+                          v-for="comment in featuredComments"
                           :key="`featured-${comment.id}`"
                           featured
+                          :highlighted-comment-id="highlightedCommentId"
                           :comment="comment"
                           :current-user-author-id="auth.user?.authorId"
                           :post-author-id="post.author?.documentId"
@@ -1956,7 +1958,7 @@ onBeforeUnmount(() => {
                           @unaccept-comment="handleUnacceptComment"
                         />
                         <div
-                          v-if="comments.length"
+                          v-if="comments.length || featuredComments.length"
                           ref="commentsSentinelRef"
                           class="ik-comments-sentinel"
                         >
