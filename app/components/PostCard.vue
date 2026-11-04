@@ -12,6 +12,7 @@ import { toAvatarThumbUrl, toCardCoverThumbUrl } from "~/utils/image";
 import { thumbhashToDataUrl } from "~/utils/thumbhash";
 import { toCardExcerpt } from "~/utils/card-excerpt";
 import { splitHighlight } from "~/utils/highlight";
+import { isPlainLinkClick } from "~/utils/post-link";
 import UserHoverCard from "./UserHoverCard.vue";
 
 const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
@@ -112,6 +113,7 @@ const onAvatarError = () => {
 };
 
 const handleOpen = (e: MouseEvent) => {
+  if (!isPlainLinkClick(e)) return;
   emit("open", props.post, e);
 };
 </script>

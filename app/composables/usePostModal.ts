@@ -6,11 +6,13 @@ import type { Author } from "~/types/entities";
 import type { HistoryState } from "vue-router";
 import { overlayHistoryState } from "~/utils/overlay-history";
 import { isPostSnowflake, knownPostId, postPath } from "~/utils/post-path";
+import { cancelPendingModalNavigation, restoreModalBackground } from "~/utils/post-modal-history";
 
 let _historyPushed = false;
 let _closing = false;
 let _queuedOpen: (() => void) | null = null;
 let _savedTitle = "";
+let _openRequest = 0;
 let _activeKey: string | null = null;
 let _restoreFocus: ModalBackground | null = null;
 
@@ -22,9 +24,15 @@ interface ModalBackground {
   position: unknown;
   title: string;
   focus: HTMLElement | null;
-  options?: OpenOptions;
 }
-const backgrounds = new Map<string, ModalBackground>();
+interface PostEntry {
+  key: string;
+  background: ModalBackground;
+  id: string;
+  options?: OpenOptions;
+  title?: string;
+}
+const entries = new Map<string, PostEntry>();
 
 let _entered = true;
 let _enteredWaiters: Array<() => void> = [];
@@ -60,6 +68,9 @@ export function usePostModal() {
   const api = useApi();
   const router = useRouter();
   const isOpen = useState("pm:open", () => false);
+  const entryKey = useState<string | null>("pm:entry", () => null);
+  const sessionKey = useState<string | null>("pm:session", () => null);
+  const switching = useState("pm:switching", () => false);
   const postId = useState<string | null>("pm:id", () => null);
   const coverHint = useState<number | null>("pm:coverHint", () => null);
   const preview = useState<PostPreview | null>("pm:preview", () => null);
@@ -69,13 +80,17 @@ export function usePostModal() {
 
   const locationUrl = () => window.location.pathname + window.location.search + window.location.hash;
 
-  function show(id: string, background: ModalBackground, opts?: OpenOptions) {
+  function show(entry: PostEntry) {
+    const { id, background, options: opts } = entry;
+    switching.value = isOpen.value;
     if (!isOpen.value) {
       _savedTitle = background.title;
       acquire(SCROLL_LOCK_TOKEN);
       _entered = false;
     }
-    _activeKey = background.key;
+    _activeKey = entry.key;
+    entryKey.value = entry.key;
+    sessionKey.value = background.key;
     _restoreFocus = null;
     _historyPushed = true;
     postId.value = id;
@@ -83,7 +98,8 @@ export function usePostModal() {
     preview.value = opts?.preview ?? null;
     targetCommentId.value = opts?.commentId ?? null;
     isOpen.value = true;
-    void api.getPost(id).then((post) => shortenUrl(post.id, post.postNo, background.key)).catch(() => {});
+    document.title = entry.title || (opts?.preview?.title ? `${opts.preview.title} - ${DEFAULT_TITLE}` : `委托 - ${DEFAULT_TITLE}`);
+    void api.getPost(id).then((post) => shortenUrl(post.id, post.postNo, entry.key)).catch(() => {});
   }
 
   /** 用帖子 id 打开的浮层，查到编号后把地址换成短的（不新增历史项）。 */
@@ -99,36 +115,39 @@ export function usePostModal() {
 
   function open(ref: string, opts?: OpenOptions) {
     if (!import.meta.client || !ref) return;
+    const request = ++_openRequest;
+    const position = window.history.state?.position;
+    const originEntry = window.history.state?.postModalKey;
+    const route = router.currentRoute.value.fullPath;
     const id = knownPostId(ref);
-    // 没见过的编号（站内链接里的 /post/7012）：先换成帖子 id，浮层和评论接口都按 id。
+    const stillWanted = () => request === _openRequest && window.history.state?.position === position &&
+      window.history.state?.postModalKey === originEntry &&
+      router.currentRoute.value.fullPath === route;
+    // 短编号先解析成 id；较晚返回的请求不能覆盖新的点击或重新打开已关闭的弹窗。
     if (!isPostSnowflake(id)) {
       void api.getPost(id)
-        .then((post) => openById(post.id || id, opts))
-        .catch(() => openById(id, opts));
+        .then((post) => { if (stillWanted()) openById(post.id || id, opts); })
+        .catch(() => { if (stillWanted()) openById(id, opts); });
       return;
     }
     openById(id, opts);
   }
 
   function openById(id: string, opts?: OpenOptions) {
-    // back 是异步的。先等它落到背景项，再处理最新的打开意图，不能替换正在退出的项。
     if (_closing) {
       _queuedOpen = () => openById(id, opts);
       return;
     }
     const history = router.options.history;
-    let background = _activeKey ? backgrounds.get(_activeKey) : undefined;
-    const replacing = isOpen.value && !!background;
-    if (!replacing) {
-      const url = locationUrl();
-      // 敲敲等旧入口仍可能直接 pushState；先同步 RouterHistory 的当前位置。
-      if (history.location !== url) {
-        history.replace(url, { ...window.history.state, current: url });
-      }
+    const active = _activeKey ? entries.get(_activeKey) : undefined;
+    // 连点当前内容不会制造空的返回步骤；同帖的不同评论仍有各自的历史和阅读位置。
+    if (isOpen.value && active?.id === id && active.options?.commentId === opts?.commentId) return;
+    let background = isOpen.value ? active?.background : undefined;
+    if (!background) {
       const activeElement = document.activeElement;
       background = {
         key: crypto.randomUUID(),
-        url,
+        url: locationUrl(),
         route: router.currentRoute.value.fullPath,
         position: window.history.state?.position,
         title: document.title,
@@ -136,24 +155,23 @@ export function usePostModal() {
           ? _restoreFocus.focus
           : activeElement instanceof HTMLElement ? activeElement : null,
       };
-      backgrounds.set(background.key, background);
     }
-    background!.options = opts;
+    const entry: PostEntry = { key: crypto.randomUUID(), background, id, options: opts };
+    entries.set(entry.key, entry);
     const url = postPath(id) + (opts?.commentId ? `?comment=${encodeURIComponent(opts.commentId)}` : "");
     const state = overlayHistoryState({
       __postModal: true,
-      postModalKey: background!.key,
+      postModalKey: entry.key,
       postId: id,
       commentId: opts?.commentId ?? null,
     });
-    // RouterHistory 自己维护 current / position / scroll，不能复制背景项的这些值。
     for (const key of ROUTER_STATE_KEYS) delete state[key];
-    if (replacing) history.replace(url, state as HistoryState);
-    else history.push(url, state as HistoryState);
-    show(id, background!, opts);
+    history.push(url, state as HistoryState);
+    show(entry);
   }
 
   function close() {
+    ++_openRequest;
     if (!isOpen.value || _closing) return;
     _closing = true;
     if (_historyPushed && window.history.state?.postModalKey === _activeKey) {
@@ -165,11 +183,13 @@ export function usePostModal() {
 
   /** 路由导航只清理浮层；返回背景时才恢复触发点焦点。 */
   function teardown(restoreFocus = false) {
+    ++_openRequest;
     _closing = false;
     if (!isOpen.value) return;
-    _restoreFocus = restoreFocus && _activeKey ? backgrounds.get(_activeKey) ?? null : null;
+    _restoreFocus = restoreFocus && _activeKey ? entries.get(_activeKey)?.background ?? null : null;
     _activeKey = null;
     isOpen.value = false;
+    switching.value = false;
     _historyPushed = false;
     flushEnteredWaiters();
     if (import.meta.client) {
@@ -196,6 +216,7 @@ export function usePostModal() {
   function clearAfterLeave() {
     // Vue 会在新节点入场时结算旧 leave，旧回调不能清掉刚打开的帖子。
     if (isOpen.value) return;
+    entryKey.value = null;
     postId.value = null;
     coverHint.value = null;
     preview.value = null;
@@ -212,6 +233,7 @@ export function usePostModal() {
     // 前置 listener 暂停路由导航一轮，但让 RouterHistory 的 popstate listener 照常
     // 同步 location / position。stopImmediatePropagation 会把这两份状态再次拆散。
     if (resumeRouter) return;
+    cancelPendingModalNavigation(router);
     const listening = router.listening;
     router.listening = false;
     const resume = () => {
@@ -226,9 +248,10 @@ export function usePostModal() {
 
   /** 由前置插件先于 RouterHistory 派发。 */
   function handlePopState() {
+    ++_openRequest;
     resumeRouter?.();
     const state = window.history.state;
-    const active = _activeKey ? backgrounds.get(_activeKey) : undefined;
+    const active = _activeKey ? entries.get(_activeKey)?.background : undefined;
     // 先认当前浮层的背景项：它本身也可能是以前访问过的独立帖子历史项。
     if (active && locationUrl() === active.url && state?.position === active.position &&
         router.currentRoute.value.fullPath === active.route) {
@@ -239,26 +262,36 @@ export function usePostModal() {
       if (reopen) setTimeout(reopen, 0);
       return;
     }
-    const background = state?.__postModal && typeof state.postModalKey === "string"
-      ? backgrounds.get(state.postModalKey)
+    const entry = state?.__postModal && typeof state.postModalKey === "string"
+      ? entries.get(state.postModalKey)
       : undefined;
-    if (background && typeof state.postId === "string" &&
-        router.currentRoute.value.fullPath === background.route) {
+    if (entry && typeof state.postId === "string" &&
+        router.currentRoute.value.fullPath === entry.background.route) {
       keepBackgroundRoute();
       _closing = false;
-      show(state.postId, background, { ...background.options, commentId: state.commentId ?? undefined });
+      show(entry);
+      const reopen = _queuedOpen;
+      _queuedOpen = null;
+      if (reopen) setTimeout(reopen, 0);
       return;
     }
     _queuedOpen = null;
     teardown();
+    if (entry) restoreModalBackground(router, entry.background.route, entry.background.position);
   }
 
   function setTitle(title: string) {
-    if (import.meta.client && isOpen.value && title) document.title = `${title} - ${DEFAULT_TITLE}`;
+    if (!import.meta.client || !isOpen.value || !title) return;
+    document.title = `${title} - ${DEFAULT_TITLE}`;
+    const entry = _activeKey ? entries.get(_activeKey) : undefined;
+    if (entry) entry.title = document.title;
   }
 
   return {
     isOpen: readonly(isOpen),
+    entryKey: readonly(entryKey),
+    sessionKey: readonly(sessionKey),
+    switching: readonly(switching),
     postId: readonly(postId),
     coverHint: readonly(coverHint),
     preview: readonly(preview),

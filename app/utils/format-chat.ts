@@ -1,3 +1,4 @@
+import { readPostLink } from "~/utils/post-link";
 import DOMPurify from "isomorphic-dompurify";
 import MarkdownIt from "markdown-it";
 import markdownItCjkFriendly from "markdown-it-cjk-friendly";
@@ -121,7 +122,8 @@ const createRenderer = (withHighlight: boolean): MarkdownIt => {
     const token = tokens[idx]!;
     const hrefIdx = token.attrIndex("href");
     const href = hrefIdx >= 0 ? (token.attrs![hrefIdx]![1] ?? "") : "";
-    const isInternal = href.startsWith("/") && !href.startsWith("//");
+    const isInternal = (href.startsWith("/") && !href.startsWith("//")) ||
+      (typeof window !== "undefined" && !!readPostLink(href));
     if (!isInternal) {
       const targetIdx = token.attrIndex("target");
       const relIdx = token.attrIndex("rel");

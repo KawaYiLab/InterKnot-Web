@@ -7,7 +7,6 @@ import { getCoverAspectRatio } from "~/utils/cover";
 definePageMeta({ middleware: "profile-member-no" });
 
 const route = useRoute();
-const router = useRouter();
 const api = useApi();
 const postModal = usePostModal();
 const pageDataLoading = usePageDataLoading();
@@ -25,13 +24,7 @@ const showAvatarModal = computed(() => modalQuery.value === 'avatar');
 const showSettingsModal = computed(() => SETTINGS_MODALS.includes(modalQuery.value));
 const showActionsModal = computed(() => !profile.value?.isSelf && modalQuery.value === 'actions');
 
-const openModal = (name: string) => {
-  router.replace({ query: { ...route.query, modal: name } });
-};
-const closeModal = () => {
-  const { modal: _, ...rest } = route.query;
-  return router.replace({ query: rest });
-};
+const { open: openModal, close: closeModal } = useProfileModalRoute();
 
 const articles = ref<Post[]>([]);
 const articleLoading = ref(false);
@@ -57,8 +50,12 @@ const loadProfileArticles = async () => {
 const allPostsPath = computed(() => `/profile/${encodeURIComponent(profileId.value)}/posts`);
 // 从弹窗进入时先去掉 ?modal，否则返回主页会重新弹出菜单。
 const goAllPosts = async () => {
-  if (route.query.modal) await closeModal();
+  await closeModal();
   await navigateTo(allPostsPath.value);
+};
+const goAccount = async () => {
+  await closeModal();
+  await navigateTo("/account");
 };
 
 /** 访客可进入全部委托：资料未隐藏、未拉黑。 */
@@ -209,7 +206,7 @@ const canSendDm = computed<boolean>(() => {
 
 const dmStarting = ref(false);
 
-/** 发起私聊：与 UserHoverCard 同款流程（找/建会话 → 打开敲敲弹窗并定位） */
+/** 关闭操作菜单后，找/建会话并打开敲敲。 */
 const startDm = async () => {
   if (!authStore.isLogin) {
     loginDialog.open();
@@ -220,6 +217,7 @@ const startDm = async () => {
   if (dmStarting.value) return;
   dmStarting.value = true;
   try {
+    await closeModal();
     const { summary } = await dm.openDirectConversation(p.uid);
     knockKnockModal.open({ dmConversationId: summary.documentId });
   } catch (err) {
@@ -670,6 +668,7 @@ onBeforeUnmount(() => {
               :current-hidden="profile?.profileHidden"
               :initial-sub="modalQuery"
               @close="closeModal"
+              @account="goAccount"
               @name-updated="onNameUpdated"
               @bio-updated="onBioUpdated"
               @hidden-updated="onHiddenUpdated"

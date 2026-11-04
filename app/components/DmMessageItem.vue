@@ -7,6 +7,8 @@ import { hasBubbleLinks, parseBubbleSegments } from "~/utils/dm-view";
 import { buildWorkflowFlow, type WorkflowFlowBlock } from "~/utils/workflow";
 import { formatTime, formatFullTime } from "~/utils/time";
 import { toCanonicalUrl, toThumbUrl } from "~/utils/image";
+import { postPath } from "~/utils/post-path";
+import { isPlainLinkClick } from "~/utils/post-link";
 
 /**
  * 单条 DM 消息（Phase 4 拆分自 KnockKnockModal）：
@@ -26,14 +28,25 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "contextmenu", evt: MouseEvent, msg: DmMessage): void;
   (e: "profile", url: string | null): void;
-  (e: "open-post", documentId: string): void;
-  (e: "bubble-link", href: string, evt: Event): void;
+  (e: "open-post", documentId: string, commentId?: string): void;
+  (e: "bubble-link", href: string, evt: MouseEvent): void;
   (e: "copy", msg: DmMessage): void;
   (e: "regenerate", msg: DmMessage): void;
   (e: "quote-click", msg: DmMessage): void;
 }>();
 
 const { openGallery } = useImageGallery();
+const forwardOpenPost = (id: string, commentId?: string) => emit("open-post", id, commentId);
+const quoteHref = computed(() => {
+  const msg = props.entry.msg;
+  const path = postPath(msg.article?.documentId);
+  return path && msg.comment?.documentId ? `${path}?comment=${encodeURIComponent(msg.comment.documentId)}` : path;
+});
+const openQuote = (event: MouseEvent) => {
+  if (!quoteHref.value || !isPlainLinkClick(event)) return;
+  event.preventDefault();
+  emit("quote-click", props.entry.msg);
+};
 
 /** 附图（撤回后不显示） */
 const images = computed(() => (props.entry.msg.deletedAt ? [] : (props.entry.msg.images ?? [])));
@@ -147,7 +160,7 @@ const awaitingFirstData = computed(
               :steps="block.steps"
               :settled="!entry.aiStreaming"
               :followed="blockIdx < lastTextIndex"
-              @open-post="emit('open-post', $event)"
+              @open-post="forwardOpenPost"
             />
             <div
               v-else
@@ -158,7 +171,7 @@ const awaitingFirstData = computed(
                 v-if="block.text"
                 :text="block.text"
                 :streaming="block.live"
-                @open-post="emit('open-post', $event)"
+                @open-post="forwardOpenPost"
               />
               <span v-else class="ik-knock__msg-typing" aria-label="正在输入">
                 <span class="ik-knock__typing-dot" />
@@ -212,6 +225,7 @@ const awaitingFirstData = computed(
                 :href="seg.href"
                 class="ik-knock__msg-link"
                 @click="emit('bubble-link', seg.href, $event)"
+                @auxclick="emit('bubble-link', seg.href, $event)"
               >{{ seg.text }}</a>
             </template>
           </template>
@@ -219,11 +233,11 @@ const awaitingFirstData = computed(
           <span v-if="entry.msg.editedAt && !entry.msg.deletedAt" class="ik-knock__msg-edited">(已编辑)</span>
         </div>
         <!-- 通知 quote 卡：点击跳到关联委托（postModal） -->
-        <button
+        <a
           v-if="entry.quote"
-          type="button"
+          :href="quoteHref || undefined"
           class="ik-knock__msg-quote"
-          @click="emit('quote-click', entry.msg)"
+          @click="openQuote"
         >
           <DocumentTextIcon
             class="ik-knock__msg-quote-icon"
@@ -235,12 +249,12 @@ const awaitingFirstData = computed(
               {{ entry.quote.title }}
             </span>
           </span>
-        </button>
+        </a>
         <!-- 3.5 引用帖子：回答里出现过的 /post/xxx，始终展示在气泡下方 -->
         <AiCitationList
           v-if="entry.aiRich && entry.citations.length > 0"
           :citations="entry.citations"
-          @open-post="emit('open-post', $event)"
+          @open-post="forwardOpenPost"
         />
         <!-- 1.4 气泡外左下角：时间 + 复制 + 重新生成，仅 AI 消息展示；始终放在消息块最下方 -->
         <div v-if="entry.aiRich" class="ik-knock__msg-meta" :class="{ 'is-mine': entry.isMine }">
@@ -543,6 +557,7 @@ const awaitingFirstData = computed(
   color: #c8c8c8;
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
   transition: background-color 140ms ease, box-shadow 140ms ease;
 }
 

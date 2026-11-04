@@ -11,6 +11,7 @@ import {
   WrenchScrewdriverIcon,
 } from "@heroicons/vue/24/outline";
 import type { WorkflowStepView } from "~/utils/workflow";
+import { isPlainLinkClick } from "~/utils/post-link";
 
 /**
  * AI 回复里一组连续的过程步骤（思考 / 检索 / 读帖 / 工具），穿插在回答气泡之间。
@@ -29,6 +30,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "open-post", documentId: string): void;
 }>();
+
+const openPost = (id: string, event: MouseEvent) => {
+  event.stopPropagation();
+  if (!isPlainLinkClick(event)) return;
+  event.preventDefault();
+  emit("open-post", id);
+};
 
 const collapsible = computed(() => props.steps.length > 1);
 /** 这组步骤已告一段落 */
@@ -222,7 +230,7 @@ const summary = computed(() => {
                 v-if="step.postId && step.subtitle"
                 :href="postPath(step.postId)"
                 class="ai-steps__subtitle is-link"
-                @click.prevent.stop="emit('open-post', step.postId)"
+                @click="openPost(step.postId, $event)"
               >{{ step.subtitle }}</a>
               <span v-else-if="step.subtitle" class="ai-steps__subtitle">{{ step.subtitle }}</span>
               <span v-if="metaOf(step)" class="ai-steps__meta">{{ metaOf(step) }}</span>
@@ -237,7 +245,7 @@ const summary = computed(() => {
                 <a
                   :href="postPath(item.documentId)"
                   class="ai-steps__hit"
-                  @click.prevent="emit('open-post', item.documentId)"
+                  @click="openPost(item.documentId, $event)"
                 >{{ item.title || "无标题" }}</a>
               </li>
             </ul>

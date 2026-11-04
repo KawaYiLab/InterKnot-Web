@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { WorkflowPostRef } from "~/utils/workflow";
+import { postPath } from "~/utils/post-path";
+import { isPlainLinkClick } from "~/utils/post-link";
 
 /**
  * 引用资料列表（3.5）：对齐 ChatGPT / Claude 的 Sources 区域。
@@ -15,6 +17,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "open-post", documentId: string): void;
 }>();
+
+const openPost = (id: string, event: MouseEvent) => {
+  if (!isPlainLinkClick(event)) return;
+  event.preventDefault();
+  emit("open-post", id);
+};
 
 const collapsed = ref(props.citations.length > 3);
 
@@ -78,14 +86,14 @@ const toggle = () => {
             :key="post.documentId"
             class="ik-aiwf-cite__item"
           >
-            <button
-              type="button"
+            <a
+              :href="postPath(post.documentId)"
               class="ik-aiwf-cite__chip"
-              @click="emit('open-post', post.documentId)"
+              @click="openPost(post.documentId, $event)"
             >
               <span class="ik-aiwf-cite__num">{{ idx + 1 }}</span>
               <span class="ik-aiwf-cite__name">{{ post.title || "（无标题）" }}</span>
-            </button>
+            </a>
           </li>
         </ul>
       </div>
@@ -196,6 +204,7 @@ const toggle = () => {
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
   transition: background-color 120ms ease, border-color 120ms ease;
   overflow: hidden;
 }

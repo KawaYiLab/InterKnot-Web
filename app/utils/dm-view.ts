@@ -5,6 +5,7 @@
  */
 import type { AiWorkflowEvent, DmMessage } from "~/types/entities";
 import type { WorkflowPostRef } from "~/utils/workflow";
+import { isSafeLinkHref } from "~/utils/post-link";
 
 /**
  * 气泡正文如何渲染：
@@ -19,7 +20,7 @@ export type BubbleSegment =
   | { type: "link"; text: string; href: string };
 
 // 匹配 markdown 链接 [text](url) 或裸路径 /post/documentId
-const BUBBLE_LINK_RE = /\[([^\]]+)\]\(([^)]+)\)|\/post\/([a-zA-Z0-9_-]+)/g;
+const BUBBLE_LINK_RE = /\[([^\]]+)\]\(([^)]+)\)|(?<![\w/:.])((?:https?:\/\/[^/\s<>()[\]]+)?\/post\/[a-zA-Z0-9_-]+(?:[?#][^\s<>()[\]]*)?)/g;
 
 export const hasBubbleLinks = (text: string): boolean =>
   /\[([^\]]+)\]\(([^)]+)\)|\/post\/[a-zA-Z0-9_-]+/.test(text);
@@ -35,10 +36,13 @@ export const parseBubbleSegments = (text: string): BubbleSegment[] => {
     }
     if (match[1] && match[2]) {
       // markdown link: [text](url)
-      segments.push({ type: "link", text: match[1], href: match[2] });
+      segments.push(isSafeLinkHref(match[2])
+        ? { type: "link", text: match[1], href: match[2] }
+        : { type: "text", content: match[0] });
     } else if (match[3]) {
-      // bare /post/id path → 显示为"查看委托"标签
-      segments.push({ type: "link", text: "查看委托", href: `/post/${match[3]}` });
+      // 完整链接保留来源，避免把外站 /post/id 错开成本地帖子。
+      const href = match[3];
+      segments.push({ type: "link", text: href.startsWith("/") ? "查看委托" : href, href });
     }
     lastIndex = regex.lastIndex;
   }

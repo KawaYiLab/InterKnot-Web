@@ -1,141 +1,190 @@
-/**
- * useKnockKnockModal —— "敲敲" 消息通知弹窗（私聊 / 群聊入口）
- *
- * 模式：仿 usePostModal 的路由级弹窗单例，
- * 外壳动画复用委托弹窗的 .ik-overlay / .ik-dialog 样式。
- *
- * open() 通过 history.pushState 在当前页 path 上追加 ik_knock query（不走 Vue Router），
- * tab 切换 / 选中会话时通过 history.replaceState 更新 URL，
- * close() 通过 history.back() 回退。
- *
- * open() 支持选参 { dmConversationId? }：当传入时弹窗会自动定位到该
- * DM 私聊会话（用于 UserHoverCard 的「私信」按钮跳转场景）。
- */
-import { knockHistoryUrl, overlayHistoryState } from "~/utils/overlay-history";
-const knockKnockVisible = ref(false);
-/** 弹窗一开就要定位到的目标 DM 会话；contacts tab 监听这个值后清空 */
-const pendingDmConversationId = ref<string | null>(null);
-const pendingKnockTab = ref<string | null>(null);
-/** 唯一 token：所有 useKnockKnockModal 实例共享，确保 open/close 配对 */
-const SCROLL_LOCK_TOKEN = Symbol("knock-knock-modal");
+/** 敲敲浮层：用 RouterHistory 更新地址，保留背景页，支持直达和前进/后退。 */
+import { ref } from "vue";
+import { cancelPendingModalNavigation, restoreModalBackground } from "~/utils/post-modal-history";
+import {
+  knockHistoryUrl, readKnockTarget, readLocationUrl, serializeHistoryUrl,
+  type KnockTab, type KnockTarget,
+} from "~/utils/overlay-history";
 
-// 模块级单例，确保所有 useKnockKnockModal() 实例共享同一份标记
-let _historyPushed = false;
-let _savedTitle = "";
+const knockKnockVisible = ref(false);
+const pendingDmConversationId = ref<string | null>(null);
+const pendingKnockTab = ref<KnockTab | null>(null);
+const requestId = ref(0);
+const SCROLL_LOCK_TOKEN = Symbol("knock-knock-modal");
 const DEFAULT_TITLE = "绳网";
 
-interface OpenOptions {
-  /** 打开后切到「私聊」tab 并定位到该会话 documentId */
-  dmConversationId?: string;
-  /** 打开后切到「通话」Tab（AI 角色） */
-  tab?: "calls" | "contacts" | "groups";
+interface Background {
+  key: string;
+  url: string;
+  route: string;
+  position: unknown;
+  title: string;
+  target: KnockTarget;
 }
+const backgrounds = new Map<string, Background>();
+let activeKey: string | null = null;
+let historyPushed = false;
+let closing = false;
+let queuedOpen: (() => void) | null = null;
+let savedTitle = "";
+
+type OpenOptions = Partial<KnockTarget>;
 
 export function useKnockKnockModal() {
+  const router = useRouter();
   const { acquire, release } = useBodyScrollLock();
+  let resumeRouter: (() => void) | null = null;
 
-  const open = (options?: OpenOptions) => {
-    if (!import.meta.client) return;
-    if (options?.dmConversationId) {
-      pendingDmConversationId.value = options.dmConversationId;
+  function show(background: Background) {
+    if (!knockKnockVisible.value) {
+      savedTitle = background.title;
+      acquire(SCROLL_LOCK_TOKEN);
     }
-    if (options?.tab) {
-      pendingKnockTab.value = options.tab;
-    }
+    activeKey = background.key;
+    historyPushed = true;
+    pendingKnockTab.value = background.target.tab;
+    pendingDmConversationId.value = background.target.dmConversationId ?? null;
     knockKnockVisible.value = true;
-    _historyPushed = true;
-    _savedTitle = document.title;
-    acquire(SCROLL_LOCK_TOKEN);
-    window.history.pushState(
-      overlayHistoryState({ __knockKnockModal: true }),
-      "",
-      knockHistoryUrl("contacts"),
-    );
+    requestId.value++;
     document.title = `敲敲 - ${DEFAULT_TITLE}`;
-  };
-
-  /**
-   * 关闭弹窗并回退浏览器历史（用户点击关闭按钮 / ESC）
-   */
-  const close = () => {
-    if (!knockKnockVisible.value) return;
-    const shouldBack = _historyPushed;
-    teardown();
-    if (shouldBack) {
-      _historyPushed = false;
-      window.history.back();
-    }
-  };
-
-  /**
-   * 仅清理状态，不操作 history（由 popstate / 路由守卫调用）
-   */
-  function teardown() {
-    knockKnockVisible.value = false;
-    release(SCROLL_LOCK_TOKEN);
-    pendingDmConversationId.value = null;
-    pendingKnockTab.value = null;
-    if (import.meta.client) {
-      document.title = _savedTitle || DEFAULT_TITLE;
-    }
   }
 
-  /**
-   * popstate 事件处理器 —— 在 app.vue 中注册
-   */
-  function handlePopState() {
-    if (knockKnockVisible.value) {
-      // 如果是回退到自身的 history 条目（如从委托弹窗返回敲敲），不关闭
-      if (window.history.state?.__knockKnockModal) return;
-      _historyPushed = false;
+  function open(options?: OpenOptions) {
+    if (!import.meta.client) return;
+    if (closing) {
+      queuedOpen = () => open(options);
+      return;
+    }
+    const target: KnockTarget = { tab: options?.tab ?? "contacts", dmConversationId: options?.dmConversationId };
+    let background = activeKey ? backgrounds.get(activeKey) : undefined;
+    const replacing = knockKnockVisible.value && !!background;
+    if (!replacing) {
+      background = {
+        key: crypto.randomUUID(),
+        url: serializeHistoryUrl(readLocationUrl()),
+        route: router.currentRoute.value.fullPath,
+        position: window.history.state?.position,
+        title: document.title,
+        target,
+      };
+      backgrounds.set(background.key, background);
+    }
+    background!.target = target;
+    const currentState = window.history.state;
+    const state = {
+      __knockKnockModal: true, knockModalKey: background!.key,
+      modalBackgroundRoute: background!.route,
+      modalBackgroundPosition: currentState?.modalBackgroundRoute === background!.route
+        ? currentState.modalBackgroundPosition : background!.position,
+    };
+    const url = knockHistoryUrl(target.tab, target.dmConversationId);
+    if (replacing) router.options.history.replace(url, state);
+    else router.options.history.push(url, state);
+    show(background!);
+  }
+
+  /** 先建立可关闭返回的背景项，再恢复目标；刷新不依赖旧标签页的内存状态。 */
+  async function openFromUrl(url = readLocationUrl()) {
+    const target = readKnockTarget(url);
+    if (!target) return;
+    const failure = await router.replace("/");
+    if (!failure) open(target);
+  }
+
+  function close() {
+    if (!knockKnockVisible.value || closing) return;
+    if (historyPushed && window.history.state?.knockModalKey === activeKey) {
+      closing = true;
+      window.history.back();
+    } else {
       teardown();
     }
   }
 
-  /**
-   * 更新 URL（replaceState），反映当前 tab / 会话状态。
-   * 不新增 history 条目，仅替换当前条目的 URL。
-   */
-  function updateUrl(tab: string, conversationId?: string | null) {
-    if (!import.meta.client || !knockKnockVisible.value) return;
-    window.history.replaceState(
-      overlayHistoryState({ __knockKnockModal: true }),
-      "",
-      knockHistoryUrl(tab, conversationId),
-    );
+  function teardown() {
+    closing = false;
+    activeKey = null;
+    historyPushed = false;
+    if (!knockKnockVisible.value) return;
+    knockKnockVisible.value = false;
+    release(SCROLL_LOCK_TOKEN);
+    pendingDmConversationId.value = null;
+    pendingKnockTab.value = null;
+    if (import.meta.client) document.title = savedTitle || DEFAULT_TITLE;
   }
 
-  /** contacts tab 消费 pending 目标后调用一次清空，避免再次定位同一会话 */
-  const consumePendingDmConversationId = (): string | null => {
+  // 与帖子浮层一样，让 RouterHistory 同步位置，但暂停本轮整页导航。
+  function keepBackgroundRoute() {
+    if (!router.listening) return;
+    cancelPendingModalNavigation(router);
+    router.listening = false;
+    const resume = () => {
+      if (resumeRouter !== resume) return;
+      router.listening = true;
+      resumeRouter = null;
+    };
+    resumeRouter = resume;
+    setTimeout(resume, 0);
+  }
+
+  function handlePopState() {
+    resumeRouter?.();
+    const state = window.history.state;
+    const active = activeKey ? backgrounds.get(activeKey) : undefined;
+    const url = readLocationUrl();
+    if (active && serializeHistoryUrl(url) === active.url && state?.position === active.position &&
+        router.currentRoute.value.fullPath === active.route) {
+      keepBackgroundRoute();
+      const reopen = queuedOpen;
+      queuedOpen = null;
+      teardown();
+      if (reopen) setTimeout(reopen, 0);
+      return;
+    }
+    const background = state?.__knockKnockModal ? backgrounds.get(state.knockModalKey) : undefined;
+    if (background && router.currentRoute.value.fullPath === background.route) {
+      const isKnock = !!readKnockTarget(url);
+      if (isKnock) keepBackgroundRoute();
+      closing = false;
+      // 帖子可以叠在敲敲上面；返回敲敲时保留当前消息和滚动位置。
+      if (!knockKnockVisible.value || activeKey !== background.key) {
+        const title = document.title;
+        show(background);
+        if (!isKnock) document.title = title;
+      }
+      return;
+    }
+    queuedOpen = null;
+    teardown();
+    if (background) restoreModalBackground(router, background.route, background.position);
+  }
+
+  function updateUrl(tab: KnockTab, conversationId?: string | null) {
+    if (!import.meta.client || !knockKnockVisible.value) return;
+    const background = activeKey ? backgrounds.get(activeKey) : undefined;
+    if (!background) return;
+    background.target = { tab, dmConversationId: conversationId ?? undefined };
+    // 初始化请求可能在打开上层帖子之后才完成，此时不能覆盖帖子地址。
+    if (window.history.state?.__postModal) return;
+    router.options.history.replace(knockHistoryUrl(tab, conversationId), {
+      __knockKnockModal: true, knockModalKey: background.key,
+    });
+  }
+
+  const consumePendingDmConversationId = () => {
     const next = pendingDmConversationId.value;
     pendingDmConversationId.value = null;
     return next;
   };
-
-  const consumePendingKnockTab = (): string | null => {
+  const consumePendingKnockTab = () => {
     const next = pendingKnockTab.value;
     pendingKnockTab.value = null;
     return next;
   };
 
-  /** 路由跳转离开敲敲时调用，避免 close() 误触发 history.back() */
-  function clearHistoryPushed() {
-    _historyPushed = false;
-  }
-
   return {
-    visible: knockKnockVisible,
-    pendingDmConversationId,
-    open,
-    close,
-    /** @internal 供 app 级别 popstate listener 使用 */
-    handlePopState,
-    /** @internal 供路由守卫关闭弹窗（不回退 history） */
-    teardown,
-    /** 更新 URL 以反映当前 tab / 会话状态 */
-    updateUrl,
-    consumePendingDmConversationId,
-    consumePendingKnockTab,
-    clearHistoryPushed,
+    visible: knockKnockVisible, pendingDmConversationId, requestId,
+    open, openFromUrl, close, handlePopState, teardown, updateUrl,
+    consumePendingDmConversationId, consumePendingKnockTab,
   };
 }

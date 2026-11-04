@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onDeactivated } from "vue";
 import type { Profile } from "~/types/entities";
 import type { ComponentPublicInstance } from "vue";
 import { useHoverCapable } from "~/composables/useHoverCapable";
@@ -161,6 +162,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearTimers();
+});
+
+onDeactivated(() => {
+  clearTimers();
+  visible.value = false;
 });
 </script>
 

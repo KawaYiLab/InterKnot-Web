@@ -16,6 +16,7 @@ const emit = defineEmits<{
   bioUpdated: [bio: string];
   hiddenUpdated: [hidden: boolean];
   posts: [];
+  account: [];
 }>();
 
 const route = useRoute();
@@ -71,7 +72,6 @@ const closeLogout = () => {
 const confirmLogout = async () => {
   const revoked = await authStore.logout();
   if (!revoked) message.warning("已在本地退出，网络恢复后将自动同步");
-  emit("close");
   await router.replace("/");
 };
 
@@ -104,7 +104,6 @@ const submitName = async () => {
     const result = await api.updateMyName(trimmed);
     emit("nameUpdated", result.name);
     message.success("用户名修改成功");
-    closeEditName();
     handleClose();
   } catch (err) {
     message.error(resolveErrorMessage(err, "修改用户名失败"));
@@ -138,7 +137,6 @@ const submitBio = async () => {
     const result = await api.updateMyBio(trimmed);
     emit("bioUpdated", result.bio);
     message.success("签名修改成功");
-    closeEditBio();
     handleClose();
   } catch (err) {
     message.error(resolveErrorMessage(err, "修改签名失败"));
@@ -154,8 +152,7 @@ const openAllPosts = () => {
 
 // ── 账号中心（独立页面） ──────────────
 const openAccountCenter = () => {
-  emit("close");
-  void navigateTo("/account");
+  emit("account");
 };
 
 const hidden = ref(!!props.currentHidden);

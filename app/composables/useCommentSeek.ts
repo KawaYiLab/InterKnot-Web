@@ -21,6 +21,11 @@ export interface SeekOptions {
   behavior?: ScrollBehavior;
 }
 
+interface SeekIntent {
+  targetId?: string;
+  options?: SeekOptions;
+}
+
 /** 最新定位意图优先；切帖、关闭和卸载均可取消待完成的加载与 DOM 等待。 */
 export function useCommentSeek({
   targetCommentId,
@@ -37,6 +42,8 @@ export function useCommentSeek({
   const shouldHighlight = ref(true);
   let generation = 0;
   let cancelVisibilityWait: (() => void) | null = null;
+  let activeIntent: SeekIntent | null = null;
+  let pausedIntent: SeekIntent | null = null;
 
   const isLoaded = (id: string) => comments.value.some((c) => c.id === id);
   const highlightedCommentId = computed(() =>
@@ -49,6 +56,15 @@ export function useCommentSeek({
     seeking.value = false;
     targetFound.value = false;
     currentTargetId.value = null;
+    activeIntent = null;
+    pausedIntent = null;
+  };
+
+  // 缓存帖子暂时离开时只保存未完成的定位，已完成的定位不能覆盖后续手动滚动。
+  const pause = () => {
+    const pending = seeking.value ? activeIntent : pausedIntent;
+    cancel();
+    pausedIntent = pending;
   };
 
   const scrollToTarget = async (targetId: string, behavior: ScrollBehavior, isCurrent: LoadGuard) => {
@@ -82,6 +98,7 @@ export function useCommentSeek({
     const request = generation;
     const isCurrent = () => request === generation;
     const effectiveTargetId = overrideTargetId ?? targetCommentId.value;
+    activeIntent = { targetId: effectiveTargetId ?? undefined, options };
     currentTargetId.value = effectiveTargetId;
     shouldHighlight.value = options?.highlight ?? true;
     seeking.value = true;
@@ -101,12 +118,21 @@ export function useCommentSeek({
       if (!isCurrent()) return false;
       throw error;
     } finally {
-      if (isCurrent()) seeking.value = false;
+      if (isCurrent()) {
+        seeking.value = false;
+        activeIntent = null;
+      }
     }
+  };
+
+  const resume = () => {
+    const pending = pausedIntent;
+    pausedIntent = null;
+    return pending ? seek(pending.targetId, pending.options) : null;
   };
 
   watch(targetCommentId, cancel, { flush: "sync" });
   if (getCurrentScope()) onScopeDispose(cancel);
 
-  return { seek, cancel, targetFound, seeking, highlightedCommentId };
+  return { seek, cancel, pause, resume, targetFound, seeking, highlightedCommentId };
 }

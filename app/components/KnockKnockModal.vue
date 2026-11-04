@@ -26,11 +26,14 @@ import Collapsible from "~/components/ui/collapsible/Collapsible.vue";
 import CollapsibleContent from "~/components/ui/collapsible/CollapsibleContent.vue";
 import { useChatScroll } from "~/composables/useChatScroll";
 import { useDmMessageEntries } from "~/composables/useDmMessageEntries";
+import { readKnockTarget, type KnockTab } from "~/utils/overlay-history";
+import { openPostLink } from "~/utils/post-link";
+import { isAnyGalleryOpen } from "~/composables/useImageGallery";
 
 const {
   visible,
+  requestId,
   close,
-  clearHistoryPushed,
   consumePendingDmConversationId,
   consumePendingKnockTab,
   updateUrl,
@@ -56,8 +59,6 @@ const historyBaselineIds = ref(new Set<string>());
 const aiRevealSessionReady = ref(false);
 
 /** 顶部 tab：通话 / 私聊 / 群聊（未来占位） */
-type KnockTab = "calls" | "contacts" | "groups";
-
 const activeTab = ref<KnockTab>("contacts");
 
 const {
@@ -65,6 +66,7 @@ const {
   isLoading,
   error: loadError,
   refresh,
+  ensureConversation,
   hasMoreConversations,
   isLoadingMoreConversations,
   loadMoreConversations,
@@ -123,11 +125,13 @@ const selfUserId = computed<string | null>(() => {
 /**
  * 弹窗打开时加载内容；关闭只清选中，登录级 WS 继续更新全站未读。
  *
- * 本组件是懒加载的（app.vue 的 LazyKnockKnockModal）：直达 /knock 或带 ik_knock 的链接时，
+ * 本组件是懒加载的（app.vue 的 LazyKnockKnockModal）：直达 /knock 路径时，
  * open() 可能早于本组件 setup，visible 一出生就是 true，watch 不会触发——
  * 所以 onMounted 里还要补一次（见下方），否则列表永远停在「加载中…」。
  */
+let bootstrapRun = 0;
 const onVisibleChange = async (next: boolean) => {
+  const run = ++bootstrapRun;
   if (!next) {
     const closingId = activeConversationId.value;
     if (closingId) {
@@ -141,23 +145,46 @@ const onVisibleChange = async (next: boolean) => {
     historyBaselineIds.value = new Set();
     return;
   }
-  activeTab.value = "contacts";
+  activeTab.value = readKnockTarget(new URL(window.location.href))?.tab ?? "contacts";
   activeAiSlug.value = null;
   activeConversationId.value = null;
   knockBootstrapDone.value = false;
   aiRevealSessionReady.value = false;
   historyBaselineIds.value = new Set();
   autoFillUsed.value = 0;
+  sendError.value = null;
+  await auth.ensureCredentials();
+  if (!visible.value || run !== bootstrapRun) return;
+  if (!auth.isLogin) {
+    knockBootstrapDone.value = true;
+    loginDialog.open();
+    return;
+  }
   // 拉列表 + 起 WS（startStream 内部对 SSR / 未登录都做了护栏）
   startStream();
   const generation = auth.generation;
   await Promise.all([refresh(), refreshAiCharacters(), refreshAiModels(), refreshAgentQuota()]);
-  if (!visible.value || auth.generation !== generation) return;
+  if (!visible.value || run !== bootstrapRun || auth.generation !== generation) return;
   knockBootstrapDone.value = true;
-  // 若是由 UserHoverCard「私信」打开，定位到指定会话
+  // 直达链接或个人页「私信」指定的会话可能不在收件箱第一页。
   const pendingDm = consumePendingDmConversationId();
+  const pendingTab = consumePendingKnockTab();
+  if (pendingTab) activeTab.value = pendingTab;
   if (pendingDm) {
-    const conv = allConversations.value.find((c) => c.documentId === pendingDm);
+    let conv: DmConversationSummary | null;
+    try {
+      conv = await ensureConversation(pendingDm);
+    } catch (err) {
+      if (visible.value && run === bootstrapRun && auth.generation === generation) {
+        sendError.value = resolveErrorMessage(err, "无法打开该会话");
+      }
+      return;
+    }
+    if (!visible.value || run !== bootstrapRun || auth.generation !== generation) return;
+    if (!conv) {
+      sendError.value = "会话不存在或当前账号无法访问";
+      return;
+    }
     const peerUid = conv?.peer?.userId;
     const aiCard =
       typeof peerUid === "string"
@@ -176,13 +203,12 @@ const onVisibleChange = async (next: boolean) => {
     updateUrl("contacts", pendingDm);
     return;
   }
-  const pendingTab = consumePendingKnockTab();
-  if (pendingTab === "calls") {
-    activeTab.value = "calls";
-    await openCallsTab();
-  }
+  updateUrl(activeTab.value);
 };
-watch(visible, onVisibleChange);
+watch([visible, requestId], ([next]) => { void onVisibleChange(next); });
+watch(() => auth.isLogin, (loggedIn) => {
+  if (loggedIn && visible.value) void onVisibleChange(true);
+});
 onMounted(() => {
   // 挂载前就已经打开（直达链接）：补跑打开流程
   if (visible.value) void onVisibleChange(true);
@@ -574,19 +600,6 @@ const deleteAiSession = async (id: string) => {
   }
 };
 
-const openCallsTab = async () => {
-  if (!auth.isLogin) {
-    loginDialog.open();
-    return;
-  }
-  if (!aiCharacters.value.length && !aiCharactersLoading.value) {
-    await refreshAiCharacters();
-  }
-  activeConversationId.value = null;
-  activeAiSlug.value = null;
-  updateUrl("calls");
-};
-
 /**
  * 当前激活会话是否禁止发送消息：
  *  - pseudo:anonymous（匿名通知）：对端没有真实身份，无法回复
@@ -761,17 +774,13 @@ const isPendingStreamBubble = (msg: DmMessage): boolean =>
 // AI 回复内链接解析（hasBubbleLinks / parseBubbleSegments）已随
 // Phase 4 拆分移至 ~/utils/dm-view.ts，由 DmMessageItem 直接消费。
 
-const handleBubbleLink = (href: string, e: Event) => {
-  e.preventDefault();
-  const postMatch = href.match(/^\/post\/([a-zA-Z0-9_-]+)/);
-  if (postMatch) {
-    postModal.open(postMatch[1]!);
-  }
+const handleBubbleLink = (_href: string, event: MouseEvent) => {
+  openPostLink(event, postModal.open);
 };
 
 /** AiMessageBody 内点击 /post/xxx 链接 → 打开委托弹窗 */
-const openPostFromBubble = (documentId: string) => {
-  postModal.open(documentId);
+const openPostFromBubble = (documentId: string, commentId?: string) => {
+  postModal.open(documentId, { commentId });
 };
 
 /** like-on-comment：通知关联委托+评论时，quote 卡引用「评论原文」而不是委托标题 */
@@ -817,15 +826,13 @@ const goPost = (msg: DmMessage) => {
 
 /**
  * 跳转个人主页。
- * 敲敲用原生 pushState 占了一条 history，replace 掉 overlay 条目再导航，
- * 避免 navigateTo push 与 overlay 栈错位导致进度条挂起或拼出错误地址。
- * navigateTo 触发路由变化 → app.vue 的 router.beforeEach 守卫自动
+ * 保留当前敲敲历史项，返回时恢复原会话。
+ * navigateTo 触发路由变化 → app.vue 的 router.beforeResolve 守卫自动
  * 调用 knockModal.teardown() 关闭弹窗，无需手动 close()。
  */
 const goToProfile = (profileUrl: string | null) => {
   if (!profileUrl) return;
-  clearHistoryPushed();
-  void navigateTo(profileUrl, { replace: true });
+  void navigateTo(profileUrl);
 };
 
 /** 列表预览文案：撤回 / 图片 / 系统 / 通知 / 正常 */
@@ -1279,12 +1286,13 @@ const doSend = async () => {
 
 /** ESC 优先关闭：上下文菜单 → 编辑模式 → 弹窗本体 */
 const onKeyDown = (e: KeyboardEvent) => {
-  if (e.key !== "Escape" || !visible.value) return;
+  if (e.key !== "Escape" || e.defaultPrevented || e.repeat || !visible.value || isAnyGalleryOpen.value) return;
   // 如果有更上层的弹窗（如委托详情 overlay）处于打开状态，不关闭敲敲
   // 敲敲自身也是 .ik-overlay，所以检查数量 > 1
   if (document.querySelectorAll(".ik-overlay").length > 1) return;
   // 图片弹窗自己处理 ESC
   if (dmImages.showPicker.value) return;
+  e.preventDefault();
   if (contextMenuMessageId.value) {
     hideContextMenu();
     return;
@@ -1783,8 +1791,11 @@ const handleMobileBack = () => {
                     </div>
                     <!-- 占位：仅在非加载态时显示，避免切换会话时闪烁 -->
                     <div v-else-if="!activeMessageLoading" class="ik-knock__empty-stage">
+                      <div v-if="sendError" class="ik-knock__empty-pill" role="alert">
+                        {{ sendError }}
+                      </div>
                       <FairyMascotEye
-                        v-if="isFairyConversation"
+                        v-else-if="isFairyConversation"
                         mode="hero"
                         :state="fairyMascotState"
                         interactive

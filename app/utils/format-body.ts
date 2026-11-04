@@ -1,6 +1,7 @@
 import DOMPurify from "isomorphic-dompurify";
 import MarkdownIt from "markdown-it";
 import { toCanonicalUrl } from "~/utils/image";
+import { readPostLink } from "~/utils/post-link";
 
 // 委托正文的安全渲染。
 // - bodyText 路径：用户敲的 markdown 会被解析渲染（CommonMark + 自动链接化 + 单换行=<br>）；
@@ -18,14 +19,15 @@ const md = new MarkdownIt({
   typographer: false,
 });
 
-// 让所有 markdown 链接默认在新标签页打开，并加 rel 三件套防钓鱼/SEO 滥用。
+// 本站帖子由容器打开浮层；外链仍在新标签页打开。
 const defaultLinkOpen =
   md.renderer.rules.link_open ||
   ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
 
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx]!;
-  token.attrSet("target", "_blank");
+  const href = token.attrGet("href") ?? "";
+  if (typeof window === "undefined" || !readPostLink(href)) token.attrSet("target", "_blank");
   token.attrSet("rel", "noopener nofollow noreferrer");
   return defaultLinkOpen(tokens, idx, options, env, self);
 };

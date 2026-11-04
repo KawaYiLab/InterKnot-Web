@@ -8,7 +8,7 @@ import CollapsibleTrigger from "./ui/collapsible/CollapsibleTrigger.vue";
 const props = withDefaults(defineProps<{
   documentId?: string; active?: boolean; collapsible?: boolean;
 }>(), { active: true, collapsible: false });
-const emit = defineEmits<{ "open-post": [documentId: string] }>();
+const emit = defineEmits<{ "open-post": [documentId: string]; ready: [] }>();
 const api = useApi();
 const auth = useAuthStore();
 // 在首次默认收起时也提供稳定的无障碍关联目标。
@@ -20,25 +20,35 @@ const listExpanded = computed(() => !props.collapsible || expanded.value);
 const seed = computed(() => typeof props.documentId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(props.documentId)
   ? props.documentId : "");
 const shown = computed(() => posts.value.filter((post) => post.id !== seed.value).slice(0, 6));
+const identity = computed(() => `${seed.value}:${auth.generation}:${auth.isLogin}`);
+let loadedIdentity = "";
+watch(identity, () => {
+  loadedIdentity = "";
+  posts.value = [];
+}, { flush: "sync" });
 // 展开选择属于当前委托；图库遮挡或布局切换不应清掉用户的选择。
 watch([seed, () => auth.isLogin, () => auth.generation], () => {
   expanded.value = false;
 }, { flush: "sync" });
 onMounted(() => { mounted.value = true; });
-watch([seed, () => auth.isLogin, () => props.active, mounted],
+watch([identity, () => props.active, mounted],
   async (_next, _previous, onCleanup) => {
     let cancelled = false;
     onCleanup(() => { cancelled = true; });
-    posts.value = [];
     if (!mounted.value || !props.active || !seed.value) return;
+    // 从内层帖子返回时复用已经显示的列表，避免列表闪空后改变正文滚动高度。
+    if (loadedIdentity === identity.value) { emit("ready"); return; }
+    const requestIdentity = identity.value;
     const result = await api.getSuggestedArticles(seed.value, 6).catch(() => []);
     if (cancelled) return;
+    loadedIdentity = requestIdentity;
     const seen = new Set<string>();
     posts.value = result.filter((post) => {
       if (seen.has(post.id)) return false;
       seen.add(post.id);
       return true;
     });
+    emit("ready");
   }, { immediate: true });
 function open(post: Post) {
   emit("open-post", post.id);

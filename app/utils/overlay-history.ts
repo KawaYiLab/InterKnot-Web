@@ -1,14 +1,32 @@
 /**
  * 敲敲弹窗 overlay 的 history URL 辅助。
  *
- * 敲敲使用当前页 path + query（ik_knock*），避免 popstate 时 Vue Router
- * 切到独立路由页并触发整页导航。
+ * 敲敲使用 /knock/:tab/:conversationId。
  *
  * 委托弹窗仍用 /post/:id（见 usePostModal），与敲敲方案分离。
  */
-export const OVERLAY_KNOCK_KEY = "ik_knock";
-export const OVERLAY_KNOCK_TAB = "ik_knock_tab";
-export const OVERLAY_KNOCK_CONV = "ik_knock_c";
+export type KnockTab = "contacts" | "calls" | "groups";
+export interface KnockTarget {
+  tab: KnockTab;
+  dmConversationId?: string;
+}
+
+const knockTab = (tab: string | undefined): KnockTab =>
+  tab === "calls" || tab === "groups" ? tab : "contacts";
+
+/** 从路径读取弹窗的标签和会话。 */
+export function readKnockTarget(url: URL): KnockTarget | null {
+  const path = /^\/knock(?:\/(contacts|calls|groups)(?:\/([^/]+))?)?\/?$/.exec(url.pathname);
+  if (!path) return null;
+  let id = path[2];
+  if (id) {
+    try { id = decodeURIComponent(id); } catch { return null; }
+  }
+  return {
+    tab: knockTab(path[1]),
+    dmConversationId: id,
+  };
+}
 
 export function readLocationUrl(): URL {
   return new URL(window.location.href);
@@ -34,26 +52,11 @@ export function overlayHistoryState(
   return { ...prev, ...extra };
 }
 
-/** 敲敲弹窗：在当前 URL 上写入 ik_knock* 参数 */
+/** 敲敲弹窗地址；私聊列表使用最短的 /knock。 */
 export function knockHistoryUrl(
-  tab: string,
+  tab: KnockTab,
   conversationId?: string | null,
-  base?: URL,
 ): string {
-  const url = base ? new URL(base.href) : readLocationUrl();
-  url.searchParams.set(OVERLAY_KNOCK_KEY, "1");
-
-  if (tab && tab !== "contacts") {
-    url.searchParams.set(OVERLAY_KNOCK_TAB, tab);
-  } else {
-    url.searchParams.delete(OVERLAY_KNOCK_TAB);
-  }
-
-  if (conversationId) {
-    url.searchParams.set(OVERLAY_KNOCK_CONV, conversationId);
-  } else {
-    url.searchParams.delete(OVERLAY_KNOCK_CONV);
-  }
-
-  return serializeHistoryUrl(url);
+  const path = tab === "contacts" && !conversationId ? "/knock" : `/knock/${tab}`;
+  return conversationId ? `${path}/${encodeURIComponent(conversationId)}` : path;
 }

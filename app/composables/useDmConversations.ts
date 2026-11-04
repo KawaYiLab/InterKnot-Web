@@ -162,6 +162,7 @@ interface UseDmConversations {
   typingByConversation: ComputedRef<Record<string, string[]>>;
 
   refresh: (opts?: { silent?: boolean }) => Promise<void>;
+  ensureConversation: (id: string) => Promise<DmConversationSummary | null>;
   /** 取/建私聊会话，返回 summary 与 isNew */
   openDirectConversation: (
     targetUserId: string,
@@ -771,6 +772,30 @@ export function useDmConversations(): UseDmConversations {
     } finally {
       if (auth.generation === generation) convLoadingMore.value = false;
     }
+  }
+
+  /** 直达会话可能不在收件箱第一页，按 id 补齐详情后才能渲染消息面板。 */
+  async function ensureConversation(id: string): Promise<DmConversationSummary | null> {
+    const existing = conversations.value.find((c) => c.documentId === id);
+    if (existing) return existing;
+    if (!auth.isLogin) return null;
+    const generation = auth.generation;
+    if (id.startsWith("pseudo:")) {
+      // 通知分组没有会话详情接口，沿现有收件箱游标查找。
+      while (convHasMore.value && auth.isLogin && auth.generation === generation) {
+        const cursor = convNextCursor.value;
+        await loadMoreConversations();
+        const found = conversations.value.find((c) => c.documentId === id);
+        if (found) return found;
+        if (convNextCursor.value === cursor) break;
+      }
+      return null;
+    }
+    const cv = await $api<ConversationDto>(`/v1/dm/conversations/${encodeURIComponent(id)}`);
+    if (!auth.isLogin || auth.generation !== generation || !cv?.id) return null;
+    const summary = summaryFromConversation(cv);
+    upsertConversation(summary);
+    return summary;
   }
 
   async function openDirectConversation(
@@ -1656,6 +1681,7 @@ export function useDmConversations(): UseDmConversations {
     workflowEventsOf,
 
     refresh,
+    ensureConversation,
     openDirectConversation,
     createAiSession,
     deleteConversation,

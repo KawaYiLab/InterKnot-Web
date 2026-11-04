@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { useDebounceFn, useMediaQuery } from "@vueuse/core";
 import { FocusScope } from "reka-ui";
@@ -10,6 +10,7 @@ import type { Author, Comment, Post } from "~/types/entities";
 import type { PostPreview } from "~/composables/usePostModal";
 import { resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
+import { openPostLink } from "~/utils/post-link";
 import { formatTime } from "~/utils/time";
 import { StarIcon, AtSymbolIcon, EyeIcon, EyeSlashIcon, PhotoIcon, EllipsisVerticalIcon, FaceSmileIcon } from "@heroicons/vue/24/outline";
 import { HeartIcon, StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
@@ -45,6 +46,7 @@ const { isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGalle
 
 const props = defineProps<{
   postId: string;
+  entryKey: string;
   coverHint?: number | null;
   preview?: PostPreview | null;
   targetCommentId?: string | null;
@@ -69,7 +71,8 @@ const relatedTargetId = `post-overlay-related-${useId()}`;
 const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
-const readingActive = computed(() => postModal.isOpen.value && postModal.postId.value === props.postId &&
+const isActiveEntry = computed(() => postModal.isOpen.value && postModal.entryKey.value === props.entryKey);
+const readingActive = computed(() => isActiveEntry.value &&
   post.value?.id === props.postId && !loading.value && !loadError.value && !post.value?.isHidden);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
@@ -274,7 +277,7 @@ const scrollRef = ref<HTMLElement | null>(null);
 const commentsScrollRef = ref<HTMLElement | null>(null);
 /** 桌面端正文单独一列滚动（封面固定在左侧）；移动端跟着整页滚，不用它。 */
 const detailScrollRef = ref<HTMLElement | null>(null);
-const detailHint = useScrollHint(detailScrollRef);
+const detailHint = useScrollHint(computed(() => isActiveEntry.value ? detailScrollRef.value : null));
 const covers = computed(() => post.value?.covers ?? []);
 const hasCovers = computed(() => covers.value.length > 0);
 const isCommentEditorActive = computed(
@@ -417,6 +420,7 @@ const initEmbla = (el: HTMLElement) => {
     loop: false,
     align: "start",
     dragThreshold: 6,
+    startIndex: coverIndex.value,
   });
   emblaApi.value.on("select", syncEmblaState);
   emblaApi.value.on("reInit", syncEmblaState);
@@ -424,7 +428,7 @@ const initEmbla = (el: HTMLElement) => {
 };
 
 watch(emblaRef, (el, _, onCleanup) => {
-  if (el) initEmbla(el);
+  if (el && isActiveEntry.value) initEmbla(el);
   onCleanup(() => destroyEmbla());
 }, { flush: "post" });
 
@@ -490,6 +494,7 @@ watch(() => props.postId, () => {
 // 封面列表变化后重新初始化 Embla，并立即扩张当前索引的加载窗口
 watch(covers, () => {
   nextTick(() => {
+    if (!isActiveEntry.value) return;
     emblaApi.value?.reInit();
     expandLoadWindow();
   });
@@ -506,7 +511,7 @@ interface PostRequest {
 const isCurrentPostRequest = (request: PostRequest) =>
   !isUnmounted && request.loadId === currentPostLoadId &&
   request.postId === props.postId && request.generation === auth.generation &&
-  postModal.isOpen.value && postModal.postId.value === request.postId;
+  isActiveEntry.value && postModal.postId.value === request.postId;
 
 const loadPost = async () => {
   const request: PostRequest = {
@@ -562,10 +567,10 @@ const waitForLoadedPreview = async (request: PostRequest) => {
 const isCurrentCommentRequest = (request: PostRequest) =>
   !isCommentLoadingCancelled && request.loadId === currentCommentLoadId &&
   request.postId === props.postId && request.generation === auth.generation &&
-  postModal.isOpen.value && postModal.postId.value === request.postId;
+  isActiveEntry.value && postModal.postId.value === request.postId;
 
 const loadComments = async (isSeekCurrent = () => true) => {
-  if (isCommentLoadingCancelled || !postModal.isOpen.value || commentsLoading.value || !commentsHasNext.value) return;
+  if (isCommentLoadingCancelled || !isActiveEntry.value || commentsLoading.value || !commentsHasNext.value) return;
   commentsLoading.value = true;
   const request = { loadId: ++currentCommentLoadId, postId: props.postId, generation: auth.generation };
   try {
@@ -593,7 +598,7 @@ const loadComments = async (isSeekCurrent = () => true) => {
 
 /** 从某条评论所在的楼层重新加载时间线（通知跳转、点引用跳到还没加载的楼层）。 */
 const loadCommentsAround = async (commentId: string, isSeekCurrent = () => true) => {
-  if (isCommentLoadingCancelled || !postModal.isOpen.value) return;
+  if (isCommentLoadingCancelled || !isActiveEntry.value) return;
   const request = { loadId: ++currentCommentLoadId, postId: props.postId, generation: auth.generation };
   commentsLoading.value = true;
   try {
@@ -617,7 +622,7 @@ const loadCommentsAround = async (commentId: string, isSeekCurrent = () => true)
 };
 
 const loadEarlierComments = async () => {
-  if (!commentsPrevCursor.value || commentsLoadingEarlier.value) return;
+  if (!isActiveEntry.value || !commentsPrevCursor.value || commentsLoadingEarlier.value) return;
   commentsLoadingEarlier.value = true;
   const request = { loadId: currentCommentLoadId, postId: props.postId, generation: auth.generation };
   try {
@@ -656,7 +661,7 @@ const refreshComments = async () => {
 
 const targetCommentId = computed(() => props.targetCommentId ?? null);
 
-const { seek, cancel: cancelSeek, highlightedCommentId } = useCommentSeek({
+const { seek, cancel: cancelSeek, pause: pauseSeek, resume: resumeSeek, highlightedCommentId } = useCommentSeek({
   targetCommentId,
   comments,
   commentsHasNext,
@@ -667,9 +672,10 @@ const { seek, cancel: cancelSeek, highlightedCommentId } = useCommentSeek({
 });
 
 watch(
-  [() => props.postId, () => auth.generation, () => postModal.isOpen.value],
-  () => {
-    cancelSeek();
+  [() => props.postId, () => auth.generation, isActiveEntry],
+  ([id, generation, active], [previousId, previousGeneration, previousActive]) => {
+    if (id !== previousId || generation !== previousGeneration) cancelSeek();
+    else if (!active && previousActive) pauseSeek();
     currentCommentLoadId++;
     commentsLoading.value = false;
     commentsLoadingEarlier.value = false;
@@ -694,7 +700,7 @@ const changeCommentSort = async (sort: CommentSort) => {
 
 const commentHistory = useCommentReadHistory();
 const commentsInnerRef = ref<HTMLElement | null>(null);
-const commentsHint = useScrollHint(commentsScrollRef);
+const commentsHint = useScrollHint(computed(() => isActiveEntry.value ? commentsScrollRef.value : null));
 const dialogBodyRef = ref<HTMLElement | null>(null);
 
 const getActiveCommentsContainer = (): HTMLElement | null => {
@@ -717,6 +723,7 @@ const teardownCommentsObserver = () => {
 const setupCommentsObserver = () => {
   if (!import.meta.client) return;
   teardownCommentsObserver();
+  if (!isActiveEntry.value) return;
   const sentinel = commentsSentinelRef.value;
   const root = getActiveCommentsContainer();
   if (!sentinel || !root) return;
@@ -745,6 +752,7 @@ watch(
 );
 
 const onContainerScroll = () => {
+  if (!isActiveEntry.value) return;
   const container = getActiveCommentsContainer();
   if (!container || !comments.value.length || !props.postId || loading.value) return;
 
@@ -777,6 +785,7 @@ const debouncedScroll = useDebounceFn(onContainerScroll, 250);
 
 const attachScrollListeners = () => {
   scrollCleanup?.();
+  if (!isActiveEntry.value) return;
   const c1 = commentsScrollRef.value;
   const c2 = dialogBodyRef.value;
   c1?.addEventListener("scroll", debouncedScroll, { passive: true });
@@ -797,7 +806,7 @@ watch(commentsVisible, (visible) => {
 
 // 同委托切换 commentId（如从通知再打开同一篇委托的另一条评论）时重新定位
 watch(targetCommentId, () => {
-  if (targetCommentId.value && post.value?.id === props.postId && postModal.isOpen.value) {
+  if (targetCommentId.value && post.value?.id === props.postId && isActiveEntry.value) {
     void seek();
   }
 });
@@ -1131,7 +1140,7 @@ const handleEditArticle = () => {
   if (!post.value?.id || !isOwner.value) return;
   // 不能先 emit("close")：postModal.close() 会 history.back()，
   // 随后的 popstate 会取消 navigateTo。路径变化时 app.vue 的
-  // beforeEach 守卫会自动 teardown 弹窗。
+  // beforeResolve 守卫会在导航确认后自动 teardown 弹窗。
   navigateTo(`/create?edit=${post.value.id}`);
 };
 
@@ -1284,7 +1293,7 @@ const onBackdropClick = (e: MouseEvent) => {
   }
 };
 
-const focusTrapActive = computed(() => postModal.isOpen.value &&
+const focusTrapActive = computed(() => isActiveEntry.value &&
   !loginDialog.visible.value && !confirmDialog.state.visible && !reportDialog.state.visible &&
   !isAnyGalleryOpen.value && !commentImages.showImagePickerModal.value && !emotePickerVisible.value);
 
@@ -1331,7 +1340,10 @@ const replaySwitchAnimation = () => {
 };
 
 /* ── 当 postId 变化时重新加载 ─────────────── */
+let viewGeneration = auth.generation;
 const resetAndLoad = async () => {
+  viewGeneration = auth.generation;
+  cancelSeek();
   teardownCommentsObserver();
   cancelScheduledRevealWork();
   commentsVisible.value = false;
@@ -1373,7 +1385,7 @@ const resetAndLoad = async () => {
 watch(
   [() => props.postId, () => auth.generation],
   ([newId], [oldId]) => {
-    if (newId && postModal.isOpen.value) {
+    if (newId && isActiveEntry.value) {
       // postId 真的变了（相关委托 / 通知跳转到另一条委托）才重放进场动画；
       // 仅 generation 变化（重新登录刷新）不重放，避免无谓的闪动。
       if (oldId && newId !== oldId) replaySwitchAnimation();
@@ -1392,6 +1404,7 @@ watch(newComment, () => {
  */
 let teardownMentionListeners: (() => void) | null = null;
 const attachMentionToTextarea = () => {
+  if (!isActiveEntry.value) return;
   const root = commentInputBoxRef.value;
   if (!root) return;
   const ta = root.querySelector("textarea") as HTMLTextAreaElement | null;
@@ -1455,26 +1468,89 @@ function ensureMentionInputInitialized() {
   attachMentionToTextarea();
 }
 
-onMounted(async () => {
+// 每个历史条目由 KeepAlive 保留独立实例；离开前存 DOM 位置，返回时不重置草稿或评论。
+let savedScroll: Array<{ element: HTMLElement; top: number; left: number }> = [];
+let savedFocus: HTMLElement | null = null;
+let wasDeactivated = false;
+const saveViewPosition = () => {
+  savedScroll = [scrollRef.value, detailScrollRef.value, commentsScrollRef.value, dialogBodyRef.value]
+    .filter((element): element is HTMLElement => !!element)
+    .map((element) => ({ element, top: element.scrollTop, left: element.scrollLeft }));
+  const activeElement = document.activeElement;
+  savedFocus = activeElement instanceof HTMLElement && dialogRef.value?.contains(activeElement)
+    ? activeElement : null;
+  // 离线容器没有布局，继续观察尺寸会把轮播重置到第一张。
+  destroyEmbla();
+};
+watch(isActiveEntry, (active, previous) => {
+  // 必须在 KeepAlive 把节点移到离线容器之前读取，尤其是移动端整列滚动。
+  if (!active && previous) saveViewPosition();
+}, { flush: "sync" });
+
+onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
-  // 大图画廊（PhotoSwipe）完全惰性：直到用户点击封面触发 openCoverPreview 才加载，
-  // 让只看文字、不点图的用户不必下载这套资源。
-  loading.value = true;
-  const request = await loadPost();
-  if (!request || !isCurrentPostRequest(request)) return;
-  if (!loadError.value && !(await waitForLoadedPreview(request))) return;
-  if (!isCurrentPostRequest(request)) return;
-  // 主体一拿到就解除骨架屏；评论与浏览数后台继续，不阻塞 UI。
-  loading.value = false;
-  void recordView(request);
-  await nextTick();
-  if (!isCurrentPostRequest(request)) return;
-  if (!loadError.value) {
-    scheduleSeek(request);
+  void resetAndLoad();
+});
+
+onDeactivated(() => {
+  wasDeactivated = true;
+  currentPostLoadId++;
+  currentCommentLoadId++;
+  commentsLoading.value = false;
+  commentsLoadingEarlier.value = false;
+  cancelScheduledRevealWork();
+  teardownCommentsObserver();
+  scrollCleanup?.();
+  scrollCleanup = null;
+  teardownMentionListeners?.();
+  teardownMentionListeners = null;
+  window.removeEventListener("keydown", onKeyDown);
+  destroyPreview();
+  emotePickerVisible.value = false;
+  mention.pickerVisible.value = false;
+  commentImages.showImagePickerModal.value = false;
+  if (switchResetTimer) clearTimeout(switchResetTimer);
+  switchResetTimer = null;
+  switchAnimationEndsAt = 0;
+  dialogRef.value?.classList.remove("ik-dialog--switching");
+});
+
+onActivated(async () => {
+  // KeepAlive 首次挂载也调用 activated，首屏加载由 mounted 负责。
+  if (!wasDeactivated) return;
+  window.addEventListener("keydown", onKeyDown);
+  const reuseComments = viewGeneration === auth.generation && !loading.value;
+  if (viewGeneration !== auth.generation || loading.value) {
+    await resetAndLoad();
+  } else {
+    commentsVisible.value = true;
+    isScrollable.value = true;
+    marqueeReady.value = true;
+    if (post.value?.title) postModal.setTitle(post.value.title);
   }
   await nextTick();
-  if (!isCurrentPostRequest(request)) return;
-  scheduleRevealWork();
+  if (!isActiveEntry.value) return;
+  if (emblaRef.value && !emblaApi.value) initEmbla(emblaRef.value);
+  for (const { element, top, left } of savedScroll) {
+    element.scrollTop = top;
+    element.scrollLeft = left;
+  }
+  detailHint.update();
+  commentsHint.update();
+  setupCommentsObserver();
+  attachScrollListeners();
+  attachMentionToTextarea();
+  if (reuseComments && !loadError.value) {
+    const resumed = resumeSeek();
+    if (resumed) void resumed;
+    else if (!commentsLoaded.value) {
+      scheduleSeek({ loadId: currentPostLoadId, postId: props.postId, generation: auth.generation });
+    }
+  }
+  if (focusTrapActive.value) {
+    const target = savedFocus?.isConnected ? savedFocus : dialogRef.value?.querySelector<HTMLElement>(".ik-dialog__close");
+    target?.focus({ preventScroll: true });
+  }
 });
 
 onBeforeUnmount(() => {
@@ -1568,7 +1644,7 @@ onBeforeUnmount(() => {
 
             <!-- ── Content Area ───────────────────── -->
             <div class="ik-dialog__main">
-              <IkZzzMarquee :paused="!marqueeReady" />
+              <IkZzzMarquee :paused="!marqueeReady || !isActiveEntry" />
 
             <div v-show="loading" class="ik-dialog__body" :class="{ 'ik-dialog__body--scrollable': isScrollable }">
               <!-- 骨架屏：左栏 -->
@@ -1767,6 +1843,7 @@ onBeforeUnmount(() => {
                         v-if="bodyHasContent"
                         class="ik-dialog__content"
                         v-html="bodyHtml"
+                        @click="openPostLink($event, postModal.open)"
                       ></div>
                       <p v-else-if="!post.externalVideos?.length" class="ik-dialog__content" style="color: #808080">
                         啥都木有¯\(°_o)/¯

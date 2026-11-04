@@ -5,6 +5,8 @@ import { useMessage } from "zenless-ui";
 import type { Comment, Post } from "~/types/entities";
 import { isNotFoundError, isUserBlockedError, resolveErrorMessage } from "~/utils/api-error";
 import { useRenderedBody } from "~/composables/useRenderedBody";
+import { openPostLink } from "~/utils/post-link";
+import { postPageReadingCache, postPageReadingKey } from "~/utils/post-page-reading-state";
 import { formatTime } from "~/utils/time";
 import { toCanonicalUrl, toThumbUrl } from "~/utils/image";
 import { toCardExcerpt } from "~/utils/card-excerpt";
@@ -29,6 +31,7 @@ const DEFAULT_COVER_IMAGE = "/images/default-cover.webp";
 const { isLoading: isGalleryLoading, loadingProgress: galleryProgress, openGallery, preload: preloadGallery, destroy: destroyPreview } = useImageGallery();
 
 const route = useRoute();
+const router = useRouter();
 const api = useApi();
 /** 详情是不是地址里这篇（地址可能是编号，也可能是帖子 id）。 */
 const isRoutePost = (p: Post) => {
@@ -36,6 +39,10 @@ const isRoutePost = (p: Post) => {
   return p.id === key || (p.postNo != null && String(p.postNo) === key);
 };
 const auth = useAuthStore();
+const readingGeneration = auth.generation;
+const readingRoute = route.fullPath;
+const readingKey = import.meta.client ? postPageReadingKey(readingRoute, window.history.state ?? {}) : "";
+let savedReadingState = import.meta.client ? postPageReadingCache(auth.generation).get(readingKey) : undefined;
 const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const reportDialog = useReportDialog();
@@ -51,9 +58,10 @@ const loadError = ref(false);
 const isBlocked = ref(false);
 const postModal = usePostModal();
 const knockModal = useKnockKnockModal();
-const readingActive = computed(() => !loading.value && !loadError.value && !isBlocked.value &&
-  !!post.value && isRoutePost(post.value) && !post.value.isHidden &&
-  !postModal.isOpen.value && !knockModal.visible.value);
+const postContentActive = computed(() => !loading.value && !loadError.value && !isBlocked.value &&
+  !!post.value && isRoutePost(post.value) && !post.value.isHidden);
+const readingActive = computed(() => postContentActive.value && !postModal.isOpen.value && !knockModal.visible.value);
+const relatedReady = ref(false);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
@@ -355,6 +363,40 @@ const commentsScrollRef = ref<HTMLElement | null>(null);
 const commentsInnerRef = ref<HTMLElement | null>(null);
 const commentsHint = useScrollHint(commentsScrollRef);
 const pageBodyRef = ref<HTMLElement | null>(null);
+const readingContainers = () => [scrollRef.value, detailScrollRef.value, commentsScrollRef.value, pageBodyRef.value];
+
+onBeforeRouteLeave(() => {
+  if (loading.value || !post.value || commentsInitialLoading.value || auth.generation !== readingGeneration) return;
+  postPageReadingCache(auth.generation).set(readingKey, {
+    postId: post.value.id,
+    sort: commentSort.value,
+    comments: comments.value.slice(),
+    featured: featuredComments.value.slice(),
+    cursor: commentsCursor.value,
+    previousCursor: commentsPrevCursor.value,
+    hasNext: commentsHasNext.value,
+    scroll: readingContainers().map((element) => ({ top: element?.scrollTop ?? 0, left: element?.scrollLeft ?? 0 })),
+  });
+});
+
+const restoreReadingPosition = async () => {
+  if (!savedReadingState || loading.value || commentsInitialLoading.value || !relatedReady.value ||
+      (bodyHasContent.value && !bodyHtml.value)) return;
+  await nextTick();
+  if (isCommentLoadingCancelled || auth.generation !== readingGeneration ||
+      router.currentRoute.value.fullPath !== readingRoute || !savedReadingState) return;
+  const saved = savedReadingState;
+  savedReadingState = undefined;
+  readingContainers().forEach((element, index) => {
+    const position = saved.scroll[index];
+    if (!element || !position) return;
+    element.scrollTop = position.top;
+    element.scrollLeft = position.left;
+  });
+  detailHint.update();
+  commentsHint.update();
+};
+watch([bodyHtml, loading, commentsInitialLoading, relatedReady], restoreReadingPosition, { flush: "post" });
 
 const getActiveCommentsContainer = (): HTMLElement | null => {
   if (isCompact.value) {
@@ -1020,19 +1062,33 @@ onMounted(async () => {
   pageDataLoading.claim();
   try {
     await loadPost();
-    const historyRecord = !targetCommentId.value && commentHistory.autoRestore.value
-      ? commentHistory.getRecord(postId.value)
-      : null;
-    const initialTargetId = historyRecord?.commentId && (historyRecord.floor == null || historyRecord.floor > 1)
-      ? historyRecord.commentId
-      : undefined;
-    const seekOptions = initialTargetId ? { highlight: false, behavior: "smooth" as const } : undefined;
-    await Promise.all([recordView(), seek(initialTargetId, seekOptions)]);
+    if (isCommentLoadingCancelled) return;
+    if (savedReadingState && savedReadingState.postId === post.value?.id && auth.generation === readingGeneration) {
+      commentSort.value = savedReadingState.sort;
+      comments.value = savedReadingState.comments.slice();
+      featuredComments.value = savedReadingState.featured.slice();
+      commentsCursor.value = savedReadingState.cursor;
+      commentsPrevCursor.value = savedReadingState.previousCursor;
+      commentsHasNext.value = savedReadingState.hasNext;
+      commentsInitialLoading.value = false;
+      await recordView();
+    } else {
+      savedReadingState = undefined;
+      const historyRecord = !targetCommentId.value && commentHistory.autoRestore.value
+        ? commentHistory.getRecord(postId.value)
+        : null;
+      const initialTargetId = historyRecord?.commentId && (historyRecord.floor == null || historyRecord.floor > 1)
+        ? historyRecord.commentId
+        : undefined;
+      const seekOptions = initialTargetId ? { highlight: false, behavior: "smooth" as const } : undefined;
+      await Promise.all([recordView(), seek(initialTargetId, seekOptions)]);
+    }
   } finally {
     pageDataLoading.finish();
   }
   // 等数据加载完 z-input 已挂载到 DOM
   await nextTick();
+  await restoreReadingPosition();
   attachMentionToTextarea();
   attachScrollListeners();
 });
@@ -1240,6 +1296,7 @@ onBeforeUnmount(() => {
                   v-if="bodyHasContent"
                   class="ik-page__content"
                   v-html="bodyHtml"
+                  @click="openPostLink($event, postModal.open)"
                 ></div>
                 <p v-else-if="!post.externalVideos?.length" class="ik-page__content" style="color: #808080">
                   啥都木有¯\(°_o)/¯
@@ -1266,7 +1323,7 @@ onBeforeUnmount(() => {
                   <template v-if="post.views"> · {{ post.views }} 阅读</template>
                 </p>
                 <Teleport defer :to="`#${relatedTargetId}`" :disabled="!isCompact">
-                  <RelatedArticles :document-id="post.id" :active="readingActive" :collapsible="isCompact" @open-post="postModal.open($event)" />
+                  <RelatedArticles :document-id="post.id" :active="postContentActive" :collapsible="isCompact" @ready="relatedReady = true" @open-post="postModal.open($event)" />
                 </Teleport>
               </div>
               <ScrollHintArrows v-if="!isCompact" :up="detailHint.up.value" :down="detailHint.down.value" />

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isPlainLinkClick, openPostLink } from "~/utils/post-link";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { formatChatMarkdown } from "~/utils/format-chat";
 import { wrapGeneratingTail } from "~/utils/text-generate";
@@ -20,7 +21,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   /** 点击站内帖子链接（/post/<documentId>） */
-  (e: "open-post", documentId: string): void;
+  (e: "open-post", documentId: string, commentId?: string): void;
 }>();
 
 /**
@@ -155,14 +156,11 @@ const onClick = async (e: MouseEvent) => {
 
   const link = target.closest<HTMLAnchorElement>("a[href]");
   if (!link || !rootRef.value?.contains(link)) return;
+  if (openPostLink(e, (id, options) => emit("open-post", id, options?.commentId))) return;
+  if (!isPlainLinkClick(e) || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
   const href = link.getAttribute("href") ?? "";
   if (!href.startsWith("/") || href.startsWith("//")) return; // 外链走默认
   e.preventDefault();
-  const postMatch = href.match(/^\/post\/([a-zA-Z0-9_-]+)/);
-  if (postMatch) {
-    emit("open-post", postMatch[1]!);
-    return;
-  }
   void navigateTo(href);
 };
 </script>

@@ -2,6 +2,8 @@
 import { computed, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { formatTime, formatFullTime } from "~/utils/time";
+import { postPath } from "~/utils/post-path";
+import { isPlainLinkClick } from "~/utils/post-link";
 
 const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
 
@@ -19,11 +21,16 @@ const timeText = computed(() => formatTime(activeAt.value ?? undefined));
 const fullTime = computed(() => formatFullTime(activeAt.value ?? undefined));
 // 大数字压缩成 Discourse 那样的 1.8k。
 const compact = (n: number) => (n < 1000 ? String(n) : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`);
+const open = (event: MouseEvent) => {
+  if (!isPlainLinkClick(event)) return;
+  event.preventDefault();
+  emit("open", props.post);
+};
 </script>
 
 <template>
   <li class="ik-related__row" :data-post-id="post.id">
-    <button type="button" class="ik-related__link" @click="emit('open', post)">
+    <a :href="postPath(post.id, post.postNo)" class="ik-related__link" @click="open">
       <span class="ik-related__title">{{ post.title || "（无标题）" }}</span>
       <span class="ik-related__meta">
         <span class="ik-related__by">
@@ -48,14 +55,14 @@ const compact = (n: number) => (n < 1000 ? String(n) : `${(n / 1000).toFixed(1).
           <span v-if="timeText" class="ik-related__stat ik-related__time" :title="fullTime">{{ timeText }}</span>
         </span>
       </span>
-    </button>
+    </a>
   </li>
 </template>
 
 <style scoped>
 .ik-related__row { list-style: none; min-width: 0; }
 .ik-related__row + .ik-related__row .ik-related__link { border-top: 1px solid var(--related-divider, #2a2a2a); }
-.ik-related__link { display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 0; padding: 12px 4px; background: transparent; border: 0; color: var(--related-text, #ededed); cursor: pointer; text-align: left; }
+.ik-related__link { display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 0; padding: 12px 4px; background: transparent; border: 0; color: var(--related-text, #ededed); cursor: pointer; text-align: left; text-decoration: none; }
 .ik-related__link:focus-visible { outline: 2px solid var(--related-accent, #bfff09); outline-offset: 2px; border-radius: 6px; }
 .ik-related__title { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 14px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; transition: color .15s; }
 .ik-related__link:hover .ik-related__title, .ik-related__link:focus-visible .ik-related__title { color: var(--related-accent, #bfff09); }

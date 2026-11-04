@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import PostOverlay from "~/components/PostOverlay.vue";
 import type { Ref } from "vue";
-import { OVERLAY_KNOCK_KEY, overlayHistoryState } from "~/utils/overlay-history";
-import { registerPostModalPopState } from "~/utils/post-modal-history";
+import { isNavigationFailure, NavigationFailureType } from "vue-router";
+import { overlayHistoryState } from "~/utils/overlay-history";
+import { isSyncingModalBackground, registerKnockModalPopState, registerPostModalPopState } from "~/utils/post-modal-history";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -45,30 +46,25 @@ if (import.meta.client) {
   });
 
   const removePostHistoryHandler = registerPostModalPopState(postModal.handlePopState);
-  window.addEventListener("popstate", knockModal.handlePopState);
+  const removeKnockHistoryHandler = registerKnockModalPopState(knockModal.handlePopState);
 
   // 真正的路由导航（包括 query 变化）退出浮层；浮层自己的 Back/Forward 不走这里。
-  const removeRouteGuard = router.beforeEach((to, from) => {
-    if (to.fullPath !== from.fullPath && postModal.isOpen.value) postModal.teardown();
-    if (to.path !== from.path) {
-      // 从委托弹窗 back 回带 ik_knock 的页面时，敲敲仍应保留
-      const knockStillInUrl = Boolean(to.query[OVERLAY_KNOCK_KEY]);
-      if (knockModal.visible.value && !knockStillInUrl) {
-        knockModal.teardown();
-      }
-      return;
-    }
-
-    const hadKnock = Boolean(from.query[OVERLAY_KNOCK_KEY]);
-    const hasKnock = Boolean(to.query[OVERLAY_KNOCK_KEY]);
-    if (knockModal.visible.value && hadKnock && !hasKnock) {
-      knockModal.teardown();
+  const removeRouteGuard = router.beforeResolve(() => {
+    if (postModal.isOpen.value) postModal.teardown();
+    if (knockModal.visible.value) knockModal.teardown();
+  });
+  // 浮层里的链接也可能指向背景页；这仍是一次页面访问，并应能后退回浮层。
+  const removeDuplicateNavigationHandler = router.afterEach((to, _from, failure) => {
+    if (!isSyncingModalBackground() && isNavigationFailure(failure, NavigationFailureType.duplicated) &&
+        (postModal.isOpen.value || knockModal.visible.value)) {
+      void router.push({ path: to.path, query: to.query, hash: to.hash, force: true });
     }
   });
   onBeforeUnmount(() => {
     removePostHistoryHandler();
-    window.removeEventListener("popstate", knockModal.handlePopState);
+    removeKnockHistoryHandler();
     removeRouteGuard?.();
+    removeDuplicateNavigationHandler();
   });
 }
 
@@ -210,18 +206,23 @@ const overlayOpen = computed(
       <Teleport to="body">
         <Transition
           name="ik-overlay"
+          :css="!postModal.switching.value"
           appear
           @after-enter="postModal.markEntered()"
           @after-leave="postModal.clearAfterLeave()"
         >
-          <PostOverlay
-            v-if="postModal.isOpen.value"
-            :post-id="postModal.postId.value || ''"
-            :cover-hint="postModal.coverHint.value"
-            :preview="postModal.preview.value"
-            :target-comment-id="postModal.targetCommentId.value"
-            @close="handleOverlayClose"
-          />
+          <KeepAlive>
+            <PostOverlay
+              v-if="postModal.isOpen.value"
+              :key="postModal.entryKey.value || ''"
+              :entry-key="postModal.entryKey.value || ''"
+              :post-id="postModal.postId.value || ''"
+              :cover-hint="postModal.coverHint.value"
+              :preview="postModal.preview.value"
+              :target-comment-id="postModal.targetCommentId.value"
+              @close="handleOverlayClose"
+            />
+          </KeepAlive>
         </Transition>
       </Teleport>
     </ClientOnly>
