@@ -23,7 +23,7 @@ import { isAnyGalleryOpen } from "~/composables/useImageGallery";
 import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
 import { countNewReply, prependKeepingPosition, refreshKeepingPosition, removeFromTimeline } from "~/utils/comment-timeline";
-import { toCardCoverThumbUrl, toThumbUrl, toCanonicalUrl, toNoResizeWebpUrl } from "~/utils/image";
+import { toCardCoverPreviewUrl, toThumbUrl, toCanonicalUrl, toNoResizeWebpUrl } from "~/utils/image";
 import RelatedArticles from "./RelatedArticles.vue";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
@@ -316,7 +316,7 @@ const previewCover = computed(() => {
   const cover = props.preview?.cover?.trim();
   // 预览图仅作为 blur-up 占位，统一走缩略图，避免首页卡片传入大原图
   // 时 decode() 占用过多资源导致弹窗入场掉帧。与卡片封面同一 URL，入场时直接命中缓存。
-  return cover ? toCardCoverThumbUrl(cover) : null;
+  return cover ? toCardCoverPreviewUrl(cover) : null;
 });
 const coverPreviewSrc = (i: number) => {
   const cover = covers.value[i];

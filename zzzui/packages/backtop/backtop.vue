@@ -14,7 +14,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onUnmounted } from 'vue';
+import { ref, watch } from 'vue';
 
 defineOptions({
   name: 'ZBacktop'
@@ -47,11 +47,19 @@ const handleTargetScroll = () => {
   }
 }
 
-watch(() => props.target, () => {
-  if (!props.target) return
+watch(() => props.target, (target, _previous, onCleanup) => {
+  if (!target) {
+    isVisible.value = false
+    return
+  }
+  // 页面滚动事件发到 window；普通滚动容器仍监听其自身。
+  const eventTarget = target === document.documentElement || target === document.body
+    ? window
+    : target
   handleTargetScroll()
-  props.target.addEventListener('scroll', handleTargetScroll)
-})
+  eventTarget.addEventListener('scroll', handleTargetScroll, { passive: true })
+  onCleanup(() => eventTarget.removeEventListener('scroll', handleTargetScroll))
+}, { immediate: true })
 
 const handleBacktopClick = () => {
   if (props.target) {
@@ -62,11 +70,6 @@ const handleBacktopClick = () => {
   }
 }
 
-onUnmounted(() => {
-  if (props.target) {
-    props.target.removeEventListener('scroll', handleTargetScroll)
-  }
-})
 </script>
 
 <style scoped lang="scss">

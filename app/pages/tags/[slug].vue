@@ -35,7 +35,7 @@ useSeoMeta({
   robots: () => (!loading.value && !loadError.value && list.value.length === 0 ? "noindex" : "index, follow"),
 });
 
-const { restored, masonryRef, initialHeights } = useListPageState(() => loading.value || loadError.value ? null : ({
+const { restored, masonryRef, initialHeights, initialMeasuredWidth } = useListPageState(() => loading.value || loadError.value ? null : ({
   list: list.value.slice(), endCursor: endCursor.value, hasNextPage: hasNextPage.value, displayName: displayName.value,
 }));
 if (restored) {
@@ -84,6 +84,7 @@ async function loadFirstPage() {
   hasNextPage.value = true;
   displayName.value = "";
   initialHeights.value = undefined;
+  initialMeasuredWidth.value = undefined;
   try {
     const page = await api.searchArticles("", "", "", "all", "latest", slug.value);
     if (disposed || version !== requestVersion) return;
@@ -215,6 +216,7 @@ watch(api.readStatusRevision, () => {
         <VirtualMasonry
           ref="masonryRef"
           :initial-heights="initialHeights"
+          :initial-width="initialMeasuredWidth"
           class="ik-masonry"
           :items="list"
           :column-width="240"
@@ -225,9 +227,10 @@ watch(api.readStatusRevision, () => {
           :height-mapper="estimatePostCardHeight"
           :key-mapper="masonryKeyMapper"
         >
-          <template #default="{ item, index, columnCount }">
+          <template #default="{ item, index, width, columnCount }">
             <PostCard
               :post="item"
+              :image-width="width"
               :eager="index < columnCount * 2"
               @open="goPost"
             />

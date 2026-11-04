@@ -3,6 +3,7 @@ import { stripMentionsToPlain } from "~/utils/mention";
 
 /** 用惰性文档取纯文本：不执行脚本、不加载资源，残缺标签也按 HTML 规范丢弃。 */
 function htmlToText(html: string): string {
+  if (!/[<&]/.test(html)) return html;
   if (typeof DOMParser === "undefined") return html.replace(/[<>]/g, "");
   return new DOMParser().parseFromString(html, "text/html").body.textContent ?? "";
 }
@@ -29,7 +30,7 @@ export function toCardExcerpt(raw: string | null | undefined): string {
     .replace(/[*_~`]{1,3}/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  if (cache.size >= CACHE_LIMIT) cache.clear();
+  if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!);
   cache.set(raw, text);
   return text;
 }

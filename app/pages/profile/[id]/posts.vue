@@ -48,7 +48,7 @@ const hasNextPage = ref(true);
 const loading = ref(true);
 const loadingMore = ref(false);
 const loadError = ref(false);
-const { restored, masonryRef, initialHeights } = useListPageState(() => loading.value || loadError.value ? null : ({
+const { restored, masonryRef, initialHeights, initialMeasuredWidth } = useListPageState(() => loading.value || loadError.value ? null : ({
   profile: profile.value, list: list.value.slice(), total: total.value, pinnedIds: pinnedIds.value,
   endCursor: endCursor.value, hasNextPage: hasNextPage.value,
 }));
@@ -249,6 +249,7 @@ async function loadFirstPage() {
   pinnedIds.value = undefined;
   editing.value = false;
   initialHeights.value = undefined;
+  initialMeasuredWidth.value = undefined;
   try {
     const p = await api.getProfile(profileId.value);
     if (disposed || version !== requestVersion) return;
@@ -408,6 +409,7 @@ watch(api.readStatusRevision, () => {
         <VirtualMasonry
           ref="masonryRef"
           :initial-heights="initialHeights"
+          :initial-width="initialMeasuredWidth"
           class="ik-masonry"
           :items="list"
           :column-width="240"
@@ -418,10 +420,11 @@ watch(api.readStatusRevision, () => {
           :height-mapper="estimatePostCardHeight"
           :key-mapper="masonryKeyMapper"
         >
-          <template #default="{ item, index, columnCount }">
+          <template #default="{ item, index, width, columnCount }">
             <div class="ik-all-card" :class="{ 'ik-all-card--showcased': !editing && showcasedIds.has(item.id) }">
               <PostCard
                 :post="item"
+                :image-width="width"
                 :eager="index < columnCount * 2"
                 @open="goPost"
               />

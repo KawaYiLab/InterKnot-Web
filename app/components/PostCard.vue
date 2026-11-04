@@ -6,9 +6,9 @@ const DEFAULT_AVATAR_IMAGE = "/images/default-avatar.webp";
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
-import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
+import { getCardCoverAspectRatio } from "~/utils/cover";
 import { loadBrandFonts } from "~/utils/brand-fonts";
-import { toAvatarThumbUrl, toCardCoverThumbUrl } from "~/utils/image";
+import { rememberCardCoverThumbnail, toAvatarThumbUrl, toCardCoverThumbUrl, toThumbSrcset } from "~/utils/image";
 import { thumbhashToDataUrl } from "~/utils/thumbhash";
 import { toCardExcerpt } from "~/utils/card-excerpt";
 import { splitHighlight } from "~/utils/highlight";
@@ -20,6 +20,8 @@ const { schedulePrefetch, cancelPrefetch } = usePostPrefetch();
 const props = defineProps<{
   post: Post;
   eager?: boolean;
+  /** Actual masonry column width, including the 4px card border on each side. */
+  imageWidth?: number;
   highlighted?: boolean;
   /** 搜索词：标题里的命中部分高亮 */
   keyword?: string;
@@ -53,25 +55,27 @@ const coverPlaceholder = computed(() => {
 });
 const avatarSrc = ref(DEFAULT_AVATAR_IMAGE);
 
-const hasBackendCoverSize = computed(() =>
-  typeof props.post.coverWidth === "number" &&
-  typeof props.post.coverHeight === "number" &&
-  props.post.coverWidth > 0 &&
-  props.post.coverHeight > 0,
+const coverAspectRatio = computed(() =>
+  getCardCoverAspectRatio(props.post.coverWidth, props.post.coverHeight),
 );
-
-const coverAspectRatio = computed(() => {
-  // 只要后端提供了原图尺寸，就始终按原比例占位；即便缩略图加载失败（如七牛云对 10MB+
-  // 大图返回 "File too large"），也保持容器尺寸不变，避免瀑布流重排引发列表跳动。
-  // 仅当后端完全没有尺寸信息时，才回落到默认占位图的原生比例。
-  if (hasBackendCoverSize.value) {
-    return getNormalizedCoverAspectRatio(
-      props.post.coverWidth,
-      props.post.coverHeight,
-    );
-  }
-  return FALLBACK_COVER_ASPECT_RATIO;
+// Let the browser select by real layout width and DPR. The layout already knows
+// this width, so cards need no additional ResizeObserver or device-size watcher.
+const coverSizes = computed(() => {
+  if (!props.imageWidth || !Number.isFinite(props.imageWidth)) return undefined;
+  const frameWidth = Math.max(1, props.imageWidth - 8);
+  const rawRatio = (props.post.coverWidth || 0) / (props.post.coverHeight || 0);
+  // object-fit: cover crops wide originals: account for the pixels outside the frame.
+  const cropScale = Number.isFinite(rawRatio) && rawRatio > 0
+    ? Math.max(1, rawRatio / coverAspectRatio.value)
+    : 1;
+  return `${Math.ceil(frameWidth * cropScale)}px`;
 });
+const coverSrcset = computed(() => coverIsFallback.value || !coverSizes.value
+  ? undefined
+  : toThumbSrcset(props.post.cover, [240, 360, 480, 720], props.post.coverWidth));
+const avatarSrcset = computed(() => avatarSrc.value === DEFAULT_AVATAR_IMAGE
+  ? undefined
+  : toThumbSrcset(props.post.author?.avatar, [64, 128]));
 
 watch(
   () => [props.post.id, props.post.cover] as const,
@@ -96,7 +100,11 @@ watch(
   { immediate: true },
 );
 
-const onCoverLoad = () => {
+const onCoverLoad = (event: Event) => {
+  const image = event.target as HTMLImageElement;
+  if (!coverIsFallback.value && props.post.cover) {
+    rememberCardCoverThumbnail(props.post.cover, image.currentSrc || image.src);
+  }
   // 首屏封面到位后再拉品牌字体，避免两者抢带宽拖慢 LCP
   if (props.eager) loadBrandFonts();
 };
@@ -140,6 +148,8 @@ const handleOpen = (e: MouseEvent) => {
         >
           <img
             :src="coverSrc"
+            :srcset="coverSrcset"
+            :sizes="coverSizes"
             :alt="coverIsFallback ? 'default cover' : post.title"
             :class="['ik-card__cover', { 'ik-card__cover--fallback': coverIsFallback }]"
             :loading="eager ? 'eager' : 'lazy'"
@@ -184,6 +194,8 @@ const handleOpen = (e: MouseEvent) => {
             <div class="ik-card__avatar-shell">
               <img
                 :src="avatarSrc"
+                :srcset="avatarSrcset"
+                sizes="50px"
                 :alt="authorName"
                 class="ik-card__avatar-image"
                 loading="lazy"
@@ -196,6 +208,8 @@ const handleOpen = (e: MouseEvent) => {
             <div class="ik-card__avatar-shell">
               <img
                 :src="avatarSrc"
+                :srcset="avatarSrcset"
+                sizes="50px"
                 :alt="authorName"
                 class="ik-card__avatar-image"
                 loading="lazy"
@@ -324,8 +338,7 @@ const handleOpen = (e: MouseEvent) => {
   object-position: top center;
 }
 
-/* fallback 时 frame 已切换为占位图原生比例，
-   占位图天然填满 frame，沿用 object-fit: cover 即可 */
+/* 加载失败时保持 frame 比例，避免图片错误改变瀑布流几何位置。 */
 :deep(.ik-card__cover--fallback) {
   background: var(--ik-post-card-cover-bg);
 }

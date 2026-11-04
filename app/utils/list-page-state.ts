@@ -3,6 +3,7 @@ import { onHistoryBranchDiscarded } from "~/utils/history-branches";
 export interface ListPageSnapshot<T> {
   data: T;
   heights: Map<string | number, number>;
+  measuredWidth?: number;
   scrollY: number;
 }
 

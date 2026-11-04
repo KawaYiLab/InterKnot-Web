@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import PostOverlay from "~/components/PostOverlay.vue";
+import GlobalMarqueeCanvas from "~/components/GlobalMarqueeCanvas.vue";
 import { defineComponent, h, type Component, type Ref } from "vue";
 import { isNavigationFailure, NavigationFailureType } from "vue-router";
 import { overlayHistoryState } from "~/utils/overlay-history";
@@ -179,7 +180,7 @@ const overlayOpen = computed(
 
 <template>
   <div :inert="postModal.isOpen.value || undefined">
-    <IkZzzMarquee class="ik-global-marquee" :paused="overlayOpen" />
+    <GlobalMarqueeCanvas v-if="gpuAccelerated" class="ik-global-marquee" :paused="overlayOpen" />
     <!-- backdrop-filter 合成层预热：1×1 不可见元素，让 GPU 在首屏就把
          模糊着色器编译好、合成层分配好。否则用户第一次打开弹窗再关闭时，
          合成层首次创建/销毁会多吃 1~3 帧 paint，表现为出场动画期间弹窗
@@ -291,13 +292,6 @@ const overlayOpen = computed(
   position: fixed !important;
   inset: 0;
   z-index: -9999 !important;
-}
-
-/* 全局实例：任何宽度都用大号预设（组件默认只在移动端用大号）。
-   叠加 .ik-zzz-marquee 提高优先级，稳压组件自身 scoped 的变量声明。 */
-.ik-global-marquee.ik-zzz-marquee {
-  --ik-marquee-band: 260%;
-  --ik-marquee-font: clamp(360px, 48vw, 640px);
 }
 
 </style>
