@@ -48,7 +48,7 @@ import type {
 } from "~/types/entities";
 import { DEFAULT_PAGE_SIZE, toPage } from "~/utils/pagination";
 import type { MentionCandidate } from "~/composables/useMentionInput";
-import { toMediaUrl } from "~/utils/image";
+import { toCdnCgiImageUrl, toMediaUrl } from "~/utils/image";
 import { knownPostId, rememberPostNo } from "~/utils/post-path";
 import {
   BENEFIT_MAX_LEVEL,
@@ -341,8 +341,11 @@ function normalizeMediaUrl(input: unknown): string {
 
 function toMediaMeta(raw: MediaDto | null | undefined): MediaMeta | null {
   if (!raw) return null;
-  const url = normalizeMediaUrl(raw.url);
-  if (!url) return null;
+  const original = normalizeMediaUrl(raw.url);
+  if (!original) return null;
+  // 后端按文件大小选缩略图服务：超过 10MB 的给 Cloudflare 地址。跟随它，
+  // 否则前端拼的 ESA 参数对大图不生效，会直接下载十几 MB 的原图。
+  const url = raw.thumbUrl?.includes("/cdn-cgi/image/") ? toCdnCgiImageUrl(original) : original;
   return { url, width: num(raw.width) || undefined, height: num(raw.height) || undefined };
 }
 

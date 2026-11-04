@@ -146,6 +146,19 @@ export function toMediaUrl(url: string | undefined): string {
 }
 
 /**
+ * 把本站原图地址换成 Cloudflare 图片变换的原尺寸 WebP 地址。
+ * 后端对超过 10MB 的图给的是这种缩略图（ESA 处理不了大图），前端沿用同一服务，
+ * 之后 toThumbUrl / toNoResizeWebpUrl 只替换宽度，toCanonicalUrl 仍能还原原图。
+ */
+export function toCdnCgiImageUrl(url: string): string {
+  const clean = migrateImageUrl(url);
+  if (isCdnCgiImageUrl(clean) || !isAppImageHost(clean)) return clean;
+  const u = new URL(stripImageProcessQuery(clean));
+  u.pathname = `/cdn-cgi/image/format=webp,quality=80${u.pathname}`;
+  return u.toString();
+}
+
+/**
  * 返回「无 ESA / R2 缩略图参数」的原图 URL，用于正文 / 详情大图。
  */
 export function toCanonicalUrl(url: string | undefined): string {
