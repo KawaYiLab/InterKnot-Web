@@ -1,28 +1,44 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { brandFontsReady } from "~/utils/brand-fonts";
+import {
+  MARQUEE_FRAME_MS,
+  drawMarquee,
+  type MarqueeGeometry,
+  type MarqueeWorkerMessage,
+} from "~/utils/marquee-canvas";
 
 const props = withDefaults(defineProps<{ paused?: boolean }>(), { paused: false });
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const WORD = "INTERKNOT";
-const FRAME_MS = 1000 / 30;
 const SCROLL_IDLE_MS = 150;
+// 支持 OffscreenCanvas 时由 Worker 绘制，主线程只负责烘焙单词位图和转发状态；
+// 否则退回主线程 rAF 绘制。
+let worker: Worker | null = null;
+let workerRunning = false;
+let tileVersion = 0;
 let context: CanvasRenderingContext2D | null = null;
 let tile: HTMLCanvasElement | null = null;
+let hasTile = false;
 let observer: ResizeObserver | null = null;
 let pageObserver: MutationObserver | null = null;
 let motion: MediaQueryList | null = null;
 let frame: number | null = null;
 let scrollTimer: ReturnType<typeof setTimeout> | null = null;
-let width = 0, height = 0, dpr = 1, fontSize = 0, wordWidth = 0, wordStep = 0;
+const geometry: MarqueeGeometry = { width: 0, height: 0, dpr: 1, fontSize: 0, wordStep: 0 };
 let elapsed = 0, lastTime = 0, lastPaint = 0;
 let scrolling = false;
 let pagePaused = false;
 
+function post(message: MarqueeWorkerMessage, transfer: Transferable[] = []) {
+  worker?.postMessage(message, transfer);
+}
+
 function bakeWord() {
-  tile = document.createElement("canvas");
-  const ctx = tile.getContext("2d");
-  if (!ctx) { tile = null; return; }
+  const { fontSize, dpr } = geometry;
+  const baked = document.createElement("canvas");
+  const ctx = baked.getContext("2d");
+  if (!ctx) { tile = null; hasTile = false; return; }
   const font = `800 ${fontSize}px ${getComputedStyle(document.body).fontFamily || '"InterKnot Sans", sans-serif'}`;
   const spacing = -0.04 * fontSize;
   ctx.font = font;
@@ -30,12 +46,12 @@ function bakeWord() {
   const nativeSpacing = typeof ctx.letterSpacing === "string";
   if (nativeSpacing) ctx.letterSpacing = `${spacing}px`;
   const metrics = ctx.measureText(WORD);
-  wordWidth = nativeSpacing ? metrics.width : metrics.width + spacing * WORD.length;
-  wordStep = wordWidth + ctx.measureText(" ").width + (nativeSpacing ? 0 : spacing);
+  const wordWidth = nativeSpacing ? metrics.width : metrics.width + spacing * WORD.length;
+  geometry.wordStep = wordWidth + ctx.measureText(" ").width + (nativeSpacing ? 0 : spacing);
   const rowHeight = 0.74 * fontSize;
   // Negative tracking reduces advance width, but the last T still paints past it.
-  tile.width = Math.ceil(Math.max(wordWidth, metrics.actualBoundingBoxRight) * dpr);
-  tile.height = Math.ceil(rowHeight * dpr);
+  baked.width = Math.ceil(Math.max(wordWidth, metrics.actualBoundingBoxRight) * dpr);
+  baked.height = Math.ceil(rowHeight * dpr);
   ctx.scale(dpr, dpr);
   ctx.font = font;
   if (nativeSpacing) ctx.letterSpacing = `${spacing}px`;
@@ -51,40 +67,21 @@ function bakeWord() {
       x += ctx.measureText(char).width + spacing;
     }
   }
+  hasTile = true;
+  if (!worker) { tile = baked; return; }
+  // 位图交给 Worker 后主线程不再持有；版本号丢弃乱序返回的旧位图。
+  const version = ++tileVersion;
+  void createImageBitmap(baked).then((bitmap) => {
+    if (!worker || version !== tileVersion) { bitmap.close(); return; }
+    post({ type: "tile", tile: bitmap }, [bitmap]);
+  }, () => undefined).finally(() => {
+    baked.width = 0;
+    baked.height = 0;
+  });
 }
 
 function draw() {
-  if (!context || !tile || !width || !height) return;
-  const ctx = context;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, width, height);
-  ctx.save();
-  // Rotation is baked inside a viewport-sized bitmap, never a giant CSS layer.
-  ctx.translate(width / 2, height * 0.55);
-  ctx.rotate(-Math.PI / 12);
-  ctx.globalAlpha = 0.07;
-  const rowHeight = 0.74 * fontSize;
-  const gap = 0.006 * fontSize;
-  const period = 3 * wordStep + 0.15 * fontSize;
-  const left = -1.3 * width;
-  ctx.beginPath(); ctx.rect(left, -1.3 * height, 2.6 * width, 2.6 * height); ctx.clip();
-  for (let row = 0; row < 3; row++) {
-    const top = -(3 * rowHeight + 2 * gap) / 2 + row * (rowHeight + gap);
-    const phase = ((elapsed / (row === 1 ? 480000 : 400000)) + (row === 2 ? 0.35 : 0)) % 1;
-    const offset = (row === 1 ? -phase : phase) * period;
-    ctx.save();
-    ctx.beginPath(); ctx.rect(left, top, 2.6 * width, rowHeight); ctx.clip();
-    for (let group = left + offset - period; group < -left; group += period) {
-      for (let word = 0; word < 3; word++) {
-        const x = group + word * wordStep;
-        if (x + tile.width / dpr >= left && x <= -left) {
-          ctx.drawImage(tile, x, top, tile.width / dpr, tile.height / dpr);
-        }
-      }
-    }
-    ctx.restore();
-  }
-  ctx.restore();
+  if (context && tile) drawMarquee(context, tile, geometry, elapsed);
 }
 
 function stop() {
@@ -95,16 +92,24 @@ function stop() {
 function tick(now: number) {
   elapsed += now - lastTime;
   lastTime = now;
-  if (now - lastPaint >= FRAME_MS) {
-    lastPaint = now - (now - lastPaint) % FRAME_MS;
+  if (now - lastPaint >= MARQUEE_FRAME_MS) {
+    lastPaint = now - (now - lastPaint) % MARQUEE_FRAME_MS;
     draw();
   }
   frame = requestAnimationFrame(tick);
 }
 
 function syncAnimation() {
+  const running = hasTile && !props.paused && !pagePaused && !scrolling && !document.hidden && !motion?.matches;
+  if (worker) {
+    if (running !== workerRunning) {
+      workerRunning = running;
+      post({ type: "running", running });
+    }
+    return;
+  }
   stop();
-  if (!tile || props.paused || pagePaused || scrolling || document.hidden || motion?.matches) return;
+  if (!running) return;
   lastTime = performance.now();
   lastPaint = lastTime;
   frame = requestAnimationFrame(tick);
@@ -119,19 +124,22 @@ function syncPagePause() {
 }
 
 function resize(nextWidth: number, nextHeight: number) {
-  if (!canvasRef.value || !context || !nextWidth || !nextHeight) return;
+  if (!canvasRef.value || (!context && !worker) || !nextWidth || !nextHeight) return;
   const nextDpr = window.devicePixelRatio || 1;
   const nextFontSize = Math.max(360, Math.min(640, window.innerWidth * 0.48));
-  const rebuild = !tile || fontSize !== nextFontSize || dpr !== nextDpr;
-  const resized = width !== nextWidth || height !== nextHeight || dpr !== nextDpr;
-  width = nextWidth; height = nextHeight; dpr = nextDpr; fontSize = nextFontSize;
-  if (resized) {
-    canvasRef.value.width = Math.ceil(width * dpr);
-    canvasRef.value.height = Math.ceil(height * dpr);
+  const rebuild = !hasTile || geometry.fontSize !== nextFontSize || geometry.dpr !== nextDpr;
+  const resized = geometry.width !== nextWidth || geometry.height !== nextHeight || geometry.dpr !== nextDpr;
+  Object.assign(geometry, { width: nextWidth, height: nextHeight, dpr: nextDpr, fontSize: nextFontSize });
+  if (resized && context) {
+    canvasRef.value.width = Math.ceil(nextWidth * nextDpr);
+    canvasRef.value.height = Math.ceil(nextHeight * nextDpr);
   }
   if (!brandFontsReady.value) return;
   if (rebuild) bakeWord();
-  if (resized || rebuild) draw();
+  if (resized || rebuild) {
+    if (worker) post({ type: "geometry", geometry: { ...geometry } });
+    else draw();
+  }
   syncAnimation();
 }
 
@@ -142,7 +150,8 @@ function resizeViewport() {
 
 function onScroll() {
   scrolling = true;
-  stop();
+  if (worker) syncAnimation();
+  else stop();
   if (scrollTimer !== null) clearTimeout(scrollTimer);
   scrollTimer = setTimeout(() => {
     scrollTimer = null;
@@ -151,11 +160,30 @@ function onScroll() {
   }, SCROLL_IDLE_MS);
 }
 
+function startWorker(canvas: HTMLCanvasElement) {
+  if (typeof canvas.transferControlToOffscreen !== "function" ||
+      typeof Worker === "undefined" || typeof createImageBitmap !== "function") return;
+  let next: Worker | null = null;
+  try {
+    next = new Worker(new URL("../workers/marquee.worker.ts", import.meta.url), { type: "module" });
+    const offscreen = canvas.transferControlToOffscreen();
+    next.postMessage({ type: "init", canvas: offscreen } satisfies MarqueeWorkerMessage, [offscreen]);
+    worker = next;
+  } catch {
+    next?.terminate();
+  }
+}
+
 watch(() => props.paused, syncAnimation);
-watch(brandFontsReady, () => { if (context) resizeViewport(); });
+watch(brandFontsReady, () => { if (context || worker) resizeViewport(); });
 onMounted(() => {
-  context = canvasRef.value?.getContext("2d") ?? null;
-  if (!context) return;
+  const canvas = canvasRef.value;
+  if (!canvas) return;
+  startWorker(canvas);
+  if (!worker) {
+    context = canvas.getContext("2d");
+    if (!context) return;
+  }
   // Overlays teleport to body. Observe only those direct insertions/removals and
   // app.vue's focus class, never the scrolling feed's descendant mutations.
   // Presence includes leaving overlays, matching the existing body:has CSS rule.
@@ -170,7 +198,7 @@ onMounted(() => {
   observer = new ResizeObserver(([entry]) => {
     if (entry) resize(entry.contentRect.width, entry.contentRect.height);
   });
-  observer.observe(canvasRef.value!);
+  observer.observe(canvas);
   resizeViewport();
 });
 onBeforeUnmount(() => {
@@ -182,7 +210,11 @@ onBeforeUnmount(() => {
   window.removeEventListener("scroll", onScroll);
   window.removeEventListener("resize", resizeViewport);
   document.removeEventListener("visibilitychange", syncAnimation);
+  post({ type: "dispose" });
+  worker?.terminate();
+  worker = null;
   tile = null;
+  hasTile = false;
 });
 </script>
 
