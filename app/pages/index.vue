@@ -62,21 +62,12 @@ useSeoMeta({
   ogDescription: "绳网（Inter-Knot）是绝区零玩家论坛：攻略、角色讨论、剧情考据和同人创作，新艾利都最大的匿名委托中枢。",
 });
 
+// z-backtop 对整页滚动用 IntersectionObserver 判断显隐，不再需要把 window 的
+// scroll 事件转发给 documentElement（转发后它会在每次滚动时读 scrollTop，强制排版）。
 const scrollTarget = ref<HTMLElement>();
-// z-backtop listens on target's "scroll" event and reads target.scrollTop
-// But document.documentElement may not fire "scroll" events in all browsers.
-// Bridge window scroll events to the element so z-backtop works correctly.
-// 记住函数引用 + 使用 passive，使浏览器可以乐观滚动；onBeforeUnmount 里清理
-// 避免路由切走后仍在全局 dispatch 事件。
-let scrollBridge: (() => void) | null = null;
 let stopPendingWatch: (() => void) | null = null;
 onMounted(() => {
-  const el = document.documentElement;
-  scrollBridge = () => {
-    el.dispatchEvent(new Event("scroll"));
-  };
-  window.addEventListener("scroll", scrollBridge, { passive: true });
-  scrollTarget.value = el;
+  scrollTarget.value = document.documentElement;
 });
 
 const LOAD_MORE_ROOT_MARGIN = "360px 0px";
@@ -1025,10 +1016,6 @@ onBeforeUnmount(() => {
     window.removeEventListener("touchend", onTouchEnd);
     window.removeEventListener("touchcancel", onTouchCancel);
     detachPullMove();
-    if (scrollBridge) {
-      window.removeEventListener("scroll", scrollBridge);
-      scrollBridge = null;
-    }
   }
   if (stopPendingWatch) {
     stopPendingWatch();
