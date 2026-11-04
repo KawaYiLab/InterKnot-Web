@@ -1,7 +1,8 @@
 import type { Post } from "~/types/entities";
 import {
+  FALLBACK_COVER_ASPECT_RATIO,
   estimateTitleLineCount,
-  getCardCoverAspectRatio,
+  getNormalizedCoverAspectRatio,
 } from "~/utils/cover";
 import { toCardExcerpt } from "~/utils/card-excerpt";
 
@@ -73,8 +74,10 @@ function countExcerptLines(text: string, availableWidth: number) {
 
 /** 按 PostCard 的实际渲染结构估算卡片高度，供 VirtualMasonry 的 heightMapper 使用。 */
 export function estimatePostCardHeight(post: Post, itemWidth: number) {
-  // 与 PostCard 共用比例规则；缺少尺寸时也必须使用相同的占位比例。
-  const ratio = getCardCoverAspectRatio(post.coverWidth, post.coverHeight);
+  // 无封面文章使用占位图原生比例，与卡片实际渲染保持一致
+  const ratio = post.cover
+    ? getNormalizedCoverAspectRatio(post.coverWidth, post.coverHeight)
+    : FALLBACK_COVER_ASPECT_RATIO;
   const innerWidth = Math.max(0, itemWidth - POST_CARD_PADDING_X);
   const coverHeight = innerWidth / ratio;
 

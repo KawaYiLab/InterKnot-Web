@@ -39,7 +39,6 @@ const message = useMessage();
 const pageDataLoading = usePageDataLoading();
 const auth = useAuthStore();
 const loginDialog = useLoginDialog();
-const siteStatus = useSiteStatus();
 const { online: presenceOnline, avatars: presenceAvatars } = usePresence();
 // 头像堆叠最多展示几个，剩余的用 +N 收口。
 const PRESENCE_AVATAR_MAX = 5;
@@ -64,13 +63,23 @@ useSeoMeta({
 });
 
 const scrollTarget = ref<HTMLElement>();
+// z-backtop listens on target's "scroll" event and reads target.scrollTop
+// But document.documentElement may not fire "scroll" events in all browsers.
+// Bridge window scroll events to the element so z-backtop works correctly.
+// 记住函数引用 + 使用 passive，使浏览器可以乐观滚动；onBeforeUnmount 里清理
+// 避免路由切走后仍在全局 dispatch 事件。
+let scrollBridge: (() => void) | null = null;
 let stopPendingWatch: (() => void) | null = null;
 onMounted(() => {
-  scrollTarget.value = document.documentElement;
+  const el = document.documentElement;
+  scrollBridge = () => {
+    el.dispatchEvent(new Event("scroll"));
+  };
+  window.addEventListener("scroll", scrollBridge, { passive: true });
+  scrollTarget.value = el;
 });
 
-// 提前量覆盖瀑布流的 840px 前向缓冲，让下一页在卡片进入渲染窗口前开始请求。
-const LOAD_MORE_ROOT_MARGIN = "1200px 0px";
+const LOAD_MORE_ROOT_MARGIN = "360px 0px";
 // 频道筛选：空串 = 全部频道（此时由排序 Tab「最新 / 热门」决定看哪条流）。
 const categories = ref<Category[]>([]);
 const selectedCategory = ref<string>("");
@@ -249,19 +258,9 @@ let hasSettledPage = false;
 let disposed = false;
 
 // VirtualMasonry 模板引用，用于读取 expose 的 measuredHeights
-const masonryRef = ref<{
-  measuredHeights: Map<string | number, number>;
-  measuredWidth: number;
-  refreshOffset: () => void;
-  $el: HTMLElement;
-} | null>(null);
+const masonryRef = ref<{ measuredHeights: Map<string | number, number>; $el: HTMLElement } | null>(null);
 // 从缓存恢复的已测量高度，传给 VirtualMasonry.initialHeights
 const cachedMeasuredHeights = shallowRef<Map<string | number, number> | undefined>(undefined);
-const cachedMeasuredWidth = ref<number | undefined>(undefined);
-
-const refreshMasonryOffset = () => masonryRef.value?.refreshOffset();
-// 公告在首页外部改变文档流；只在该状态变化后读一次偏移，不占滚动帧。
-watch([siteStatus.announcement, siteStatus.readOnly], refreshMasonryOffset, { flush: "post" });
 
 const loadMoreSentinelRef = ref<HTMLElement | null>(null);
 const loadMoreObserverRef = shallowRef<IntersectionObserver | null>(null);
@@ -417,20 +416,13 @@ const scrollToTopAfterReset = async (reset: boolean, version: number) => {
   }
 };
 
-const fetchList = async (reset = false, preserveSettledPage = false) => {
+const fetchList = async (reset = false) => {
   if (disposed) return;
   // 重置请求必须能取代旧身份/筛选的在途请求；只有追加分页需要等待。
   if (!reset && (listRequestPending || applyingNewArticles.value)) return;
   if (!hasNextPage.value && !reset) return;
   listRequestPending = true;
-  // 同一条流的主动刷新失败时，已有列表和游标仍可继续使用。
-  // 筛选/身份切换不传 preserveSettledPage，避免把旧流当成新流的有效首屏。
-  if (reset && !preserveSettledPage) hasSettledPage = false;
-  if (reset) {
-    // 快照只用于路由返回时的首次挂载；新请求不能再次播种旧内容的高度。
-    cachedMeasuredHeights.value = undefined;
-    cachedMeasuredWidth.value = undefined;
-  }
+  if (reset) hasSettledPage = false;
 
   // 缓存命中预填：避免从其他页面切回首页时 skeleton → fade → list 双重过渡 440ms。
   // 同步把缓存数据填进 list，模板首帧就走 "list" 分支，跳过 <Transition> 切换。
@@ -451,7 +443,6 @@ const fetchList = async (reset = false, preserveSettledPage = false) => {
       list.value = uniqueNodes;
       endCursor.value = cached.endCursor;
       hasNextPage.value = cached.hasNextPage;
-      hasSettledPage = true;
       cacheHit = true;
     }
   }
@@ -474,7 +465,6 @@ const fetchList = async (reset = false, preserveSettledPage = false) => {
   }
 
   const currentVersion = ++requestVersion.value;
-  let pageLoaded = false;
   try {
     const page = await api.searchArticles(
       "",
@@ -499,13 +489,12 @@ const fetchList = async (reset = false, preserveSettledPage = false) => {
     } else {
       // 翻页追加的卡片不播入场动画：它们在视口下方，滚到时才挂载，
       // 动画只会在快速滚动时和图片解码、重新分层挤在同一帧里。
-      if (uniqueNodes.length) list.value = [...list.value, ...uniqueNodes];
+      list.value = [...list.value, ...uniqueNodes];
     }
 
     endCursor.value = page.endCursor;
     hasNextPage.value = page.hasNextPage;
     hasSettledPage = true;
-    pageLoaded = true;
     if (reset || feedUpdates.reconciledBump.value === null) {
       feedUpdates.seedPollingBaseline(page.nodes);
     }
@@ -527,13 +516,10 @@ const fetchList = async (reset = false, preserveSettledPage = false) => {
         listProgressClaimed = false;
         pageDataLoading.finish();
       }
-      // 成功后重新观察以补齐短页；失败时保留现有观察，滚出再进入才重试，
-      // 避免哨兵一直可见时循环请求同一失败页。
-      if (pageLoaded) {
-        void nextTick().then(() => {
-          if (!disposed && currentVersion === requestVersion.value) observeLoadMoreSentinel();
-        });
-      }
+      // 首屏在途时哨兵可能已经进入视口；完成后重新观察，避免漏掉自动续页。
+      void nextTick().then(() => {
+        if (!disposed && currentVersion === requestVersion.value) observeLoadMoreSentinel();
+      });
     }
   }
 };
@@ -621,7 +607,7 @@ const handleRefresh = async () => {
   const minDelay = new Promise((r) => setTimeout(r, 600));
   // 用户明确下拉刷新：跳过 staleTime 缓存，强制重拉最新首页列表
   api.invalidateQueries(["articles", "search"]);
-  if (await fetchList(true, true)) feedUpdates.acknowledge(pendingBatch);
+  if (await fetchList(true)) feedUpdates.acknowledge(pendingBatch);
   await minDelay;
   refreshing.value = false;
 };
@@ -692,19 +678,20 @@ useArticleFeedStream({
 });
 
 const doLoadMore = () => {
-  if (disposed || !hasSettledPage || listRequestPending || applyingNewArticles.value || !hasNextPage.value) return;
+  if (disposed || listRequestPending || applyingNewArticles.value || !hasNextPage.value) return;
   fetchList(false).catch(() => undefined);
 };
 
 const observeLoadMoreSentinel = () => {
   if (disposed || !import.meta.client) return;
-  const sentinel = loadMoreSentinelRef.value;
-  if (!sentinel) {
-    loadMoreObserverRef.value?.disconnect();
-    return;
-  }
 
-  const observer = loadMoreObserverRef.value ?? new IntersectionObserver(
+  loadMoreObserverRef.value?.disconnect();
+  loadMoreObserverRef.value = null;
+
+  const sentinel = loadMoreSentinelRef.value;
+  if (!sentinel) return;
+
+  const observer = new IntersectionObserver(
     (entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
         doLoadMore();
@@ -717,9 +704,6 @@ const observeLoadMoreSentinel = () => {
     },
   );
 
-  // 复用 observer，但重新观察哨兵以取得新布局的交叉状态。
-  // 短页追加后哨兵可能仍在预取区内，必须允许继续补页。
-  observer.disconnect();
   observer.observe(sentinel);
   loadMoreObserverRef.value = observer;
 };
@@ -767,7 +751,6 @@ watch(
     unsettledReadIds.clear();
     list.value = [];
     cachedMeasuredHeights.value = undefined;
-    cachedMeasuredWidth.value = undefined;
     seenIds = new Set();
     enterAnimationIds.value = new Set();
     endCursor.value = "";
@@ -825,8 +808,6 @@ const consumePendingPosts = () => {
   const fresh: Post[] = [];
   for (const post of pending) {
     if (!post.id || seenIds.has(post.id)) continue;
-    // 路由返回会恢复原分类，其他分类的新帖由对应列表的请求加载。
-    if (selectedCategory.value && post.category?.slug !== selectedCategory.value) continue;
     seenIds.add(post.id);
     fresh.push(post);
   }
@@ -835,12 +816,8 @@ const consumePendingPosts = () => {
   list.value = [...fresh, ...list.value];
 };
 
-if (cached) {
+if (cached && cached.category === selectedCategory.value) {
   // 从缓存恢复：跳过网络请求，直接填充列表状态
-  if (cached.category !== selectedCategory.value) {
-    skipFeedWatch = true;
-    selectedCategory.value = cached.category;
-  }
   const restoredFeed = cached.feed ?? "all";
   if (restoredFeed !== feedMode.value) {
     skipFeedWatch = true;
@@ -860,7 +837,6 @@ if (cached) {
   hasNextPage.value = cached.hasNextPage;
   seenIds = cached.seenIds;
   cachedMeasuredHeights.value = cached.measuredHeights;
-  cachedMeasuredWidth.value = cached.measuredWidth;
   feedUpdates.seedPollingBaseline(cached.list);
   if (cached.reconciledBump !== undefined) feedUpdates.reconciledBump.value = cached.reconciledBump;
   for (const id of cached.pendingArticleIds ?? []) feedUpdates.enqueue(id);
@@ -1034,7 +1010,6 @@ onBeforeRouteLeave(() => {
     pendingArticleIds: [...newArticleIds.value],
     seenIds,
     measuredHeights: heights ? new Map(heights) : new Map(),
-    measuredWidth: masonryRef.value?.measuredWidth,
     scrollY: window.scrollY,
   });
 });
@@ -1050,6 +1025,10 @@ onBeforeUnmount(() => {
     window.removeEventListener("touchend", onTouchEnd);
     window.removeEventListener("touchcancel", onTouchCancel);
     detachPullMove();
+    if (scrollBridge) {
+      window.removeEventListener("scroll", scrollBridge);
+      scrollBridge = null;
+    }
   }
   if (stopPendingWatch) {
     stopPendingWatch();
@@ -1084,7 +1063,6 @@ onBeforeUnmount(() => {
       :model-value="currentTab"
       :category="selectedCategory"
       :categories="categories"
-      @layout-change="refreshMasonryOffset"
       @update:model-value="handleTabChange"
       @update:category="(val: string) => (val === '' ? selectAllCategories() : selectCategory(val))"
     >
@@ -1162,14 +1140,12 @@ onBeforeUnmount(() => {
               :height-mapper="estimatePostCardHeight"
               :key-mapper="masonryKeyMapper"
               :initial-heights="cachedMeasuredHeights"
-              :initial-width="cachedMeasuredWidth"
             >
-              <template #default="{ item, index, width, columnCount }">
+              <template #default="{ item, index, columnCount }">
                 <PostCard
                   :class="{ 'ik-masonry-card-enter': shouldAnimatePost(item.id) }"
                   :style="shouldAnimatePost(item.id) ? getStaggerDelayStyle(index, columnCount) : undefined"
                   :post="item"
-                  :image-width="width"
                   :highlighted="highlightedArticleIds.has(item.id)"
                   :eager="index < columnCount * 2"
                   :data-post-id="item.id"

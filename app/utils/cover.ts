@@ -67,18 +67,6 @@ export function getNormalizedCoverAspectRatio(
   return NORMALIZED_LANDSCAPE_RATIO;
 }
 
-/** PostCard preserves supplied dimensions, including after an image load failure. */
-export function getCardCoverAspectRatio(
-  coverWidth: number | undefined,
-  coverHeight: number | undefined,
-): number {
-  if (!coverWidth || !coverHeight || !Number.isFinite(coverWidth) ||
-      !Number.isFinite(coverHeight) || coverWidth <= 0 || coverHeight <= 0) {
-    return FALLBACK_COVER_ASPECT_RATIO;
-  }
-  return getNormalizedCoverAspectRatio(coverWidth, coverHeight);
-}
-
 /**
  * 估算标题在给定可用宽度下会占多少行（最多 2 行）。
  *

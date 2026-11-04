@@ -11,12 +11,13 @@ const DEFAULT_ESTIMATED_HEIGHT = 340;
 <script setup lang="ts" generic="T">
 import {
   computed,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
   watch,
+  type StyleValue,
 } from "vue";
-import { createMasonryLayout, type MasonryItem } from "~/utils/masonry-layout";
 
 /* ── Props ────────────────────────────────────── */
 const props = withDefaults(
@@ -34,8 +35,6 @@ const props = withDefaults(
     measureItems?: boolean;
     /** 预填充的已测量高度，用于列表重建时跳过"估算→测量"阶段，实现精确滚动恢复 */
     initialHeights?: Iterable<readonly [string | number, number]>;
-    /** initialHeights 对应的列宽；跨路由改变屏宽后不使用旧尺寸。 */
-    initialWidth?: number;
   }>(),
   {
     columnWidth: 240,
@@ -62,9 +61,7 @@ const scrollDirection = ref(1);
 // 使列表重建后能跳过"估算 → 测量"过程，直接用真实高度计算布局。
 const measuredHeights = new Map<string | number, number>(props.initialHeights);
 // 缓存 heightMapper 计算结果 (key → px)，colW 变化时清空
-const mappedHeightCache = new Map<string | number, { item: T; height: number | undefined }>();
-const positioner = createMasonryLayout<T>();
-let dirtyFrom = Infinity;
+const mappedHeightCache = new Map<string | number, number>();
 let _cachedColW = 0;
 // 当前正在被 ResizeObserver 跟踪的元素
 const observedElements = new Map<Element, string | number>();
@@ -75,6 +72,7 @@ let resizeObserver: ResizeObserver | null = null;
 let containerResizeObserver: ResizeObserver | null = null;
 let scrollRAF: number | null = null;
 let resizeRAF: number | null = null;
+let measureRAF: number | null = null;
 let _prevScrollY = 0;
 // 累计同方向位移，超过阈值才翻转 scrollDirection，避免惯性滚动末段抖动导致 buffer 频繁切换
 let _directionAccum = 0;
@@ -108,55 +106,102 @@ const contentLeftOffset = computed(() => {
 });
 
 /* ── 布局计算 ──────────────────────────────────── */
-function resolveHeight(item: T, key: string | number) {
-  let cached = mappedHeightCache.get(key);
-  if (!cached || cached.item !== item) {
-    const mapped = props.heightMapper?.(item, actualColumnWidth.value);
-    const height = typeof mapped === "number" && Number.isFinite(mapped) && mapped > 0
-      ? mapped : undefined;
-    // Mounted cards are measured by RO. Offscreen edits need fresh estimates only
-    // when their dimensions changed; read status/count updates retain measurements.
-    if (cached && cached.height !== height && !itemRefMap.has(key)) measuredHeights.delete(key);
-    cached = { item, height };
-    mappedHeightCache.set(key, cached);
-  }
-  return (props.measureItems ? measuredHeights.get(key) : undefined)
-    ?? cached.height ?? props.estimatedHeight;
+interface LayoutItem {
+  key: string | number;
+  index: number;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
 }
 
-const layout = computed(() => {
+// 最近一次 layout 中每个 key 实际使用的高度（测量值 / heightMapper / 估算值），
+// 供 ResizeObserver 判断"实测高度是否与布局所用高度不同"，相同则无需重排。
+let layoutHeights = new Map<string | number, number>();
+
+const layout = computed((): {
+  items: LayoutItem[];
+  columns: LayoutItem[][];
+  totalHeight: number;
+} => {
+  // 触发对 heightVersion 的依赖追踪
   void heightVersion.value;
+
   const cols = columnCount.value;
   const colW = actualColumnWidth.value;
-  if (cols <= 0 || colW <= 0) return { items: [], columns: [], totalHeight: 0 };
+  const gap = props.gap;
 
+  if (cols <= 0 || colW <= 0) {
+    return { items: [], columns: [], totalHeight: 0 };
+  }
+
+  const leftOffset = contentLeftOffset.value;
+
+  // colW 变化时清空 heightMapper 缓存
   if (colW !== _cachedColW) {
     mappedHeightCache.clear();
-    // An existing measurement belongs to one column width. Keep initial values
-    // on the first layout only when their saved width is compatible.
-    if (_cachedColW > 0 || (props.initialWidth !== undefined && props.initialWidth !== colW)) {
-      measuredHeights.clear();
-    }
     _cachedColW = colW;
   }
-  const result = positioner.update(props.items, {
-    columns: cols, width: colW, gap: props.gap, left: contentLeftOffset.value,
-  }, props.keyMapper, resolveHeight, dirtyFrom);
-  dirtyFrom = Infinity;
 
-  if (mappedHeightCache.size > props.items.length || measuredHeights.size > props.items.length) {
-    for (const key of mappedHeightCache.keys()) {
-      if (!positioner.byKey.has(key)) mappedHeightCache.delete(key);
+  const colHeights = new Array<number>(cols).fill(0);
+  const columns = Array.from({ length: cols }, () => [] as LayoutItem[]);
+  const result: LayoutItem[] = [];
+  const heights = new Map<string | number, number>();
+
+  for (let i = 0; i < props.items.length; i++) {
+    const item = props.items[i];
+    if (!item) continue;
+    const key = props.keyMapper(item);
+
+    // 使用缓存的 heightMapper 结果，避免重复计算
+    let stableMappedHeight: number | undefined;
+    if (props.heightMapper) {
+      const cached = mappedHeightCache.get(key);
+      if (cached !== undefined) {
+        stableMappedHeight = cached;
+      } else {
+        const mappedHeight = props.heightMapper(item, colW);
+        if (typeof mappedHeight === "number" && Number.isFinite(mappedHeight) && mappedHeight > 0) {
+          stableMappedHeight = mappedHeight;
+          mappedHeightCache.set(key, mappedHeight);
+        }
+      }
     }
-    for (const key of measuredHeights.keys()) {
-      if (!positioner.byKey.has(key)) measuredHeights.delete(key);
+
+    const h = (props.measureItems ? measuredHeights.get(key) : undefined)
+      ?? stableMappedHeight
+      ?? props.estimatedHeight;
+
+    // 找最短列
+    let minCol = 0;
+    for (let c = 1; c < cols; c++) {
+      if ((colHeights[c] ?? 0) < (colHeights[minCol] ?? 0)) minCol = c;
     }
+
+    const top = colHeights[minCol] ?? 0;
+    const left = leftOffset + minCol * (colW + gap);
+
+    const layoutItem = { key, index: i, top, left, width: colW, height: h };
+    result.push(layoutItem);
+    heights.set(key, h);
+    columns[minCol]?.push(layoutItem);
+    colHeights[minCol] = top + h + gap;
   }
-  return result;
+
+  // colHeights 每列累加值末尾都带了一个 gap（colHeights[col] = top + h + gap），
+  // 直接 max 会让容器底部多出一个 gap 像素的空白。减去 gap 得到真实内容总高。
+  let maxCol = 0;
+  for (let c = 0; c < colHeights.length; c++) {
+    const v = colHeights[c] ?? 0;
+    if (v > maxCol) maxCol = v;
+  }
+  const totalHeight = maxCol > 0 ? maxCol - gap : 0;
+  layoutHeights = heights;
+  return { items: result, columns, totalHeight };
 });
 
 function findFirstColumnItem(
-  items: MasonryItem[],
+  items: LayoutItem[],
   viewportTop: number,
   containerOffset: number,
 ) {
@@ -195,7 +240,7 @@ const BUFFER_SCALE_MIN = 0.5;
 const BUFFER_SCALE_MAX = 1.0;
 
 // 渲染只用到 key / index / left / top / width；这些都没变就视为同一个可见集
-function sameVisibleItems(a: MasonryItem[], b: MasonryItem[]) {
+function sameVisibleItems(a: LayoutItem[], b: LayoutItem[]) {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     const x = a[i]!;
@@ -210,8 +255,7 @@ function sameVisibleItems(a: MasonryItem[], b: MasonryItem[]) {
 
 // scrollY 每帧都在变，但多数帧并没有卡片进出视口。可见集不变时返回上一次的
 // 数组（computed 的 oldValue），Vue 不会通知依赖方，本组件这一帧就不重渲染。
-let renderedWindow: { top: number; bottom: number; layout: ReturnType<typeof positioner.update> } | undefined;
-const visibleItems = computed((prev?: MasonryItem[]) => {
+const visibleItems = computed((prev?: LayoutItem[]) => {
   const sy = scrollY.value;
   const vh = viewportH.value;
   const cols = columnCount.value;
@@ -219,17 +263,7 @@ const visibleItems = computed((prev?: MasonryItem[]) => {
     BUFFER_SCALE_MAX,
     Math.max(BUFFER_SCALE_MIN, BUFFER_REFERENCE_COLUMNS / Math.max(1, cols)),
   );
-  const buf = Math.max(0, props.buffer) * bufScale;
-  const currentLayout = layout.value;
-  const containerOffset = containerOffsetY.value;
-  const viewportTop = sy - containerOffset;
-  const viewportBottom = viewportTop + vh;
-  // Refill the overscan window in batches. Small scrolls no longer mount/unmount
-  // a row at every card boundary, while a guard remains ahead of the viewport.
-  const guard = Math.min(120, buf * 0.25);
-  if (prev && renderedWindow?.layout === currentLayout
-    && viewportTop - guard >= renderedWindow.top
-    && viewportBottom + guard <= renderedWindow.bottom) return prev;
+  const buf = props.buffer * bufScale;
   const dir = scrollDirection.value;
 
   // 根据滚动方向使用温和的非对称缓冲区：滚动方向 1.4x，反方向 1.0x
@@ -237,21 +271,23 @@ const visibleItems = computed((prev?: MasonryItem[]) => {
   // 配合 onScroll 中的方向翻转阈值（DIRECTION_FLIP_THRESHOLD），可显著减少抖动。
   const bufAbove = dir >= 0 ? buf * 1.0 : buf * 1.4;
   const bufBelow = dir >= 0 ? buf * 1.4 : buf * 1.0;
-  const top = viewportTop - bufAbove;
-  const bottom = viewportBottom + bufBelow;
-  renderedWindow = { top, bottom, layout: currentLayout };
+  const top = sy - bufAbove;
+  const bottom = sy + vh + bufBelow;
 
-  const visible: MasonryItem[] = [];
-  const columns = currentLayout.columns;
+  // 使用缓存的容器偏移，不再调用 getBoundingClientRect
+  const containerOffset = containerOffsetY.value;
+
+  const visible: LayoutItem[] = [];
+  const columns = layout.value.columns;
 
   for (const columnItems of columns) {
-    const startIndex = findFirstColumnItem(columnItems, top, 0);
+    const startIndex = findFirstColumnItem(columnItems, top, containerOffset);
 
     for (let i = startIndex; i < columnItems.length; i++) {
       const item = columnItems[i];
       if (!item) continue;
 
-      const itemTop = item.top;
+      const itemTop = containerOffset + item.top;
       if (itemTop > bottom) break;
 
       visible.push(item);
@@ -262,13 +298,24 @@ const visibleItems = computed((prev?: MasonryItem[]) => {
 });
 
 /* ── 容器与 item 的样式 ────────────────────────── */
-const containerStyle = computed((previous?: { height: string }) => {
-  const height = `${layout.value.totalHeight}px`;
-  return previous?.height === height ? previous : { height };
-});
+const containerStyle = computed<StyleValue>(() => ({
+  position: "relative" as const,
+  width: "100%",
+  height: `${layout.value.totalHeight}px`,
+}));
+
+// 只输出动态字段（width + transform）；静态 position/top/left/contain 由
+// .ik-vm-item class 承担。减少每帧 50+ 个对象字面量的 GC 压力，
+// 也避免每个 item 都把 contain 等冗余属性走 Vue patch。
+function itemStyle(it: LayoutItem): StyleValue {
+  return {
+    width: `${it.width}px`,
+    transform: `translate(${it.left}px, ${it.top}px)`,
+  };
+}
 
 /* ── 获取原始 item 对象 ────────────────────────── */
-function getItem(layoutItem: MasonryItem): T {
+function getItem(layoutItem: LayoutItem): T {
   return props.items[layoutItem.index] as T;
 }
 
@@ -277,23 +324,6 @@ function updateContainerOffset() {
   if (containerRef.value) {
     containerOffsetY.value = window.scrollY + containerRef.value.getBoundingClientRect().top;
   }
-}
-
-// Call after content above the list changes its document position. Keeping this
-// explicit avoids a layout read for every scroll or appended page.
-function refreshOffset() {
-  updateContainerOffset();
-  // Browser scroll anchoring can move scrollY together with the content above.
-  scrollY.value = window.scrollY;
-}
-
-function onWindowResize() {
-  if (resizeRAF !== null) return;
-  resizeRAF = requestAnimationFrame(() => {
-    resizeRAF = null;
-    updateContainerOffset();
-    viewportH.value = window.innerHeight;
-  });
 }
 
 function onScroll() {
@@ -340,20 +370,24 @@ function setupResizeObserver() {
       if (key === undefined) continue;
       const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
       const rounded = Math.round(h);
-      if (rounded <= 0) continue;
       measuredHeights.set(key, rounded);
       // 与布局实际使用的高度比较，而不是与"是否测量过"比较：observe 后首次回调
       // 必定到来，若首测一律算作变化，每张新挂载的卡片都会触发一次全量重排。
-      const positioned = positioner.byKey.get(key);
-      const used = positioned?.height;
+      const used = layoutHeights.get(key);
       if (used === undefined || Math.abs(used - rounded) >= MEASURE_DIFF_THRESHOLD) {
-        dirtyFrom = Math.min(dirtyFrom, positioned?.index ?? 0);
         changed = true;
       }
     }
-    // ResizeObserver already batches measurements before paint; Vue batches the
-    // resulting render. A second rAF would leave corrected positions a frame late.
-    if (changed) heightVersion.value++;
+    if (changed) {
+      // 合并到下一帧批量提交：避免一次 ResizeObserver 回调内多次 layout 重算，
+      // 也避免与滚动 rAF 在同一帧内争用导致抖动。
+      if (measureRAF === null) {
+        measureRAF = requestAnimationFrame(() => {
+          measureRAF = null;
+          heightVersion.value++;
+        });
+      }
+    }
   });
 }
 
@@ -374,18 +408,18 @@ function unobserveItem(el: Element) {
 /* ── 容器宽度监听 ──────────────────────────────── */
 function setupContainerResize() {
   if (!containerRef.value) return;
-  containerResizeObserver = new ResizeObserver((entries) => {
-    const entry = entries[0];
-    if (!entry) return;
-    const width = entry.contentRect.width;
-    // Appending a page changes height but not width. Do not schedule another
-    // frame or read layout for those notifications.
-    if (width > 0 && width !== containerWidth.value) {
-      containerWidth.value = width;
-      updateContainerOffset();
-    }
+  containerResizeObserver = new ResizeObserver(() => {
+    if (resizeRAF !== null) cancelAnimationFrame(resizeRAF);
+    resizeRAF = requestAnimationFrame(() => {
+      resizeRAF = null;
+      if (containerRef.value) {
+        containerWidth.value = containerRef.value.clientWidth;
+        updateContainerOffset();
+      }
+    });
   });
   containerResizeObserver.observe(containerRef.value);
+  containerWidth.value = containerRef.value.clientWidth;
 }
 
 /* ── item-ref 回调 (供模板使用) ─────────────────── */
@@ -406,36 +440,93 @@ function setItemRef(el: Element | null, key: string | number) {
   }
 }
 
-// Mapper/measurement options can change independently of the item array.
-watch([() => props.heightMapper, () => props.keyMapper, () => props.estimatedHeight, () => props.measureItems], () => {
-  mappedHeightCache.clear();
-  dirtyFrom = 0;
-  heightVersion.value++;
-});
+function cleanupRemovedRefs(activeKeys: Set<string | number>) {
+  for (const [key, el] of itemRefMap) {
+    if (!activeKeys.has(key)) {
+      unobserveItem(el);
+      itemRefMap.delete(key);
+    }
+  }
+}
+
+// items 引用变化时，清理不再存在的缓存
+watch(
+  () => props.items,
+  (newItems, oldItems) => {
+    if (!oldItems || newItems.length === 0) {
+      measuredHeights.clear();
+      mappedHeightCache.clear();
+      return;
+    }
+    // 插入/移动卡片保留其它项的高度；仅在卡片不在 DOM 且尺寸估算发生变化时才使已测高度失效。
+    const previous = new Map(oldItems.map((item) => [props.keyMapper(item), item]));
+    const activeKeys = new Set(newItems.map(props.keyMapper));
+    for (const item of newItems) {
+      const key = props.keyMapper(item);
+      const prevItem = previous.get(key);
+      if (prevItem !== undefined && prevItem !== item) {
+        mappedHeightCache.delete(key);
+
+        // 测量高度保留原则：
+        // 1. 若卡片已在 DOM 中（itemRefMap 有记录），ResizeObserver 会自然响应真实 DOM 尺寸变化，
+        //    非尺寸属性（如 isRead、浏览量等）更新时保留真实高度，绝不提前 delete，避免回退到估算值导致闪烁。
+        // 2. 若卡片不在 DOM 中，仅当其估算高度（heightMapper）实际发生变化时，才使 measuredHeights 失效。
+        if (!itemRefMap.has(key) && props.heightMapper) {
+          const colW = actualColumnWidth.value > 0 ? actualColumnWidth.value : props.columnWidth;
+          const oldMapped = props.heightMapper(prevItem, colW);
+          const newMapped = props.heightMapper(item, colW);
+          if (oldMapped !== newMapped) {
+            measuredHeights.delete(key);
+          }
+        }
+      }
+    }
+    for (const key of previous.keys()) {
+      if (!activeKeys.has(key)) {
+        measuredHeights.delete(key);
+        mappedHeightCache.delete(key);
+      }
+    }
+    heightVersion.value++;
+  },
+);
+
+// 每次 visibleItems 变化时，清理已离开虚拟视口的 observer
+watch(
+  () => visibleItems.value,
+  (items) => {
+    if (!props.measureItems) return;
+    const activeKeys = new Set(items.map((it) => it.key));
+    cleanupRemovedRefs(activeKeys);
+  },
+  { flush: "post" },
+);
 
 /* ── 生命周期 ──────────────────────────────────── */
-onMounted(() => {
+onMounted(async () => {
   scrollY.value = window.scrollY;
   _prevScrollY = window.scrollY;
   viewportH.value = window.innerHeight;
-  // 容器无 border / padding；一次读取同时取得宽度和文档偏移。
-  // 保留与 ResizeObserver 相同的小数精度，避免 clientWidth 取整后误清恢复的高度。
+  // 同步读一次 clientWidth：container 已 attached（外层 <ClientOnly> 保证客户端
+  // 才渲染本组件），避免首帧 containerWidth=0 → cols 退回 minColumns → 用户可见
+  // 一次"假布局 → 真布局"的重排闪烁。
   if (containerRef.value) {
-    const rect = containerRef.value.getBoundingClientRect();
-    containerWidth.value = rect.width;
-    containerOffsetY.value = window.scrollY + rect.top;
+    containerWidth.value = containerRef.value.clientWidth;
+    updateContainerOffset();
   }
   window.addEventListener("scroll", onScroll, { passive: true });
-  window.addEventListener("resize", onWindowResize, { passive: true });
+  window.addEventListener("resize", onScroll, { passive: true });
   setupResizeObserver();
+  await nextTick();
   setupContainerResize();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("scroll", onScroll);
-  window.removeEventListener("resize", onWindowResize);
+  window.removeEventListener("resize", onScroll);
   if (scrollRAF !== null) cancelAnimationFrame(scrollRAF);
   if (resizeRAF !== null) cancelAnimationFrame(resizeRAF);
+  if (measureRAF !== null) cancelAnimationFrame(measureRAF);
   resizeObserver?.disconnect();
   containerResizeObserver?.disconnect();
   observedElements.clear();
@@ -444,17 +535,17 @@ onBeforeUnmount(() => {
 });
 
 /* ── Expose ───────────────────────────────────── */
-defineExpose({ measuredHeights, measuredWidth: actualColumnWidth, refreshOffset });
+defineExpose({ measuredHeights });
 </script>
 
 <template>
-  <div ref="containerRef" class="ik-vm" :style="containerStyle">
+  <div ref="containerRef" :style="containerStyle">
     <div
       v-for="layoutItem in visibleItems"
       :key="layoutItem.key"
       class="ik-vm-item"
       :ref="(el) => setItemRef(el as Element | null, layoutItem.key)"
-      :style="layoutItem.style"
+      :style="itemStyle(layoutItem)"
     >
       <slot
         :item="getItem(layoutItem)"
@@ -467,12 +558,8 @@ defineExpose({ measuredHeights, measuredWidth: actualColumnWidth, refreshOffset 
 </template>
 
 <style scoped>
-.ik-vm {
-  position: relative;
-  width: 100%;
-}
-
-/* Styles are created once per position, rather than once per render. */
+/* 所有 item 共用静态定位，只让动态部分（width / transform）走 inline style，
+   减少每帧大量字面量对象创建与 Vue patch 比较成本。 */
 .ik-vm-item {
   position: absolute;
   top: 0;

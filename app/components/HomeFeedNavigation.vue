@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, type ComponentPublicInstance } from "vue";
-import { useEventListener, useResizeObserver } from "@vueuse/core";
+import { useEventListener } from "@vueuse/core";
 import type { AcceptableValue, PointerDownOutsideEvent } from "reka-ui";
 import type { Category } from "~/types/entities";
 import {
@@ -42,19 +42,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: "update:modelValue", value: string): void;
   (e: "update:category", value: string): void;
-  (e: "layout-change"): void;
 }>();
-
-const toolbarRef = ref<HTMLElement | null>(null);
-let toolbarHeight: number | undefined;
-useResizeObserver(toolbarRef, ([entry]) => {
-  if (!entry) return;
-  const height = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
-  if (height === toolbarHeight) return;
-  toolbarHeight = height;
-  // Async presence can add a second row without changing the masonry's size.
-  emit("layout-change");
-});
 
 const FEED_PANEL_ID = "ik-home-feed-panel";
 
@@ -198,7 +186,7 @@ const handleCategoryPointerDownOutside = (event: PointerDownOutsideEvent) => {
     class="ik-home-nav-hub"
     @update:model-value="handleTabChange"
   >
-    <div ref="toolbarRef" class="ik-home-toolbar">
+    <div class="ik-home-toolbar">
       <!-- 委托流 Tabs 与分区筛选是一组，始终同处一行（窄屏时整体收紧，不再把分区挤到第二行） -->
       <div class="ik-home-toolbar__nav">
         <!-- 主流切换 Tabs（最新 / 热门 / 未看 / 关注 / 收藏） -->

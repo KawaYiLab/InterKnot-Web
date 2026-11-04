@@ -249,7 +249,7 @@ const loadHot = async () => {
   }
 };
 
-const { restored, masonryRef, initialHeights, initialMeasuredWidth } = useListPageState(() => postsLoading.value || postsError.value ? null : ({
+const { restored, masonryRef, initialHeights } = useListPageState(() => postsLoading.value || postsError.value ? null : ({
   posts: posts.value.slice(), postsCursor: postsCursor.value, postsHasMore: postsHasMore.value, postsTotal: postsTotal.value,
   users: users.value.slice(), usersLoaded: usersLoaded.value, tags: tags.value.slice(), tagsLoaded: tagsLoaded.value,
   hotPosts: hotPosts.value.slice(),
@@ -270,7 +270,6 @@ if (restored) {
 
 const resetResults = () => {
   initialHeights.value = undefined;
-  initialMeasuredWidth.value = undefined;
   postsVersion++;
   usersVersion++;
   tagsVersion++;
@@ -312,7 +311,6 @@ watch(
 watch([sort, category], () => {
   if (!keyword.value) return;
   initialHeights.value = undefined;
-  initialMeasuredWidth.value = undefined;
   if (import.meta.client) window.scrollTo({ top: 0 });
   void loadPosts(true);
 });
@@ -645,7 +643,6 @@ const retry = () => {
               <VirtualMasonry
                 ref="masonryRef"
                 :initial-heights="initialHeights"
-                :initial-width="initialMeasuredWidth"
                 class="ik-masonry"
                 :class="{ 'is-stale': postsLoading }"
                 :items="posts"
@@ -657,10 +654,9 @@ const retry = () => {
                 :height-mapper="estimatePostCardHeight"
                 :key-mapper="postKey"
               >
-                <template #default="{ item, index, width, columnCount }">
+                <template #default="{ item, index, columnCount }">
                   <PostCard
                     :post="item"
-                    :image-width="width"
                     :keyword="keyword"
                     :eager="index < columnCount * 2"
                     @open="openPost"

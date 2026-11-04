@@ -186,47 +186,6 @@ export function toThumbUrl(url: string | undefined, width = 360): string {
   return buildEsaImageUrl(clean, `resize,w_${width}/format,webp/quality,q_80`);
 }
 
-/** Only advertise resize candidates for image services that can produce them. */
-export function toThumbSrcset(
-  url: string | undefined,
-  widths: readonly number[],
-  originalWidth?: number,
-): string | undefined {
-  if (!url || isInlineUrl(url)) return undefined;
-  const clean = migrateImageUrl(url);
-  if (!isAppImageHost(clean) && !isCdnCgiImageUrl(clean)) return undefined;
-  const maxWidth = originalWidth && Number.isFinite(originalWidth) && originalWidth > 0
-    ? Math.max(1, Math.floor(originalWidth))
-    : Infinity;
-  const candidates = [...new Set(widths
-    .filter((width) => Number.isFinite(width) && width > 0)
-    .map((width) => Math.min(maxWidth, Math.max(1, Math.round(width)))))];
-  candidates.sort((a, b) => a - b);
-  return candidates.length
-    ? candidates.map((width) => `${toThumbUrl(clean, width)} ${width}w`).join(", ")
-    : undefined;
-}
-
-// Virtual cards unmount, but their browser-selected thumbnail remains in HTTP cache.
-// Reuse that exact resource for the detail preview instead of requesting another size.
-const loadedCardThumbnails = new Map<string, string>();
-const MAX_CARD_THUMBNAILS = 600;
-
-export function rememberCardCoverThumbnail(source: string, thumbnail: string): void {
-  const key = toCanonicalUrl(source);
-  if (!key || toCanonicalUrl(thumbnail) !== key) return;
-  loadedCardThumbnails.delete(key);
-  if (loadedCardThumbnails.size >= MAX_CARD_THUMBNAILS) {
-    loadedCardThumbnails.delete(loadedCardThumbnails.keys().next().value!);
-  }
-  loadedCardThumbnails.set(key, thumbnail);
-}
-
-export function toCardCoverPreviewUrl(url: string | undefined): string {
-  if (!url) return "";
-  return loadedCardThumbnails.get(toCanonicalUrl(url)) ?? toCardCoverThumbUrl(url);
-}
-
 /**
  * 瀑布流卡片封面缩略图：卡片宽约 170–330px，按屏幕倍率取 360 / 480 / 720 三档
  * （沿用既有档位，CDN 缓存能命中）。1x 屏取 720 等于多解码 4 倍像素，

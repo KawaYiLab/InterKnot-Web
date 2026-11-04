@@ -23,8 +23,6 @@ export interface HomeStateSnapshot {
   pendingArticleIds?: string[];
   seenIds: Set<string>;
   measuredHeights: Map<string | number, number>;
-  /** 实测高度对应的列宽；返回时列宽不同则重新估高，避免复用旧尺寸。 */
-  measuredWidth?: number;
   /** 路由离开瞬间的 window.scrollY（DOM 完好时采集，值精确） */
   scrollY: number;
 }

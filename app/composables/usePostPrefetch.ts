@@ -41,19 +41,13 @@ function canHoverIntent() {
 }
 
 export function usePostPrefetch() {
-  // Capture Nuxt context during setup; most virtual cards are never hovered.
-  // Build the API only after hover intent, inside that captured context.
-  const nuxtApp = useNuxtApp();
-  let api: ReturnType<typeof useApi> | undefined;
+  const api = useApi();
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
   const prefetchPost = (id: string) => {
     if (!import.meta.client || !id) return;
     // 只预取委托详情；评论列表在弹窗/页面进入时强制拉取，避免旧缓存被预取污染
-    nuxtApp.runWithContext(() => {
-      api ??= useApi();
-      void api.getPost(id).catch(() => {});
-    });
+    void api.getPost(id).catch(() => {});
   };
 
   const cancelPrefetch = () => {
