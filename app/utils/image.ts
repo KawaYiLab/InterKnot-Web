@@ -171,6 +171,46 @@ export function toCanonicalUrl(url: string | undefined): string {
   return clean;
 }
 
+// ── 访客走哪条图片线路 ───────────────────────────────────────────
+// im.tiwat.cn 按访客线路解析：国内到阿里云 ESA，认 image_process 参数；海外或开了代理的
+// 到 Cloudflare，不认这个参数，直接回原图（近期封面常有好几 MB，滚动时解码和回收内存
+// 会让整页卡住）。卡片封面加载完时对比实际宽度和要的宽度就知道走的是哪条线，
+// 判定是 Cloudflare 后，之后的缩略图改用 Cloudflare 自己的 /cdn-cgi/image。
+// 只记在本次会话里：换网络后重开页面会重新判断。
+const IMAGE_ROUTE_KEY = "ik:image-route";
+let cloudflareRoute = readImageRoute();
+let routeSettled = cloudflareRoute;
+
+function readImageRoute(): boolean {
+  try {
+    return typeof sessionStorage !== "undefined" && sessionStorage.getItem(IMAGE_ROUTE_KEY) === "cf";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 卡片封面加载完后调用：要的是 requestedWidth 宽的 ESA 缩略图，原图比它宽很多，
+ * 回来的却还是原图宽度，说明这条线不处理 image_process。
+ */
+export function noteThumbnailLoaded(img: HTMLImageElement, requestedWidth: number, originalWidth: number | undefined) {
+  if (routeSettled || !originalWidth || originalWidth < requestedWidth * 1.5) return;
+  const src = img.currentSrc || img.src;
+  if (!hasImageProcess(src) || !img.naturalWidth) return;
+  routeSettled = true;
+  if (img.naturalWidth < requestedWidth * 1.5) return;
+  cloudflareRoute = true;
+  try {
+    sessionStorage.setItem(IMAGE_ROUTE_KEY, "cf");
+  } catch {
+    // 隐私模式等存不了就只在本页生效
+  }
+}
+
+function toCloudflareThumbUrl(url: string, width: number): string {
+  return replaceR2Width(toCdnCgiImageUrl(url), width);
+}
+
 /**
  * 生成缩略图 URL：
  * - 若 url 已是 R2 /cdn-cgi/image 或 ESA image_process 缩略图，保持同一服务并替换宽度；
@@ -187,13 +227,17 @@ export function toThumbUrl(url: string | undefined, width = 360): string {
     return replaceR2Width(clean, width);
   }
 
-  if (hasImageProcess(clean)) {
-    return ensureEsaResizeWidth(clean, width);
-  }
-
   // 外部封面图（如 Bilibili）不需要/不支持 ESA 处理，直接返回原图。
   if (!isAppImageHost(clean)) {
     return clean;
+  }
+
+  if (cloudflareRoute) {
+    return toCloudflareThumbUrl(clean, width);
+  }
+
+  if (hasImageProcess(clean)) {
+    return ensureEsaResizeWidth(clean, width);
   }
 
   return buildEsaImageUrl(clean, `resize,w_${width}/format,webp/quality,q_80`);
@@ -208,7 +252,7 @@ export function toCardCoverThumbUrl(url: string | undefined): string {
   return toThumbUrl(url, cardCoverThumbWidth());
 }
 
-function cardCoverThumbWidth(): number {
+export function cardCoverThumbWidth(): number {
   const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
   if (dpr <= 1.2) return 360;
   if (dpr <= 1.6) return 480;

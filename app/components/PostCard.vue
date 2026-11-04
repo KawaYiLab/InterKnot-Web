@@ -8,7 +8,7 @@ import { computed, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 import { loadBrandFonts } from "~/utils/brand-fonts";
-import { toAvatarThumbUrl, toCardCoverThumbUrl } from "~/utils/image";
+import { cardCoverThumbWidth, noteThumbnailLoaded, toAvatarThumbUrl, toCardCoverThumbUrl } from "~/utils/image";
 import { thumbhashToDataUrl } from "~/utils/thumbhash";
 import { toCardExcerpt } from "~/utils/card-excerpt";
 import { splitHighlight } from "~/utils/highlight";
@@ -96,7 +96,8 @@ watch(
   { immediate: true },
 );
 
-const onCoverLoad = () => {
+const onCoverLoad = (e: Event) => {
+  noteThumbnailLoaded(e.target as HTMLImageElement, cardCoverThumbWidth(), props.post.coverWidth);
   // 首屏封面到位后再拉品牌字体，避免两者抢带宽拖慢 LCP
   if (props.eager) loadBrandFonts();
 };
