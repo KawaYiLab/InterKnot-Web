@@ -130,8 +130,16 @@ const selfUserId = computed<string | null>(() => {
  * 所以 onMounted 里还要补一次（见下方），否则列表永远停在「加载中…」。
  */
 let bootstrapRun = 0;
+let selectionVersion = 0;
+// 用户选择优先于打开弹窗时的目标；列表仍继续加载，旧目标不再写回。
+const cancelPendingSelection = () => {
+  selectionVersion++;
+  consumePendingDmConversationId();
+  consumePendingKnockTab();
+};
 const onVisibleChange = async (next: boolean) => {
   const run = ++bootstrapRun;
+  const selection = selectionVersion;
   if (!next) {
     const closingId = activeConversationId.value;
     if (closingId) {
@@ -166,6 +174,7 @@ const onVisibleChange = async (next: boolean) => {
   await Promise.all([refresh(), refreshAiCharacters(), refreshAiModels(), refreshAgentQuota()]);
   if (!visible.value || run !== bootstrapRun || auth.generation !== generation) return;
   knockBootstrapDone.value = true;
+  if (selection !== selectionVersion) return;
   // 直达链接或个人页「私信」指定的会话可能不在收件箱第一页。
   const pendingDm = consumePendingDmConversationId();
   const pendingTab = consumePendingKnockTab();
@@ -175,12 +184,12 @@ const onVisibleChange = async (next: boolean) => {
     try {
       conv = await ensureConversation(pendingDm);
     } catch (err) {
-      if (visible.value && run === bootstrapRun && auth.generation === generation) {
+      if (visible.value && run === bootstrapRun && auth.generation === generation && selection === selectionVersion) {
         sendError.value = resolveErrorMessage(err, "无法打开该会话");
       }
       return;
     }
-    if (!visible.value || run !== bootstrapRun || auth.generation !== generation) return;
+    if (!visible.value || run !== bootstrapRun || auth.generation !== generation || selection !== selectionVersion) return;
     if (!conv) {
       sendError.value = "会话不存在或当前账号无法访问";
       return;
@@ -487,6 +496,7 @@ const selectAiCharacter = async (card: AiRoleCard) => {
     loginDialog.open();
     return;
   }
+  cancelPendingSelection();
   activeAiSlug.value = card.slug;
   if (import.meta.client) {
     localStorage.setItem(AI_SLUG_STORAGE_KEY, card.slug);
@@ -504,6 +514,7 @@ const selectAiCharacter = async (card: AiRoleCard) => {
 
 /** 打开当前角色下的某条会话 */
 const openAiSession = (id: string) => {
+  cancelPendingSelection();
   if (renamingSessionId.value && renamingSessionId.value !== id) void commitRename();
   activeConversationId.value = id;
   updateUrl("calls", id);
@@ -514,6 +525,7 @@ const createNewAiSession = async () => {
   const card = activeAiCard.value;
   const uid = card?.boundUser?.id;
   if (!uid || creatingAiSession.value) return;
+  cancelPendingSelection();
   creatingAiSession.value = true;
   try {
     const summary = await createAiSession(card.slug);
@@ -1324,6 +1336,7 @@ const handleBackdropMouseDown = (e: MouseEvent) => {
 };
 
 const handleTabClick = (tab: KnockTab) => {
+  cancelPendingSelection();
   activeTab.value = tab;
   activeConversationId.value = null;
   activeAiSlug.value = null;
@@ -1331,6 +1344,7 @@ const handleTabClick = (tab: KnockTab) => {
 };
 
 const handleConversationClick = (id: string) => {
+  cancelPendingSelection();
   activeConversationId.value = id;
   updateUrl(activeTab.value, id);
 };
@@ -1340,6 +1354,7 @@ const mobileChatOpen = computed(() => !!activeConversationId.value);
 
 /** 移动端聊天页返回：清空选中回到会话列表（不关闭弹窗） */
 const handleMobileBack = () => {
+  cancelPendingSelection();
   const id = activeConversationId.value;
   if (id) void markConversationAsRead(id, { force: true });
   activeConversationId.value = null;

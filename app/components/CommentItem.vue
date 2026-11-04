@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onActivated, onDeactivated, ref } from "vue";
 import type { Comment } from "~/types/entities";
 import { formatTime } from "~/utils/time";
 import {
@@ -84,6 +85,14 @@ const floorLabel = computed(() => {
 });
 
 const replyTo = computed(() => props.comment.replyTo ?? null);
+const quotePreviewOpen = ref(false);
+let quotePreviewActive = true;
+const setQuotePreviewOpen = (open: boolean) => { quotePreviewOpen.value = quotePreviewActive && open; };
+onActivated(() => { quotePreviewActive = true; });
+onDeactivated(() => {
+  quotePreviewActive = false;
+  quotePreviewOpen.value = false;
+});
 
 const jumpToReplyTarget = () => {
   const id = replyTo.value?.comment?.id;
@@ -152,7 +161,7 @@ const openCommentImages = (images?: Comment["images"], index = 0) => {
 
         <!-- 回复了哪条 -->
         <TooltipProvider v-if="replyTo" :delay-duration="450">
-          <Tooltip :disabled="!replyTo.comment">
+          <Tooltip :open="quotePreviewOpen" :disabled="!replyTo.comment" @update:open="setQuotePreviewOpen">
             <TooltipTrigger as-child>
               <button
                 type="button"

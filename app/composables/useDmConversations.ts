@@ -315,6 +315,8 @@ export function useDmConversations(): UseDmConversations {
    * 用户滚了几页的列表会被反复截回 20 条，哨兵又立刻进入视口重新翻页。
    */
   const convPagesLoaded = useState<number>("dm:convPagesLoaded", () => 0);
+  /** 按直达链接补齐的会话不一定在第一页，刷新收件箱时仍保留。 */
+  const detailConversationIds = useState<Set<string>>("dm:detailConversationIds", () => new Set());
   /**
    * AI 会话列表的分页状态（按角色 slug）。AI 会话也在收件箱里，但收件箱按页加载，
    * 较早的会话可能还没翻到，所以「通话」Tab 单独按角色拉一份。
@@ -711,12 +713,13 @@ export function useDmConversations(): UseDmConversations {
           conversations.value = sortConversations([...byId.values()]);
           // cursor / hasMore 不动：后续页仍接在已加载列表之后
         } else {
-          // 按角色单独拉到的 AI 会话不一定在收件箱第一页，整体替换时留下来
+          // 单独拉到的 AI / 直达会话不一定在收件箱第一页，整体替换时留下来。
           const incomingIds = new Set(incoming.map((c) => c.documentId));
-          const keptAi = conversations.value.filter(
-            (c) => !c.pseudoKind && c.peer?.isAiAgent === true && !incomingIds.has(c.documentId),
+          const kept = conversations.value.filter(
+            (c) => !incomingIds.has(c.documentId) &&
+              ((!c.pseudoKind && c.peer?.isAiAgent === true) || detailConversationIds.value.has(c.documentId)),
           );
-          conversations.value = keptAi.length ? sortConversations([...incoming, ...keptAi]) : incoming;
+          conversations.value = kept.length ? sortConversations([...incoming, ...kept]) : incoming;
           convPagesLoaded.value = 1;
           convNextCursor.value = resp?.nextCursor ?? null;
           convHasMore.value = !!resp?.nextCursor;
@@ -794,6 +797,7 @@ export function useDmConversations(): UseDmConversations {
     const cv = await $api<ConversationDto>(`/v1/dm/conversations/${encodeURIComponent(id)}`);
     if (!auth.isLogin || auth.generation !== generation || !cv?.id) return null;
     const summary = summaryFromConversation(cv);
+    detailConversationIds.value.add(summary.documentId);
     upsertConversation(summary);
     return summary;
   }
@@ -871,6 +875,7 @@ export function useDmConversations(): UseDmConversations {
    * 还在，只是挂到了新的 documentId 上。
    */
   function removeConversation(id: string, opts?: { dropUnread?: boolean }): void {
+    detailConversationIds.value.delete(id);
     if (opts?.dropUnread) {
       const conv = conversations.value.find((c) => c.documentId === id);
       if (conv?.unreadCount) bumpUnreadTotal(-conv.unreadCount);
@@ -1643,6 +1648,7 @@ export function useDmConversations(): UseDmConversations {
     convHasMore.value = false;
     convLoadingMore.value = false;
     convPagesLoaded.value = 0;
+    detailConversationIds.value = new Set();
     aiSessionCursor.value = {};
     aiSessionLoadingSlugs.value = [];
     unreadTotal.value = null;

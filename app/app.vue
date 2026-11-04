@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import PostOverlay from "~/components/PostOverlay.vue";
-import type { Ref } from "vue";
+import { defineComponent, h, type Component, type Ref } from "vue";
 import { isNavigationFailure, NavigationFailureType } from "vue-router";
 import { overlayHistoryState } from "~/utils/overlay-history";
 import { isSyncingModalBackground, registerKnockModalPopState, registerPostModalPopState } from "~/utils/post-modal-history";
+import { onHistoryBranchDiscarded, trackHistoryBranches } from "~/utils/history-branches";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -14,7 +15,38 @@ const benefitsModal = useBenefitsModal();
 const checkInReminder = useCheckInReminder();
 const gpuAccelerated = useGpuAccelerated();
 
+// KeepAlive 的公开 include 按组件名回收；每条历史用独立名字，保留可达条目的实例。
+const postEntryComponents = new Map<string, Component>();
+const postEntryName = (key: string) => `PostOverlayEntry_${key}`;
+const cachedPostEntryNames = computed(() => postModal.cachedEntryKeys.value.map(postEntryName));
+watch(postModal.cachedEntryKeys, (keys) => {
+  const retained = new Set(keys);
+  for (const key of postEntryComponents.keys()) {
+    if (!retained.has(key)) postEntryComponents.delete(key);
+  }
+}, { flush: "sync" });
+const activePostEntryComponent = computed(() => {
+  const key = postModal.entryKey.value;
+  if (!key) return null;
+  let component = postEntryComponents.get(key);
+  if (!component) {
+    component = defineComponent({
+      name: postEntryName(key),
+      inheritAttrs: false,
+      props: {
+        postId: { type: String, required: true },
+        entryKey: { type: String, required: true },
+      },
+      setup: (props, { attrs }) => () => h(PostOverlay, { ...attrs, ...props }),
+    });
+    postEntryComponents.set(key, component);
+  }
+  return component;
+});
+
 if (import.meta.client) {
+  const stopTrackingHistoryBranches = trackHistoryBranches(router.options.history);
+  const stopDiscardingPostEntries = onHistoryBranchDiscarded(postModal.discardForwardEntries);
   auth.hydrateFromStorage();
 
   // 初始化账号缓存清理；安全信息、绑定和黑名单由账号页按需加载。
@@ -61,6 +93,8 @@ if (import.meta.client) {
     }
   });
   onBeforeUnmount(() => {
+    stopTrackingHistoryBranches();
+    stopDiscardingPostEntries();
     removePostHistoryHandler();
     removeKnockHistoryHandler();
     removeRouteGuard?.();
@@ -211,8 +245,9 @@ const overlayOpen = computed(
           @after-enter="postModal.markEntered()"
           @after-leave="postModal.clearAfterLeave()"
         >
-          <KeepAlive>
-            <PostOverlay
+          <KeepAlive :include="cachedPostEntryNames">
+            <component
+              :is="activePostEntryComponent"
               v-if="postModal.isOpen.value"
               :key="postModal.entryKey.value || ''"
               :entry-key="postModal.entryKey.value || ''"

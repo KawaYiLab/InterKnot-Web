@@ -1,10 +1,15 @@
 import type { RouterConfig } from "@nuxt/schema";
+import { consumeListPageScroll } from "~/utils/list-page-state";
 
 // 自定义 scrollBehavior：当导航回首页且存在状态缓存时，
 // 恢复到缓存的滚动位置而非默认的顶部。
 // 其余场景保持 Nuxt 默认行为：后退/前进用浏览器保存的位置，前进导航滚到顶部。
 export default <RouterConfig>{
   scrollBehavior(to, _from, savedPosition) {
+    // 浮层返回先 replace 背景路由，此时没有 savedPosition；分页数据已同步恢复。
+    const listScroll = consumeListPageScroll(to.fullPath, window.history.state ?? {});
+    if (listScroll !== undefined) return { top: listScroll, left: 0 };
+
     // 后退/前进：使用浏览器保存的位置
     if (savedPosition) return savedPosition;
 

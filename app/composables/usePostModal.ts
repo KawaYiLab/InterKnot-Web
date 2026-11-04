@@ -27,6 +27,7 @@ interface ModalBackground {
 }
 interface PostEntry {
   key: string;
+  position: number;
   background: ModalBackground;
   id: string;
   options?: OpenOptions;
@@ -69,6 +70,7 @@ export function usePostModal() {
   const router = useRouter();
   const isOpen = useState("pm:open", () => false);
   const entryKey = useState<string | null>("pm:entry", () => null);
+  const cachedEntryKeys = useState<string[]>("pm:cachedEntries", () => []);
   const sessionKey = useState<string | null>("pm:session", () => null);
   const switching = useState("pm:switching", () => false);
   const postId = useState<string | null>("pm:id", () => null);
@@ -156,18 +158,27 @@ export function usePostModal() {
           : activeElement instanceof HTMLElement ? activeElement : null,
       };
     }
-    const entry: PostEntry = { key: crypto.randomUUID(), background, id, options: opts };
-    entries.set(entry.key, entry);
+    const key = crypto.randomUUID();
     const url = postPath(id) + (opts?.commentId ? `?comment=${encodeURIComponent(opts.commentId)}` : "");
     const state = overlayHistoryState({
       __postModal: true,
-      postModalKey: entry.key,
+      postModalKey: key,
       postId: id,
       commentId: opts?.commentId ?? null,
     });
     for (const key of ROUTER_STATE_KEYS) delete state[key];
     history.push(url, state as HistoryState);
+    const entry: PostEntry = { key, position: Number(history.state.position), background, id, options: opts };
+    entries.set(key, entry);
+    cachedEntryKeys.value = [...entries.keys()];
     show(entry);
+  }
+
+  function discardForwardEntries(firstDiscardedPosition: number) {
+    for (const [key, entry] of entries) {
+      if (entry.position >= firstDiscardedPosition) entries.delete(key);
+    }
+    cachedEntryKeys.value = [...entries.keys()];
   }
 
   function close() {
@@ -290,6 +301,7 @@ export function usePostModal() {
   return {
     isOpen: readonly(isOpen),
     entryKey: readonly(entryKey),
+    cachedEntryKeys: readonly(cachedEntryKeys),
     sessionKey: readonly(sessionKey),
     switching: readonly(switching),
     postId: readonly(postId),
@@ -304,5 +316,6 @@ export function usePostModal() {
     handlePopState,
     teardown,
     clearAfterLeave,
+    discardForwardEntries,
   };
 }

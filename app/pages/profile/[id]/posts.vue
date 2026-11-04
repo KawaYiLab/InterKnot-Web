@@ -48,7 +48,20 @@ const hasNextPage = ref(true);
 const loading = ref(true);
 const loadingMore = ref(false);
 const loadError = ref(false);
-const seenIds = new Set<string>();
+const { restored, masonryRef, initialHeights } = useListPageState(() => loading.value || loadError.value ? null : ({
+  profile: profile.value, list: list.value.slice(), total: total.value, pinnedIds: pinnedIds.value,
+  endCursor: endCursor.value, hasNextPage: hasNextPage.value,
+}));
+if (restored) {
+  profile.value = restored.profile;
+  list.value = api.mergeReadStatus(restored.list);
+  total.value = restored.total;
+  pinnedIds.value = restored.pinnedIds;
+  endCursor.value = restored.endCursor;
+  hasNextPage.value = restored.hasNextPage;
+  loading.value = false;
+}
+const seenIds = new Set(list.value.map(post => post.id));
 let requestVersion = 0;
 let disposed = false;
 
@@ -206,6 +219,7 @@ const feedGap = computed(() => (viewportWidth.value && viewportWidth.value <= 76
 const sheetSide = computed(() => (viewportWidth.value && viewportWidth.value <= 768 ? "bottom" : "right"));
 
 const profileTabLabel = useState<string | null>("profileTabLabel", () => null);
+if (profile.value) profileTabLabel.value = profile.value.isSelf ? null : (profile.value.name || profile.value.login || null);
 
 useSeoMeta({
   title: () => (displayName.value ? `${displayName.value}的全部委托 - 绳网` : "全部委托 - 绳网"),
@@ -234,6 +248,7 @@ async function loadFirstPage() {
   total.value = null;
   pinnedIds.value = undefined;
   editing.value = false;
+  initialHeights.value = undefined;
   try {
     const p = await api.getProfile(profileId.value);
     if (disposed || version !== requestVersion) return;
@@ -311,7 +326,7 @@ onMounted(() => {
     },
     { rootMargin: "360px 0px" },
   );
-  void loadFirstPage();
+  if (!restored) void loadFirstPage();
 });
 
 watch(
@@ -391,6 +406,8 @@ watch(api.readStatusRevision, () => {
 
       <div v-else class="ik-list-state">
         <VirtualMasonry
+          ref="masonryRef"
+          :initial-heights="initialHeights"
           class="ik-masonry"
           :items="list"
           :column-width="240"

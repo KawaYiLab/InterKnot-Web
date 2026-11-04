@@ -216,6 +216,7 @@ const loadUsers = async () => {
 
 // ── 标签：命中的标签放在委托结果上方，点了去标签页 ──
 const tags = shallowRef<Tag[]>([]);
+const tagsLoaded = ref(false);
 let tagsVersion = 0;
 const loadTags = async () => {
   const q = keyword.value;
@@ -225,26 +226,50 @@ const loadTags = async () => {
     if (version === tagsVersion) tags.value = list.slice(0, 6);
   } catch {
     if (version === tagsVersion) tags.value = [];
+  } finally {
+    if (version === tagsVersion) tagsLoaded.value = true;
   }
 };
 
 // ── 没输入关键词时：热门帖子 ──
 const hotPosts = shallowRef<Post[]>([]);
 const hotLoading = ref(false);
+let hotVersion = 0;
 const loadHot = async () => {
   if (hotPosts.value.length || hotLoading.value) return;
+  const version = ++hotVersion;
   hotLoading.value = true;
   try {
     const page = await api.searchArticles("", "", "", "all", "hot");
-    hotPosts.value = page.nodes.slice(0, 10);
+    if (version === hotVersion) hotPosts.value = page.nodes.slice(0, 10);
   } catch {
     // 热门只是锦上添花，失败就不显示
   } finally {
-    hotLoading.value = false;
+    if (version === hotVersion) hotLoading.value = false;
   }
 };
 
+const { restored, masonryRef, initialHeights } = useListPageState(() => postsLoading.value || postsError.value ? null : ({
+  posts: posts.value.slice(), postsCursor: postsCursor.value, postsHasMore: postsHasMore.value, postsTotal: postsTotal.value,
+  users: users.value.slice(), usersLoaded: usersLoaded.value, tags: tags.value.slice(), tagsLoaded: tagsLoaded.value,
+  hotPosts: hotPosts.value.slice(),
+  categories: categories.value.slice(),
+}));
+if (restored) {
+  posts.value = api.mergeReadStatus(restored.posts);
+  postsCursor.value = restored.postsCursor;
+  postsHasMore.value = restored.postsHasMore;
+  postsTotal.value = restored.postsTotal;
+  users.value = restored.users;
+  usersLoaded.value = restored.usersLoaded;
+  tags.value = restored.tags;
+  tagsLoaded.value = restored.tagsLoaded;
+  hotPosts.value = api.mergeReadStatus(restored.hotPosts);
+  categories.value = restored.categories;
+}
+
 const resetResults = () => {
+  initialHeights.value = undefined;
   postsVersion++;
   usersVersion++;
   tagsVersion++;
@@ -257,11 +282,18 @@ const resetResults = () => {
   usersLoaded.value = false;
   usersError.value = "";
   tags.value = [];
+  tagsLoaded.value = false;
 };
 
 watch(
   keyword,
-  (q) => {
+  (q, previous) => {
+    if (previous === undefined && restored) {
+      if (q && !usersLoaded.value) void loadUsers();
+      if (q && !tagsLoaded.value) void loadTags();
+      if (!q) void loadHot();
+      return;
+    }
     resetResults();
     if (import.meta.client) window.scrollTo({ top: 0 });
     if (!q) {
@@ -278,9 +310,24 @@ watch(
 
 watch([sort, category], () => {
   if (!keyword.value) return;
+  initialHeights.value = undefined;
   if (import.meta.client) window.scrollTo({ top: 0 });
   void loadPosts(true);
 });
+
+watch(() => auth.generation, () => {
+  resetResults();
+  hotVersion++;
+  hotLoading.value = false;
+  hotPosts.value = [];
+  if (keyword.value) {
+    void loadPosts(true);
+    void loadUsers();
+    void loadTags();
+  } else {
+    void loadHot();
+  }
+}, { flush: "sync" });
 
 onMounted(() => {
   api.getCategories().then((list) => {
@@ -594,6 +641,8 @@ const retry = () => {
 
             <template v-else>
               <VirtualMasonry
+                ref="masonryRef"
+                :initial-heights="initialHeights"
                 class="ik-masonry"
                 :class="{ 'is-stale': postsLoading }"
                 :items="posts"

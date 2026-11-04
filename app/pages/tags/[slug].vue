@@ -35,7 +35,17 @@ useSeoMeta({
   robots: () => (!loading.value && !loadError.value && list.value.length === 0 ? "noindex" : "index, follow"),
 });
 
-const seenIds = new Set<string>();
+const { restored, masonryRef, initialHeights } = useListPageState(() => loading.value || loadError.value ? null : ({
+  list: list.value.slice(), endCursor: endCursor.value, hasNextPage: hasNextPage.value, displayName: displayName.value,
+}));
+if (restored) {
+  list.value = api.mergeReadStatus(restored.list);
+  endCursor.value = restored.endCursor;
+  hasNextPage.value = restored.hasNextPage;
+  displayName.value = restored.displayName;
+  loading.value = false;
+}
+const seenIds = new Set(list.value.map(post => post.id));
 let requestVersion = 0;
 let disposed = false;
 
@@ -73,6 +83,7 @@ async function loadFirstPage() {
   endCursor.value = "";
   hasNextPage.value = true;
   displayName.value = "";
+  initialHeights.value = undefined;
   try {
     const page = await api.searchArticles("", "", "", "all", "latest", slug.value);
     if (disposed || version !== requestVersion) return;
@@ -136,7 +147,7 @@ onMounted(() => {
     },
     { rootMargin: "360px 0px" },
   );
-  void loadFirstPage();
+  if (!restored) void loadFirstPage();
 });
 
 // 哨兵在 ClientOnly/列表加载后才挂载；每页完成后重新观察也能填满较高视口。
@@ -202,6 +213,8 @@ watch(api.readStatusRevision, () => {
 
       <div v-else class="ik-list-state">
         <VirtualMasonry
+          ref="masonryRef"
+          :initial-heights="initialHeights"
           class="ik-masonry"
           :items="list"
           :column-width="240"
