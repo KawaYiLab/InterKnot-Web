@@ -825,6 +825,8 @@ const consumePendingPosts = () => {
   const fresh: Post[] = [];
   for (const post of pending) {
     if (!post.id || seenIds.has(post.id)) continue;
+    // 路由返回会恢复原分类，其他分类的新帖由对应列表的请求加载。
+    if (selectedCategory.value && post.category?.slug !== selectedCategory.value) continue;
     seenIds.add(post.id);
     fresh.push(post);
   }

@@ -4,11 +4,19 @@ import { listPagePosition, readListPageState, saveListPageState } from "~/utils/
 export function useListPageState<T>(capture: () => T | null) {
   const route = useRoute();
   const auth = useAuthStore();
+  const siteStatus = useSiteStatus();
   const position = import.meta.client ? listPagePosition(route.fullPath, window.history.state ?? {}) : 0;
   const snapshot = import.meta.client ? readListPageState<T>(route.fullPath, position, auth.generation) : undefined;
-  const masonryRef = shallowRef<{ measuredHeights: Map<string | number, number>; measuredWidth: number } | null>(null);
+  const masonryRef = shallowRef<{
+    measuredHeights: Map<string | number, number>;
+    measuredWidth: number;
+    refreshOffset: () => void;
+  } | null>(null);
   const initialHeights = shallowRef(snapshot?.heights);
   const initialMeasuredWidth = shallowRef(snapshot?.measuredWidth);
+
+  // 全站横幅位于页面外部；公告或维护提示变化后，三个列表页都要刷新文档偏移。
+  watch([siteStatus.announcement, siteStatus.readOnly], () => masonryRef.value?.refreshOffset(), { flush: "post" });
 
   onBeforeRouteLeave(() => {
     const data = capture();
