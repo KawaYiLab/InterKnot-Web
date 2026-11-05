@@ -1779,7 +1779,7 @@ const handleMobileBack = () => {
                             :key="entry.msg.documentId"
                             :entry="entry"
                             :copied-id="copiedMessageId"
-                            :show-regenerate="entry.aiRich && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
+                            :show-regenerate="entry.aiRich && !!entry.msg.aiModelKey && entry.msg.documentId === lastAiMessageId && !activeStreamingMessageId"
                             :regenerating="regeneratingAi"
                             @contextmenu="showContextMenu"
                             @profile="goToProfile"
