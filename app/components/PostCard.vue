@@ -113,9 +113,17 @@ const onAvatarError = () => {
   avatarSrc.value = DEFAULT_AVATAR_IMAGE;
 };
 
+// 卡片链接用普通 <a>：NuxtLink 每张卡都要建一套 RouterLink（路由匹配 + 几个 computed），
+// 虚拟列表滚动时成批挂载 / 卸载，这部分在剖析里约占脚本时间的 5%。
+// 点击照旧交给父组件（打开弹窗）；父组件没拦下时再走站内跳转，修饰键 / 中键仍由浏览器开新标签。
+const postHref = computed(() => postPath(props.post.id, props.post.postNo));
+
 const handleOpen = (e: MouseEvent) => {
   if (!isPlainLinkClick(e)) return;
   emit("open", props.post, e);
+  if (e.defaultPrevented) return;
+  e.preventDefault();
+  void navigateTo(postHref.value);
 };
 </script>
 
@@ -129,11 +137,7 @@ const handleOpen = (e: MouseEvent) => {
     @focusin="schedulePrefetch(post.id)"
     @focusout="cancelPrefetch"
   >
-    <NuxtLink
-      :to="postPath(post.id, post.postNo)"
-      class="ik-card__link"
-      no-prefetch
-    >
+    <a :href="postHref" class="ik-card__link">
       <div class="ik-card__cover-wrap">
         <div
           class="ik-card__cover-frame"
@@ -227,7 +231,7 @@ const handleOpen = (e: MouseEvent) => {
         </h3>
         <p v-if="excerpt" class="ik-card__excerpt">{{ excerpt }}</p>
       </div>
-    </NuxtLink>
+    </a>
   </article>
 </template>
 
