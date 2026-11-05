@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useDebounceFn, useMediaQuery } from "@vueuse/core";
 import { useMessage } from "zenless-ui";
 import type { Comment, Post } from "~/types/entities";
@@ -19,7 +19,6 @@ import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
 import { countNewReply, prependKeepingPosition, refreshKeepingPosition, removeFromTimeline } from "~/utils/comment-timeline";
 import BilibiliPlayer from "~/components/BilibiliPlayer.vue";
-import RelatedArticles from "~/components/RelatedArticles.vue";
 import ScrollHintArrows from "~/components/ScrollHintArrows.vue";
 import CommentsToolbar from "~/components/CommentsToolbar.vue";
 import type { CommentSort } from "~/composables/useApi";
@@ -50,18 +49,12 @@ const pageDataLoading = usePageDataLoading();
 const message = useMessage();
 const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
 const isCompact = useMediaQuery("(max-width: 800px)", { ssrWidth: initialWidth });
-const relatedTargetId = `post-page-related-${useId()}`;
 
 const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
 const isBlocked = ref(false);
 const postModal = usePostModal();
-const knockModal = useKnockKnockModal();
-const postContentActive = computed(() => !loading.value && !loadError.value && !isBlocked.value &&
-  !!post.value && isRoutePost(post.value) && !post.value.isHidden);
-const readingActive = computed(() => postContentActive.value && !postModal.isOpen.value && !knockModal.visible.value);
-const relatedReady = ref(false);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
@@ -379,7 +372,7 @@ onBeforeRouteLeave(() => {
 });
 
 const restoreReadingPosition = async () => {
-  if (!savedReadingState || loading.value || commentsInitialLoading.value || !relatedReady.value ||
+  if (!savedReadingState || loading.value || commentsInitialLoading.value ||
       (bodyHasContent.value && !bodyHtml.value)) return;
   await nextTick();
   if (isCommentLoadingCancelled || auth.generation !== readingGeneration ||
@@ -395,7 +388,7 @@ const restoreReadingPosition = async () => {
   detailHint.update();
   commentsHint.update();
 };
-watch([bodyHtml, loading, commentsInitialLoading, relatedReady], restoreReadingPosition, { flush: "post" });
+watch([bodyHtml, loading, commentsInitialLoading], restoreReadingPosition, { flush: "post" });
 
 const getActiveCommentsContainer = (): HTMLElement | null => {
   if (isCompact.value) {
@@ -1321,9 +1314,6 @@ onBeforeUnmount(() => {
                   <template v-if="post.editedAt"> · 编辑于 {{ formatTime(post.editedAt) }}</template>
                   <template v-if="post.views"> · {{ post.views }} 阅读</template>
                 </p>
-                <Teleport defer :to="`#${relatedTargetId}`" :disabled="!isCompact">
-                  <RelatedArticles :document-id="post.id" :active="postContentActive" :collapsible="isCompact" @ready="relatedReady = true" @open-post="postModal.open($event)" />
-                </Teleport>
               </div>
               <ScrollHintArrows v-if="!isCompact" :up="detailHint.up.value" :down="detailHint.down.value" />
               </div>
@@ -1426,7 +1416,6 @@ onBeforeUnmount(() => {
                     <span v-else class="ik-comments-end">— 已无更多评论 —</span>
                   </div>
                 </div>
-                <div :id="relatedTargetId"></div>
               </div>
             </div>
             </div>
