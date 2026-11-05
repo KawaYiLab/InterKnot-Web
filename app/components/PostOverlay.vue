@@ -74,12 +74,6 @@ const loadError = ref(false);
 const isActiveEntry = computed(() => postModal.isOpen.value && postModal.entryKey.value === props.entryKey);
 const readingActive = computed(() => isActiveEntry.value &&
   post.value?.id === props.postId && !loading.value && !loadError.value && !post.value?.isHidden);
-// 关闭时 isOpen 先变成 false，浮层还要播完退场动画；相关委托沿用关闭前的状态，
-// 跟着整个弹窗一起淡出，而不是在动画开始时就先消失。
-const relatedActive = ref(readingActive.value);
-watch(readingActive, (active) => {
-  if (postModal.isOpen.value) relatedActive.value = active;
-});
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
@@ -1876,7 +1870,7 @@ onBeforeUnmount(() => {
                         <template v-if="post.editedAt"> · 编辑于 {{ formatTime(post.editedAt) }}</template>
                       </p>
                       <Teleport defer :to="`#${relatedTargetId}`" :disabled="!isCompact">
-                        <RelatedArticles :document-id="post.id" :active="relatedActive" :collapsible="isCompact" @open-post="postModal.open($event)" />
+                        <RelatedArticles :document-id="post.id" :active="readingActive" :collapsible="isCompact" @open-post="postModal.open($event)" />
                       </Teleport>
                     </div>
                     <ScrollHintArrows v-if="!isCompact" :up="detailHint.up.value" :down="detailHint.down.value" />
