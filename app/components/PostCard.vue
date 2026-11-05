@@ -156,23 +156,7 @@ const handleOpen = (e: MouseEvent) => {
           />
         </div>
         <div class="ik-card__views">
-          <svg
-            class="ik-card__views-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <!-- 先画一圈半透明黑描边当阴影：比 filter: drop-shadow 便宜（滤镜每张卡单独离屏绘制） -->
-            <g stroke="rgba(0, 0, 0, 0.55)" stroke-width="3.6">
-              <path d="M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z" />
-              <circle cx="12" cy="12" r="3.2" />
-            </g>
-            <g stroke="currentColor" stroke-width="1.8">
-              <path d="M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z" />
-              <circle cx="12" cy="12" r="3.2" />
-            </g>
-          </svg>
+          <span class="ik-card__views-icon" aria-hidden="true" />
           <span>{{ post.views || 0 }}</span>
         </div>
         <div v-if="post.solvedAt" class="ik-card__solved">已采纳</div>
@@ -221,7 +205,6 @@ const handleOpen = (e: MouseEvent) => {
             <div v-else class="ik-card__hover-slot">
               <p class="ik-card__author-name">{{ authorName }}</p>
             </div>
-            <div class="ik-card__author-divider" />
           </div>
         </div>
 
@@ -350,10 +333,15 @@ const handleOpen = (e: MouseEvent) => {
     0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
+/* 眼睛图标画成背景图：内联 SVG 每张卡要多 7 个节点（svg / g / path / circle），
+   虚拟列表成批挂载时都要算样式、建布局对象。先画一圈半透明黑描边当阴影，
+   比 filter: drop-shadow 便宜。 */
 .ik-card__views-icon {
+  display: block;
+  flex: none;
   width: var(--ik-post-card-views-icon-size);
   height: var(--ik-post-card-views-icon-size);
-  overflow: visible;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><g stroke='rgba(0,0,0,0.55)' stroke-width='3.6'><path d='M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z'/><circle cx='12' cy='12' r='3.2'/></g><g stroke='%23fff' stroke-width='1.8'><path d='M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z'/><circle cx='12' cy='12' r='3.2'/></g></svg>") center / 100% 100% no-repeat;
 }
 
 .ik-card__body {
@@ -411,7 +399,9 @@ const handleOpen = (e: MouseEvent) => {
   white-space: nowrap;
 }
 
-.ik-card__author-divider {
+/* 名字下面的分隔线用伪元素画，少一个节点 */
+.ik-card__author-block::after {
+  content: "";
   width: 100%;
   height: 1px;
   background: var(--ik-post-card-divider-bg);
