@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowReactive, shallowRef, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { useDebounceFn, useMediaQuery } from "@vueuse/core";
 import { FocusScope } from "reka-ui";
@@ -24,7 +24,6 @@ import { useCommentSeek } from "~/composables/useCommentSeek";
 import { useCommentReadHistory, findTopVisibleComment } from "~/composables/useCommentReadHistory";
 import { countNewReply, prependKeepingPosition, refreshKeepingPosition, removeFromTimeline } from "~/utils/comment-timeline";
 import { toCardCoverThumbUrl, toThumbUrl, toCanonicalUrl, toNoResizeWebpUrl } from "~/utils/image";
-import RelatedArticles from "./RelatedArticles.vue";
 
 // 静态导入子组件以避免运行时链式异步解析带来的视觉卡顿和加载迟滞
 import BilibiliPlayer from "./BilibiliPlayer.vue";
@@ -66,14 +65,11 @@ const message = useMessage();
 const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
 const isMobile = useMediaQuery("(max-width: 768px)", { ssrWidth: initialWidth });
 const isCompact = useMediaQuery("(max-width: 1024px)", { ssrWidth: initialWidth });
-const relatedTargetId = `post-overlay-related-${useId()}`;
 
 const post = ref<Post | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
 const isActiveEntry = computed(() => postModal.isOpen.value && postModal.entryKey.value === props.entryKey);
-const readingActive = computed(() => isActiveEntry.value &&
-  post.value?.id === props.postId && !loading.value && !loadError.value && !post.value?.isHidden);
 
 // 正文渲染（markdown-it + DOMPurify）按需异步加载，不进首屏 chunk。
 const { bodyHtml, hasContent: bodyHasContent } = useRenderedBody(post);
@@ -1307,7 +1303,7 @@ const onKeyDown = (e: KeyboardEvent) => {
 };
 
 /* ── 浮层内切换委托时重放进场动画 ─────────────
-   浮层已打开时点相关委托 / 通知跳转，只换 postId，组件不重新挂载，
+   浮层已打开时点通知等跳转到另一条委托，只换 postId，组件不重新挂载，
    app.vue 外层的 <Transition> 不会触发，观感像「原地替换内容」。
    这里给弹窗主体 .ik-dialog 重放一次与瀑布流点开一致的滑入+淡入，
    背景遮罩保持不动，让新委托像「新帖子进场」而非替换。 */
@@ -1387,7 +1383,7 @@ watch(
   [() => props.postId, () => auth.generation],
   ([newId], [oldId]) => {
     if (newId && isActiveEntry.value) {
-      // postId 真的变了（相关委托 / 通知跳转到另一条委托）才重放进场动画；
+      // postId 真的变了（通知等跳转到另一条委托）才重放进场动画；
       // 仅 generation 变化（重新登录刷新）不重放，避免无谓的闪动。
       if (oldId && newId !== oldId) replaySwitchAnimation();
       void resetAndLoad();
@@ -1869,9 +1865,6 @@ onBeforeUnmount(() => {
                         <template v-if="headerCreatedAt">{{ formatTime(headerCreatedAt) }}</template>
                         <template v-if="post.editedAt"> · 编辑于 {{ formatTime(post.editedAt) }}</template>
                       </p>
-                      <Teleport defer :to="`#${relatedTargetId}`" :disabled="!isCompact">
-                        <RelatedArticles :document-id="post.id" :active="readingActive" :collapsible="isCompact" @open-post="postModal.open($event)" />
-                      </Teleport>
                     </div>
                     <ScrollHintArrows v-if="!isCompact" :up="detailHint.up.value" :down="detailHint.down.value" />
                     </div>
@@ -1968,7 +1961,6 @@ onBeforeUnmount(() => {
                           </div>
                         </div>
                       </template>
-                      <div :id="relatedTargetId"></div>
                     </div>
                   </div>
                   </div>
@@ -3452,7 +3444,7 @@ html.no-gpu .ik-dialog {
   transform: scale(1.1) translateX(-5%);
 }
 
-/* 浮层内切换委托（相关委托 / 通知跳转）时，仅让弹窗主体 .ik-dialog 重放一次
+/* 浮层内切换委托（通知等跳转）时，仅让弹窗主体 .ik-dialog 重放一次
    与瀑布流点开一致的滑入+淡入；背景遮罩、斜纹保持不动，观感为「新委托进场」
    而非「原地替换内容」。桌面端 base transform 为 scale(1.1)。 */
 @keyframes ik-dialog-switch-in {

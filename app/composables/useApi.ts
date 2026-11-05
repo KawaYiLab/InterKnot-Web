@@ -1230,14 +1230,6 @@ export function useApi() {
     return data.viewCount != null && Number.isFinite(views) && views >= 0 ? views : undefined;
   };
 
-  const getSuggestedArticles = async (articleId: string, limit = 6): Promise<Post[]> => {
-    if (import.meta.client) await useAuthStore().ensureCredentials();
-    const res = await $api<{ items: Rec[] }>(`/v1/posts/${encodeURIComponent(articleId)}/related`, {
-      query: { limit },
-    });
-    return (res.items || []).map(toPost);
-  };
-
   const pinArticle = async (id: string): Promise<void> => {
     await $api(`/v1/posts/${encodeURIComponent(id)}/pin`, { method: "PUT" });
     invalidate(qk.articles.detail(id));
@@ -2571,7 +2563,6 @@ export function useApi() {
     seedSelfUser,
     patchSelfUserCache,
     searchArticles,
-    getSuggestedArticles,
     getArticleUpdates,
     suggestArticles,
     searchPosts,
