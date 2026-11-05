@@ -14,7 +14,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onUnmounted } from 'vue';
+import { ref, watch } from 'vue';
 
 defineOptions({
   name: 'ZBacktop'
@@ -47,11 +47,41 @@ const handleTargetScroll = () => {
   }
 }
 
-watch(() => props.target, () => {
-  if (!props.target) return
+const isDocumentTarget = (target) =>
+  target === document.documentElement || target === document.body
+
+// 整页滚动时不在 scroll 事件里读 scrollTop：页面有改动没排版时，这一读会让浏览器
+// 当场重新排版（首页边滚边出图时每次滚动都中）。改成在 visibleHeight 处放一个
+// 1px 的标记，交给 IntersectionObserver 告诉我们它是否已滚出视口上方。
+const observeDocument = (onCleanup) => {
+  const marker = document.createElement('div')
+  marker.setAttribute('aria-hidden', 'true')
+  marker.style.cssText = `position:absolute;top:${props.visibleHeight}px;left:0;width:1px;height:1px;pointer-events:none;visibility:hidden`
+  document.body.appendChild(marker)
+  const observer = new IntersectionObserver(([entry]) => {
+    if (!entry) return
+    isVisible.value = !entry.isIntersecting && entry.boundingClientRect.top < 0
+  })
+  observer.observe(marker)
+  onCleanup(() => {
+    observer.disconnect()
+    marker.remove()
+  })
+}
+
+watch(() => props.target, (target, _previous, onCleanup) => {
+  if (!target) {
+    isVisible.value = false
+    return
+  }
+  if (isDocumentTarget(target) && typeof IntersectionObserver !== 'undefined') {
+    observeDocument(onCleanup)
+    return
+  }
   handleTargetScroll()
-  props.target.addEventListener('scroll', handleTargetScroll)
-})
+  target.addEventListener('scroll', handleTargetScroll, { passive: true })
+  onCleanup(() => target.removeEventListener('scroll', handleTargetScroll))
+}, { immediate: true })
 
 const handleBacktopClick = () => {
   if (props.target) {
@@ -62,11 +92,6 @@ const handleBacktopClick = () => {
   }
 }
 
-onUnmounted(() => {
-  if (props.target) {
-    props.target.removeEventListener('scroll', handleTargetScroll)
-  }
-})
 </script>
 
 <style scoped lang="scss">

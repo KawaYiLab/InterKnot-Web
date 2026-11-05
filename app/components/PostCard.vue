@@ -8,7 +8,7 @@ import { computed, ref, watch } from "vue";
 import type { Post } from "~/types/entities";
 import { FALLBACK_COVER_ASPECT_RATIO, getNormalizedCoverAspectRatio } from "~/utils/cover";
 import { loadBrandFonts } from "~/utils/brand-fonts";
-import { toAvatarThumbUrl, toCardCoverThumbUrl } from "~/utils/image";
+import { cardCoverThumbWidth, noteThumbnailLoaded, toAvatarThumbUrl, toCardCoverThumbUrl } from "~/utils/image";
 import { thumbhashToDataUrl } from "~/utils/thumbhash";
 import { toCardExcerpt } from "~/utils/card-excerpt";
 import { splitHighlight } from "~/utils/highlight";
@@ -96,7 +96,8 @@ watch(
   { immediate: true },
 );
 
-const onCoverLoad = () => {
+const onCoverLoad = (e: Event) => {
+  noteThumbnailLoaded(e.target as HTMLImageElement, cardCoverThumbWidth(), props.post.coverWidth);
   // 首屏封面到位后再拉品牌字体，避免两者抢带宽拖慢 LCP
   if (props.eager) loadBrandFonts();
 };
@@ -112,9 +113,17 @@ const onAvatarError = () => {
   avatarSrc.value = DEFAULT_AVATAR_IMAGE;
 };
 
+// 卡片链接用普通 <a>：NuxtLink 每张卡都要建一套 RouterLink（路由匹配 + 几个 computed），
+// 虚拟列表滚动时成批挂载 / 卸载，这部分在剖析里约占脚本时间的 5%。
+// 点击照旧交给父组件（打开弹窗）；父组件没拦下时再走站内跳转，修饰键 / 中键仍由浏览器开新标签。
+const postHref = computed(() => postPath(props.post.id, props.post.postNo));
+
 const handleOpen = (e: MouseEvent) => {
   if (!isPlainLinkClick(e)) return;
   emit("open", props.post, e);
+  if (e.defaultPrevented) return;
+  e.preventDefault();
+  void navigateTo(postHref.value);
 };
 </script>
 
@@ -128,11 +137,7 @@ const handleOpen = (e: MouseEvent) => {
     @focusin="schedulePrefetch(post.id)"
     @focusout="cancelPrefetch"
   >
-    <NuxtLink
-      :to="postPath(post.id, post.postNo)"
-      class="ik-card__link"
-      no-prefetch
-    >
+    <a :href="postHref" class="ik-card__link">
       <div class="ik-card__cover-wrap">
         <div
           class="ik-card__cover-frame"
@@ -151,23 +156,7 @@ const handleOpen = (e: MouseEvent) => {
           />
         </div>
         <div class="ik-card__views">
-          <svg
-            class="ik-card__views-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <!-- 先画一圈半透明黑描边当阴影：比 filter: drop-shadow 便宜（滤镜每张卡单独离屏绘制） -->
-            <g stroke="rgba(0, 0, 0, 0.55)" stroke-width="3.6">
-              <path d="M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z" />
-              <circle cx="12" cy="12" r="3.2" />
-            </g>
-            <g stroke="currentColor" stroke-width="1.8">
-              <path d="M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z" />
-              <circle cx="12" cy="12" r="3.2" />
-            </g>
-          </svg>
+          <span class="ik-card__views-icon" aria-hidden="true" />
           <span>{{ post.views || 0 }}</span>
         </div>
         <div v-if="post.solvedAt" class="ik-card__solved">已采纳</div>
@@ -216,7 +205,6 @@ const handleOpen = (e: MouseEvent) => {
             <div v-else class="ik-card__hover-slot">
               <p class="ik-card__author-name">{{ authorName }}</p>
             </div>
-            <div class="ik-card__author-divider" />
           </div>
         </div>
 
@@ -226,7 +214,7 @@ const handleOpen = (e: MouseEvent) => {
         </h3>
         <p v-if="excerpt" class="ik-card__excerpt">{{ excerpt }}</p>
       </div>
-    </NuxtLink>
+    </a>
   </article>
 </template>
 
@@ -345,10 +333,15 @@ const handleOpen = (e: MouseEvent) => {
     0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
+/* 眼睛图标画成背景图：内联 SVG 每张卡要多 7 个节点（svg / g / path / circle），
+   虚拟列表成批挂载时都要算样式、建布局对象。先画一圈半透明黑描边当阴影，
+   比 filter: drop-shadow 便宜。 */
 .ik-card__views-icon {
+  display: block;
+  flex: none;
   width: var(--ik-post-card-views-icon-size);
   height: var(--ik-post-card-views-icon-size);
-  overflow: visible;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><g stroke='rgba(0,0,0,0.55)' stroke-width='3.6'><path d='M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z'/><circle cx='12' cy='12' r='3.2'/></g><g stroke='%23fff' stroke-width='1.8'><path d='M12 5C6.7 5 3 10 2 12c1 2 4.7 7 10 7s9-5 10-7c-1-2-4.7-7-10-7Z'/><circle cx='12' cy='12' r='3.2'/></g></svg>") center / 100% 100% no-repeat;
 }
 
 .ik-card__body {
@@ -406,7 +399,9 @@ const handleOpen = (e: MouseEvent) => {
   white-space: nowrap;
 }
 
-.ik-card__author-divider {
+/* 名字下面的分隔线用伪元素画，少一个节点 */
+.ik-card__author-block::after {
+  content: "";
   width: 100%;
   height: 1px;
   background: var(--ik-post-card-divider-bg);
