@@ -46,6 +46,58 @@ function getMeasureContext() {
   return measureCtx;
 }
 
+// 先用字宽下限判断「肯定放不下一行」，省掉大多数 measureText（每次都要按字体排一遍字形）。
+// 中日韩全角字、emoji 至少 0.9em；其它字最窄（i、l、撇号）也有 0.15em。
+// 下限已超过可用宽度，实测宽度只会更大，结论与 measureText 一致。
+// 组合符、变体选择符、零宽字符不占宽，不计入。
+function isWideChar(c: number) {
+  return (c >= 0x2e80 && c < 0xa4d0) || (c >= 0xac00 && c < 0xd7a4) ||
+    (c >= 0xf900 && c < 0xfb00) || (c >= 0xfe30 && c < 0xfe50) ||
+    (c >= 0xff01 && c < 0xff61) || (c >= 0x1f300 && c < 0x1fb00) ||
+    (c >= 0x20000 && c < 0x40000);
+}
+
+function isZeroWidthChar(c: number) {
+  return (c >= 0x200b && c <= 0x200f) || (c >= 0x0300 && c < 0x0370) ||
+    (c >= 0xfe00 && c <= 0xfe0f) || (c >= 0x1f3fb && c <= 0x1f3ff) ||
+    (c >= 0xe0000 && c < 0xe0080);
+}
+
+function surelyWraps(text: string, availableWidth: number, fontSize: number) {
+  const limit = availableWidth / fontSize;
+  let em = 0;
+  let joined = false;
+  for (const ch of text) {
+    const c = ch.codePointAt(0)!;
+    // 👨‍👩‍👧 这类用零宽连接符拼起来的 emoji 只画成一个字，连接符后面的不再计宽
+    if (c === 0x200d) {
+      joined = true;
+      continue;
+    }
+    if (joined) {
+      joined = false;
+      continue;
+    }
+    if (isZeroWidthChar(c)) continue;
+    em += isWideChar(c) ? 0.9 : 0.15;
+    if (em > limit) return true;
+  }
+  return false;
+}
+
+// 反过来，按字宽上限判断「肯定放得下一行」：ASCII 最宽（W、M）也不到 1.1em，
+// 其它字（全角字、emoji、圈号数字等）不到 1.5em。上限都没超过可用宽度，实测只会更窄。
+// 拼接 emoji 的每个码位都按一个字算，只会高估，结论仍然成立。
+function surelyFits(text: string, availableWidth: number, fontSize: number) {
+  const limit = availableWidth / fontSize;
+  let em = 0;
+  for (const ch of text) {
+    em += ch.codePointAt(0)! < 0x80 ? 1.1 : 1.5;
+    if (em > limit) return false;
+  }
+  return true;
+}
+
 /**
  * 标题行数（1 或 2，PostCard 用 line-clamp: 2 截断）。
  * 是否需要换行只取决于整行宽度，所以用 canvas 按卡片标题同款字体量出宽度即可精确判断，
@@ -55,6 +107,8 @@ function getMeasureContext() {
 function countTitleLines(title: string, availableWidth: number) {
   // DOM 会合并连续空白、行首行尾空白不占宽
   const text = title.replace(/\s+/g, " ").trim();
+  if (surelyWraps(text, availableWidth, POST_CARD_TITLE_FONT_SIZE)) return 2;
+  if (surelyFits(text, availableWidth, POST_CARD_TITLE_FONT_SIZE)) return 1;
   const ctx = getMeasureContext();
   if (!ctx) {
     return estimateTitleLineCount(text, availableWidth, POST_CARD_TITLE_FONT_SIZE);
@@ -66,6 +120,8 @@ function countTitleLines(title: string, availableWidth: number) {
 /** 摘要行数（0–2）。量法同标题。 */
 function countExcerptLines(text: string, availableWidth: number) {
   if (!text) return 0;
+  if (surelyWraps(text, availableWidth, 15)) return 2;
+  if (surelyFits(text, availableWidth, 15)) return 1;
   const ctx = getMeasureContext();
   if (!ctx) return estimateTitleLineCount(text, availableWidth, 15);
   ctx.font = `${POST_CARD_EXCERPT_FONT} ${fontFamily}`;
