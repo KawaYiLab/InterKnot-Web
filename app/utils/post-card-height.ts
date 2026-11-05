@@ -85,6 +85,19 @@ function surelyWraps(text: string, availableWidth: number, fontSize: number) {
   return false;
 }
 
+// 反过来，按字宽上限判断「肯定放得下一行」：ASCII 最宽（W、M）也不到 1.1em，
+// 其它字（全角字、emoji、圈号数字等）不到 1.5em。上限都没超过可用宽度，实测只会更窄。
+// 拼接 emoji 的每个码位都按一个字算，只会高估，结论仍然成立。
+function surelyFits(text: string, availableWidth: number, fontSize: number) {
+  const limit = availableWidth / fontSize;
+  let em = 0;
+  for (const ch of text) {
+    em += ch.codePointAt(0)! < 0x80 ? 1.1 : 1.5;
+    if (em > limit) return false;
+  }
+  return true;
+}
+
 /**
  * 标题行数（1 或 2，PostCard 用 line-clamp: 2 截断）。
  * 是否需要换行只取决于整行宽度，所以用 canvas 按卡片标题同款字体量出宽度即可精确判断，
@@ -95,6 +108,7 @@ function countTitleLines(title: string, availableWidth: number) {
   // DOM 会合并连续空白、行首行尾空白不占宽
   const text = title.replace(/\s+/g, " ").trim();
   if (surelyWraps(text, availableWidth, POST_CARD_TITLE_FONT_SIZE)) return 2;
+  if (surelyFits(text, availableWidth, POST_CARD_TITLE_FONT_SIZE)) return 1;
   const ctx = getMeasureContext();
   if (!ctx) {
     return estimateTitleLineCount(text, availableWidth, POST_CARD_TITLE_FONT_SIZE);
@@ -107,6 +121,7 @@ function countTitleLines(title: string, availableWidth: number) {
 function countExcerptLines(text: string, availableWidth: number) {
   if (!text) return 0;
   if (surelyWraps(text, availableWidth, 15)) return 2;
+  if (surelyFits(text, availableWidth, 15)) return 1;
   const ctx = getMeasureContext();
   if (!ctx) return estimateTitleLineCount(text, availableWidth, 15);
   ctx.font = `${POST_CARD_EXCERPT_FONT} ${fontFamily}`;
