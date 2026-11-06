@@ -45,6 +45,7 @@ let savedReadingState = import.meta.client ? postPageReadingCache(auth.generatio
 const loginDialog = useLoginDialog();
 const confirmDialog = useConfirmDialog();
 const reportDialog = useReportDialog();
+const movePostDialog = useMovePostDialog();
 const pageDataLoading = usePageDataLoading();
 const message = useMessage();
 const initialWidth = typeof window !== "undefined" ? window.innerWidth : 0;
@@ -705,6 +706,20 @@ const handleDeleteArticle = async () => {
   }
 };
 
+// 管理员、版主：把委托移到别的分区（如里区），作者会收到通知。
+const handleMoveArticle = async () => {
+  if (!post.value?.id || !isStaff.value) return;
+  const postId = post.value.id;
+  const from = post.value.category?.slug ?? "";
+  const moved = await movePostDialog.open({ postId, currentSlug: from });
+  if (!moved) return;
+  if (post.value?.id === postId) post.value.category = { name: moved.name, slug: moved.slug };
+  // 进出里区后，它不该再留在当前列表里（首页或里区）。
+  if (moved.slug === INNER_CATEGORY_SLUG || from === INNER_CATEGORY_SLUG) {
+    window.dispatchEvent(new CustomEvent("ik:article-deleted", { detail: postId }));
+  }
+};
+
 const handleEditArticle = () => {
   if (!post.value?.id || !isOwner.value) return;
   navigateTo(`/create?edit=${post.value.id}`);
@@ -715,6 +730,8 @@ const handleArticleMenuCommand = (command: string | number) => {
     handleDeleteArticle();
   } else if (command === "edit") {
     handleEditArticle();
+  } else if (command === "move") {
+    void handleMoveArticle();
   } else if (command === "report") {
     handleReportArticle();
   } else if (command === "pin" || command === "unpin") {
@@ -1552,6 +1569,7 @@ onBeforeUnmount(() => {
                           <z-dropdown-item command="report" :disabled="isOwner">举报委托</z-dropdown-item>
                           <z-dropdown-item v-if="isAdmin" :command="post?.isPinned ? 'unpin' : 'pin'" :disabled="pinningArticle">{{ post?.isPinned ? '取消置顶' : '置顶' }}</z-dropdown-item>
                           <z-dropdown-item command="edit" :disabled="!isOwner">编辑委托</z-dropdown-item>
+                          <z-dropdown-item v-if="isStaff" command="move">移动分区</z-dropdown-item>
                           <z-dropdown-item command="delete" :disabled="!(isOwner || isStaff) || deletingArticle">删除委托</z-dropdown-item>
                           <z-dropdown-item
                             command="block"

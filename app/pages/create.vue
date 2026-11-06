@@ -82,6 +82,8 @@ const isLoadingEditor = ref(false);
 const hasUnsavedChanges = ref(false);
 // 编辑已发布委托模式：自动保存仍写 draft 版本，点「更新委托」后重新发布。
 const isEditingPublished = ref(false);
+// 发布过、在里区的委托只能由管理员移出（后端同样拦截）。
+const categoryLocked = ref(false);
 const isAnonymous = ref(false);
 const showImagePickerModal = ref(false);
 const isVideoDialogVisible = ref(false);
@@ -927,6 +929,7 @@ function applyDraftToEditor(draft: DraftArticle) {
     inFlightSnapshot.value = null;
     documentId.value = draft.documentId;
     isEditingPublished.value = !!draft.hasPublishedVersion;
+    categoryLocked.value = !!draft.hasPublishedVersion && draft.category?.slug === INNER_CATEGORY_SLUG;
     title.value = draft.title;
     body.value = draft.text;
     externalVideos.value = draft.externalVideos ?? [];
@@ -981,6 +984,7 @@ function resetEditor() {
     uploadTasks.value = [];
     isAnonymous.value = false;
     isEditingPublished.value = false;
+    categoryLocked.value = false;
     selectedCategory.value = DEFAULT_CATEGORY_SLUG;
     resetTags();
     lastSavedSnapshot.value = "";
@@ -1160,6 +1164,10 @@ watch(body, () => markDirty());
 
 function selectCategory(slug: string) {
   if (!slug || slug === selectedCategory.value) return;
+  if (categoryLocked.value) {
+    message.warning("里区的委托只能由管理员移出");
+    return;
+  }
   selectedCategory.value = slug;
   markDirty();
 }
@@ -1448,7 +1456,11 @@ if (import.meta.client) {
                     :key="cat.slug"
                     type="button"
                     class="ik-create-category-chip"
-                    :class="{ 'ik-create-category-chip--active': selectedCategory === cat.slug }"
+                    :class="{
+                      'ik-create-category-chip--active': selectedCategory === cat.slug,
+                      'ik-create-category-chip--locked': categoryLocked && selectedCategory !== cat.slug,
+                    }"
+                    :disabled="categoryLocked && selectedCategory !== cat.slug"
                     @click="selectCategory(cat.slug)"
                   >
                     {{ cat.name }}
@@ -2470,9 +2482,14 @@ if (import.meta.client) {
     background 0.15s ease;
 }
 
-.ik-create-category-chip:hover:not(.ik-create-category-chip--active):not(.ik-create-category-chip--placeholder) {
+.ik-create-category-chip:hover:not(.ik-create-category-chip--active):not(.ik-create-category-chip--placeholder):not(.ik-create-category-chip--locked) {
   border-color: #3a3a3a;
   color: #fff;
+}
+
+.ik-create-category-chip--locked {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .ik-create-category-chip--active {

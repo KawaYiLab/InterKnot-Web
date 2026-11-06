@@ -6,7 +6,7 @@ import { watch, onScopeDispose, type Ref } from "vue";
  * **即时**路径，与既有的慢轮询对账互补（轮询兜底漏推）。
  *
  * - 仅客户端运行；SSR 时是 no-op。连接由 plugins/realtime.client.ts 维持。
- * - 新帖事件带 categoryId，按当前频道过滤；顶帖事件不带分区，交给 load 时的列表接口过滤。
+ * - 新帖事件带 categoryId，按当前频道过滤；「全部」下不算里区的新帖。顶帖事件不带分区，交给 load 时的列表接口过滤。
  * - 自己发的帖、自己顶起的帖：服务端广播时不推给操作者本人；轮询对账路径由列表卡片的 bumpedBySelf 排除
  *   （见 useArticleFeedUpdates）。
  */
@@ -31,8 +31,9 @@ export function useArticleFeedStream(opts: {
       })
       .catch(() => undefined);
   };
+  // 「全部」也要知道里区的 id，用来跳过里区的新帖。
   watch(opts.category, (slug) => {
-    if (slug && !categoryIds.has(slug)) loadCategories();
+    if (!categoryIds.has(slug || INNER_CATEGORY_SLUG)) loadCategories();
   }, { immediate: true });
 
   const offs = [
@@ -44,6 +45,9 @@ export function useArticleFeedStream(opts: {
       if (slug) {
         const wanted = categoryIds.get(slug);
         if (wanted && categoryId && wanted !== categoryId) return;
+      } else {
+        const inner = categoryIds.get(INNER_CATEGORY_SLUG);
+        if (inner && categoryId === inner) return;
       }
       opts.onTopicEvent(postId);
     }),

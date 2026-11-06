@@ -1825,6 +1825,24 @@ export function useApi() {
     invalidate(["profile"]);
   };
 
+  /** 管理员、版主把帖子移到别的分区（如里区）：走审核接口，记审核日志并通知作者。 */
+  const moderateMove = async (postId: string, categoryId: string, note = ""): Promise<void> => {
+    await $api<Rec>("/v1/admin/moderation/actions", {
+      method: "POST",
+      body: {
+        targetType: "post",
+        ids: [postId],
+        action: "move",
+        categoryId,
+        note: note.trim() || undefined,
+        notifyAuthor: true,
+      },
+    });
+    invalidate(qk.articles.detail(postId));
+    invalidate(qk.articles.searchAll);
+    invalidate(["profile"]);
+  };
+
   /** 草稿箱：还没发布过的帖子（已发布帖子的修改不进草稿箱）。 */
   const getMyDrafts = async (
     endCur = "",
@@ -2623,6 +2641,7 @@ export function useApi() {
     discardArticleDraft,
     deleteArticle,
     moderateDelete,
+    moderateMove,
     getMyDrafts,
     getMyDraftDetail,
     signUpload,

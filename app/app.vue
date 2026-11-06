@@ -228,6 +228,11 @@ const overlayOpen = computed(
       <LazyReportModal />
     </ClientOnly>
 
+    <!-- 管理员、版主移动委托分区 -->
+    <ClientOnly>
+      <LazyMovePostModal />
+    </ClientOnly>
+
     <!-- 敲敲弹窗（消息通知 / 私聊 / 群聊入口） -->
     <ClientOnly>
       <LazyKnockKnockModal v-if="knockModalMounted" />
