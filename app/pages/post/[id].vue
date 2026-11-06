@@ -946,7 +946,7 @@ const handleDeleteComment = async (comment: Comment) => {
   const own = !!auth.user?.authorId && comment.author?.documentId === auth.user.authorId;
   const ok = await confirmDialog.open({
     title: "删除评论",
-    message: own ? "确定删除这条评论吗？此操作无法撤销。" : "确定删除这条评论吗？作者会收到通知，此操作无法撤销。",
+    message: own ? "确定删除这条评论吗？此操作无法撤销。" : "确定删除这条评论吗？此操作无法撤销。",
     confirmText: "删除",
     danger: true,
   });

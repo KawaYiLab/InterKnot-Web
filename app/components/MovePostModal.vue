@@ -34,7 +34,7 @@ const submit = async () => {
   submitting.value = true;
   try {
     await api.moderateMove(state.postId, chosen.documentId, note.value);
-    message.success(`已移到「${chosen.name}」，作者会收到通知`);
+    message.success(`已移动至「${chosen.name}」`);
     close(chosen);
   } catch (err) {
     message.error(resolveErrorMessage(err, "移动失败，请稍后再试"));
@@ -94,7 +94,7 @@ onBeforeUnmount(() => {
                 <IkZzzMarquee />
                 <div class="ik-move__wrapper">
                   <div class="ik-move__inner">
-                    <p class="ik-move__hint">作者会收到通知。移进里区后，作者不能自己移出来。</p>
+                    <p class="ik-move__hint">请选择分区。</p>
 
                     <div class="ik-move__reasons">
                       <button
@@ -118,7 +118,7 @@ onBeforeUnmount(() => {
                       class="ik-move__detail"
                       :maxlength="MAX_NOTE_LENGTH"
                       rows="2"
-                      placeholder="理由（选填，会附在通知里）"
+                      placeholder="理由（选填）"
                     ></textarea>
                   </div>
 
