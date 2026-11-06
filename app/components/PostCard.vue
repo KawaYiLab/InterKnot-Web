@@ -320,11 +320,15 @@ const handleOpen = (e: MouseEvent) => {
 
 .ik-card__views {
   position: absolute;
-  top: 11px;
-  left: 16px;
+  top: 8px;
+  left: 10px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  /* 浅色封面上光靠描边看不清，垫一层半透明底 */
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
   color: #fff;
   font-size: var(--ik-post-card-views-font-size);
   font-weight: 700;

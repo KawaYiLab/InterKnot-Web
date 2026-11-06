@@ -1705,8 +1705,8 @@ onBeforeUnmount(() => {
                 <!-- 左栏：封面 + 正文 -->
                 <div class="ik-dialog__left">
                   <div class="ik-dialog__left-scroll" ref="scrollRef">
-                    <!-- 封面 / 视频 -->
-                    <div class="ik-dialog__cover-wrap">
+                    <!-- 封面 / 视频：纯文字委托不放占位图，正文占满左栏（与 /post 页一致） -->
+                    <div v-if="hasCovers || post.externalVideos?.length" class="ik-dialog__cover-wrap">
                       <div
                         class="ik-dialog__cover-border"
                         :style="{ '--ik-cover-ratio': String(coverAspectRatio) }"
@@ -1805,30 +1805,16 @@ onBeforeUnmount(() => {
                             :video="video"
                           />
                         </template>
-
-                        <!-- 默认占位图 -->
-                        <template v-else>
-                          <img
-                            :src="DEFAULT_COVER_IMAGE"
-                            alt="default cover"
-                            class="ik-dialog__cover"
-                            loading="eager"
-                            decoding="async"
-                            referrerpolicy="no-referrer"
-                            @load="onCoverImageLoad(0)"
-                          />
-                          <div
-                            v-if="!isCoverImageLoaded(0)"
-                            class="ik-skel ik-dialog__cover-skel"
-                            aria-hidden="true"
-                          ></div>
-                        </template>
                       </div>
                     </div>
 
                     <!-- 正文：桌面端在封面右侧单独滚动 -->
                     <div class="ik-dialog__detail-frame">
-                    <div ref="detailScrollRef" class="ik-dialog__detail">
+                    <div
+                      ref="detailScrollRef"
+                      class="ik-dialog__detail"
+                      :class="{ 'ik-dialog__detail--no-cover': !hasCovers && !post.externalVideos?.length }"
+                    >
                       <div v-if="post.isHidden" class="ik-dialog__hidden-banner" role="alert">
                         <EyeSlashIcon class="ik-dialog__hidden-icon" aria-hidden="true" />
                         <span>该委托因收到举报已被隐藏，仅你自己可见。如有异议请联系管理员。</span>
@@ -2725,6 +2711,11 @@ html.no-gpu .ik-dialog {
   padding: 20px 20px 32px 4px;
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* 没有封面卡片时正文不再贴左边，补回左内边距 */
+.ik-dialog__detail--no-cover {
+  padding-left: 20px;
 }
 
 .ik-dialog__detail::-webkit-scrollbar {

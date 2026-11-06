@@ -455,21 +455,22 @@ onUnmounted(() => {
 
                   <!-- 重置模式 - 未发验证码 -->
                   <template v-if="isReset && !isCodeSent">
-                    <z-button :disabled="isSendingCode" @click="sendCode">
+                    <z-button :icon="{ success: '#00cc0d' }" :disabled="isSendingCode" @click="sendCode">
                       重置密码
                     </z-button>
                   </template>
 
                   <!-- 重置模式 - 已发验证码 -->
                   <template v-else-if="isReset && isCodeSent">
-                    <z-button :disabled="isLoading" @click="submit">
+                    <z-button :icon="{ success: '#00cc0d' }" :disabled="isLoading" @click="submit">
                       重置密码
                     </z-button>
                   </template>
 
                   <!-- 登录 / 注册模式 -->
                   <template v-else>
-                    <z-button :disabled="isLoading" @click="submit">
+                    <!-- 主操作：与确认弹窗一致，带绿色标记和次要按钮区分 -->
+                    <z-button :icon="{ success: '#00cc0d' }" :disabled="isLoading" @click="submit">
                       {{ isRegister ? "注册账号" : "登录账号" }}
                     </z-button>
                   </template>
@@ -816,7 +817,7 @@ onUnmounted(() => {
   padding: 0 14px 0 0;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.55);
   font-size: 12px;
   white-space: nowrap;
   cursor: pointer;
@@ -824,7 +825,7 @@ onUnmounted(() => {
 }
 
 .ik-forgot-btn:hover {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* 入场/出场动画统一在 theme.css 的 .ik-overlay-* 全局规则里维护 */
