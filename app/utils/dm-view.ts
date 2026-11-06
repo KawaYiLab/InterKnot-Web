@@ -80,6 +80,8 @@ export interface EnrichedMessage {
     title: string;
     article: NonNullable<DmMessage["article"]>;
   } | null;
+  /** 头像地址：没有发送者的系统通知用会话对端（Fairy）的头像；为空时显示默认头像 */
+  avatar: string | null;
   /** 头像是否可点击跳转个人主页 */
   avatarClickable: boolean;
   /** 个人主页 URL（avatarClickable 为 false 时为 null） */

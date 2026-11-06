@@ -143,8 +143,8 @@ const awaitingFirstData = computed(
         @keydown.enter="emit('profile', entry.profileUrl)"
       >
         <img
-          v-if="entry.msg.sender?.avatar"
-          :src="entry.msg.sender.avatar"
+          v-if="entry.avatar"
+          :src="entry.avatar"
           :alt="entry.msg.sender?.name || ''"
           class="ik-knock__msg-avatar-img"
           draggable="false"

@@ -938,6 +938,10 @@ const enrichedMessages = useDmMessageEntries(activeMessages, (msg, previousCreat
           article: msg.article,
         }
       : null,
+    avatar:
+      msg.sender?.avatar ||
+      (msg.kind === "notification" && !msg.sender ? activeConversation.value?.peer?.avatar : null) ||
+      null,
     avatarClickable,
     // avatarClickable 为 true 时 canClickAvatar 已保证 authorDocumentId 存在
     profileUrl: avatarClickable
