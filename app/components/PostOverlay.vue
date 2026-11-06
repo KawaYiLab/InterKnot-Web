@@ -927,7 +927,7 @@ const likeArticle = async () => {
     const result = await api.toggleLike("article", post.value.id, !!post.value.liked);
     post.value.liked = result.liked;
     post.value.likesCount = result.likesCount;
-    message.success(result.liked ? "已点赞（￣︶￣）↗　" : "已取消点赞(；′⌒`)");
+    message.success(result.liked ? "已点赞" : "已取消点赞");
   } catch (err) {
     message.error(resolveErrorMessage(err, "点赞失败"));
   }
