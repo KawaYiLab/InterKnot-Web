@@ -30,7 +30,8 @@ const props = defineProps<{
   currentUserAuthorId?: string;
   /** 帖子作者 id：评论者是楼主时名字前加「[楼主]」。匿名帖没有 id，不标。 */
   postAuthorId?: string;
-  isPostOwner?: boolean;
+  /** 管理员或版主：能删任何人的评论。 */
+  canModerate?: boolean;
   canPin?: boolean;
   canAccept?: boolean;
   /**
@@ -64,7 +65,8 @@ const isPostAuthor = computed(() =>
   !!props.postAuthorId && props.comment.author?.documentId === props.postAuthorId,
 );
 
-const canDeleteComment = computed(() => props.isPostOwner === true || isOwnComment.value);
+// 后端只允许作者本人删除，楼主不能删别人的评论；管理员、版主走审核接口。
+const canDeleteComment = computed(() => isOwnComment.value || props.canModerate === true);
 
 const handleCommentMenuCommand = (command: string | number) => {
   if (command === "pin") emit("pinComment", props.comment);

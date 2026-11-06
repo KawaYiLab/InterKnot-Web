@@ -1088,6 +1088,8 @@ const startReply = (comment: Comment) => {
 
 const isOwner = computed(() => post.value?.isOwner === true);
 const isAdmin = computed(() => auth.isLogin && auth.user?.isAdmin === true);
+// 管理员、版主：能删别人的帖子和评论。
+const isStaff = computed(() => auth.isLogin && auth.user?.isStaff === true);
 const canPin = computed(() => auth.isLogin && (isOwner.value || isAdmin.value));
 const canAccept = computed(() => auth.isLogin && (isOwner.value || isAdmin.value));
 // 所在分区是否开启评论采纳（服务端按分区开关下发），与身份权限 canAccept 分开传递。
@@ -1117,12 +1119,19 @@ const handlePinArticle = async () => {
 
 const handleDeleteArticle = async () => {
   if (!post.value?.id) return;
-  const ok = await confirmDialog.open({ title: "删除委托", message: "确定删除这篇委托？删除后不可恢复。", confirmText: "删除", danger: true });
+  const moderate = !isOwner.value;
+  const ok = await confirmDialog.open({
+    title: "删除委托",
+    message: moderate ? "确定删除这篇委托？作者会收到通知，删除后不可恢复。" : "确定删除这篇委托？删除后不可恢复。",
+    confirmText: "删除",
+    danger: true,
+  });
   if (!ok) return;
   deletingArticle.value = true;
   try {
     const deletedId = post.value.id;
-    await api.deleteArticle(deletedId);
+    if (moderate) await api.moderateDelete("post", deletedId);
+    else await api.deleteArticle(deletedId);
     message.success("委托已删除");
     window.dispatchEvent(new CustomEvent("ik:article-deleted", { detail: deletedId }));
     emit("close");
@@ -1214,15 +1223,17 @@ const likeComment = async (comment: Comment) => {
 };
 
 const handleDeleteComment = async (comment: Comment) => {
+  const own = !!auth.user?.authorId && comment.author?.documentId === auth.user.authorId;
   const ok = await confirmDialog.open({
     title: "删除评论",
-    message: "确定删除这条评论吗？此操作无法撤销。",
+    message: own ? "确定删除这条评论吗？此操作无法撤销。" : "确定删除这条评论吗？作者会收到通知，此操作无法撤销。",
     confirmText: "删除",
     danger: true,
   });
   if (!ok) return;
   try {
-    await api.deleteComment(comment.id);
+    if (own) await api.deleteComment(comment.id);
+    else await api.moderateDelete("comment", comment.id);
     comments.value = removeFromTimeline(comments.value, comment);
     featuredComments.value = removeFromTimeline(featuredComments.value, comment);
     if (post.value) {
@@ -1905,7 +1916,7 @@ onBeforeUnmount(() => {
                           :comment="comment"
                           :current-user-author-id="auth.user?.authorId"
                           :post-author-id="post.author?.documentId"
-                          :is-post-owner="auth.isLogin && isOwner"
+                          :can-moderate="isStaff"
                           :can-pin="canPin"
                           :can-accept="canAccept"
                           :accept-enabled="acceptEnabled"
@@ -1935,7 +1946,7 @@ onBeforeUnmount(() => {
                           :index="idx"
                           :current-user-author-id="auth.user?.authorId"
                           :post-author-id="post.author?.documentId"
-                          :is-post-owner="auth.isLogin && isOwner"
+                          :can-moderate="isStaff"
                           :can-pin="canPin"
                           :can-accept="canAccept"
                           :accept-enabled="acceptEnabled"
@@ -2086,7 +2097,7 @@ onBeforeUnmount(() => {
                                 <z-dropdown-item command="report" :disabled="isOwner">举报委托</z-dropdown-item>
                                 <z-dropdown-item v-if="isAdmin" :command="post?.isPinned ? 'unpin' : 'pin'" :disabled="pinningArticle">{{ post?.isPinned ? '取消置顶' : '置顶' }}</z-dropdown-item>
                                 <z-dropdown-item command="edit" :disabled="!isOwner">编辑委托</z-dropdown-item>
-                                <z-dropdown-item command="delete" :disabled="!isOwner || deletingArticle">删除委托</z-dropdown-item>
+                                <z-dropdown-item command="delete" :disabled="!(isOwner || isStaff) || deletingArticle">删除委托</z-dropdown-item>
                               </template>
                             </z-dropdown>
                           </div>

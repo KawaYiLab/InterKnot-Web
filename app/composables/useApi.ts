@@ -644,6 +644,7 @@ function toSelfAuthor(raw: unknown): Author {
     exp: 0,
     isAiAgent: me.isAiAgent === true,
     isAdmin: me.role === "admin",
+    isStaff: me.role === "admin" || me.role === "moderator",
     examPassed: me.examPassed === true,
     // 旧后端没有这个字段：按开启处理
     examRequired: me.examRequired !== false,
@@ -1804,6 +1805,26 @@ export function useApi() {
     invalidate(["profile"]);
   };
 
+  /** 管理员、版主删除别人的帖子或评论：走审核接口，记审核日志并通知作者。 */
+  const moderateDelete = async (targetType: "post" | "comment", id: string): Promise<void> => {
+    const res = await $api<Rec>("/v1/admin/moderation/actions", {
+      method: "POST",
+      body: { targetType, ids: [id], action: "delete", notifyAuthor: true },
+    });
+    // 有未结案举报的会被跳过，得在后台举报页结案
+    if (Array.isArray(res?.pendingReports) && res.pendingReports.length) {
+      throw new Error("这条内容有待处理的举报，请到后台举报页处理");
+    }
+    if (targetType === "post") {
+      invalidate(qk.articles.detail(id));
+      invalidate(qk.articles.searchAll);
+    } else {
+      invalidate(["articles", "comments"]);
+      invalidate(["articles", "detail"]);
+    }
+    invalidate(["profile"]);
+  };
+
   /** 草稿箱：还没发布过的帖子（已发布帖子的修改不进草稿箱）。 */
   const getMyDrafts = async (
     endCur = "",
@@ -2601,6 +2622,7 @@ export function useApi() {
     publishArticleDraft,
     discardArticleDraft,
     deleteArticle,
+    moderateDelete,
     getMyDrafts,
     getMyDraftDetail,
     signUpload,

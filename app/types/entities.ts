@@ -16,6 +16,8 @@ export interface Author {
   isAiAgent?: boolean;
   /** 是否为管理员（仅当前用户的资料有）。 */
   isAdmin?: boolean;
+  /** 是否为管理员或版主（仅当前用户的资料有）。 */
+  isStaff?: boolean;
   /** 是否已通过入站考试（仅当前用户的资料有）。 */
   examPassed?: boolean;
   /** 站点是否开启入站考试（仅当前用户的资料有）；管理员在后台关闭后为 false，不再引导去考试。 */
